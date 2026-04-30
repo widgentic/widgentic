@@ -2,12 +2,32 @@ schema: spec-driven
 
 # Project context (optional)
 # This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+context: |
+  Project: widgentic — widgets for agents (MCP skills/plugins).
+  Purpose: turn structured data (JSON, CSV, agent-built structures) into
+  generic, agent-friendly widgets (cards, tables, trees, custom). It is the
+  primary UI surface agents use to display data from external services/APIs.
+
+  Tech direction:
+    - Language: TypeScript (strict).
+    - UI runtime: lightweight reactive rendering (Arrow JS direction); no
+      heavy framework lock-in. Renderer-agnostic core (pure data + DOM layer).
+    - Integration: MCP-first. Treat MCP integration as a convention, not a
+      hard SDK dependency, so the contract works outside MCP too.
+    - Reference patterns: Azure Functions MCP extension and the fluent MCP
+      SDK (see reference-links.md).
+
+  Conventions:
+    - Spec-first: capabilities are defined under openspec/ before implementation.
+    - Contract-first design: { kind, data, hints?, meta? } is the stable
+      payload across adapters, mapper, catalog, and MCP output.
+    - Forward compatibility: renderers ignore unknown fields rather than fail.
+    - Use SHALL/MUST in specs; one capability per spec folder.
+
+  Non-goals (foundation phase):
+    - No charts/maps/forms/editors yet.
+    - No theming system beyond minimal density hints.
+    - No persistence/networking/state-management layer.
 
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.
