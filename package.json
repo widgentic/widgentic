@@ -1,0 +1,24 @@
+{
+  "name": "widgentic",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Widgets for agents — generic UI for MCP skills/plugins.",
+  "type": "module",
+  "main": "./src/contract/index.ts",
+  "types": "./src/contract/index.ts",
+  "exports": {
+    "./contract": "./src/contract/index.ts",
+    "./adapters": "./src/adapters/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "test:types": "vitest --typecheck.only run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
+  }
+}
