@@ -8,7 +8,8 @@
   "types": "./src/contract/index.ts",
   "exports": {
     "./contract": "./src/contract/index.ts",
-    "./adapters": "./src/adapters/index.ts"
+    "./adapters": "./src/adapters/index.ts",
+    "./mapper": "./src/mapper/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
