@@ -11,7 +11,8 @@
     "./adapters": "./src/adapters/index.ts",
     "./mapper": "./src/mapper/index.ts",
     "./catalog": "./src/catalog/index.ts",
-    "./mcp": "./src/mcp/index.ts"
+    "./mcp": "./src/mcp/index.ts",
+    "./reactive": "./src/reactive/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
