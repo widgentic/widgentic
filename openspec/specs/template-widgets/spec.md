@@ -91,6 +91,17 @@ Event-handler attribute names (matching `on*`, case-insensitive) SHALL fail vali
 - **WHEN** a bind resolves to `"<img onerror=x src=y>"`
 - **THEN** serialized HTML SHALL contain the escaped text and no `img` element
 
+### Requirement: Multi-node root wrapping
+When a template's root interprets to anything other than exactly one node, the compiled renderer SHALL wrap the output in a `div` element with class `wg-template`, so the renderer contract (a single root `WidgetNode`) always holds. Single-node roots SHALL NOT be wrapped.
+
+#### Scenario: Each-rooted template wraps
+- **WHEN** a template whose root is an `each` node renders two items
+- **THEN** the output SHALL be a single `div` with `class="wg-template"` containing both items
+
+#### Scenario: Single-node root is unwrapped
+- **WHEN** a template whose root is an element node renders
+- **THEN** the output SHALL be that element itself, with no `wg-template` wrapper
+
 ### Requirement: Reactive integration
 Template widgets SHALL work with in-place updates: mounting a payload of a template-registered kind via `mountWidget` (with the owning catalog) and updating with changed data SHALL patch the DOM, preserving identity of unchanged elements.
 
