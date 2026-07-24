@@ -10,7 +10,8 @@
     "./contract": "./src/contract/index.ts",
     "./adapters": "./src/adapters/index.ts",
     "./mapper": "./src/mapper/index.ts",
-    "./catalog": "./src/catalog/index.ts"
+    "./catalog": "./src/catalog/index.ts",
+    "./mcp": "./src/mcp/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
