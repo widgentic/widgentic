@@ -26,8 +26,10 @@ context: |
 
   Non-goals (foundation phase):
     - No charts/maps/forms/editors yet.
-    - No theming system beyond minimal density hints.
     - No persistence/networking/state-management layer.
+
+  Theming (widget-theming capability): tokens (--wg-*) + base stylesheet
+  over the stable wg-* classes; themes are validated JSON token maps.
 
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.

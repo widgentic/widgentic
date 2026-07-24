@@ -13,7 +13,8 @@
     "./catalog": "./src/catalog/index.ts",
     "./mcp": "./src/mcp/index.ts",
     "./reactive": "./src/reactive/index.ts",
-    "./templates": "./src/templates/index.ts"
+    "./templates": "./src/templates/index.ts",
+    "./theming": "./src/theming/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
