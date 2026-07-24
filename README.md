@@ -10,37 +10,86 @@ Agents call tools and APIs that return structured data. Each tool today reinvent
 
 ## Capabilities
 
-The foundation is defined as OpenSpec capabilities under `openspec/changes/widget-rendering-foundation/`:
+All capabilities are specified under `openspec/specs/` and implemented with zero runtime dependencies:
 
-- `widget-contract` — Normalized payload (`kind`, `data`, `hints?`, `meta?`) emitted by agents and consumed by renderers.
-- `widget-catalog` — Built-in widgets: `card`, `table`, `tree`, plus a `custom` extension point.
-- `data-adapters` — JSON and CSV adapters that turn raw input into the contract.
-- `widget-mapper` — Default widget selection from data shape, with explicit override.
-- `mcp-widget-output` — Convention for MCP tools to return widget payloads to capable hosts.
+| Capability | Package entry | What it does |
+|--|--|--|
+| `widget-contract` | `widgentic/contract` | The normalized payload `{ kind, data, hints?, meta? }` + `validateWidgetPayload` |
+| `data-adapters` | `widgentic/adapters` | `parseJson` / `parseCsv` with structured errors and opt-in type inference |
+| `widget-mapper` | `widgentic/mapper` | `inferKind` / `mapToWidget`: default widget selection from data shape |
+| `widget-catalog` | `widgentic/catalog` | Built-ins (`card`, `table`, `tree`, `custom`), registration API, pure `WidgetNode` render tree, `renderToHtml` + `mountNode` |
+| `mcp-widget-output` | `widgentic/mcp` | The MCP convention: emit/extract widget payloads, capability negotiation — no SDK dependency |
+| `reactive-rendering` | `widgentic/reactive` | `mountWidget` handles with in-place DOM patching (identity-preserving updates) |
+| `template-widgets` | `widgentic/templates` | Serializable JSON template DSL (`bind`/`each`/`when`) — the widget-designer runtime, safe for untrusted authors |
+| `widget-theming` | `widgentic/theming` | `--wg-*` token registry, generated base stylesheet, themes as validated JSON |
 
-## Architecture (target)
+## Architecture
 
 ```
 External API / Agent data
         │
         ▼
-  Data adapter (JSON | CSV | passthrough)
+  Data adapter (JSON | CSV | passthrough)      widgentic/adapters
         │
         ▼
-  Widget mapper  ──►  { kind, data, hints?, meta? }   ◄── Widget contract
+  Widget mapper ──► { kind, data, hints?, meta? } ◄── widgentic/contract
         │
         ▼
-  Widget catalog  →  card · table · tree · custom
+  MCP widget output (tool ⇄ host convention)   widgentic/mcp
         │
         ▼
-  Lightweight reactive renderer
+  Widget catalog → card · table · tree · custom · registered/template kinds
+        │
+        ▼
+  Reactive renderer (WidgetNode diff → DOM patch) + theming (--wg-* tokens)
 ```
 
-See `openspec/changes/widget-rendering-foundation/design.md` for decisions and tradeoffs.
+## End to end
+
+```ts
+import { parseCsv } from "widgentic/adapters";
+import { mapToWidget } from "widgentic/mapper";
+import { toWidgetResult, extractWidgetPayload, hostSupportsWidgets } from "widgentic/mcp";
+import { createCatalog } from "widgentic/catalog";
+import { mountWidget } from "widgentic/reactive";
+import { injectBaseStyles, applyTheme, darkTheme } from "widgentic/theming";
+
+// Tool side: parse data, pick a widget, emit an MCP result.
+const parsed = parseCsv(csvText);
+const payload = mapToWidget({ data: parsed.ok ? parsed.records : [], meta: { title: "People" } });
+const result = hostSupportsWidgets(clientCapabilities) ? toWidgetResult(payload) : /* text */ undefined;
+
+// Host side: extract, mount, theme, and keep updating in place.
+const catalog = createCatalog();
+const extraction = extractWidgetPayload(result, { knownKinds: new Set(catalog.kinds()) });
+if (extraction.found && extraction.ok) {
+  injectBaseStyles(document);
+  applyTheme(container, darkTheme);
+  const mount = mountWidget(extraction.payload, container, { catalog });
+  // later: mount.update(nextPayload) patches the DOM without losing state
+}
+```
+
+Custom widgets come in two flavors:
+
+```ts
+// Code (trusted developers): a pure renderer function
+catalog.register("badge", (payload) => ({ tag: "span", attrs: { class: "badge" }, children: [String(payload.data)] }));
+
+// Data (untrusted authors / widget designers): a serializable template
+import { registerTemplate } from "widgentic/templates";
+registerTemplate(catalog, "invoice", {
+  tag: "div",
+  children: [
+    { tag: "h2", children: [{ bind: "$meta.title" }] },
+    { each: "lines", template: { tag: "li", children: [{ bind: "item" }, ": ", { bind: "amount" }] } }
+  ]
+});
+```
 
 ## Status
 
-Spec-first phase. No runtime code yet — the foundational change defines the contract and capabilities. Implementation lands in follow-up OpenSpec changes per capability.
+All eight capabilities are implemented and tested (`npm test` — unit, type, and DOM suites). Development is spec-first via OpenSpec: see `openspec/specs/` for current behavior and `openspec/changes/archive/` for the change history. Planned next: a demo MCP tool + host example, and a widget designer UI on top of `widgentic/templates`.
 
 ## Reference material
 
