@@ -1,0 +1,161 @@
+import type { TemplateError, WidgetTemplate } from "./types.js";
+import { FORBIDDEN_ATTR, MAX_TEMPLATE_DEPTH } from "./guards.js";
+
+export type ValidateTemplateResult =
+  | { ok: true; template: WidgetTemplate }
+  | { ok: false; error: TemplateError };
+
+/**
+ * Thrown by `registerTemplate` when the template fails validation —
+ * registration is host setup, where failing loudly is the convention.
+ * Carries the structured error for programmatic handling.
+ */
+export class InvalidTemplateError extends Error {
+  readonly templateError: TemplateError;
+
+  constructor(kind: string, error: TemplateError) {
+    super(
+      `Invalid widget template for kind '${kind}' at '${error.path}': ${error.message} (${error.code})`
+    );
+    this.name = "InvalidTemplateError";
+    this.templateError = error;
+  }
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function join(path: string, segment: string): string {
+  return path === "" ? segment : `${path}.${segment}`;
+}
+
+function nodeError(message: string, path: string): TemplateError {
+  return { code: "INVALID_TEMPLATE_NODE", message, path };
+}
+
+/** Path syntax: "." (scope self) or non-empty dot segments. */
+function checkPathSyntax(value: string, path: string): TemplateError | undefined {
+  if (value === ".") return undefined;
+  const body = value.startsWith("$meta.") ? value.slice("$meta.".length) : value;
+  if (body.length === 0 || body.split(".").some((segment) => segment === "")) {
+    return {
+      code: "INVALID_PATH",
+      message: `Invalid data path '${value}'.`,
+      path
+    };
+  }
+  return undefined;
+}
+
+function check(node: unknown, path: string, depth: number): TemplateError | undefined {
+  if (depth > MAX_TEMPLATE_DEPTH) {
+    return {
+      code: "TEMPLATE_TOO_DEEP",
+      message: `Template exceeds the maximum nesting depth of ${MAX_TEMPLATE_DEPTH}.`,
+      path
+    };
+  }
+  if (typeof node === "string") return undefined;
+  if (!isPlainObject(node)) {
+    return nodeError("Template node must be a string or a plain object.", path);
+  }
+
+  if ("bind" in node) {
+    if (typeof node.bind !== "string") {
+      return nodeError("'bind' must be a string path.", path);
+    }
+    return checkPathSyntax(node.bind, path);
+  }
+
+  if ("each" in node) {
+    if (typeof node.each !== "string") {
+      return nodeError("'each' must be a string path.", path);
+    }
+    const pathError = checkPathSyntax(node.each, path);
+    if (pathError) return pathError;
+    if (!("template" in node)) {
+      return nodeError("'each' node requires a 'template'.", path);
+    }
+    const templateError = check(node.template, join(path, "template"), depth + 1);
+    if (templateError) return templateError;
+    if ("empty" in node && node.empty !== undefined) {
+      return check(node.empty, join(path, "empty"), depth + 1);
+    }
+    return undefined;
+  }
+
+  if ("when" in node) {
+    if (typeof node.when !== "string") {
+      return nodeError("'when' must be a string path.", path);
+    }
+    const pathError = checkPathSyntax(node.when, path);
+    if (pathError) return pathError;
+    if (!("template" in node)) {
+      return nodeError("'when' node requires a 'template'.", path);
+    }
+    const templateError = check(node.template, join(path, "template"), depth + 1);
+    if (templateError) return templateError;
+    if ("else" in node && node.else !== undefined) {
+      return check(node.else, join(path, "else"), depth + 1);
+    }
+    return undefined;
+  }
+
+  if ("tag" in node) {
+    if (typeof node.tag !== "string" || node.tag.length === 0) {
+      return nodeError("'tag' must be a non-empty string.", path);
+    }
+    if ("attrs" in node && node.attrs !== undefined) {
+      if (!isPlainObject(node.attrs)) {
+        return nodeError("'attrs' must be an object.", path);
+      }
+      for (const [name, value] of Object.entries(node.attrs)) {
+        const attrPath = join(path, `attrs.${name}`);
+        if (FORBIDDEN_ATTR.test(name)) {
+          return {
+            code: "FORBIDDEN_ATTRIBUTE",
+            message: `Event-handler attribute '${name}' is not allowed in templates.`,
+            path: attrPath
+          };
+        }
+        if (typeof value === "string") continue;
+        if (isPlainObject(value) && typeof value.bind === "string") {
+          const pathError = checkPathSyntax(value.bind, attrPath);
+          if (pathError) return pathError;
+          continue;
+        }
+        return nodeError(
+          `Attribute '${name}' must be a string or { bind } object.`,
+          attrPath
+        );
+      }
+    }
+    if ("children" in node && node.children !== undefined) {
+      if (!Array.isArray(node.children)) {
+        return nodeError("'children' must be an array.", path);
+      }
+      for (let i = 0; i < node.children.length; i++) {
+        const childError = check(
+          node.children[i],
+          join(path, `children.${i}`),
+          depth + 1
+        );
+        if (childError) return childError;
+      }
+    }
+    return undefined;
+  }
+
+  return nodeError(
+    "Unknown template node form (expected text, bind, tag, each, or when).",
+    path
+  );
+}
+
+/** Validate an unknown value as a widget template. Never throws. */
+export function validateTemplate(input: unknown): ValidateTemplateResult {
+  const error = check(input, "", 0);
+  if (error) return { ok: false, error };
+  return { ok: true, template: input as WidgetTemplate };
+}

@@ -12,7 +12,8 @@
     "./mapper": "./src/mapper/index.ts",
     "./catalog": "./src/catalog/index.ts",
     "./mcp": "./src/mcp/index.ts",
-    "./reactive": "./src/reactive/index.ts"
+    "./reactive": "./src/reactive/index.ts",
+    "./templates": "./src/templates/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
