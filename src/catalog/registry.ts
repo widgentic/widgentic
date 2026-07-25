@@ -2,6 +2,8 @@ import { validateWidgetPayload } from "../contract/validate.js";
 import type { WidgetContractError } from "../contract/errors.js";
 import type { WidgetKind } from "../contract/types.js";
 import type { WidgetNode, WidgetRenderer } from "./node.js";
+import type { WidgetDescriptor, WidgetDescriptorInput } from "./descriptors.js";
+import { BUILTIN_DESCRIPTORS } from "./descriptors.js";
 import { renderCard } from "./widgets/card.js";
 import { renderTable } from "./widgets/table.js";
 import { renderTree } from "./widgets/tree.js";
@@ -29,12 +31,25 @@ export type RenderResult =
   | { ok: false; error: WidgetContractError };
 
 export interface WidgetCatalog {
-  /** Register a renderer for a new kind. Throws {@link DuplicateKindError} on duplicates (built-ins included). */
-  register(kind: WidgetKind, renderer: WidgetRenderer): void;
+  /**
+   * Register a renderer for a new kind, optionally with agent-facing
+   * documentation. Throws {@link DuplicateKindError} on duplicates
+   * (built-ins included). Without a descriptor, a minimal one is generated
+   * so every renderable kind stays listable.
+   */
+  register(
+    kind: WidgetKind,
+    renderer: WidgetRenderer,
+    descriptor?: WidgetDescriptorInput
+  ): void;
   has(kind: WidgetKind): boolean;
   resolve(kind: WidgetKind): WidgetRenderer | undefined;
   /** Currently registered kinds, as a fresh array. */
   kinds(): WidgetKind[];
+  /** Descriptor for a kind, or undefined when the kind is unknown. */
+  describe(kind: WidgetKind): WidgetDescriptor | undefined;
+  /** All descriptors, as a fresh array. */
+  list(): WidgetDescriptor[];
   /** Validate a payload against the contract (with this catalog's kinds) and render it. Never throws. */
   render(payload: unknown): RenderResult;
 }
@@ -45,15 +60,27 @@ export interface WidgetCatalog {
  */
 export function createCatalog(): WidgetCatalog {
   const renderers = new Map<WidgetKind, WidgetRenderer>();
+  const descriptors = new Map<WidgetKind, WidgetDescriptor>();
 
   const catalog: WidgetCatalog = {
-    register(kind, renderer) {
+    register(kind, renderer, descriptor) {
       if (renderers.has(kind)) throw new DuplicateKindError(kind);
       renderers.set(kind, renderer);
+      descriptors.set(kind, {
+        kind,
+        description: descriptor?.description ?? `Custom widget kind '${kind}'.`,
+        dataShape: descriptor?.dataShape ?? "Defined by the registered renderer.",
+        ...(descriptor?.dataExample !== undefined
+          ? { dataExample: descriptor.dataExample }
+          : {}),
+        ...(descriptor?.hints ? { hints: descriptor.hints } : {})
+      });
     },
     has: (kind) => renderers.has(kind),
     resolve: (kind) => renderers.get(kind),
     kinds: () => [...renderers.keys()],
+    describe: (kind) => descriptors.get(kind),
+    list: () => [...descriptors.values()],
     render(payload) {
       const validated = validateWidgetPayload(payload, {
         knownKinds: new Set(renderers.keys())
@@ -77,10 +104,10 @@ export function createCatalog(): WidgetCatalog {
 
   // Built-ins go through register() so they get the same duplicate
   // protection and hosts cannot silently override them.
-  catalog.register("card", renderCard);
-  catalog.register("table", renderTable);
-  catalog.register("tree", renderTree);
-  catalog.register("custom", renderCustom);
+  catalog.register("card", renderCard, BUILTIN_DESCRIPTORS.card);
+  catalog.register("table", renderTable, BUILTIN_DESCRIPTORS.table);
+  catalog.register("tree", renderTree, BUILTIN_DESCRIPTORS.tree);
+  catalog.register("custom", renderCustom, BUILTIN_DESCRIPTORS.custom);
 
   return catalog;
 }

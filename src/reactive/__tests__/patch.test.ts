@@ -53,13 +53,17 @@ describe("in-place patching", () => {
     const target = container();
     const data = {
       label: "root",
-      children: [{ label: "leaf", children: [] }]
+      children: [
+        { label: "season", children: [{ label: "episode", children: [] }] }
+      ]
     };
     const mount = mountWidget({ kind: "tree", data }, target);
     const nodes = [...target.querySelectorAll("li.wg-tree-node")];
+    // branches carry the attribute; the leaf episode does not
     expect(nodes.map((n) => n.getAttribute("data-expanded"))).toEqual([
       "true",
-      "true"
+      "true",
+      null
     ]);
 
     mount.update({ kind: "tree", data, hints: { expandDepth: 1 } });
@@ -67,7 +71,8 @@ describe("in-place patching", () => {
     const nodesAfter = [...target.querySelectorAll("li.wg-tree-node")];
     expect(nodesAfter.map((n) => n.getAttribute("data-expanded"))).toEqual([
       "true",
-      "false"
+      "false",
+      null
     ]);
     nodes.forEach((node, i) => expect(nodesAfter[i]).toBe(node));
   });

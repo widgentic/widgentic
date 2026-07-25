@@ -22,6 +22,7 @@ All capabilities are specified under `openspec/specs/` and implemented with zero
 | `reactive-rendering` | `widgentic/reactive` | `mountWidget` handles with in-place DOM patching (identity-preserving updates) |
 | `template-widgets` | `widgentic/templates` | Serializable JSON template DSL (`bind`/`each`/`when`) — the widget-designer runtime, safe for untrusted authors |
 | `widget-theming` | `widgentic/theming` | `--wg-*` token registry, generated base stylesheet, themes as validated JSON |
+| `mcp-server` | `widgentic/mcp-server` | The Widgentic MCP server: `list_widgets` (descriptor discovery) + `render_widget` (validate → render → HTML + payload), as SDK-free handlers plus a runnable stdio server |
 
 ## Architecture
 
@@ -87,9 +88,45 @@ registerTemplate(catalog, "invoice", {
 });
 ```
 
+## Run the Widgentic MCP server
+
+widgentic is itself an MCP server: any MCP client can discover the available widgets and ask widgentic to validate and render for it.
+
+```bash
+npm run mcp   # starts the stdio server (tools: list_widgets, render_widget)
+```
+
+- `list_widgets` — returns every registered kind's descriptor: purpose, expected `data` shape, an example to imitate, and supported hints.
+- `render_widget` — input `{ widget, data, hints?, meta? }`; validates the id and payload, then returns the rendered HTML **plus** an embedded widgentic payload block (aware hosts mount it natively). Invalid input comes back as a structured, correctable error (`UNKNOWN_KIND`, `MISSING_FIELD`, ...).
+
+### Register with Claude Code
+
+This repo ships a project-scoped [`.mcp.json`](.mcp.json), so Claude Code picks the server up automatically: open a session in this workspace, approve the server when prompted, and confirm with `/mcp`. Then just ask — *"list the available widgets"*, *"render an invoice widget for ..."*.
+
+To register it outside this project instead:
+
+```bash
+claude mcp add widgentic -- npx tsx /path/to/widgentic/examples/mcp-server/main.ts
+```
+
+For Claude Desktop, add to `claude_desktop_config.json` (absolute paths — Desktop has no working directory):
+
+```json
+"widgentic": {
+  "command": "npx",
+  "args": ["tsx", "/path/to/widgentic/examples/mcp-server/main.ts"]
+}
+```
+
+### Testing without Claude
+
+- **MCP Inspector** (interactive UI): `npx @modelcontextprotocol/inspector npx tsx examples/mcp-server/main.ts`
+- **Raw stdio**: pipe newline-delimited JSON-RPC (`initialize` → `notifications/initialized` → `tools/list` → `tools/call`) into `npm run mcp`.
+- **In-process**: the SDK interop suite (`src/mcp-server/__tests__/sdk-interop.test.ts`) runs client and server over an in-memory transport on every `npm test`.
+
 ## Status
 
-All eight capabilities are implemented and tested (`npm test` — unit, type, and DOM suites). Development is spec-first via OpenSpec: see `openspec/specs/` for current behavior and `openspec/changes/archive/` for the change history. Planned next: a demo MCP tool + host example, and a widget designer UI on top of `widgentic/templates`.
+All nine capabilities are implemented and tested (`npm test` — unit, type, DOM, and MCP interop suites). Development is spec-first via OpenSpec: see `openspec/specs/` for current behavior and `openspec/changes/archive/` for the change history. Planned next: `render_widget` extensions (per-kind data schemas, theme input, format selection) and a widget designer UI on top of `widgentic/templates`.
 
 ## Reference material
 

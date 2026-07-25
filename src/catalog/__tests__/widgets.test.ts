@@ -115,21 +115,41 @@ describe("tree renderer", () => {
     expect(output).toContain('class="wg-tree-children"');
   });
 
-  it("marks all nodes expanded by default", () => {
+  it("marks all branches expanded by default", () => {
     const output = html({ kind: "tree", data: nested });
     expect(output).not.toContain('data-expanded="false"');
+    expect(output).toContain('data-expanded="true"');
   });
 
-  it("honors hints.expandDepth", () => {
+  it("honors hints.expandDepth on branches", () => {
+    const deep = {
+      label: "root",
+      children: [
+        { label: "season", children: [{ label: "episode", children: [] }] }
+      ]
+    };
     const output = html({
       kind: "tree",
-      data: nested,
+      data: deep,
       hints: { expandDepth: 1 }
     });
     const flags = [...output.matchAll(/data-expanded="(\w+)"/g)].map(
       (m) => m[1]
     );
+    // root (branch, depth 0) expanded; season (branch, depth 1) collapsed;
+    // episode is a leaf and carries no attribute at all.
     expect(flags).toEqual(["true", "false"]);
+    // collapsed children remain in the markup (presentational collapse)
+    expect(output).toContain(">episode</");
+  });
+
+  it("leaves carry no expansion attribute", () => {
+    const output = html({
+      kind: "tree",
+      data: { label: "root", children: [{ label: "leaf", children: [] }] }
+    });
+    const attributeCount = (output.match(/data-expanded/g) ?? []).length;
+    expect(attributeCount).toBe(1); // root only — leaf has none
   });
 
   it("falls back to a JSON label for nodes without one", () => {

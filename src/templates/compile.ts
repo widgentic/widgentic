@@ -1,6 +1,7 @@
 import type { WidgetPayload } from "../contract/types.js";
 import type {
   WidgetCatalog,
+  WidgetDescriptorInput,
   WidgetElementNode,
   WidgetNode,
   WidgetNodeAttrs,
@@ -146,11 +147,12 @@ export function compileTemplate(template: WidgetTemplate): WidgetRenderer {
 export function registerTemplate(
   catalog: WidgetCatalog,
   kind: string,
-  template: unknown
+  template: unknown,
+  descriptor?: WidgetDescriptorInput
 ): void {
   const validated = validateTemplate(template);
   if (!validated.ok) {
     throw new InvalidTemplateError(kind, validated.error);
   }
-  catalog.register(kind, compileTemplate(validated.template));
+  catalog.register(kind, compileTemplate(validated.template), descriptor);
 }

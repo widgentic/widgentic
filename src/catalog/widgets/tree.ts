@@ -38,23 +38,31 @@ function renderNode(
   depth: number,
   expandDepth: number
 ): WidgetNode {
-  const attrs: WidgetNodeAttrs = {
-    class: "wg-tree-node",
-    "data-expanded": depth < expandDepth ? "true" : "false"
-  };
+  const hasChildren =
+    isPlainObject(node) &&
+    Array.isArray(node.children) &&
+    node.children.length > 0;
+
+  // The expansion attribute marks expandable branches only — its presence
+  // identifies a branch, its value the initial state. Leaves carry none.
+  const attrs: WidgetNodeAttrs = hasChildren
+    ? {
+        class: "wg-tree-node",
+        "data-expanded": depth < expandDepth ? "true" : "false"
+      }
+    : { class: "wg-tree-node" };
+
   const children: WidgetNode[] = [
     el("span", { class: "wg-tree-label" }, [nodeLabel(node)])
   ];
-  if (
-    isPlainObject(node) &&
-    Array.isArray(node.children) &&
-    node.children.length > 0
-  ) {
+  if (hasChildren) {
     children.push(
       el(
         "ul",
         { class: "wg-tree-children" },
-        node.children.map((child) => renderNode(child, depth + 1, expandDepth))
+        (node.children as unknown[]).map((child) =>
+          renderNode(child, depth + 1, expandDepth)
+        )
       )
     );
   }
