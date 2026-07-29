@@ -24,6 +24,7 @@ Out of scope (deliberately, again): registration-over-the-wire (own change — s
 ### Modified Capabilities
 - `widget-catalog`: descriptor `dataSchema` + subset validator + schema enforcement in `render`; `fieldFormat` hint added to Card data handling.
 - `mcp-server`: `render_widget` gains `format` and `theme` inputs; marshalling becomes schema-aware; rendering-tool and marshalling requirements updated accordingly.
+- `widget-theming`: the value guard additionally rejects `expression(` (legacy webview script vector), whitespace-tolerant before the parenthesis.
 
 ## Impact
 

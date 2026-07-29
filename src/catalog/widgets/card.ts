@@ -11,8 +11,18 @@ import { formatValue, isPlainObject } from "./format.js";
  * render as a single value line. `meta.title`/`meta.subtitle` fill in when
  * `data` does not provide them. Total: never throws.
  */
+/** Apply a `fieldFormat` pattern: substitute `{value}`, or append when absent. */
+function applyPattern(pattern: string, value: string): string {
+  return pattern.includes("{value}")
+    ? pattern.split("{value}").join(value)
+    : pattern + value;
+}
+
 export function renderCard(payload: WidgetPayload): WidgetNode {
   const { data, meta } = payload;
+  const fieldFormat = isPlainObject(payload.hints?.fieldFormat)
+    ? payload.hints.fieldFormat
+    : undefined;
 
   let title: unknown;
   let subtitle: unknown;
@@ -53,12 +63,16 @@ export function renderCard(payload: WidgetPayload): WidgetNode {
       el(
         "dl",
         { class: "wg-card-fields" },
-        fieldEntries.map(([key, fieldValue]) =>
-          el("div", { class: "wg-card-field" }, [
+        fieldEntries.map(([key, fieldValue]) => {
+          const raw = formatValue(fieldValue);
+          const pattern = fieldFormat?.[key];
+          const display =
+            typeof pattern === "string" ? applyPattern(pattern, raw) : raw;
+          return el("div", { class: "wg-card-field" }, [
             el("dt", { class: "wg-card-field-key" }, [key]),
-            el("dd", { class: "wg-card-field-value" }, [formatValue(fieldValue)])
-          ])
-        )
+            el("dd", { class: "wg-card-field-value" }, [display])
+          ]);
+        })
       )
     );
   }

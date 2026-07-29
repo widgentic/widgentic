@@ -23,6 +23,19 @@
 - **WHEN** a kind with a `dataSchema` appears in `list()`
 - **THEN** its descriptor SHALL include the schema verbatim
 
+### Requirement: Registered widget styles
+`WidgetDescriptor` SHALL accept optional `styles`: a map of CSS selectors to property/value maps, letting custom kinds ship their look as data. Every selector part SHALL target a `.wg-`-prefixed class; selectors, property names, and values are guarded (no braces, semicolons, angle brackets, `url(`, or `expression(`), and values MAY reference theme tokens via `var(--wg-*)`. Invalid entries SHALL be skipped, never emitted. `widgetStylesToCss(styles)` SHALL generate the CSS, and styles SHALL be exposed through `describe`/`list` so hosts can inject them.
+
+#### Scenario: Styles registered as data generate CSS
+- **WHEN** a kind registers `styles: { ".wg-invoice": { border: "1px solid var(--wg-border, #e2e8f0)" } }`
+- **THEN** `widgetStylesToCss` SHALL emit a `.wg-invoice { border: ... }` rule
+- **AND** `describe(kind).styles` SHALL return the map
+
+#### Scenario: Unsafe style entries are dropped
+- **WHEN** styles contain a non-`.wg-` selector (e.g. `body`), a value with `url(`, or a property with `{`
+- **THEN** the generated CSS SHALL contain none of them
+- **AND** safe sibling entries SHALL still be emitted
+
 ## MODIFIED Requirements
 
 ### Requirement: Card data handling

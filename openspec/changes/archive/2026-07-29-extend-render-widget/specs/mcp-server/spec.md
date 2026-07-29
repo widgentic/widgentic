@@ -6,24 +6,57 @@
 #### Scenario: Page output is self-contained and styled
 - **WHEN** `render_widget` runs with `format: "page"`
 - **THEN** the text block SHALL start with `<!doctype html>` and contain the base stylesheet and the widget markup
+- **AND** the document SHALL style `body` background, text color, and font from the `--wg-*` tokens, so themes recolor the whole page
 - **AND** the result SHALL still contain the widgentic resource block
+
+#### Scenario: Registered kind styles are included
+- **WHEN** a kind registered with `styles` renders with `format: "page"`
+- **THEN** the document SHALL contain the CSS generated from that kind's styles
 
 #### Scenario: Single-block formats
 - **WHEN** `format: "html"` or `format: "widget"` is used
 - **THEN** the result SHALL contain only the corresponding block
 
 ### Requirement: Themed page output
-`render_widget` SHALL accept `theme?: <token map>` validated by the theming capability's rules. With `format: "page"`, valid themes SHALL be applied to the document via generated `--wg-*` declarations; invalid themes SHALL return `INVALID_TYPE` at `path: "theme.<token>"` naming the offending token. Without `format: "page"`, a valid `theme` SHALL be accepted and ignored.
+`render_widget` SHALL accept `theme?: <token map>` validated by the theming capability's rules. With `format: "page"`, valid themes SHALL be applied to the document via generated `--wg-*` declarations; invalid themes SHALL return `INVALID_TYPE` at `path: "theme.<token>"` naming the offending token. A valid `theme` SHALL also be embedded as a top-level `theme` field in the widgentic payload block regardless of format — riding the contract's unknown-field passthrough — so natively mounting hosts can honor it (advisory; hosts own their scope).
 
 #### Scenario: Dark-themed page
 - **WHEN** `render_widget` runs with `format: "page"` and `theme: { bg: "#0f131c" }`
 - **THEN** the document SHALL contain `--wg-bg: #0f131c`
 
+#### Scenario: Theme travels in the payload for native hosts
+- **WHEN** `render_widget` runs with a valid `theme` and any format
+- **THEN** the extracted payload SHALL carry that `theme` as a top-level field
+- **AND** contract validation of the payload SHALL still succeed (unknown-field passthrough)
+
 #### Scenario: Unsafe theme values are structured errors
 - **WHEN** `theme` contains `{ bg: "url(https://evil.example)" }`
 - **THEN** the result SHALL be `isError: true` with `error.path: "theme.bg"`
 
+### Requirement: Theme discovery tool
+The server SHALL expose `list_theme_tokens` (no input): a discovery tool returning the theming vocabulary as JSON — every token name with its light default, ready-made presets (at least `dark`), and the value rules (CSS strings only; unsafe values rejected) — so remote agents can construct valid themes without reading source. `handleListThemeTokens()` SHALL be a pure, catalog-free handler.
+
+#### Scenario: Tokens, defaults, and presets are discoverable
+- **WHEN** `handleListThemeTokens()` runs
+- **THEN** the parsed result SHALL list every registry token with its default value
+- **AND** SHALL include a `dark` preset that passes theme validation
+- **AND** SHALL state the value rules
+
+#### Scenario: Discoverable through the protocol
+- **WHEN** an SDK client lists tools and calls `list_theme_tokens`
+- **THEN** the tool SHALL appear alongside `list_widgets` and `render_widget`
+- **AND** the delivered result SHALL parse to the token listing
+
 ## MODIFIED Requirements
+
+### Requirement: Server module programmatic surface
+The package SHALL export from a `./mcp-server` entry: tool definitions as plain data (`LIST_WIDGETS_TOOL`, `RENDER_WIDGET_TOOL`, `LIST_THEME_TOKENS_TOOL` — each with `name`, `description`, and a JSON-Schema `inputSchema` object) and pure handlers `handleListWidgets(catalog)`, `handleRenderWidget(catalog, input: unknown)`, and `handleListThemeTokens()` returning MCP-shaped tool results. The module SHALL NOT depend on an MCP SDK.
+
+#### Scenario: Tool definitions are serializable data
+- **WHEN** `LIST_WIDGETS_TOOL`, `RENDER_WIDGET_TOOL`, and `LIST_THEME_TOKENS_TOOL` are inspected
+- **THEN** each SHALL be JSON-serializable with `name` (`"list_widgets"` / `"render_widget"` / `"list_theme_tokens"`), a non-empty `description`, and an object-typed `inputSchema`
+- **AND** `RENDER_WIDGET_TOOL.inputSchema` SHALL require `widget` and `data`
+- **AND** the `data` property SHALL declare the JSON value types (`array`, `object`, `string`, `number`, `boolean`, `null`) so clients marshal structured values instead of serialized strings
 
 ### Requirement: Structured data marshalling
 When `data` arrives as a string that encodes a JSON object or array (a client-side marshalling artifact), `handleRenderWidget` SHALL parse it before payload assembly, so the rendered output and the embedded payload carry the structured value. Multiply-encoded strings (a JSON string encoding a JSON string encoding a structured value) SHALL be unwrapped the same way, to a bounded depth. Unwrapping SHALL commit only when it reaches an object or array; strings that do not (including quoted plain text and stringified primitives) SHALL pass through unchanged and verbatim as literal string data. When the target kind's `dataSchema` declares string-typed `data` (and neither object nor array), string `data` SHALL bypass unwrapping entirely, making literal JSON-shaped text expressible.

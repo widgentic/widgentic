@@ -38,6 +38,9 @@ describe("validateTheme", () => {
       { bg: "red; } body { display:none" },
       { bg: "url(https://evil.example/x)" },
       { bg: "URL(https://evil.example/x)" },
+      { bg: "url (https://evil.example/x)" },
+      { bg: "expression(alert(1))" },
+      { bg: "EXPRESSION (alert(1))" },
       { bg: "</style><script>x</script>" },
       { bg: 42 as unknown as string }
     ]) {

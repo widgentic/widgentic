@@ -2,9 +2,12 @@ import { describe, it, expect } from "vitest";
 import {
   handleListWidgets,
   handleRenderWidget,
+  handleListThemeTokens,
   LIST_WIDGETS_TOOL,
-  RENDER_WIDGET_TOOL
+  RENDER_WIDGET_TOOL,
+  LIST_THEME_TOKENS_TOOL
 } from "../index.js";
+import { THEME_TOKENS, validateTheme } from "../../theming/index.js";
 import { createCatalog } from "../../catalog/index.js";
 import type { WidgetCatalog } from "../../catalog/index.js";
 import { registerTemplate } from "../../templates/index.js";
@@ -30,9 +33,29 @@ function catalogWithInvoice(): WidgetCatalog {
   return catalog;
 }
 
+describe("handleListThemeTokens", () => {
+  it("lists every token with its default, presets, and rules", () => {
+    const result = handleListThemeTokens();
+    expect(result.isError).toBeUndefined();
+    const listing = JSON.parse(textOf(result)) as {
+      tokens: { name: string; default: string }[];
+      presets: { dark: Record<string, string> };
+      rules: string;
+    };
+    expect(listing.tokens.map((t) => t.name).sort()).toEqual(
+      [...THEME_TOKENS].sort()
+    );
+    for (const token of listing.tokens) {
+      expect(token.default.length).toBeGreaterThan(0);
+    }
+    expect(validateTheme(listing.presets.dark)).toMatchObject({ ok: true });
+    expect(listing.rules).toContain("strings");
+  });
+});
+
 describe("tool definitions", () => {
   it("are serializable data with the documented names", () => {
-    for (const tool of [LIST_WIDGETS_TOOL, RENDER_WIDGET_TOOL]) {
+    for (const tool of [LIST_WIDGETS_TOOL, RENDER_WIDGET_TOOL, LIST_THEME_TOKENS_TOOL]) {
       expect(JSON.parse(JSON.stringify(tool))).toEqual(tool);
       expect(tool.description.length).toBeGreaterThan(0);
     }
@@ -235,6 +258,150 @@ describe("handleRenderWidget", () => {
       } else {
         expect.fail(`expected a successful extraction for ${literal}`);
       }
+    }
+  });
+
+  it("format selects output blocks; page is a styled document", () => {
+    const input = { widget: "card", data: { title: "T" } };
+
+    const htmlOnly = handleRenderWidget(catalog, { ...input, format: "html" });
+    expect(htmlOnly.content).toHaveLength(1);
+    expect(htmlOnly.content[0]?.type).toBe("text");
+
+    const widgetOnly = handleRenderWidget(catalog, {
+      ...input,
+      format: "widget"
+    });
+    expect(widgetOnly.content).toHaveLength(1);
+    expect(widgetOnly.content[0]?.type).toBe("resource");
+    expect(extractWidgetPayload(widgetOnly)).toMatchObject({
+      found: true,
+      ok: true
+    });
+
+    const page = handleRenderWidget(catalog, { ...input, format: "page" });
+    const doc = textOf(page);
+    expect(doc.startsWith("<!doctype html>")).toBe(true);
+    expect(doc).toContain(".wg-card {");
+    expect(doc).toContain('class="wg-card"');
+    // the body is themed from tokens so dark themes recolor the whole page
+    expect(doc).toContain("body {");
+    expect(doc).toContain("background: var(--wg-bg,");
+    expect(doc).toContain("color: var(--wg-fg,");
+    expect(extractWidgetPayload(page)).toMatchObject({ found: true, ok: true });
+
+    const badFormat = handleRenderWidget(catalog, { ...input, format: "pdf" });
+    expect(badFormat.isError).toBe(true);
+    expect(JSON.parse(textOf(badFormat)).path).toBe("format");
+  });
+
+  it("theme applies to page output and fails structurally when unsafe", () => {
+    const input = { widget: "card", data: { title: "T" } };
+
+    const themed = handleRenderWidget(catalog, {
+      ...input,
+      format: "page",
+      theme: { bg: "#0f131c", accent: "#7aa2f7" }
+    });
+    const doc = textOf(themed);
+    expect(doc).toContain("--wg-bg: #0f131c;");
+    expect(doc).toContain("--wg-accent: #7aa2f7;");
+
+    const unsafe = handleRenderWidget(catalog, {
+      ...input,
+      format: "page",
+      theme: { bg: "url(https://evil.example)" }
+    });
+    expect(unsafe.isError).toBe(true);
+    expect(JSON.parse(textOf(unsafe)).path).toBe("theme.bg");
+
+    // valid theme without page format: not in the fragment, but embedded in
+    // the payload so natively mounting hosts can honor it
+    const offPage = handleRenderWidget(catalog, {
+      ...input,
+      theme: { bg: "#111" }
+    });
+    expect(offPage.isError).toBeUndefined();
+    expect(textOf(offPage)).not.toContain("--wg-bg");
+    const extraction = extractWidgetPayload(offPage);
+    if (extraction.found && extraction.ok) {
+      expect(extraction.payload.theme).toEqual({ bg: "#111" });
+    } else {
+      expect.fail("expected a successful extraction");
+    }
+  });
+
+  it("page output includes the rendered kind's registered styles", () => {
+    const styled = createCatalog();
+    styled.register("badge", () => ({ tag: "span", attrs: { class: "wg-badge" } }), {
+      description: "badge",
+      dataShape: "any",
+      styles: {
+        ".wg-badge": { color: "var(--wg-accent, #2563eb)" },
+        body: { display: "none" } // unsafe: must be dropped
+      }
+    });
+    const page = handleRenderWidget(styled, {
+      widget: "badge",
+      data: 1,
+      format: "page"
+    });
+    const doc = textOf(page);
+    expect(doc).toContain(".wg-badge {");
+    expect(doc).toContain("color: var(--wg-accent, #2563eb);");
+    // the unsafe body rule was dropped: the only body rule is the themed one
+    expect(doc.match(/body \{/g)).toHaveLength(1);
+    expect(doc).not.toContain("body {\n  display: none");
+
+    // other formats carry no styles (fragment only)
+    const fragment = handleRenderWidget(styled, { widget: "badge", data: 1 });
+    expect(textOf(fragment)).not.toContain(".wg-badge {");
+  });
+
+  it("enforces dataSchema with dotted paths and skips coercion for string schemas", () => {
+    const strict = createCatalog();
+    registerTemplate(
+      strict,
+      "invoice",
+      {
+        tag: "div",
+        children: [{ each: "lines", template: { tag: "li", children: [{ bind: "item" }] } }]
+      },
+      {
+        description: "Invoice",
+        dataShape: "{ customer, lines }",
+        dataSchema: {
+          type: "object",
+          required: ["customer", "lines"],
+          properties: { lines: { type: "array" } }
+        }
+      }
+    );
+    const missing = handleRenderWidget(strict, {
+      widget: "invoice",
+      data: { customer: "Ada" }
+    });
+    expect(missing.isError).toBe(true);
+    expect(JSON.parse(textOf(missing))).toMatchObject({
+      code: "MISSING_FIELD",
+      path: "data.lines"
+    });
+
+    strict.register("verbatim", (payload) => String(payload.data), {
+      description: "string kind",
+      dataShape: "string",
+      dataSchema: { type: "string" }
+    });
+    const literal = '[{"a":1}]';
+    const result = handleRenderWidget(strict, {
+      widget: "verbatim",
+      data: literal
+    });
+    const extraction = extractWidgetPayload(result);
+    if (extraction.found && extraction.ok) {
+      expect(extraction.payload.data).toBe(literal);
+    } else {
+      expect.fail("expected a successful extraction");
     }
   });
 

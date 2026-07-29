@@ -20,6 +20,12 @@ describe("mcp-server types", () => {
     expectTypeOf(LIST_WIDGETS_TOOL).toEqualTypeOf<McpToolDefinition>();
   });
 
+  it("descriptor dataSchema is typed", () => {
+    expectTypeOf<WidgetDescriptor["dataSchema"]>().toEqualTypeOf<
+      Record<string, unknown> | undefined
+    >();
+  });
+
   it("catalog metadata surface is typed", () => {
     expectTypeOf<ReturnType<WidgetCatalog["describe"]>>().toEqualTypeOf<
       WidgetDescriptor | undefined

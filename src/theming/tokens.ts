@@ -45,9 +45,14 @@ export interface ThemeError {
 
 /**
  * Value guard shared by validation (strict) and application (lenient
- * defense in depth). Rejects characters that could escape a declaration or
- * an HTML context, and `url()` to prevent themes from fetching resources.
+ * defense in depth). Rejects exfiltration and execution vectors — not
+ * invalid CSS: declaration/HTML escapes, `url()` (resource fetching), and
+ * `expression()` (legacy script execution in old embedded webviews).
  */
 export function isSafeTokenValue(value: string): boolean {
-  return !/[;{}<>]/.test(value) && !/url\(/i.test(value);
+  return (
+    !/[;{}<>]/.test(value) &&
+    !/url\s*\(/i.test(value) &&
+    !/expression\s*\(/i.test(value)
+  );
 }

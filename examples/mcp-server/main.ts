@@ -13,8 +13,10 @@ import { registerTemplate } from "widgentic/templates";
 import {
   LIST_WIDGETS_TOOL,
   RENDER_WIDGET_TOOL,
+  LIST_THEME_TOKENS_TOOL,
   handleListWidgets,
-  handleRenderWidget
+  handleRenderWidget,
+  handleListThemeTokens
 } from "widgentic/mcp-server";
 
 const catalog = createCatalog();
@@ -70,6 +72,44 @@ registerTemplate(
       customer: "Ada Lovelace",
       lines: [{ item: "widgets", qty: 4, lineTotal: "$119.96" }],
       total: "$119.96"
+    },
+    styles: {
+      ".wg-invoice": {
+        background: "var(--wg-bg, #ffffff)",
+        border: "1px solid var(--wg-border, #e2e8f0)",
+        "border-radius": "var(--wg-radius, 6px)",
+        "box-shadow": "var(--wg-shadow, 0 1px 3px rgba(0, 0, 0, 0.12))",
+        padding: "calc(var(--wg-spacing, 8px) * 2)",
+        "max-width": "28rem"
+      },
+      ".wg-invoice h2": {
+        color: "var(--wg-accent, #2563eb)",
+        "margin-top": "0"
+      },
+      ".wg-invoice li": {
+        padding: "calc(var(--wg-spacing, 8px) / 2) 0",
+        "border-bottom": "1px solid var(--wg-border, #e2e8f0)"
+      }
+    },
+    dataSchema: {
+      type: "object",
+      required: ["customer", "lines"],
+      properties: {
+        customer: { type: "string" },
+        lines: {
+          type: "array",
+          items: {
+            type: "object",
+            required: ["item", "qty", "lineTotal"],
+            properties: {
+              item: { type: "string" },
+              qty: { type: "number" },
+              lineTotal: { type: "string" }
+            }
+          }
+        },
+        total: { type: "string" }
+      }
     }
   }
 );
@@ -82,6 +122,12 @@ server.registerTool(
   // Handler results use widgentic's structural MCP types; they are shaped
   // as CallToolResult content, asserted at this wiring boundary.
   () => handleListWidgets(catalog) as CallToolResult
+);
+
+server.registerTool(
+  LIST_THEME_TOKENS_TOOL.name,
+  { description: LIST_THEME_TOKENS_TOOL.description },
+  () => handleListThemeTokens() as CallToolResult
 );
 
 server.registerTool(
@@ -105,7 +151,9 @@ server.registerTool(
         ])
         .describe("Widget data matching the kind's dataShape."),
       hints: z.record(z.string(), z.unknown()).optional(),
-      meta: z.record(z.string(), z.unknown()).optional()
+      meta: z.record(z.string(), z.unknown()).optional(),
+      format: z.enum(["both", "html", "widget", "page"]).optional(),
+      theme: z.record(z.string(), z.string()).optional()
     }
   },
   (args) => handleRenderWidget(catalog, args) as CallToolResult

@@ -23,6 +23,19 @@ export const LIST_WIDGETS_TOOL: McpToolDefinition = {
   }
 };
 
+export const LIST_THEME_TOKENS_TOOL: McpToolDefinition = {
+  name: "list_theme_tokens",
+  description:
+    "List the theming vocabulary for render_widget's 'theme' input: every " +
+    "token name with its light-mode default, ready-made presets (e.g. " +
+    "dark), and the value rules. Call this before building a theme.",
+  inputSchema: {
+    type: "object",
+    properties: {},
+    additionalProperties: false
+  }
+};
+
 export const RENDER_WIDGET_TOOL: McpToolDefinition = {
   name: "render_widget",
   description:
@@ -50,6 +63,23 @@ export const RENDER_WIDGET_TOOL: McpToolDefinition = {
       meta: {
         type: "object",
         description: "Optional metadata (title, subtitle, source, ...)."
+      },
+      format: {
+        type: "string",
+        enum: ["both", "html", "widget", "page"],
+        description:
+          "Output selection (default 'both'): 'html' fragment only (no " +
+          "payload block — plain consumers only; strands widgentic-aware " +
+          "hosts), 'widget' payload block only, 'page' a self-contained " +
+          "styled HTML document (plus the payload block)."
+      },
+      theme: {
+        type: "object",
+        description:
+          "Theme token map: bare token names to CSS string values — always " +
+          "strings, e.g. '6px' not 6. Discover tokens, defaults, and " +
+          "presets with list_theme_tokens. Applied to 'page' output and " +
+          "embedded in the widget payload for native hosts on every format."
       }
     },
     required: ["widget", "data"],

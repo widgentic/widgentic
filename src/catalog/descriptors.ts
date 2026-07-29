@@ -1,4 +1,6 @@
 import type { WidgetKind } from "../contract/types.js";
+import type { DataSchema } from "./schema.js";
+import type { WidgetStyles } from "./styles.js";
 
 /**
  * Agent-facing documentation for a widget kind. Descriptors make the
@@ -16,6 +18,17 @@ export interface WidgetDescriptor {
   dataExample?: unknown;
   /** Supported hint keys and what they do. */
   hints?: Record<string, string>;
+  /**
+   * Optional JSON-Schema subset for `data` (see schema.ts). When present,
+   * `catalog.render` validates data against it before rendering; kinds
+   * without one keep their lenient fallback behavior.
+   */
+  dataSchema?: DataSchema;
+  /**
+   * Optional CSS-as-data for the kind's `.wg-` classes (see styles.ts).
+   * Included in `page` output and exposable by hosts; guarded like themes.
+   */
+  styles?: WidgetStyles;
 }
 
 /** Descriptor as supplied at registration; `kind` is filled by the catalog. */
@@ -35,13 +48,21 @@ export const BUILTIN_DESCRIPTORS: Record<
     dataShape:
       "A plain object. `title`, `subtitle`, and `fields` are used when present; " +
       "other entries become field key/value pairs. Primitives render as a single " +
-      "value line. `meta.title`/`meta.subtitle` fill in missing chrome. Field " +
-      "values render as given — pre-format display strings yourself (e.g. " +
-      "'$9.99', '2.56 / 5'); there are no formatting hints.",
+      "value line. `meta.title`/`meta.subtitle` fill in missing chrome. Send " +
+      "field values typed (e.g. price: 9.99, not '$9.99') and use " +
+      "hints.fieldFormat for display formatting — the payload keeps the " +
+      "typed value while the render gets its unit.",
     dataExample: {
       title: "Essence Mascara",
       subtitle: "beauty",
-      fields: { price: "$9.99", rating: "2.56 / 5", stock: 99 }
+      fields: { price: 9.99, rating: 2.56, stock: 99 }
+    },
+    hints: {
+      fieldFormat:
+        "Record<fieldKey, pattern> — formats matching field values by " +
+        "substituting {value} in the pattern (e.g. { price: '${value}', " +
+        "rating: '{value} / 5' }); a pattern without {value} is prefixed " +
+        "to the value. Output is escaped like any text."
     }
   },
   table: {

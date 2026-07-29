@@ -4,6 +4,7 @@ import type { WidgetKind } from "../contract/types.js";
 import type { WidgetNode, WidgetRenderer } from "./node.js";
 import type { WidgetDescriptor, WidgetDescriptorInput } from "./descriptors.js";
 import { BUILTIN_DESCRIPTORS } from "./descriptors.js";
+import { validateDataAgainstSchema } from "./schema.js";
 import { renderCard } from "./widgets/card.js";
 import { renderTable } from "./widgets/table.js";
 import { renderTree } from "./widgets/tree.js";
@@ -73,7 +74,9 @@ export function createCatalog(): WidgetCatalog {
         ...(descriptor?.dataExample !== undefined
           ? { dataExample: descriptor.dataExample }
           : {}),
-        ...(descriptor?.hints ? { hints: descriptor.hints } : {})
+        ...(descriptor?.hints ? { hints: descriptor.hints } : {}),
+        ...(descriptor?.dataSchema ? { dataSchema: descriptor.dataSchema } : {}),
+        ...(descriptor?.styles ? { styles: descriptor.styles } : {})
       });
     },
     has: (kind) => renderers.has(kind),
@@ -86,6 +89,16 @@ export function createCatalog(): WidgetCatalog {
         knownKinds: new Set(renderers.keys())
       });
       if (!validated.ok) return validated;
+      // Opt-in structural validation: kinds with a dataSchema fail fast
+      // with a dotted data path instead of rendering a lenient fallback.
+      const schema = descriptors.get(validated.payload.kind)?.dataSchema;
+      if (schema) {
+        const schemaError = validateDataAgainstSchema(
+          schema,
+          validated.payload.data
+        );
+        if (schemaError) return { ok: false, error: schemaError };
+      }
       const renderer = renderers.get(validated.payload.kind);
       if (renderer === undefined) {
         // Unreachable while knownKinds is non-empty; kept for totality.

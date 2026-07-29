@@ -55,6 +55,36 @@ describe("card renderer", () => {
     expect(html({ kind: "card", data: null })).toContain(">null</");
     expect(html({ kind: "card", data: [1, 2] })).toContain("[1,2]");
   });
+
+  it("hints.fieldFormat formats matching field values", () => {
+    const output = html({
+      kind: "card",
+      data: { fields: { price: 9.99, rating: 2.56, stock: 99 } },
+      hints: { fieldFormat: { price: "${value}", rating: "{value} / 5" } }
+    });
+    expect(output).toContain(">$9.99</");
+    expect(output).toContain(">2.56 / 5</");
+    expect(output).toContain(">99</"); // unmatched key unformatted
+  });
+
+  it("fieldFormat without a placeholder prefixes the value", () => {
+    const output = html({
+      kind: "card",
+      data: { fields: { price: 9.99 } },
+      hints: { fieldFormat: { price: "$" } }
+    });
+    expect(output).toContain(">$9.99</");
+  });
+
+  it("fieldFormat cannot inject markup", () => {
+    const output = html({
+      kind: "card",
+      data: { fields: { note: "x" } },
+      hints: { fieldFormat: { note: "<b>{value}</b>" } }
+    });
+    expect(output).toContain("&lt;b&gt;x&lt;/b&gt;");
+    expect(output).not.toContain("<b>");
+  });
 });
 
 describe("table renderer", () => {

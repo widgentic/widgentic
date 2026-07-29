@@ -1,8 +1,65 @@
-import type { WidgetCatalog } from "../catalog/index.js";
-import { renderToHtml } from "../catalog/index.js";
+import type { DataSchema, WidgetCatalog, WidgetStyles } from "../catalog/index.js";
+import { renderToHtml, widgetStylesToCss } from "../catalog/index.js";
 import type { WidgetContractError } from "../contract/index.js";
-import type { McpToolResult } from "../mcp/index.js";
+import type { McpToolResult, McpContentBlock } from "../mcp/index.js";
 import { WIDGENTIC_MIME_TYPE, WIDGENTIC_URI } from "../mcp/index.js";
+import type { WidgetTheme } from "../theming/index.js";
+import {
+  THEME_TOKENS,
+  TOKEN_DEFAULTS,
+  baseStylesheet,
+  darkTheme,
+  themeToCss,
+  validateTheme
+} from "../theming/index.js";
+
+const FORMATS = ["both", "html", "widget", "page"] as const;
+type RenderFormat = (typeof FORMATS)[number];
+
+/** True when a schema declares string-typed data (and not object/array). */
+function declaresStringOnly(schema: DataSchema | undefined): boolean {
+  if (!schema) return false;
+  const type = schema.type;
+  const types =
+    typeof type === "string" ? [type] : Array.isArray(type) ? type : [];
+  return (
+    types.includes("string") &&
+    !types.includes("object") &&
+    !types.includes("array")
+  );
+}
+
+/**
+ * The page body takes background, color, and font from the theme tokens —
+ * a dark theme recolors the whole document, not just the widget chrome.
+ */
+const PAGE_BODY_CSS =
+  `body {\n` +
+  `  background: var(--wg-bg, ${TOKEN_DEFAULTS.bg});\n` +
+  `  color: var(--wg-fg, ${TOKEN_DEFAULTS.fg});\n` +
+  `  font-family: var(--wg-font-family, ${TOKEN_DEFAULTS["font-family"]});\n` +
+  `  font-size: var(--wg-font-size, ${TOKEN_DEFAULTS["font-size"]});\n` +
+  `  margin: calc(var(--wg-spacing, ${TOKEN_DEFAULTS.spacing}) * 2);\n` +
+  `}`;
+
+/** Self-contained styled document for `format: "page"`. */
+function composePage(
+  fragment: string,
+  theme: WidgetTheme | undefined,
+  kindStyles: WidgetStyles | undefined
+): string {
+  const styleCss = kindStyles ? widgetStylesToCss(kindStyles) : "";
+  const parts = [
+    baseStylesheet,
+    PAGE_BODY_CSS,
+    ...(styleCss ? [styleCss] : []),
+    ...(theme ? [themeToCss(theme, ":root")] : [])
+  ];
+  return (
+    `<!doctype html>\n<meta charset="utf-8">\n<title>widgentic</title>\n` +
+    `<style>\n${parts.join("\n")}\n</style>\n<body>${fragment}</body>`
+  );
+}
 
 /** Same plain-object definition as the contract validator. */
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -37,6 +94,29 @@ function errorResult(error: WidgetContractError): McpToolResult {
   return {
     isError: true,
     content: [{ type: "text", text: JSON.stringify(error) }]
+  };
+}
+
+/**
+ * `list_theme_tokens`: the theming vocabulary as JSON — token names with
+ * their light defaults, ready-made presets, and the value rules — so remote
+ * agents can build valid themes without reading widgentic source.
+ */
+export function handleListThemeTokens(): McpToolResult {
+  const listing = {
+    tokens: THEME_TOKENS.map((token) => ({
+      name: token,
+      default: TOKEN_DEFAULTS[token]
+    })),
+    presets: { dark: darkTheme },
+    rules:
+      "Values are CSS strings (e.g. '6px', not 6). Unsafe values are " +
+      "rejected: no ';', braces, angle brackets, url(), or expression(). " +
+      "Unset tokens fall back to the light defaults. Pass the map as " +
+      "render_widget's 'theme' input."
+  };
+  return {
+    content: [{ type: "text", text: JSON.stringify(listing, null, 2) }]
   };
 }
 
@@ -82,12 +162,40 @@ export function handleRenderWidget(
     });
   }
 
+  const format: unknown = input.format === undefined ? "both" : input.format;
+  if (!FORMATS.includes(format as RenderFormat)) {
+    return errorResult({
+      code: "INVALID_TYPE",
+      path: "format",
+      message: `'format' must be one of ${FORMATS.map((f) => `'${f}'`).join(", ")}.`
+    });
+  }
+
+  let theme: WidgetTheme | undefined;
+  if ("theme" in input && input.theme !== undefined) {
+    const validated = validateTheme(input.theme);
+    if (!validated.ok) {
+      return errorResult({
+        code: "INVALID_TYPE",
+        path: validated.error.token ? `theme.${validated.error.token}` : "theme",
+        message: validated.error.message
+      });
+    }
+    theme = validated.theme;
+  }
+
+  // Schema-aware marshalling: kinds declaring string-typed data receive the
+  // string verbatim — literal JSON-shaped text stays expressible for them.
+  const schema = catalog.describe(widget)?.dataSchema;
   const payload: Record<string, unknown> = {
     kind: widget,
-    data: coerceData(input.data)
+    data: declaresStringOnly(schema) ? input.data : coerceData(input.data)
   };
   if ("hints" in input && input.hints !== undefined) payload.hints = input.hints;
   if ("meta" in input && input.meta !== undefined) payload.meta = input.meta;
+  // The theme rides the payload as an unknown-field passthrough, so hosts
+  // that mount the widget natively can honor it (advisory, any format).
+  if (theme !== undefined) payload.theme = theme;
 
   // Contract validation (kind membership, hints/meta shape) + rendering.
   const rendered = catalog.render(payload);
@@ -119,17 +227,32 @@ export function handleRenderWidget(
     });
   }
 
-  return {
-    content: [
-      { type: "text", text: renderToHtml(rendered.node) },
-      {
-        type: "resource",
-        resource: {
-          uri: WIDGENTIC_URI,
-          mimeType: WIDGENTIC_MIME_TYPE,
-          text: json
-        }
-      }
-    ]
+  const html = renderToHtml(rendered.node);
+  const widgetBlock: McpContentBlock = {
+    type: "resource",
+    resource: {
+      uri: WIDGENTIC_URI,
+      mimeType: WIDGENTIC_MIME_TYPE,
+      text: json
+    }
   };
+
+  switch (format as RenderFormat) {
+    case "html":
+      return { content: [{ type: "text", text: html }] };
+    case "widget":
+      return { content: [widgetBlock] };
+    case "page":
+      return {
+        content: [
+          {
+            type: "text",
+            text: composePage(html, theme, catalog.describe(widget)?.styles)
+          },
+          widgetBlock
+        ]
+      };
+    default:
+      return { content: [{ type: "text", text: html }, widgetBlock] };
+  }
 }

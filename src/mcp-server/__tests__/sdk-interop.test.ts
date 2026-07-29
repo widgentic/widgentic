@@ -9,8 +9,10 @@ import { extractWidgetPayload } from "../../mcp/index.js";
 import {
   LIST_WIDGETS_TOOL,
   RENDER_WIDGET_TOOL,
+  LIST_THEME_TOKENS_TOOL,
   handleListWidgets,
-  handleRenderWidget
+  handleRenderWidget,
+  handleListThemeTokens
 } from "../index.js";
 
 interface DeliveredResult {
@@ -31,6 +33,11 @@ async function connect() {
     () => handleListWidgets(catalog) as CallToolResult
   );
   server.registerTool(
+    LIST_THEME_TOKENS_TOOL.name,
+    { description: LIST_THEME_TOKENS_TOOL.description },
+    () => handleListThemeTokens() as CallToolResult
+  );
+  server.registerTool(
     RENDER_WIDGET_TOOL.name,
     {
       description: RENDER_WIDGET_TOOL.description,
@@ -45,7 +52,9 @@ async function connect() {
           z.null()
         ]),
         hints: z.record(z.string(), z.unknown()).optional(),
-        meta: z.record(z.string(), z.unknown()).optional()
+        meta: z.record(z.string(), z.unknown()).optional(),
+        format: z.enum(["both", "html", "widget", "page"]).optional(),
+        theme: z.record(z.string(), z.string()).optional()
       }
     },
     (args) => handleRenderWidget(catalog, args) as CallToolResult
@@ -128,10 +137,44 @@ describe("SDK interoperability (in-memory transport)", () => {
     expect(JSON.parse(textOf(result)).code).toBe("UNKNOWN_KIND");
   });
 
+  it("themed page format round-trips through the protocol", async () => {
+    const { client } = await connect();
+    const result = (await client.callTool({
+      name: "render_widget",
+      arguments: {
+        widget: "card",
+        data: { title: "T" },
+        format: "page",
+        theme: { bg: "#0f131c" }
+      }
+    })) as DeliveredResult;
+    expect(result.isError).toBeFalsy();
+    const doc = textOf(result);
+    expect(doc.startsWith("<!doctype html>")).toBe(true);
+    expect(doc).toContain(".wg-card {");
+    expect(doc).toContain("--wg-bg: #0f131c;");
+    expect(extractWidgetPayload(result)).toMatchObject({
+      found: true,
+      ok: true
+    });
+  });
+
   it("tools are discoverable through the protocol", async () => {
     const { client } = await connect();
     const tools = await client.listTools();
     const names = tools.tools.map((tool) => tool.name).sort();
-    expect(names).toEqual(["list_widgets", "render_widget"]);
+    expect(names).toEqual(["list_theme_tokens", "list_widgets", "render_widget"]);
+  });
+
+  it("theme vocabulary round-trips through the protocol", async () => {
+    const { client } = await connect();
+    const result = (await client.callTool({
+      name: "list_theme_tokens",
+      arguments: {}
+    })) as DeliveredResult;
+    expect(result.isError).toBeFalsy();
+    const listing = JSON.parse(textOf(result));
+    expect(listing.presets.dark.bg).toBeDefined();
+    expect(listing.tokens.length).toBeGreaterThanOrEqual(10);
   });
 });
