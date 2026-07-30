@@ -93,7 +93,9 @@ registerTemplate(catalog, "invoice", {
 widgentic is itself an MCP server: any MCP client can discover the available widgets and ask widgentic to validate and render for it.
 
 ```bash
-npm run mcp   # starts the stdio server (tools: list_widgets, render_widget)
+npm run mcp        # stdio server
+npm run mcp:http   # Streamable HTTP on :3001/mcp (for HTTP hosts and Apps testing)
+# tools: list_widgets, list_theme_tokens, render_widget
 ```
 
 - `list_widgets` — returns every registered kind's descriptor: purpose, expected `data` shape, an example to imitate, and supported hints.
@@ -137,6 +139,12 @@ chat. Non-aware hosts (including Claude Code's terminal chat) receive the same
 result as text; there, use `format: "page"` and open the document in a browser
 instead.
 
+Inline mounting is verified in the official **basic-host** reference and
+**VS Code Copilot Chat** (all five widget kinds, live host re-theming);
+Claude Code degrades gracefully to text. Full runbooks — local basic-host
+setup, remote rig, host registration snippets — live in
+[examples/mcp-server/TESTING.md](examples/mcp-server/TESTING.md).
+
 ### Testing without Claude
 
 - **MCP Inspector** (interactive UI): `npx @modelcontextprotocol/inspector npx tsx examples/mcp-server/main.ts`
@@ -145,7 +153,7 @@ instead.
 
 ## Status
 
-All nine capabilities are implemented and tested (`npm test` — unit, type, DOM, and MCP interop suites). Development is spec-first via OpenSpec: see `openspec/specs/` for current behavior and `openspec/changes/archive/` for the change history. Planned next: `render_widget` extensions (per-kind data schemas, theme input, format selection) and a widget designer UI on top of `widgentic/templates`.
+All nine capabilities are implemented and tested (`npm test` — unit, type, DOM, and MCP Apps interop suites; zero runtime dependencies). `render_widget` supports per-kind data schemas, formatting hints, themes, format selection, and MCP Apps inline mounting — visually verified in two production-grade Apps hosts (see [TESTING.md](examples/mcp-server/TESTING.md)). Development is spec-first via OpenSpec: see `openspec/specs/` for current behavior and `openspec/changes/archive/` for the full change history (14 changes). Earned backlog for the next cycle: capability-aware model-context slimming, native reactive mounting in the app template, hint-coherence diagnostics, bounded schema pattern checks, a `--wg-surface` token, and the widget designer UI on top of `widgentic/templates`.
 
 ## Reference material
 
