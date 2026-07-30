@@ -45,6 +45,8 @@ export type McpContentBlock =
 export interface McpToolResult {
   content: McpContentBlock[];
   isError?: boolean;
+  /** Presentation data for app templates; not added to model context. */
+  structuredContent?: Record<string, unknown>;
   [key: string]: unknown;
 }
 

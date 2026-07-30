@@ -53,7 +53,7 @@ async function connect() {
         ]),
         hints: z.record(z.string(), z.unknown()).optional(),
         meta: z.record(z.string(), z.unknown()).optional(),
-        format: z.enum(["both", "html", "widget", "page"]).optional(),
+        format: z.enum(["both", "html", "widget", "page", "app"]).optional(),
         theme: z.record(z.string(), z.string()).optional()
       }
     },
@@ -125,6 +125,39 @@ describe("SDK interoperability (in-memory transport)", () => {
     } else {
       expect.fail("expected a successful extraction");
     }
+  });
+
+  it("app format round-trips the ui:// html resource through the protocol", async () => {
+    const { client } = await connect();
+    const result = (await client.callTool({
+      name: "render_widget",
+      arguments: {
+        widget: "card",
+        data: { title: "T" },
+        format: "app",
+        theme: { bg: "#0f131c" }
+      }
+    })) as DeliveredResult & {
+      content: { type: string; resource?: { uri: string; mimeType?: string; text?: string } }[];
+    };
+    expect(result.isError).toBeFalsy();
+    expect(result.content.map((b) => b.type)).toEqual([
+      "text",
+      "resource",
+      "resource"
+    ]);
+    const ui = result.content[1]?.resource;
+    expect(ui?.uri).toBe("ui://widgentic/page/card");
+    expect(ui?.mimeType).toBe("text/html;profile=mcp-app");
+    expect(ui?.text?.startsWith("<!doctype html>")).toBe(true);
+    expect(extractWidgetPayload(result)).toMatchObject({
+      found: true,
+      ok: true
+    });
+    // structuredContent survives the protocol for app templates
+    const sc = (result as { structuredContent?: { html?: string } })
+      .structuredContent;
+    expect(sc?.html).toContain('class="wg-card"');
   });
 
   it("unknown widget id arrives as an isError result", async () => {

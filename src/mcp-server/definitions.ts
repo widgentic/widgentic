@@ -23,6 +23,19 @@ export const LIST_WIDGETS_TOOL: McpToolDefinition = {
   }
 };
 
+/**
+ * URI prefix for widget pages served as MCP Apps-style UI resources
+ * (`text/html`). The full URI is `ui://widgentic/page/<kind>` —
+ * deterministic per kind so Apps hosts can cache and reference it.
+ */
+export const WIDGENTIC_UI_URI_PREFIX = "ui://widgentic/page/";
+
+/** MCP Apps mime type for UI resources (spec: `text/html;profile=mcp-app`). */
+export const WIDGENTIC_APP_MIME_TYPE = "text/html;profile=mcp-app";
+
+/** URI of the declared app template that renders `structuredContent`. */
+export const WIDGENTIC_APP_TEMPLATE_URI = "ui://widgentic/app.html";
+
 export const LIST_THEME_TOKENS_TOOL: McpToolDefinition = {
   name: "list_theme_tokens",
   description:
@@ -66,12 +79,14 @@ export const RENDER_WIDGET_TOOL: McpToolDefinition = {
       },
       format: {
         type: "string",
-        enum: ["both", "html", "widget", "page"],
+        enum: ["both", "html", "widget", "page", "app"],
         description:
           "Output selection (default 'both'): 'html' fragment only (no " +
           "payload block — plain consumers only; strands widgentic-aware " +
           "hosts), 'widget' payload block only, 'page' a self-contained " +
-          "styled HTML document (plus the payload block)."
+          "styled HTML document (plus the payload block), 'app' the page " +
+          "as a ui:// text/html resource for inline display — Apps hosts " +
+          "use the html resource, native hosts the payload block."
       },
       theme: {
         type: "object",

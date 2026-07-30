@@ -118,6 +118,25 @@ For Claude Desktop, add to `claude_desktop_config.json` (absolute paths — Desk
 }
 ```
 
+### Inline widgets in Apps-capable hosts
+
+Hosts that support MCP Apps (Claude Desktop among them) can display widgets
+**inline in the conversation**. The server implements the official convention
+(spec 2026-01-26, via `@modelcontextprotocol/ext-apps`): `render_widget`
+declares its app template (`_meta.ui.resourceUri` → `ui://widgentic/app.html`,
+`text/html;profile=mcp-app`), the host mounts it in a sandboxed iframe, and
+every render streams into it as `structuredContent` (fragment + CSS + payload).
+For legacy embedded-resource hosts (mcp-ui lineage), `format: "app"` also
+carries the self-contained styled page inline. Widget content stays script-free
+with zero external references; the widgentic payload block is always included
+for natively mounting hosts, and a text fallback covers everyone else.
+
+Register the server in Claude Desktop (`claude_desktop_config.json`, absolute
+paths) and ask for a widget render — Apps-capable versions mount the page in
+chat. Non-aware hosts (including Claude Code's terminal chat) receive the same
+result as text; there, use `format: "page"` and open the document in a browser
+instead.
+
 ### Testing without Claude
 
 - **MCP Inspector** (interactive UI): `npx @modelcontextprotocol/inspector npx tsx examples/mcp-server/main.ts`

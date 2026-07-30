@@ -13,7 +13,12 @@ import {
   validateTheme
 } from "../theming/index.js";
 
-const FORMATS = ["both", "html", "widget", "page"] as const;
+import {
+  WIDGENTIC_APP_MIME_TYPE,
+  WIDGENTIC_UI_URI_PREFIX
+} from "./definitions.js";
+
+const FORMATS = ["both", "html", "widget", "page", "app"] as const;
 type RenderFormat = (typeof FORMATS)[number];
 
 /** True when a schema declares string-typed data (and not object/array). */
@@ -228,6 +233,7 @@ export function handleRenderWidget(
   }
 
   const html = renderToHtml(rendered.node);
+  const kindStyles = catalog.describe(widget)?.styles;
   const widgetBlock: McpContentBlock = {
     type: "resource",
     resource: {
@@ -237,22 +243,57 @@ export function handleRenderWidget(
     }
   };
 
+  // Presentation channel for the declared MCP Apps template: hosts push the
+  // whole result into the mounted iframe via ui/notifications/tool-result,
+  // and per the Apps convention structuredContent is not model context.
+  const styleCss = kindStyles ? widgetStylesToCss(kindStyles) : "";
+  const themeCss = theme ? themeToCss(theme, ":root") : "";
+  const structuredContent: Record<string, unknown> = {
+    html,
+    css: [styleCss, themeCss].filter((part) => part.length > 0).join("\n"),
+    payload
+  };
+
   switch (format as RenderFormat) {
     case "html":
-      return { content: [{ type: "text", text: html }] };
+      return { structuredContent, content: [{ type: "text", text: html }] };
     case "widget":
-      return { content: [widgetBlock] };
+      return { structuredContent, content: [widgetBlock] };
     case "page":
       return {
+        structuredContent,
+        content: [
+          { type: "text", text: composePage(html, theme, kindStyles) },
+          widgetBlock
+        ]
+      };
+    case "app":
+      // Embedded static path for legacy (mcp-ui lineage) hosts that mount
+      // resources straight from tool results; formal Apps hosts use the
+      // declared template + structuredContent instead. Native hosts keep
+      // the payload block; everyone else gets the fallback line.
+      return {
+        structuredContent,
         content: [
           {
             type: "text",
-            text: composePage(html, theme, catalog.describe(widget)?.styles)
+            text: `Rendered '${widget}' widget — view inline in an MCP Apps-capable host.`
+          },
+          {
+            type: "resource",
+            resource: {
+              uri: `${WIDGENTIC_UI_URI_PREFIX}${widget}`,
+              mimeType: WIDGENTIC_APP_MIME_TYPE,
+              text: composePage(html, theme, kindStyles)
+            }
           },
           widgetBlock
         ]
       };
     default:
-      return { content: [{ type: "text", text: html }, widgetBlock] };
+      return {
+        structuredContent,
+        content: [{ type: "text", text: html }, widgetBlock]
+      };
   }
 }

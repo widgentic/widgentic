@@ -295,6 +295,107 @@ describe("handleRenderWidget", () => {
     expect(JSON.parse(textOf(badFormat)).path).toBe("format");
   });
 
+  it("app format composes fallback text, ui:// html resource, and payload", () => {
+    const styled = createCatalog();
+    styled.register(
+      "badge",
+      () => ({ tag: "span", attrs: { class: "wg-badge" }, children: ["hi"] }),
+      {
+        description: "badge",
+        dataShape: "any",
+        styles: { ".wg-badge": { color: "var(--wg-accent, #2563eb)" } }
+      }
+    );
+    const result = handleRenderWidget(styled, {
+      widget: "badge",
+      data: 1,
+      format: "app",
+      theme: { bg: "#0f131c" }
+    });
+    expect(result.isError).toBeUndefined();
+    expect(result.content.map((b) => b.type)).toEqual([
+      "text",
+      "resource",
+      "resource"
+    ]);
+
+    // fallback line names the widget
+    expect(result.content[0]?.text).toContain("badge");
+
+    // the ui:// html resource is the themed, styled page
+    const ui = result.content[1] as {
+      resource: { uri: string; mimeType: string; text: string };
+    };
+    expect(ui.resource.uri).toBe("ui://widgentic/page/badge");
+    expect(ui.resource.mimeType).toBe("text/html;profile=mcp-app");
+    expect(ui.resource.text.startsWith("<!doctype html>")).toBe(true);
+    expect(ui.resource.text).toContain("--wg-bg: #0f131c;");
+    expect(ui.resource.text).toContain(".wg-badge {");
+
+    // sandbox-safe: no scripts, no network, no url()
+    expect(ui.resource.text).not.toContain("<script");
+    expect(ui.resource.text).not.toMatch(/https?:\/\//);
+    expect(ui.resource.text).not.toMatch(/url\s*\(/i);
+
+    // the widgentic payload block still extracts (html resource is skipped)
+    const extraction = extractWidgetPayload(result);
+    expect(extraction).toMatchObject({ found: true, ok: true });
+    if (extraction.found && extraction.ok) {
+      expect(extraction.payload.theme).toEqual({ bg: "#0f131c" });
+    }
+
+    // deterministic URI across renders
+    const again = handleRenderWidget(styled, {
+      widget: "badge",
+      data: 2,
+      format: "app"
+    });
+    const againUi = again.content[1] as { resource: { uri: string } };
+    expect(againUi.resource.uri).toBe("ui://widgentic/page/badge");
+  });
+
+  it("every successful result carries structuredContent for app templates", () => {
+    const styled = createCatalog();
+    styled.register(
+      "badge",
+      () => ({ tag: "span", attrs: { class: "wg-badge" }, children: ["hi"] }),
+      {
+        description: "badge",
+        dataShape: "any",
+        styles: { ".wg-badge": { color: "var(--wg-accent, #2563eb)" } }
+      }
+    );
+    // default format
+    const plain = handleRenderWidget(styled, {
+      widget: "badge",
+      data: 1,
+      theme: { bg: "#0f131c" }
+    });
+    const sc = plain.structuredContent as {
+      html: string;
+      css: string;
+      payload: { kind: string; theme?: unknown };
+    };
+    expect(sc.html).toContain('class="wg-badge"');
+    expect(sc.css).toContain(".wg-badge {");
+    expect(sc.css).toContain("--wg-bg: #0f131c;");
+    expect(sc.payload.kind).toBe("badge");
+
+    // single-block formats carry it too
+    for (const format of ["html", "widget", "page", "app"]) {
+      const result = handleRenderWidget(styled, {
+        widget: "badge",
+        data: 1,
+        format
+      });
+      expect(result.structuredContent).toBeDefined();
+    }
+
+    // errors carry none
+    const failed = handleRenderWidget(styled, { widget: "nope", data: 1 });
+    expect(failed.structuredContent).toBeUndefined();
+  });
+
   it("theme applies to page output and fails structurally when unsafe", () => {
     const input = { widget: "card", data: { title: "T" } };
 
