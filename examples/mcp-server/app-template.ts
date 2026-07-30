@@ -72,8 +72,31 @@ window.addEventListener("message", (event) => {
     return;
   }
   if (message.method === "ui/notifications/tool-result") {
-    const sc = message.params && message.params.structuredContent;
-    if (sc) render(sc);
+    const params = message.params || {};
+    if (params.structuredContent) {
+      render(params.structuredContent);
+      return;
+    }
+    // Error (or structured-content-less) result: replace any pending
+    // placeholder with the error message — never leave a stale
+    // "Rendering…" state on screen.
+    let text = "Render failed.";
+    const block = Array.isArray(params.content)
+      ? params.content.find(function (b) { return b && b.type === "text"; })
+      : undefined;
+    if (block && typeof block.text === "string") {
+      try {
+        const parsed = JSON.parse(block.text);
+        text = typeof parsed.message === "string" ? parsed.message : block.text;
+      } catch (error) {
+        text = block.text;
+      }
+    }
+    root.textContent = "";
+    const notice = document.createElement("div");
+    notice.className = "wg-app-error";
+    notice.textContent = text;
+    root.appendChild(notice);
     return;
   }
   if (message.method === "ui/notifications/host-context-changed") {
@@ -123,6 +146,12 @@ body {
   color: var(--wg-fg);
   font-family: var(--wg-font-family);
   margin: 8px;
+}
+.wg-app-error {
+  color: var(--color-text-danger, #b91c1c);
+  border: 1px solid var(--wg-border, #e2e8f0);
+  border-radius: var(--wg-radius, 6px);
+  padding: calc(var(--wg-spacing, 8px) * 2);
 }`;
 
   return (

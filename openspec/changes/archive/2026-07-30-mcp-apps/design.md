@@ -36,6 +36,8 @@ Unit tests pin the `app` content shape; the in-memory interop test proves the bl
 
 ## Risks / Trade-offs
 
+- [Default `format: "both"` places the full rendered HTML in model context even in Apps hosts, where the widget mounts from `structuredContent` instead — wasting tokens and inviting agents to narrate the data as text alongside the mounted widget (observed live in VS Code Copilot)] → prompt-mitigable today ("the widgets are the presentation"); the product fix is capability-aware model-context slimming — compact text confirmation instead of the HTML block when the client advertised the UI capability — queued for a follow-up change alongside the existing backlog (hint-coherence diagnostics, bounded pattern checks, `--wg-surface`, native reactive mounting in the app template, wire registration).
+
 - [Apps metadata flavor drift (`_meta` keys, mime variants like `text/html+skybridge`, registration API) since knowledge cutoff] → all flavor-specific code confined to `examples/main.ts`, verified against the installed SDK at apply time; the static embedded resource is flavor-independent and ships regardless.
 - [Hosts that render *both* the html resource and honor the payload block could double-display] → hosts pick one idiom by design; documented in the format description ("Apps hosts use the html resource; native hosts the payload block").
 - [`app` responses are page-sized (~3 KB CSS overhead per call)] → opt-in format; existing formats unchanged.

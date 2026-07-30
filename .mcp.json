@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "widgentic": {
-      "command": "npx",
-      "args": ["tsx", "examples/mcp-server/main.ts"]
-    }
-  }
-}

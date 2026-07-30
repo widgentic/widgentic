@@ -51,6 +51,11 @@ The repository SHALL provide the app template (`ui://widgentic/app.html`): a sel
 - **THEN** the template SHALL apply them
 - **AND** an explicit widgentic `theme` in `structuredContent.css` SHALL override host-derived token values
 
+#### Scenario: Error results replace the placeholder
+- **WHEN** a `tool-result` notification arrives with `isError` or without `structuredContent`
+- **THEN** the template SHALL replace any pending placeholder with the result's error message text
+- **AND** SHALL never remain in a stale "Rendering…" state
+
 #### Scenario: Template serves with the Apps mime type
 - **WHEN** an SDK client reads `ui://widgentic/app.html`
 - **THEN** the contents SHALL have `mimeType: "text/html;profile=mcp-app"`, start with `<!doctype html>`, and contain the `ui/initialize` handshake and `tool-result` listener
