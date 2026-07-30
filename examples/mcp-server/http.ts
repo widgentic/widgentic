@@ -14,21 +14,46 @@ import { createWidgenticServer } from "./server.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
 
+/**
+ * Optional API-key guard: when WIDGENTIC_API_KEY is set (e.g. from an Azure
+ * Container Apps secret), every /mcp request must carry a matching
+ * `x-api-key` header. Unset (local development) leaves the endpoint open.
+ */
+const API_KEY = process.env.WIDGENTIC_API_KEY;
+
 const httpServer = createHttpServer(async (req: IncomingMessage, res: ServerResponse) => {
-  // Permissive CORS for local testing (basic-host runs on another port).
+  // Permissive CORS for browser hosts (e.g. basic-host on another origin).
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, Accept, Mcp-Session-Id, Mcp-Protocol-Version"
+    "Content-Type, Accept, X-Api-Key, Mcp-Session-Id, Mcp-Protocol-Version"
   );
   res.setHeader("Access-Control-Expose-Headers", "Mcp-Session-Id");
   if (req.method === "OPTIONS") {
     res.writeHead(204).end();
     return;
   }
+  if (req.url === "/healthz") {
+    // Unauthenticated liveness probe for the container platform.
+    res.writeHead(200, { "Content-Type": "text/plain" }).end("ok");
+    return;
+  }
   if (!req.url?.startsWith("/mcp")) {
     res.writeHead(404).end();
+    return;
+  }
+  if (API_KEY && req.headers["x-api-key"] !== API_KEY) {
+    res.writeHead(401, { "Content-Type": "application/json" }).end(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        error: {
+          code: -32001,
+          message: "Unauthorized: missing or invalid x-api-key header."
+        },
+        id: null
+      })
+    );
     return;
   }
 
