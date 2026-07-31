@@ -16,10 +16,19 @@ const PORT = Number(process.env.PORT ?? 3001);
 
 /**
  * Optional API-key guard: when WIDGENTIC_API_KEY is set (e.g. from an Azure
- * Container Apps secret), every /mcp request must carry a matching
- * `x-api-key` header. Unset (local development) leaves the endpoint open.
+ * Container Apps secret), every /mcp request must carry a matching key —
+ * either an `x-api-key` header, or `?key=` in the URL for hosts whose
+ * connector settings cannot send custom headers (claude.ai / Claude Desktop
+ * remote connectors). Unset (local development) leaves the endpoint open.
  */
 const API_KEY = process.env.WIDGENTIC_API_KEY;
+
+function requestKey(req: IncomingMessage): string | undefined {
+  const header = req.headers["x-api-key"];
+  if (typeof header === "string") return header;
+  const query = new URL(req.url ?? "/", "http://localhost").searchParams.get("key");
+  return query ?? undefined;
+}
 
 const httpServer = createHttpServer(async (req: IncomingMessage, res: ServerResponse) => {
   // Permissive CORS for browser hosts (e.g. basic-host on another origin).
@@ -43,13 +52,14 @@ const httpServer = createHttpServer(async (req: IncomingMessage, res: ServerResp
     res.writeHead(404).end();
     return;
   }
-  if (API_KEY && req.headers["x-api-key"] !== API_KEY) {
+  if (API_KEY && requestKey(req) !== API_KEY) {
     res.writeHead(401, { "Content-Type": "application/json" }).end(
       JSON.stringify({
         jsonrpc: "2.0",
         error: {
           code: -32001,
-          message: "Unauthorized: missing or invalid x-api-key header."
+          message:
+            "Unauthorized: provide the API key via the x-api-key header or a ?key= query parameter."
         },
         id: null
       })

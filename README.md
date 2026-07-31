@@ -106,13 +106,17 @@ npm run mcp:http   # Streamable HTTP on :3001/mcp (for HTTP hosts and Apps testi
 The server is deployed on Azure Container Apps behind a custom domain:
 
 ```
-https://mcp.widgentic.dev/mcp        (Streamable HTTP, x-api-key header required)
+https://mcp.widgentic.dev/mcp        (Streamable HTTP, API key required)
 https://mcp.widgentic.dev/healthz    (unauthenticated health check)
 ```
 
+The API key is accepted two ways: an `x-api-key` header (hosts with header
+support, e.g. VS Code Copilot), or a `?key=` query parameter
+(`https://mcp.widgentic.dev/mcp?key=…`) for hosts whose connector settings
+cannot send custom headers — claude.ai and Claude Desktop remote connectors.
 `widgentic.dev` itself is reserved for the future registration/designer app,
-which will own key issuance; for now the single API key is distributed
-out-of-band. The deployment is fully described by [infra/main.bicep](infra/main.bicep)
+which will own per-user key issuance; for now the single API key is
+distributed out-of-band. The deployment is fully described by [infra/main.bicep](infra/main.bicep)
 (Log Analytics, private ACR pulled via a pre-granted user-assigned identity,
 managed environment, scale-to-zero app with the key as a Container Apps
 secret). To ship a new version:

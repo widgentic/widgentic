@@ -6,7 +6,7 @@
 |--|--|--|
 | `npm run mcp` | stdio | Claude Desktop, Claude Code, any stdio client |
 | `npm run mcp:http` | Streamable HTTP (stateless) on `:3001/mcp` | VS Code Copilot (HTTP), MCP Apps hosts, curl |
-| *(hosted)* `https://mcp.widgentic.dev/mcp` | Streamable HTTP, `x-api-key` required | Any HTTP host, no local setup |
+| *(hosted)* `https://mcp.widgentic.dev/mcp` | Streamable HTTP, API key required | Any HTTP host, no local setup |
 
 Quick checks without any host:
 
@@ -76,9 +76,11 @@ machine.
 `https://mcp.widgentic.dev/mcp` — the same HTTP server (`examples/mcp-server/http.ts`)
 containerized and deployed via [infra/main.bicep](../../infra/main.bicep) to app
 `widgentic-mcp` in resource group `widgentic-rg`. Scale-to-zero: the first
-request after idle takes a few seconds. `/mcp` requires the `x-api-key` header
-(distributed out-of-band; stored as the ACA secret `widgentic-api-key`);
-`/healthz` is open for probes.
+request after idle takes a few seconds. `/mcp` requires the API key
+(distributed out-of-band; stored as the ACA secret `widgentic-api-key`),
+presented either as an `x-api-key` header or as a `?key=` query parameter —
+the latter exists for claude.ai / Claude Desktop remote connectors, whose
+settings accept only a URL. `/healthz` is open for probes.
 
 Smoke test:
 
@@ -104,6 +106,13 @@ Rotate the key with `az containerapp secret set -n widgentic-mcp -g widgentic-rg
 
 Against a local/tailnet server instead, drop the header and point `url` at
 `http://localhost:3001/mcp` or `https://ubuntu-open-clawn.tailcb1690.ts.net:9444/mcp`.
+
+**claude.ai / Claude Desktop custom connectors** — Settings → Connectors →
+Add custom connector, with the key in the URL (no header support there):
+
+```
+https://mcp.widgentic.dev/mcp?key=<api-key>
+```
 
 **Claude Code** — this repo's `.mcp.json` registers the stdio server
 automatically (tool results are text; Claude Code does not mount MCP Apps UI).
