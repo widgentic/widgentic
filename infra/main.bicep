@@ -6,8 +6,10 @@
 //   and idle cost is ~zero; cold starts of a few seconds are acceptable
 //   for MCP clients.
 // - Container Registry with anonymous pull DISABLED and admin user
-//   DISABLED; the app pulls via its system-assigned managed identity with
-//   the AcrPull role (least privilege, no credentials in config).
+//   DISABLED; the app pulls via a USER-ASSIGNED managed identity that is
+//   created and granted AcrPull BEFORE the app exists — a system-assigned
+//   identity cannot receive the role until after app creation, which races
+//   the first image pull (observed live: ACR token exchange 401).
 // - The API key is a Container Apps secret injected as an env var; it is
 //   passed as a secure parameter and never appears in template outputs.
 // - External HTTPS ingress on 3001, matching the container's listening
@@ -48,6 +50,25 @@ resource registry 'Microsoft.ContainerRegistry/registries@2025-04-01' = {
   }
 }
 
+resource identity 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' = {
+  name: '${baseName}-mcp-identity'
+  location: location
+}
+
+// AcrPull granted before the app exists, so the first pull succeeds.
+resource acrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(registry.id, identity.id, 'acrpull')
+  scope: registry
+  properties: {
+    principalId: identity.properties.principalId
+    roleDefinitionId: subscriptionResourceId(
+      'Microsoft.Authorization/roleDefinitions',
+      '7f951dda-4ed3-4680-a7ca-43fe172d538d' // AcrPull
+    )
+    principalType: 'ServicePrincipal'
+  }
+}
+
 resource environment 'Microsoft.App/managedEnvironments@2025-01-01' = {
   name: '${baseName}-env'
   location: location
@@ -65,7 +86,11 @@ resource environment 'Microsoft.App/managedEnvironments@2025-01-01' = {
 resource app 'Microsoft.App/containerApps@2025-01-01' = {
   name: '${baseName}-mcp'
   location: location
-  identity: { type: 'SystemAssigned' }
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: { '${identity.id}': {} }
+  }
+  dependsOn: [acrPull]
   properties: {
     managedEnvironmentId: environment.id
     configuration: {
@@ -78,7 +103,7 @@ resource app 'Microsoft.App/containerApps@2025-01-01' = {
       registries: [
         {
           server: registry.properties.loginServer
-          identity: 'system'
+          identity: identity.id
         }
       ]
       secrets: [
@@ -110,21 +135,6 @@ resource app 'Microsoft.App/containerApps@2025-01-01' = {
         maxReplicas: 2
       }
     }
-  }
-}
-
-// AcrPull for the app's managed identity — the only data-plane permission
-// the app needs.
-resource acrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(registry.id, app.id, 'acrpull')
-  scope: registry
-  properties: {
-    principalId: app.identity.principalId
-    roleDefinitionId: subscriptionResourceId(
-      'Microsoft.Authorization/roleDefinitions',
-      '7f951dda-4ed3-4680-a7ca-43fe172d538d' // AcrPull
-    )
-    principalType: 'ServicePrincipal'
   }
 }
 
