@@ -101,6 +101,28 @@ npm run mcp:http   # Streamable HTTP on :3001/mcp (for HTTP hosts and Apps testi
 - `list_widgets` — returns every registered kind's descriptor: purpose, expected `data` shape, an example to imitate, and supported hints.
 - `render_widget` — input `{ widget, data, hints?, meta? }`; validates the id and payload, then returns the rendered HTML **plus** an embedded widgentic payload block (aware hosts mount it natively). Invalid input comes back as a structured, correctable error (`UNKNOWN_KIND`, `MISSING_FIELD`, ...).
 
+### Hosted endpoint
+
+The server is deployed on Azure Container Apps behind a custom domain:
+
+```
+https://mcp.widgentic.dev/mcp        (Streamable HTTP, x-api-key header required)
+https://mcp.widgentic.dev/healthz    (unauthenticated health check)
+```
+
+`widgentic.dev` itself is reserved for the future registration/designer app,
+which will own key issuance; for now the single API key is distributed
+out-of-band. The deployment is fully described by [infra/main.bicep](infra/main.bicep)
+(Log Analytics, private ACR pulled via a pre-granted user-assigned identity,
+managed environment, scale-to-zero app with the key as a Container Apps
+secret). To ship a new version:
+
+```bash
+az acr build -r <registry> -t widgentic-mcp:vN .
+az deployment group create -g widgentic-rg -f infra/main.bicep \
+  -p image=<registry>.azurecr.io/widgentic-mcp:vN -p apiKey=<current-key>
+```
+
 ### Register with Claude Code
 
 This repo ships a project-scoped [`.mcp.json`](.mcp.json), so Claude Code picks the server up automatically: open a session in this workspace, approve the server when prompted, and confirm with `/mcp`. Then just ask — *"list the available widgets"*, *"render an invoice widget for ..."*.
@@ -153,7 +175,7 @@ setup, remote rig, host registration snippets — live in
 
 ## Status
 
-All nine capabilities are implemented and tested (`npm test` — unit, type, DOM, and MCP Apps interop suites; zero runtime dependencies). `render_widget` supports per-kind data schemas, formatting hints, themes, format selection, and MCP Apps inline mounting — visually verified in two production-grade Apps hosts (see [TESTING.md](examples/mcp-server/TESTING.md)). Development is spec-first via OpenSpec: see `openspec/specs/` for current behavior and `openspec/changes/archive/` for the full change history (14 changes). Earned backlog for the next cycle: capability-aware model-context slimming, native reactive mounting in the app template, hint-coherence diagnostics, bounded schema pattern checks, a `--wg-surface` token, and the widget designer UI on top of `widgentic/templates`.
+All nine capabilities are implemented and tested (`npm test` — unit, type, DOM, and MCP Apps interop suites; zero runtime dependencies). `render_widget` supports per-kind data schemas, formatting hints, themes, format selection, and MCP Apps inline mounting — visually verified in two production-grade Apps hosts (see [TESTING.md](examples/mcp-server/TESTING.md)). The server is live at `https://mcp.widgentic.dev/mcp` (Azure Container Apps, IaC in [infra/](infra/)). Development is spec-first via OpenSpec: see `openspec/specs/` for current behavior and `openspec/changes/archive/` for the full change history (14 changes). Earned backlog for the next cycle: capability-aware model-context slimming, native reactive mounting in the app template, hint-coherence diagnostics, bounded schema pattern checks, a `--wg-surface` token, and the widget designer UI on top of `widgentic/templates`.
 
 ## Reference material
 

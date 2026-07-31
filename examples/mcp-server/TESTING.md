@@ -6,6 +6,7 @@
 |--|--|--|
 | `npm run mcp` | stdio | Claude Desktop, Claude Code, any stdio client |
 | `npm run mcp:http` | Streamable HTTP (stateless) on `:3001/mcp` | VS Code Copilot (HTTP), MCP Apps hosts, curl |
+| *(hosted)* `https://mcp.widgentic.dev/mcp` | Streamable HTTP, `x-api-key` required | Any HTTP host, no local setup |
 
 Quick checks without any host:
 
@@ -70,13 +71,39 @@ SERVERS='["https://ubuntu-open-clawn.tailcb1690.ts.net:9444/mcp"]' npx tsx serve
 Browse `https://ubuntu-open-clawn.tailcb1690.ts.net:9443` from any tailnet
 machine.
 
+## Production (Azure Container Apps)
+
+`https://mcp.widgentic.dev/mcp` — the same HTTP server (`examples/mcp-server/http.ts`)
+containerized and deployed via [infra/main.bicep](../../infra/main.bicep) to app
+`widgentic-mcp` in resource group `widgentic-rg`. Scale-to-zero: the first
+request after idle takes a few seconds. `/mcp` requires the `x-api-key` header
+(distributed out-of-band; stored as the ACA secret `widgentic-api-key`);
+`/healthz` is open for probes.
+
+Smoke test:
+
+```bash
+curl https://mcp.widgentic.dev/healthz    # 200 ok
+curl -X POST https://mcp.widgentic.dev/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "x-api-key: $WIDGENTIC_API_KEY" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"smoke","version":"0"}}}'
+# → 200 with "serverInfo":{"name":"widgentic",...}; without the header → 401
+```
+
+Rotate the key with `az containerapp secret set -n widgentic-mcp -g widgentic-rg --secrets widgentic-api-key=<new>` followed by a revision restart. DNS lives in Cloudflare: CNAME `mcp` → the app FQDN (DNS only / grey cloud — required for the Azure-managed certificate) plus the `asuid.mcp` TXT validation record.
+
 ## Host registration snippets
 
 **VS Code Copilot** (`.vscode/mcp.json`) — an MCP Apps host; widgets mount inline:
 
 ```json
-{ "servers": { "widgentic": { "type": "http", "url": "https://ubuntu-open-clawn.tailcb1690.ts.net:9444/mcp" } } }
+{ "servers": { "widgentic": { "type": "http", "url": "https://mcp.widgentic.dev/mcp", "headers": { "x-api-key": "<api-key>" } } } }
 ```
+
+Against a local/tailnet server instead, drop the header and point `url` at
+`http://localhost:3001/mcp` or `https://ubuntu-open-clawn.tailcb1690.ts.net:9444/mcp`.
 
 **Claude Code** — this repo's `.mcp.json` registers the stdio server
 automatically (tool results are text; Claude Code does not mount MCP Apps UI).
@@ -92,3 +119,4 @@ automatically (tool results are text; Claude Code does not mount MCP Apps UI).
 - **basic-host (ext-apps v1.7.5 reference)** — full 7-input visual sweep: all five kinds inline, live host re-theming via `host-context-changed`, error-state notice.
 - **VS Code Copilot Chat** — agent-driven end-to-end from a one-line steer; all five kinds mounted inline over HTTP.
 - **Claude Code 2.1.220** — graceful degradation confirmed (text results, no UI mounting by design).
+- **Production endpoint (mcp.widgentic.dev)** — deployed 2026-07-30; `/healthz`, 401-without-key, and keyed `initialize` handshake verified end-to-end through the custom domain with the Azure-managed certificate.
