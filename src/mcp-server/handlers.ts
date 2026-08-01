@@ -1,5 +1,5 @@
-import type { DataSchema, WidgetCatalog, WidgetStyles } from "../catalog/index.js";
-import { renderToHtml, widgetStylesToCss } from "../catalog/index.js";
+import type { DataSchema, HintDiagnostic, WidgetCatalog, WidgetStyles } from "../catalog/index.js";
+import { analyzeHints, renderToHtml, widgetStylesToCss } from "../catalog/index.js";
 import type { WidgetContractError } from "../contract/index.js";
 import type { McpToolResult, McpContentBlock } from "../mcp/index.js";
 import { WIDGENTIC_MIME_TYPE, WIDGENTIC_URI } from "../mcp/index.js";
@@ -142,7 +142,8 @@ export function handleListWidgets(catalog: WidgetCatalog): McpToolResult {
  */
 export function handleRenderWidget(
   catalog: WidgetCatalog,
-  input: unknown
+  input: unknown,
+  options?: { slim?: boolean | undefined }
 ): McpToolResult {
   if (!isPlainObject(input)) {
     return errorResult({
@@ -254,12 +255,34 @@ export function handleRenderWidget(
     payload
   };
 
+  // Hint-coherence feedback: forward compatibility ignores unmatched hints
+  // at render time, so the model-facing text is where an agent learns its
+  // hints missed. Never fatal, never changes the markup.
+  const diagnostics: HintDiagnostic[] = analyzeHints(
+    widget,
+    payload.data,
+    payload.hints,
+    catalog.describe(widget)
+  );
+  if (diagnostics.length > 0) structuredContent.diagnostics = diagnostics;
+  const hintNotes =
+    diagnostics.length > 0
+      ? `\n\nHint notes: ${diagnostics
+          .map((d) => `${d.hint}: ${d.message}`)
+          .join("; ")}`
+      : "";
+
   switch (format as RenderFormat) {
     case "html":
-      return { structuredContent, content: [{ type: "text", text: html }] };
+      return {
+        structuredContent,
+        content: [{ type: "text", text: html + hintNotes }]
+      };
     case "widget":
       return { structuredContent, content: [widgetBlock] };
     case "page":
+      // The page text is a browser-facing document, not model prose — hint
+      // notes would corrupt it, so they ride structuredContent only.
       return {
         structuredContent,
         content: [
@@ -277,7 +300,7 @@ export function handleRenderWidget(
         content: [
           {
             type: "text",
-            text: `Rendered '${widget}' widget — view inline in an MCP Apps-capable host.`
+            text: `Rendered '${widget}' widget — view inline in an MCP Apps-capable host.${hintNotes}`
           },
           {
             type: "resource",
@@ -291,9 +314,27 @@ export function handleRenderWidget(
         ]
       };
     default:
+      // Capability-aware slimming: on Apps hosts the visual mounts from
+      // structuredContent, so the full HTML text block is pure model-context
+      // weight — replace it with a confirmation that also heads off the
+      // restate-the-data-as-text reflex. Explicit formats never slim.
+      if (options?.slim === true) {
+        return {
+          structuredContent,
+          content: [
+            {
+              type: "text",
+              text:
+                `Rendered '${widget}' widget inline — the visual is already ` +
+                `displayed to the user; do not restate this data as text.${hintNotes}`
+            },
+            widgetBlock
+          ]
+        };
+      }
       return {
         structuredContent,
-        content: [{ type: "text", text: html }, widgetBlock]
+        content: [{ type: "text", text: html + hintNotes }, widgetBlock]
       };
   }
 }

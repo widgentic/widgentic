@@ -14,3 +14,5 @@ export { widgetStylesToCss } from "./styles.js";
 export type { WidgetStyles } from "./styles.js";
 export { renderToHtml } from "./html.js";
 export { mountNode } from "./dom.js";
+export { analyzeHints } from "./hints.js";
+export type { HintDiagnostic, HintDiagnosticCode } from "./hints.js";

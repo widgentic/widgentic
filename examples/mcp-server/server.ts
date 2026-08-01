@@ -34,6 +34,13 @@ const INLINE_IMAGES = !["0", "false"].includes(
 
 export function createWidgenticServer(): McpServer {
   const catalog = createCatalog();
+  // Model-context slimming signal: session-negotiated UI capability wins in
+  // either direction; the env assumption (WIDGENTIC_ASSUME_UI, read per
+  // construction) covers un-negotiated instances — on stateless HTTP the
+  // tools/call POST builds a fresh server that never saw initialize.
+  let slim = ["1", "true"].includes(
+    (process.env.WIDGENTIC_ASSUME_UI ?? "").toLowerCase()
+  );
 
   // Custom template widgets (kind + template + descriptor as data), each
   // surfacing in list_widgets and rendering through render_widget.
@@ -90,7 +97,7 @@ export function createWidgenticServer(): McpServer {
       }
     },
     async (args) => {
-      const result = handleRenderWidget(catalog, args) as CallToolResult;
+      const result = handleRenderWidget(catalog, args, { slim }) as CallToolResult;
       // Apps-host sandboxes block external img-src but allow data:, so the
       // iframe-facing surfaces get image bytes inlined as data URIs
       // (SSRF-guarded; see src/mcp-server/inline-images.ts). Disable with
@@ -160,9 +167,12 @@ export function createWidgenticServer(): McpServer {
     // Normalized: getUiCapability only reads `extensions`, and the SDK type's
     // optional field clashes with exactOptionalPropertyTypes otherwise.
     const ui = getUiCapability({ extensions: capabilities?.extensions ?? {} });
+    // Negotiation is authoritative for this session, overriding ASSUME_UI
+    // in both directions.
+    slim = ui?.mimeTypes?.includes(RESOURCE_MIME_TYPE) ?? false;
     console.error(
-      ui?.mimeTypes?.includes(RESOURCE_MIME_TYPE)
-        ? "MCP Apps: host advertises UI support — render_widget mounts in the declared template."
+      slim
+        ? "MCP Apps: host advertises UI support — render_widget mounts in the declared template (slim model output)."
         : "MCP Apps: host lacks the UI capability — text/page/widget outputs remain the fallback."
     );
   };

@@ -99,7 +99,8 @@ npm run mcp:http   # Streamable HTTP on :3001/mcp (for HTTP hosts and Apps testi
 ```
 
 - `list_widgets` — returns every registered kind's descriptor: purpose, expected `data` shape, an example to imitate, and supported hints.
-- `render_widget` — input `{ widget, data, hints?, meta? }`; validates the id and payload, then returns the rendered HTML **plus** an embedded widgentic payload block (aware hosts mount it natively). Invalid input comes back as a structured, correctable error (`UNKNOWN_KIND`, `MISSING_FIELD`, ...).
+- `render_widget` — input `{ widget, data, hints?, meta? }`; validates the id and payload, then returns the rendered HTML **plus** an embedded widgentic payload block (aware hosts mount it natively). Invalid input comes back as a structured, correctable error (`UNKNOWN_KIND`, `MISSING_FIELD`, ...). Misaimed hints (misspelled keys, targets matching no field/column, unsafe image sources) never fail a render — they come back as a compact `Hint notes:` tail on the text output plus `structuredContent.diagnostics`, so agents can self-correct on the next call.
+- **Model-context slimming**: when the host is an MCP Apps host (session-negotiated, or assumed via `WIDGENTIC_ASSUME_UI=1` where negotiation can't happen — stateless HTTP), the default-format result replaces the full-HTML text block with a one-line confirmation telling the model the visual is already displayed. Explicit `format` requests are never slimmed.
 
 ### Hosted endpoint
 

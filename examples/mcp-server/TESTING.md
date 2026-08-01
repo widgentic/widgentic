@@ -94,6 +94,13 @@ curl -X POST https://mcp.widgentic.dev/mcp \
 # → 200 with "serverInfo":{"name":"widgentic",...}; without the header → 401
 ```
 
+The hosted deployment sets `WIDGENTIC_ASSUME_UI=1`: stateless HTTP can't see
+the client's negotiated capabilities at `tools/call` time, so the default
+`render_widget` format returns the slim confirmation line instead of the full
+HTML text block (Apps hosts mount the visual from `structuredContent`
+regardless; explicit `format` values are never slimmed). Misaimed hints
+surface as a `Hint notes:` tail + `structuredContent.diagnostics`.
+
 Rotate the key with `az containerapp secret set -n widgentic-mcp -g widgentic-rg --secrets widgentic-api-key=<new>` followed by a revision restart. DNS lives in Cloudflare: CNAME `mcp` → the app FQDN (DNS only / grey cloud — required for the Azure-managed certificate) plus the `asuid.mcp` TXT validation record.
 
 ## Host registration snippets
@@ -129,4 +136,5 @@ automatically (tool results are text; Claude Code does not mount MCP Apps UI).
 - **VS Code Copilot Chat** — agent-driven end-to-end from a one-line steer; all five kinds mounted inline over HTTP.
 - **Claude Code 2.1.220** — graceful degradation confirmed (text results, no UI mounting by design).
 - **Production endpoint (mcp.widgentic.dev)** — deployed 2026-07-30; `/healthz`, 401-without-key, and keyed `initialize` handshake verified end-to-end through the custom domain with the Azure-managed certificate.
+- **Slimming + hint diagnostics (2026-08-01, v5, VS Code Copilot)** — the self-correction loop works end-to-end: given deliberately broken hints (`colums` typo, `fieldFormat` on `table`), the first render succeeded with two `Hint notes:`, and the agent unprompted renamed `colums` → `columns`, dropped the unsupported hint, re-rendered clean, and attributed both fixes to the tool feedback. The slim confirmation line also held: no restatement of widget data as text. Env path (`WIDGENTIC_ASSUME_UI=1` over stateless HTTP) verified via curl: slim line + intact `structuredContent.html`, diagnostics array present, `isError` unset.
 - **Image rendering (2026-07-31 → 08-01, v3/v4)** — `img` elements mount inline with the correct `wg-img-*` classes in both **VS Code Copilot** and **basic-host** (auto-detect and `hints.images` paths; `fieldFormat` coexists on sibling fields; suppression and hostile-URL rejection verified visually). Apps-host sandbox CSP blocks fetching **external** image URLs (basic-host: exactly `img-src 'self' data: blob:`) while `data:` is universally allowed — so since v4 the server **inlines image bytes as `data:` URIs at render time** on the iframe-facing surfaces (structuredContent fragment + `ui://` resource; model-facing HTML and `format: "page"` keep original URLs). The fetch is SSRF-guarded (https-only, private/metadata address rejection per redirect hop, `image/*` only, 1 MiB / 4 s / 8-images caps); any failure falls back to the original URL, where the alt-text broken-image state is the safety net. Verified in production via curl: external `picsum` image → `data:image/jpeg` in structuredContent; `https://169.254.169.254/...` refused and left un-inlined. Visually confirmed against v4 in **VS Code Copilot** and **basic-host** (full 5-payload sweep): round table avatars and a full-width card hero display as real pixels from external URLs (server-inlined), data-URI swatch renders, suppression and hostile-URL rejection hold, dark theme intact.

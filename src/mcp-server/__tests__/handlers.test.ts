@@ -375,6 +375,77 @@ describe("handleRenderWidget", () => {
     expect(withoutImgs).not.toMatch(/url\s*\(/i);
   });
 
+  it("slim mode replaces the default HTML block with a confirmation line", () => {
+    const args = { widget: "card", data: { a: 1 } };
+    const full = handleRenderWidget(catalog, args);
+    const slim = handleRenderWidget(catalog, args, { slim: true });
+
+    expect(slim.content).toHaveLength(2);
+    const line = slim.content[0];
+    expect(line?.type).toBe("text");
+    expect(line?.text).toContain("'card'");
+    expect(line?.text).toContain("do not restate this data as text");
+    expect(line?.text).not.toContain("<div");
+    expect(slim.content[1]?.type).toBe("resource");
+
+    // structuredContent is byte-identical between modes.
+    expect(slim.structuredContent).toEqual(full.structuredContent);
+  });
+
+  it("explicit formats are never slimmed", () => {
+    for (const format of ["html", "widget", "page", "app"]) {
+      const explicit = handleRenderWidget(
+        catalog,
+        { widget: "card", data: { a: 1 }, format },
+        { slim: true }
+      );
+      const reference = handleRenderWidget(catalog, {
+        widget: "card",
+        data: { a: 1 },
+        format
+      });
+      expect(explicit).toEqual(reference);
+    }
+  });
+
+  it("misaimed hints produce Hint notes and diagnostics without failing", () => {
+    const result = handleRenderWidget(catalog, {
+      widget: "table",
+      data: [{ a: 1 }],
+      hints: { colums: ["a"] }
+    });
+    expect(result.isError).toBeUndefined();
+    expect(textOf(result)).toContain("Hint notes:");
+    expect(textOf(result)).toContain("did you mean 'columns'");
+    const diagnostics = result.structuredContent?.diagnostics as Array<{
+      code: string;
+      hint: string;
+    }>;
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]).toMatchObject({ code: "UNKNOWN_HINT", hint: "colums" });
+    // Markup unchanged by diagnostics.
+    expect(textOf(result)).toContain('<table class="wg-table">');
+  });
+
+  it("hint notes reach the slim line too", () => {
+    const result = handleRenderWidget(
+      catalog,
+      { widget: "table", data: [{ a: 1 }], hints: { colums: ["a"] } },
+      { slim: true }
+    );
+    expect(result.content[0]?.text).toContain("Hint notes:");
+  });
+
+  it("coherent hints leave output untouched", () => {
+    const result = handleRenderWidget(catalog, {
+      widget: "table",
+      data: [{ a: 1 }],
+      hints: { columns: ["a"] }
+    });
+    expect(textOf(result)).not.toContain("Hint notes:");
+    expect(result.structuredContent).not.toHaveProperty("diagnostics");
+  });
+
   it("every successful result carries structuredContent for app templates", () => {
     const styled = createCatalog();
     styled.register(
