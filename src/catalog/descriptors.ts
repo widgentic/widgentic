@@ -51,7 +51,8 @@ export const BUILTIN_DESCRIPTORS: Record<
       "value line. `meta.title`/`meta.subtitle` fill in missing chrome. Send " +
       "field values typed (e.g. price: 9.99, not '$9.99') and use " +
       "hints.fieldFormat for display formatting — the payload keeps the " +
-      "typed value while the render gets its unit.",
+      "typed value while the render gets its unit. Field values that are " +
+      "image URLs render as images (see hints.images).",
     dataExample: {
       title: "Essence Mascara",
       subtitle: "beauty",
@@ -62,7 +63,15 @@ export const BUILTIN_DESCRIPTORS: Record<
         "Record<fieldKey, pattern> — formats matching field values by " +
         "substituting {value} in the pattern (e.g. { price: '${value}', " +
         "rating: '{value} / 5' }); a pattern without {value} is prefixed " +
-        "to the value. Output is escaped like any text."
+        "to the value. Output is escaped like any text.",
+      images:
+        "Record<fieldKey, 'avatar' | 'thumb' | 'hero' | true | false> — " +
+        "field values that are https image URLs (image extension) or " +
+        "data:image/* URIs auto-render as images (default shape: thumb); " +
+        "a shape forces image treatment (use for extensionless URLs), " +
+        "true forces the default shape, false keeps the URL as text. " +
+        "Unsafe sources always render as text; image treatment wins over " +
+        "fieldFormat for the same key."
     }
   },
   table: {
@@ -70,13 +79,21 @@ export const BUILTIN_DESCRIPTORS: Record<
     dataShape:
       "An array of records (plain objects). Columns are the union of record keys " +
       "in first-seen order; missing cells render empty; non-array data becomes a " +
-      "single row.",
+      "single row. Cell values that are image URLs render as avatars (see " +
+      "hints.images).",
     dataExample: [
-      { name: "Ada", role: "eng" },
-      { name: "Lin", role: "ops" }
+      { name: "Ada", role: "eng", avatar: "https://cdn.example.com/ada.png" },
+      { name: "Lin", role: "ops", avatar: "https://cdn.example.com/lin.png" }
     ],
     hints: {
-      columns: "string[] — overrides column selection and order"
+      columns: "string[] — overrides column selection and order",
+      images:
+        "Record<columnKey, 'avatar' | 'thumb' | 'hero' | true | false> — " +
+        "cell values that are https image URLs (image extension) or " +
+        "data:image/* URIs auto-render as images (default shape: avatar); " +
+        "a shape forces image treatment (use for extensionless URLs), " +
+        "true forces the default shape, false keeps the URL as text. " +
+        "Unsafe sources always render as text."
     }
   },
   tree: {

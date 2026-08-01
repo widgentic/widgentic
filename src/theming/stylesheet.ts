@@ -86,6 +86,27 @@ export const baseStylesheet = `
   padding: ${v("spacing")};
   overflow: auto;
 }
+.wg-img {
+  object-fit: cover;
+  vertical-align: middle;
+  background: ${v("border")};
+}
+.wg-img-avatar {
+  width: ${v("avatar-size")};
+  height: ${v("avatar-size")};
+  border-radius: 50%;
+}
+.wg-img-thumb {
+  width: ${v("thumb-size")};
+  height: ${v("thumb-size")};
+  border-radius: ${v("radius")};
+}
+.wg-img-hero {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: ${v("radius")};
+}
 `.trim();
 
 const STYLE_MARKER = "data-widgentic";

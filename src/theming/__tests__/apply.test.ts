@@ -45,6 +45,12 @@ describe("applyTheme", () => {
     expect(target.style.getPropertyValue("--wg-accent")).toBe("");
   });
 
+  it("avatar-size override flows through as a custom property", () => {
+    const target = container();
+    applyTheme(target, { "avatar-size": "48px" });
+    expect(target.style.getPropertyValue("--wg-avatar-size")).toBe("48px");
+  });
+
   it("scopes themes per container", () => {
     const a = container();
     const b = container();

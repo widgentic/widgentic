@@ -18,7 +18,9 @@ describe("token registry", () => {
       "spacing",
       "font-family",
       "font-size",
-      "shadow"
+      "shadow",
+      "avatar-size",
+      "thumb-size"
     ]) {
       expect(THEME_TOKENS).toContain(token);
     }
@@ -33,9 +35,25 @@ describe("token registry", () => {
 
 describe("baseStylesheet", () => {
   it("covers the built-in widget classes", () => {
-    for (const cls of [".wg-card", ".wg-table", ".wg-tree", ".wg-custom", ".wg-template"]) {
+    for (const cls of [
+      ".wg-card",
+      ".wg-table",
+      ".wg-tree",
+      ".wg-custom",
+      ".wg-template",
+      ".wg-img",
+      ".wg-img-avatar",
+      ".wg-img-thumb",
+      ".wg-img-hero"
+    ]) {
       expect(baseStylesheet).toContain(cls);
     }
+  });
+
+  it("sizes image shapes from the registry tokens", () => {
+    expect(baseStylesheet).toMatch(/\.wg-img-avatar[^}]*var\(--wg-avatar-size,/);
+    expect(baseStylesheet).toMatch(/\.wg-img-thumb[^}]*var\(--wg-thumb-size,/);
+    expect(baseStylesheet).toMatch(/\.wg-img-hero[^}]*max-width: 100%/);
   });
 
   it("references only registry tokens, always with a fallback", () => {

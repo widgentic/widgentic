@@ -66,6 +66,24 @@ describe("untrusted-author safety", () => {
     expect(output).toBe("<a></a>");
   });
 
+  it("allows data:image URIs on img src only", () => {
+    const dataUri = "data:image/png;base64,iVBORw0KGgo=";
+    expect(html({ tag: "img", attrs: { src: { bind: "pic" } } }, { pic: dataUri })).toBe(
+      `<img src="${dataUri}">`
+    );
+    // The same value on any other URL attribute stays dropped.
+    expect(html({ tag: "a", attrs: { href: { bind: "pic" } } }, { pic: dataUri })).toBe(
+      "<a></a>"
+    );
+    // Non-image data URIs stay dropped even on img src.
+    expect(
+      html(
+        { tag: "img", attrs: { src: { bind: "pic" } } },
+        { pic: "data:text/html;base64,PHNjcmlwdD4=" }
+      )
+    ).toBe("<img>");
+  });
+
   it("keeps bound markup inert", () => {
     const output = html({ bind: "payload" }, {
       payload: "<img onerror=x src=y>"

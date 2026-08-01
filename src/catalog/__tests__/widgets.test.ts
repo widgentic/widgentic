@@ -210,6 +210,79 @@ describe("custom renderer", () => {
   });
 });
 
+describe("image rendering", () => {
+  const PNG = "https://cdn.example/a/ada.png";
+  const DATA_URI = "data:image/png;base64,iVBORw0KGgo=";
+
+  it("auto-detects an avatar URL in a table cell", () => {
+    const output = html({
+      kind: "table",
+      data: [{ user: "Ada", avatar: PNG }]
+    });
+    expect(output).toContain(
+      `<img class="wg-img wg-img-avatar" src="${PNG}" alt="avatar" loading="lazy" decoding="async">`
+    );
+    expect(output).toContain("Ada");
+  });
+
+  it("renders a thumbnail by default in a card field", () => {
+    const output = html({
+      kind: "card",
+      data: { fields: { photo: "https://cdn.example/p.jpg" } }
+    });
+    expect(output).toContain('class="wg-img wg-img-thumb"');
+    expect(output).toContain('alt="photo"');
+  });
+
+  it("hint forces a shape for an extensionless URL", () => {
+    const output = html({
+      kind: "card",
+      data: { fields: { cover: "https://images.example/id/12345" } },
+      hints: { images: { cover: "hero" } }
+    });
+    expect(output).toContain('class="wg-img wg-img-hero"');
+    expect(output).toContain('src="https://images.example/id/12345"');
+  });
+
+  it("hint false suppresses detection", () => {
+    const output = html({
+      kind: "table",
+      data: [{ screenshot: PNG }],
+      hints: { images: { screenshot: false } }
+    });
+    expect(output).not.toContain("<img");
+    expect(output).toContain("cdn.example/a/ada.png");
+  });
+
+  it("never renders an unsafe source as an image, even hinted", () => {
+    const output = html({
+      kind: "card",
+      data: { fields: { x: "javascript:alert(1)" } },
+      hints: { images: { x: "avatar" } }
+    });
+    expect(output).not.toContain("<img");
+    expect(output).toContain("javascript:alert(1)"); // escaped text
+  });
+
+  it("renders data-image URIs", () => {
+    const output = html({
+      kind: "card",
+      data: { fields: { pic: DATA_URI } }
+    });
+    expect(output).toContain(`src="${DATA_URI}"`);
+  });
+
+  it("image treatment wins over fieldFormat for the same key", () => {
+    const output = html({
+      kind: "card",
+      data: { fields: { avatar: PNG } },
+      hints: { fieldFormat: { avatar: "IMG: {value}" } }
+    });
+    expect(output).toContain('class="wg-img wg-img-thumb"');
+    expect(output).not.toContain("IMG:");
+  });
+});
+
 describe("render trees are pure data", () => {
   it("built-in output is JSON-serializable", () => {
     const payloads = [

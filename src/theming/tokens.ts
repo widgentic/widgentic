@@ -14,7 +14,9 @@ export const TOKEN_DEFAULTS = {
   spacing: "8px",
   "font-family": "system-ui, -apple-system, 'Segoe UI', sans-serif",
   "font-size": "14px",
-  shadow: "0 1px 3px rgba(0, 0, 0, 0.12)"
+  shadow: "0 1px 3px rgba(0, 0, 0, 0.12)",
+  "avatar-size": "32px",
+  "thumb-size": "48px"
 } as const;
 
 export type ThemeToken = keyof typeof TOKEN_DEFAULTS;

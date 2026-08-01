@@ -8,7 +8,12 @@ import type {
   WidgetRenderer
 } from "../catalog/index.js";
 import type { WidgetTemplate } from "./types.js";
-import { FORBIDDEN_ATTR, URL_ATTRS, isSafeUrl } from "./guards.js";
+import {
+  FORBIDDEN_ATTR,
+  URL_ATTRS,
+  isSafeImageSrc,
+  isSafeUrl
+} from "./guards.js";
 import { InvalidTemplateError, validateTemplate } from "./validate.js";
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -107,7 +112,16 @@ function interpretNode(node: unknown, scope: unknown, meta: unknown): WidgetNode
           value = formatValue(resolvePath(raw.bind, scope, meta));
         }
         if (value === undefined) continue;
-        if (URL_ATTRS.has(name.toLowerCase()) && !isSafeUrl(value)) continue;
+        const lower = name.toLowerCase();
+        if (URL_ATTRS.has(lower)) {
+          // Image sources additionally accept data:image/*; every other
+          // URL attribute keeps the strict scheme set (data-URI
+          // navigation is an XSS vector; data-URI images are not).
+          const imageContext = lower === "src" && node.tag.toLowerCase() === "img";
+          const allowed =
+            isSafeUrl(value) || (imageContext && isSafeImageSrc(value));
+          if (!allowed) continue;
+        }
         attrs[name] = value;
       }
     }

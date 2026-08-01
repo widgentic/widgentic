@@ -12,3 +12,11 @@ export {
   handleRenderWidget,
   handleListThemeTokens
 } from "./handlers.js";
+export {
+  inlineImagesInHtml,
+  inlineRenderResultImages,
+  fetchImageAsDataUri,
+  isPrivateAddress,
+  clearInlineImageCache
+} from "./inline-images.js";
+export type { InlineImageDeps } from "./inline-images.js";

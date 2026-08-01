@@ -7,3 +7,9 @@ export type {
 export type { ErrorCode, WidgetContractError } from "./errors.js";
 export type { ValidateOptions, ValidateResult } from "./validate.js";
 export { validateWidgetPayload } from "./validate.js";
+export {
+  ALLOWED_SCHEMES,
+  isSafeUrl,
+  isSafeImageSrc,
+  looksLikeImageUrl
+} from "./urls.js";

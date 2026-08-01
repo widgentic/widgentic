@@ -2,6 +2,7 @@ import type { WidgetPayload } from "../../contract/types.js";
 import type { WidgetNode } from "../node.js";
 import { el } from "../node.js";
 import { formatValue, isPlainObject } from "./format.js";
+import { imageNode, resolveImage } from "./images.js";
 
 /**
  * `card` renderer.
@@ -64,10 +65,17 @@ export function renderCard(payload: WidgetPayload): WidgetNode {
         "dl",
         { class: "wg-card-fields" },
         fieldEntries.map(([key, fieldValue]) => {
-          const raw = formatValue(fieldValue);
-          const pattern = fieldFormat?.[key];
-          const display =
-            typeof pattern === "string" ? applyPattern(pattern, raw) : raw;
+          // Image treatment wins over fieldFormat for the same key.
+          const image = resolveImage(key, fieldValue, payload.hints, "thumb");
+          let display: WidgetNode;
+          if (image) {
+            display = imageNode(key, image.src, image.shape);
+          } else {
+            const raw = formatValue(fieldValue);
+            const pattern = fieldFormat?.[key];
+            display =
+              typeof pattern === "string" ? applyPattern(pattern, raw) : raw;
+          }
           return el("div", { class: "wg-card-field" }, [
             el("dt", { class: "wg-card-field-key" }, [key]),
             el("dd", { class: "wg-card-field-value" }, [display])

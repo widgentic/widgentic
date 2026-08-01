@@ -1,0 +1,226 @@
+import { beforeEach, describe, expect, it } from "vitest";
+import {
+  clearInlineImageCache,
+  fetchImageAsDataUri,
+  inlineImagesInHtml,
+  inlineRenderResultImages,
+  isPrivateAddress
+} from "../inline-images.js";
+import type { InlineImageDeps } from "../inline-images.js";
+
+const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+const PNG_B64 = Buffer.from(PNG_BYTES).toString("base64");
+
+/** A fetch stub serving PNG bytes for any URL, recording calls. */
+function pngFetch(calls: string[] = []): typeof fetch {
+  return (async (input: RequestInfo | URL) => {
+    calls.push(String(input));
+    return new Response(PNG_BYTES, {
+      status: 200,
+      headers: { "content-type": "image/png" }
+    });
+  }) as typeof fetch;
+}
+
+const publicLookup = async () => ["93.184.216.34"];
+const deps = (fetchImpl: typeof fetch): InlineImageDeps => ({
+  fetchImpl,
+  lookupImpl: publicLookup
+});
+
+beforeEach(() => clearInlineImageCache());
+
+describe("isPrivateAddress", () => {
+  it("flags loopback, RFC1918, link-local, CGNAT, and IPv6 local ranges", () => {
+    for (const addr of [
+      "127.0.0.1",
+      "10.1.2.3",
+      "172.16.0.1",
+      "172.31.255.255",
+      "192.168.1.1",
+      "169.254.169.254",
+      "100.64.0.1",
+      "0.0.0.0",
+      "255.255.255.255",
+      "::1",
+      "::",
+      "fc00::1",
+      "fd12::1",
+      "fe80::1",
+      "::ffff:127.0.0.1"
+    ]) {
+      expect(isPrivateAddress(addr), addr).toBe(true);
+    }
+  });
+
+  it("passes public addresses", () => {
+    for (const addr of ["93.184.216.34", "8.8.8.8", "2606:2800:220:1::1"]) {
+      expect(isPrivateAddress(addr), addr).toBe(false);
+    }
+  });
+});
+
+describe("fetchImageAsDataUri", () => {
+  it("returns a data URI for a fetchable https image", async () => {
+    const uri = await fetchImageAsDataUri(
+      "https://cdn.example/a.png",
+      deps(pngFetch())
+    );
+    expect(uri).toBe(`data:image/png;base64,${PNG_B64}`);
+  });
+
+  it("refuses non-https schemes without fetching", async () => {
+    const calls: string[] = [];
+    expect(
+      await fetchImageAsDataUri("http://cdn.example/a.png", deps(pngFetch(calls)))
+    ).toBeNull();
+    expect(calls).toHaveLength(0);
+  });
+
+  it("refuses IP-literal and DNS-resolved private hosts without fetching", async () => {
+    const calls: string[] = [];
+    const fetchImpl = pngFetch(calls);
+    expect(
+      await fetchImageAsDataUri("https://169.254.169.254/meta.png", {
+        fetchImpl,
+        lookupImpl: publicLookup
+      })
+    ).toBeNull();
+    expect(
+      await fetchImageAsDataUri("https://internal.example/a.png", {
+        fetchImpl,
+        lookupImpl: async () => ["10.0.0.5"]
+      })
+    ).toBeNull();
+    expect(calls).toHaveLength(0);
+  });
+
+  it("rejects non-image content types", async () => {
+    const fetchImpl = (async () =>
+      new Response("<html></html>", {
+        status: 200,
+        headers: { "content-type": "text/html" }
+      })) as typeof fetch;
+    expect(
+      await fetchImageAsDataUri("https://cdn.example/x.png", deps(fetchImpl))
+    ).toBeNull();
+  });
+
+  it("rejects oversized responses", async () => {
+    const big = new Uint8Array(1024 * 1024 + 1);
+    const fetchImpl = (async () =>
+      new Response(big, {
+        status: 200,
+        headers: { "content-type": "image/png" }
+      })) as typeof fetch;
+    expect(
+      await fetchImageAsDataUri("https://cdn.example/big.png", deps(fetchImpl))
+    ).toBeNull();
+  });
+
+  it("follows bounded redirects, re-validating each hop", async () => {
+    let first = true;
+    const targets: string[] = [];
+    const fetchImpl = (async (input: RequestInfo | URL) => {
+      targets.push(String(input));
+      if (first) {
+        first = false;
+        return new Response(null, {
+          status: 302,
+          headers: { location: "https://cdn2.example/b.png" }
+        });
+      }
+      return new Response(PNG_BYTES, {
+        status: 200,
+        headers: { "content-type": "image/png" }
+      });
+    }) as typeof fetch;
+    const uri = await fetchImageAsDataUri(
+      "https://cdn.example/a.png",
+      deps(fetchImpl)
+    );
+    expect(uri).toContain("base64");
+    expect(targets).toEqual([
+      "https://cdn.example/a.png",
+      "https://cdn2.example/b.png"
+    ]);
+  });
+
+  it("caches successes per URL", async () => {
+    const calls: string[] = [];
+    const d = deps(pngFetch(calls));
+    await fetchImageAsDataUri("https://cdn.example/a.png", d);
+    await fetchImageAsDataUri("https://cdn.example/a.png", d);
+    expect(calls).toHaveLength(1);
+  });
+});
+
+describe("inlineImagesInHtml", () => {
+  it("rewrites img src to data URIs and dedupes per render", async () => {
+    const calls: string[] = [];
+    const html =
+      '<td><img class="wg-img wg-img-avatar" src="https://cdn.example/a.png" alt="avatar"></td>' +
+      '<td><img class="wg-img wg-img-avatar" src="https://cdn.example/a.png" alt="avatar"></td>';
+    const out = await inlineImagesInHtml(html, deps(pngFetch(calls)));
+    expect(calls).toHaveLength(1);
+    expect(out).not.toContain("https://cdn.example/a.png");
+    expect(out.match(/data:image\/png;base64,/g)).toHaveLength(2);
+    expect(out).toContain('alt="avatar"'); // rest of the tag untouched
+  });
+
+  it("unescapes serializer-escaped URLs before fetching", async () => {
+    const calls: string[] = [];
+    const html = '<img src="https://cdn.example/a.png?w=64&amp;h=64" alt="x">';
+    const out = await inlineImagesInHtml(html, deps(pngFetch(calls)));
+    expect(calls).toEqual(["https://cdn.example/a.png?w=64&h=64"]);
+    expect(out).toContain("data:image/png;base64,");
+  });
+
+  it("leaves failed sources untouched and data URIs alone", async () => {
+    const failFetch = (async () => {
+      throw new Error("net down");
+    }) as typeof fetch;
+    const html =
+      '<img src="https://cdn.example/a.png" alt="a">' +
+      '<img src="data:image/png;base64,AAAA" alt="b">';
+    const out = await inlineImagesInHtml(html, deps(failFetch));
+    expect(out).toBe(html);
+  });
+});
+
+describe("inlineRenderResultImages", () => {
+  const APP_MIME = "text/html;profile=mcp-app";
+
+  it("rewrites structuredContent and app resources, not text blocks", async () => {
+    const url = "https://cdn.example/a.png";
+    const img = `<img class="wg-img wg-img-avatar" src="${url}" alt="avatar">`;
+    const result = {
+      content: [
+        { type: "text", text: `<table>${img}</table>` },
+        { type: "resource", resource: { uri: "ui://widgentic/page/table", mimeType: APP_MIME, text: `<!doctype html><body>${img}</body>` } },
+        { type: "resource", resource: { uri: "widgentic://widget", mimeType: "application/json", text: "{}" } }
+      ],
+      structuredContent: { html: img, css: "", payload: {} } as Record<string, unknown>
+    };
+    await inlineRenderResultImages(result, deps(pngFetch()));
+
+    expect(result.structuredContent.html).toContain("data:image/png;base64,");
+    const appResource = (result.content[1] as { resource: { text: string } }).resource;
+    expect(appResource.text).toContain("data:image/png;base64,");
+    // Model-facing text block and non-app resources keep the original URL.
+    expect((result.content[0] as { text: string }).text).toContain(url);
+    expect((result.content[2] as { resource: { text: string } }).resource.text).toBe("{}");
+  });
+
+  it("does nothing on error results", async () => {
+    const calls: string[] = [];
+    const result = {
+      isError: true,
+      content: [{ type: "text", text: '<img src="https://cdn.example/a.png">' }],
+      structuredContent: { html: '<img src="https://cdn.example/a.png">' } as Record<string, unknown>
+    };
+    await inlineRenderResultImages(result, deps(pngFetch(calls)));
+    expect(calls).toHaveLength(0);
+    expect(result.structuredContent.html).toContain("https://cdn.example/a.png");
+  });
+});

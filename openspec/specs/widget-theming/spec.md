@@ -8,18 +8,18 @@ The package SHALL export from a `./theming` entry: `THEME_TOKENS` (the token reg
 
 #### Scenario: Token registry is exported
 - **WHEN** `THEME_TOKENS` is imported
-- **THEN** it SHALL contain `"bg"`, `"fg"`, `"accent"`, `"border"`, `"radius"`, `"spacing"`, `"font-family"`, `"font-size"`, `"muted"`, and `"shadow"`
+- **THEN** it SHALL contain `"bg"`, `"fg"`, `"accent"`, `"border"`, `"radius"`, `"spacing"`, `"font-family"`, `"font-size"`, `"muted"`, `"shadow"`, `"avatar-size"`, and `"thumb-size"`
 
 #### Scenario: Dark preset is valid theme data
 - **WHEN** `validateTheme(darkTheme)` is called
 - **THEN** the result SHALL be `{ ok: true, theme: darkTheme }`
 
 ### Requirement: Predefined base stylesheet
-`baseStylesheet` SHALL style the documented `wg-*` classes (`wg-card`, `wg-table`, `wg-tree`, `wg-custom`, `wg-template` and their sub-element classes) using only `var(--wg-<token>, <fallback>)` references to registry tokens, with light-theme fallback values. `injectBaseStyles(doc)` SHALL append the stylesheet as a marked `<style>` element exactly once per document (idempotent).
+`baseStylesheet` SHALL style the documented `wg-*` classes (`wg-card`, `wg-table`, `wg-tree`, `wg-custom`, `wg-template`, `wg-img` with its shape modifiers `wg-img-avatar`, `wg-img-thumb`, `wg-img-hero`, and their sub-element classes) using only `var(--wg-<token>, <fallback>)` references to registry tokens, with light-theme fallback values. Image rules SHALL size `wg-img-avatar` from the `avatar-size` token (circular crop), `wg-img-thumb` from the `thumb-size` token (rounded rectangle), and render `wg-img-hero` as a block spanning available width; all three SHALL use `object-fit: cover` or equivalent so mis-proportioned sources stay presentable. `injectBaseStyles(doc)` SHALL append the stylesheet as a marked `<style>` element exactly once per document (idempotent).
 
 #### Scenario: Stylesheet covers the built-in classes
 - **WHEN** `baseStylesheet` is inspected
-- **THEN** it SHALL contain rules for `.wg-card`, `.wg-table`, `.wg-tree`, and `.wg-custom`
+- **THEN** it SHALL contain rules for `.wg-card`, `.wg-table`, `.wg-tree`, `.wg-custom`, `.wg-img`, `.wg-img-avatar`, `.wg-img-thumb`, and `.wg-img-hero`
 
 #### Scenario: All variables come from the registry
 - **WHEN** every `--wg-*` reference in `baseStylesheet` is extracted
@@ -29,6 +29,10 @@ The package SHALL export from a `./theming` entry: `THEME_TOKENS` (the token reg
 #### Scenario: Injection is idempotent
 - **WHEN** `injectBaseStyles(document)` is called twice
 - **THEN** the document SHALL contain exactly one widgentic style element
+
+#### Scenario: Avatar size is themeable
+- **WHEN** a theme sets `"avatar-size": "48px"` and is applied to a container with an `.wg-img-avatar` image
+- **THEN** the avatar SHALL derive its rendered box from the overridden token value
 
 ### Requirement: Theme validation
 `validateTheme(input)` SHALL return `{ ok: true, theme } | { ok: false, error: ThemeError }` where `ThemeError` has `code` (`"INVALID_THEME" | "UNKNOWN_TOKEN" | "INVALID_TOKEN_VALUE"`), `message`, and the offending `token` name when applicable. Non-object input SHALL fail with `INVALID_THEME`; keys outside `THEME_TOKENS` SHALL fail with `UNKNOWN_TOKEN`; values that are not strings or that contain `;`, `{`, `}`, `<`, `>`, `url(`, or `expression(` (case-insensitive, whitespace-tolerant before the parenthesis) SHALL fail with `INVALID_TOKEN_VALUE`. The guard rejects exfiltration and execution vectors, not invalid CSS — inert nonsense values pass.

@@ -2,6 +2,7 @@ import type { WidgetPayload } from "../../contract/types.js";
 import type { WidgetNode } from "../node.js";
 import { el } from "../node.js";
 import { formatValue, isPlainObject } from "./format.js";
+import { imageNode, resolveImage } from "./images.js";
 
 /**
  * `table` renderer.
@@ -54,11 +55,16 @@ export function renderTable(payload: WidgetPayload): WidgetNode {
         el(
           "tr",
           { class: "wg-table-row" },
-          columns.map((column) =>
-            el("td", { class: "wg-table-cell" }, [
-              column in record ? formatValue(record[column]) : ""
-            ])
-          )
+          columns.map((column) => {
+            if (!(column in record)) {
+              return el("td", { class: "wg-table-cell" }, [""]);
+            }
+            const value = record[column];
+            const image = resolveImage(column, value, payload.hints, "avatar");
+            return el("td", { class: "wg-table-cell" }, [
+              image ? imageNode(column, image.src, image.shape) : formatValue(value)
+            ]);
+          })
         )
       )
     )

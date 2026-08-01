@@ -354,6 +354,27 @@ describe("handleRenderWidget", () => {
     expect(againUi.resource.uri).toBe("ui://widgentic/page/badge");
   });
 
+  it("app page may reference validated image sources and nothing else external", () => {
+    const logo = "https://cdn.example/logo.png";
+    const result = handleRenderWidget(catalog, {
+      widget: "card",
+      data: { title: "Co", fields: { logo } },
+      format: "app"
+    });
+    expect(result.isError).toBeUndefined();
+    const ui = result.content[1] as { resource: { text: string } };
+    expect(ui.resource.text).toContain(`src="${logo}"`);
+    expect(ui.resource.text).toContain('class="wg-img wg-img-thumb"');
+
+    // Still script-free, and the img sources are the only external refs:
+    expect(ui.resource.text).not.toContain("<script");
+    expect(ui.resource.text).not.toContain("<link");
+    expect(ui.resource.text).not.toMatch(/@import/i);
+    const withoutImgs = ui.resource.text.replace(/<img\b[^>]*>/g, "");
+    expect(withoutImgs).not.toMatch(/https?:\/\//);
+    expect(withoutImgs).not.toMatch(/url\s*\(/i);
+  });
+
   it("every successful result carries structuredContent for app templates", () => {
     const styled = createCatalog();
     styled.register(

@@ -24,8 +24,13 @@ import {
   WIDGENTIC_APP_TEMPLATE_URI,
   handleListWidgets,
   handleRenderWidget,
-  handleListThemeTokens
+  handleListThemeTokens,
+  inlineRenderResultImages
 } from "widgentic/mcp-server";
+
+const INLINE_IMAGES = !["0", "false"].includes(
+  (process.env.WIDGENTIC_INLINE_IMAGES ?? "").toLowerCase()
+);
 
 export function createWidgenticServer(): McpServer {
   const catalog = createCatalog();
@@ -84,7 +89,15 @@ export function createWidgenticServer(): McpServer {
         theme: z.record(z.string(), z.string()).optional()
       }
     },
-    (args) => handleRenderWidget(catalog, args) as CallToolResult
+    async (args) => {
+      const result = handleRenderWidget(catalog, args) as CallToolResult;
+      // Apps-host sandboxes block external img-src but allow data:, so the
+      // iframe-facing surfaces get image bytes inlined as data URIs
+      // (SSRF-guarded; see src/mcp-server/inline-images.ts). Disable with
+      // WIDGENTIC_INLINE_IMAGES=0.
+      if (INLINE_IMAGES) await inlineRenderResultImages(result);
+      return result;
+    }
   );
 
   // The declared app template: Apps hosts fetch this once and mount it in a
