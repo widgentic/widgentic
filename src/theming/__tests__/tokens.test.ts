@@ -20,7 +20,8 @@ describe("token registry", () => {
       "font-size",
       "shadow",
       "avatar-size",
-      "thumb-size"
+      "thumb-size",
+      "surface"
     ]) {
       expect(THEME_TOKENS).toContain(token);
     }
@@ -54,6 +55,16 @@ describe("baseStylesheet", () => {
     expect(baseStylesheet).toMatch(/\.wg-img-avatar[^}]*var\(--wg-avatar-size,/);
     expect(baseStylesheet).toMatch(/\.wg-img-thumb[^}]*var\(--wg-thumb-size,/);
     expect(baseStylesheet).toMatch(/\.wg-img-hero[^}]*max-width: 100%/);
+  });
+
+  it("widget surfaces fall back from surface to bg", () => {
+    // The nested chain is the back-compat guarantee: themes setting only
+    // `bg` color surfaces exactly as before; `surface` overrides when set.
+    for (const cls of ["\\.wg-card", "\\.wg-table", "\\.wg-custom"]) {
+      expect(baseStylesheet).toMatch(
+        new RegExp(`${cls} \\{[^}]*background: var\\(--wg-surface, var\\(--wg-bg,`)
+      );
+    }
   });
 
   it("references only registry tokens, always with a fallback", () => {

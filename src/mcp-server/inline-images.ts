@@ -13,6 +13,7 @@
  * and time caps, bounded image count per render. Residual DNS-rebinding
  * TOCTOU is accepted at this stage (documented in the change design).
  */
+import type { WidgetElementNode, WidgetNode } from "../catalog/index.js";
 import { WIDGENTIC_APP_MIME_TYPE } from "./definitions.js";
 
 const REDIRECT_LIMIT = 3;
@@ -239,10 +240,40 @@ export async function inlineImagesInHtml(
   );
 }
 
+function isElementNode(node: unknown): node is WidgetElementNode {
+  return typeof node === "object" && node !== null && !Array.isArray(node);
+}
+
+/** Collect raw http(s) img sources from a render tree. */
+function collectTreeSources(node: WidgetNode, into: Set<string>): void {
+  if (!isElementNode(node)) return;
+  if (node.tag === "img") {
+    const src = node.attrs?.src;
+    if (typeof src === "string" && /^https?:\/\//i.test(src)) into.add(src);
+  }
+  for (const child of node.children ?? []) collectTreeSources(child, into);
+}
+
+/** Rewrite tree img sources in place from resolved raw-URL → data-URI. */
+function rewriteTreeImages(node: WidgetNode, resolved: Map<string, string>): void {
+  if (!isElementNode(node)) return;
+  if (node.tag === "img" && node.attrs !== undefined) {
+    const src = node.attrs.src;
+    if (typeof src === "string") {
+      const dataUri = resolved.get(src);
+      if (dataUri !== undefined) node.attrs.src = dataUri;
+    }
+  }
+  for (const child of node.children ?? []) rewriteTreeImages(child, resolved);
+}
+
 /**
  * Apply inlining to the iframe-facing surfaces of a `render_widget` result,
- * in place: the `structuredContent.html` fragment and any embedded resource
- * with the MCP Apps mime type. Model-facing text blocks keep original URLs.
+ * in place: the `structuredContent.html` fragment, the `structuredContent.tree`
+ * render tree, and any embedded resource with the MCP Apps mime type. All
+ * surfaces are rewritten from ONE fetch pass, so the tree and html
+ * projections can never disagree about an image. Model-facing text blocks
+ * keep original URLs.
  */
 export async function inlineRenderResultImages(
   result: {
@@ -254,11 +285,17 @@ export async function inlineRenderResultImages(
 ): Promise<void> {
   if (result.isError === true) return;
 
-  const fragment = result.structuredContent?.html;
-  if (typeof fragment === "string" && result.structuredContent !== undefined) {
-    result.structuredContent.html = await inlineImagesInHtml(fragment, deps);
+  // HTML-string surfaces (escaped attributes) as get/set accessors.
+  const htmlSurfaces: { get(): string; set(value: string): void }[] = [];
+  const sc = result.structuredContent;
+  if (sc !== undefined && typeof sc.html === "string") {
+    htmlSurfaces.push({
+      get: () => sc.html as string,
+      set: (value) => {
+        sc.html = value;
+      }
+    });
   }
-
   if (Array.isArray(result.content)) {
     for (const block of result.content) {
       if (
@@ -272,9 +309,51 @@ export async function inlineRenderResultImages(
           resource.mimeType === WIDGENTIC_APP_MIME_TYPE &&
           typeof resource.text === "string"
         ) {
-          resource.text = await inlineImagesInHtml(resource.text, deps);
+          htmlSurfaces.push({
+            get: () => resource.text as string,
+            set: (value) => {
+              resource.text = value;
+            }
+          });
         }
       }
     }
   }
+  const tree = sc?.tree as WidgetNode | undefined;
+
+  // One collection pass over every surface, keyed by RAW url.
+  const raw = new Set<string>();
+  for (const surface of htmlSurfaces) {
+    for (const tag of surface.get().match(IMG_TAG) ?? []) {
+      const src = SRC_ATTR.exec(tag)?.[1];
+      if (src !== undefined) {
+        const unescaped = unescapeAttr(src);
+        if (/^https?:\/\//i.test(unescaped)) raw.add(unescaped);
+      }
+    }
+  }
+  if (tree !== undefined) collectTreeSources(tree, raw);
+  if (raw.size === 0) return;
+
+  // One fetch pass (bounded), then rewrite every projection from it.
+  const resolved = new Map<string, string>();
+  await Promise.all(
+    [...raw].slice(0, MAX_IMAGES_PER_RENDER).map(async (url) => {
+      const dataUri = await fetchImageAsDataUri(url, deps);
+      if (dataUri !== null) resolved.set(url, dataUri);
+    })
+  );
+  if (resolved.size === 0) return;
+
+  for (const surface of htmlSurfaces) {
+    surface.set(
+      surface.get().replace(IMG_TAG, (tag) =>
+        tag.replace(SRC_ATTR, (full, src: string) => {
+          const dataUri = resolved.get(unescapeAttr(src));
+          return dataUri === undefined ? full : `src="${dataUri}"`;
+        })
+      )
+    );
+  }
+  if (tree !== undefined) rewriteTreeImages(tree, resolved);
 }

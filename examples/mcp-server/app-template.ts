@@ -10,6 +10,8 @@ import { baseStylesheet } from "widgentic/theming";
  *   - host context integration (theme, style variables, safe-area insets),
  *     applied from the initialize result and on `host-context-changed`
  *   - `tool-input` placeholder, `tool-result` rendering of structuredContent
+ *     (native mount from `tree` — DOM built from data and patched in place
+ *     across results; `html` injection only as the tree-less fallback)
  *   - ResizeObserver-driven `size-changed` notifications
  *   - `ping` and `ui/resource-teardown` responders
  * Widget content stays script-free and fully escaped; this loader is fixed
@@ -49,8 +51,88 @@ function applyHostContext(ctx) {
       s.top + "px " + s.right + "px " + s.bottom + "px " + s.left + "px";
   }
 }
+// --- Native tree mounter -------------------------------------------------
+// Mirrors src/reactive build/patch semantics over the JSON render tree in
+// structuredContent.tree: DOM built from data (no HTML parsing), successive
+// results patch in place preserving node identity where shape matches.
+// Applies the serializer's discipline even to a tampered tree: tag and
+// attribute names allowlisted, on* attributes skipped.
+const TAG_NAME = /^[a-zA-Z][a-zA-Z0-9-]*$/;
+const ATTR_NAME = /^[a-zA-Z_][a-zA-Z0-9_:.-]*$/;
+function isElement(node) {
+  return node !== null && typeof node === "object" && !Array.isArray(node) &&
+    typeof node.tag === "string" && TAG_NAME.test(node.tag);
+}
+function build(node) {
+  if (typeof node === "string") return document.createTextNode(node);
+  if (!isElement(node)) return document.createTextNode("");
+  const el = document.createElement(node.tag);
+  if (node.attrs) {
+    for (const name in node.attrs) {
+      if (!ATTR_NAME.test(name) || /^on/i.test(name)) continue;
+      const value = node.attrs[name];
+      if (typeof value === "string") el.setAttribute(name, value);
+    }
+  }
+  if (Array.isArray(node.children)) {
+    for (const child of node.children) el.appendChild(build(child));
+  }
+  return el;
+}
+function patch(prev, next, dom) {
+  if (typeof prev === "string" && typeof next === "string") {
+    if (prev !== next) dom.nodeValue = next;
+    return dom;
+  }
+  if (typeof prev === "string" || !isElement(next) || !isElement(prev) ||
+      prev.tag !== next.tag) {
+    const built = build(next);
+    dom.replaceWith(built);
+    return built;
+  }
+  const prevAttrs = prev.attrs || {};
+  const nextAttrs = next.attrs || {};
+  for (const name in prevAttrs) {
+    if (!(name in nextAttrs)) dom.removeAttribute(name);
+  }
+  for (const name in nextAttrs) {
+    if (!ATTR_NAME.test(name) || /^on/i.test(name)) continue;
+    const value = nextAttrs[name];
+    if (typeof value !== "string") { dom.removeAttribute(name); continue; }
+    if (prevAttrs[name] !== value) dom.setAttribute(name, value);
+  }
+  const prevKids = Array.isArray(prev.children) ? prev.children : [];
+  const nextKids = Array.isArray(next.children) ? next.children : [];
+  const domKids = [];
+  for (let i = 0; i < dom.childNodes.length; i++) domKids.push(dom.childNodes[i]);
+  const shared = Math.min(prevKids.length, nextKids.length, domKids.length);
+  for (let i = 0; i < shared; i++) patch(prevKids[i], nextKids[i], domKids[i]);
+  for (let i = domKids.length - 1; i >= nextKids.length; i--) {
+    dom.removeChild(domKids[i]);
+  }
+  for (let i = prevKids.length; i < nextKids.length; i++) {
+    dom.appendChild(build(nextKids[i]));
+  }
+  return dom;
+}
+let mountedTree;
+let mountedRoot;
 function render(sc) {
   if (typeof sc.css === "string") dynamicCss.textContent = sc.css;
+  if (sc.tree !== undefined && sc.tree !== null) {
+    if (mountedTree !== undefined && mountedRoot && mountedRoot.parentNode === root) {
+      mountedRoot = patch(mountedTree, sc.tree, mountedRoot);
+    } else {
+      const built = build(sc.tree);
+      root.replaceChildren(built);
+      mountedRoot = built;
+    }
+    mountedTree = sc.tree;
+    return;
+  }
+  // Fallback projection for results that predate the tree.
+  mountedTree = undefined;
+  mountedRoot = undefined;
   if (typeof sc.html === "string") root.innerHTML = sc.html;
 }
 window.addEventListener("message", (event) => {

@@ -252,7 +252,11 @@ export function handleRenderWidget(
   const structuredContent: Record<string, unknown> = {
     html,
     css: [styleCss, themeCss].filter((part) => part.length > 0).join("\n"),
-    payload
+    payload,
+    // The same render, as data: the app template mounts this natively
+    // (DOM from tree, patched in place across results); `html` stays the
+    // fallback projection for hosts and templates that predate it.
+    tree: rendered.node
   };
 
   // Hint-coherence feedback: forward compatibility ignores unmatched hints

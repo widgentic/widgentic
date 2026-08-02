@@ -4,18 +4,18 @@
 Predefined styles and data-driven themes for the stable `wg-*` widget classes. A token registry (`--wg-*` custom properties) backs a generated base stylesheet with light defaults; a theme is a validated JSON token map applied per container (scoped, replace semantics) or emitted as CSS. Theme values from untrusted authors cannot escape declarations or fetch resources.
 ## Requirements
 ### Requirement: Theming programmatic surface
-The package SHALL export from a `./theming` entry: `THEME_TOKENS` (the token registry), the `WidgetTheme` and `ThemeError` types, `baseStylesheet` (string), `injectBaseStyles(doc: Document): void`, `validateTheme(input: unknown)`, `applyTheme(container: Element, theme: WidgetTheme): void`, `themeToCss(theme: WidgetTheme, selector?: string): string`, and the `darkTheme` preset. Themes SHALL be plain JSON-serializable maps of bare token names to string values.
+The package SHALL export from a `./theming` entry: `THEME_TOKENS` (the token registry), the `WidgetTheme` and `ThemeError` types, `baseStylesheet` (string), `injectBaseStyles(doc: Document): void`, `validateTheme(input: unknown)`, `applyTheme(container: Element, theme: WidgetTheme): void`, `themeToCss(theme: WidgetTheme, selector?: string): string`, and the `darkTheme` preset. Themes SHALL be plain JSON-serializable maps of bare token names to string values. The `darkTheme` preset SHALL set `surface` to a value distinct from its `bg`.
 
 #### Scenario: Token registry is exported
 - **WHEN** `THEME_TOKENS` is imported
-- **THEN** it SHALL contain `"bg"`, `"fg"`, `"accent"`, `"border"`, `"radius"`, `"spacing"`, `"font-family"`, `"font-size"`, `"muted"`, `"shadow"`, `"avatar-size"`, and `"thumb-size"`
+- **THEN** it SHALL contain `"bg"`, `"fg"`, `"accent"`, `"border"`, `"radius"`, `"spacing"`, `"font-family"`, `"font-size"`, `"muted"`, `"shadow"`, `"avatar-size"`, `"thumb-size"`, and `"surface"`
 
 #### Scenario: Dark preset is valid theme data
 - **WHEN** `validateTheme(darkTheme)` is called
 - **THEN** the result SHALL be `{ ok: true, theme: darkTheme }`
 
 ### Requirement: Predefined base stylesheet
-`baseStylesheet` SHALL style the documented `wg-*` classes (`wg-card`, `wg-table`, `wg-tree`, `wg-custom`, `wg-template`, `wg-img` with its shape modifiers `wg-img-avatar`, `wg-img-thumb`, `wg-img-hero`, and their sub-element classes) using only `var(--wg-<token>, <fallback>)` references to registry tokens, with light-theme fallback values. Image rules SHALL size `wg-img-avatar` from the `avatar-size` token (circular crop), `wg-img-thumb` from the `thumb-size` token (rounded rectangle), and render `wg-img-hero` as a block spanning available width; all three SHALL use `object-fit: cover` or equivalent so mis-proportioned sources stay presentable. `injectBaseStyles(doc)` SHALL append the stylesheet as a marked `<style>` element exactly once per document (idempotent).
+`baseStylesheet` SHALL style the documented `wg-*` classes (`wg-card`, `wg-table`, `wg-tree`, `wg-custom`, `wg-template`, `wg-img` with its shape modifiers `wg-img-avatar`, `wg-img-thumb`, `wg-img-hero`, and their sub-element classes) using only `var(--wg-<token>, <fallback>)` references to registry tokens, with light-theme fallback values. Widget surface backgrounds (`wg-card`, `wg-table`, `wg-custom`) SHALL read `var(--wg-surface, var(--wg-bg, <light default>))` so that themes without a `surface` value inherit `bg` exactly as before, while themes may set the two independently. Image rules SHALL size `wg-img-avatar` from the `avatar-size` token (circular crop), `wg-img-thumb` from the `thumb-size` token (rounded rectangle), and render `wg-img-hero` as a block spanning available width; all three SHALL use `object-fit: cover` or equivalent so mis-proportioned sources stay presentable. `injectBaseStyles(doc)` SHALL append the stylesheet as a marked `<style>` element exactly once per document (idempotent).
 
 #### Scenario: Stylesheet covers the built-in classes
 - **WHEN** `baseStylesheet` is inspected
@@ -33,6 +33,11 @@ The package SHALL export from a `./theming` entry: `THEME_TOKENS` (the token reg
 #### Scenario: Avatar size is themeable
 - **WHEN** a theme sets `"avatar-size": "48px"` and is applied to a container with an `.wg-img-avatar` image
 - **THEN** the avatar SHALL derive its rendered box from the overridden token value
+
+#### Scenario: Surface falls back to bg
+- **WHEN** the surface rules are inspected
+- **THEN** `.wg-card` background SHALL be `var(--wg-surface, var(--wg-bg, …))`
+- **AND** a theme setting only `bg` SHALL color surfaces with that `bg` value, unchanged from prior behavior
 
 ### Requirement: Theme validation
 `validateTheme(input)` SHALL return `{ ok: true, theme } | { ok: false, error: ThemeError }` where `ThemeError` has `code` (`"INVALID_THEME" | "UNKNOWN_TOKEN" | "INVALID_TOKEN_VALUE"`), `message`, and the offending `token` name when applicable. Non-object input SHALL fail with `INVALID_THEME`; keys outside `THEME_TOKENS` SHALL fail with `UNKNOWN_TOKEN`; values that are not strings or that contain `;`, `{`, `}`, `<`, `>`, `url(`, or `expression(` (case-insensitive, whitespace-tolerant before the parenthesis) SHALL fail with `INVALID_TOKEN_VALUE`. The guard rejects exfiltration and execution vectors, not invalid CSS — inert nonsense values pass.

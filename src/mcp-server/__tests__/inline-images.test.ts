@@ -212,6 +212,52 @@ describe("inlineRenderResultImages", () => {
     expect((result.content[2] as { resource: { text: string } }).resource.text).toBe("{}");
   });
 
+  it("rewrites the tree in lockstep with the html surfaces", async () => {
+    const url = "https://cdn.example/a.png";
+    const calls: string[] = [];
+    const result = {
+      content: [],
+      structuredContent: {
+        html: `<td><img class="wg-img wg-img-avatar" src="${url}" alt="avatar"></td>`,
+        tree: {
+          tag: "td",
+          children: [
+            {
+              tag: "img",
+              attrs: { class: "wg-img wg-img-avatar", src: url, alt: "avatar" }
+            }
+          ]
+        },
+        payload: {}
+      } as Record<string, unknown>
+    };
+    await inlineRenderResultImages(result, deps(pngFetch(calls)));
+    expect(calls).toHaveLength(1); // one fetch feeds both projections
+    const tree = result.structuredContent.tree as {
+      children: { attrs: { src: string } }[];
+    };
+    expect(tree.children[0]?.attrs.src).toContain("data:image/png;base64,");
+    expect(result.structuredContent.html).toContain("data:image/png;base64,");
+    expect(result.structuredContent.html).not.toContain(url);
+  });
+
+  it("walks tree-only image sources (none in html)", async () => {
+    const result = {
+      content: [],
+      structuredContent: {
+        html: "<div></div>",
+        tree: {
+          tag: "img",
+          attrs: { src: "https://cdn.example/only-in-tree.png" }
+        },
+        payload: {}
+      } as Record<string, unknown>
+    };
+    await inlineRenderResultImages(result, deps(pngFetch()));
+    const tree = result.structuredContent.tree as { attrs: { src: string } };
+    expect(tree.attrs.src).toContain("data:image/png;base64,");
+  });
+
   it("does nothing on error results", async () => {
     const calls: string[] = [];
     const result = {

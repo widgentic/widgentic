@@ -194,7 +194,7 @@ The catalog SHALL store a `WidgetDescriptor` per kind — `{ kind, description, 
 - **THEN** the catalog's stored descriptors SHALL be unaffected
 
 ### Requirement: Descriptor data schemas
-`WidgetDescriptor` SHALL accept an optional `dataSchema` object using the documented JSON-Schema subset (`type`, `properties`, `required`, `items`, `enum`; unknown keywords ignored). When a kind has a `dataSchema`, `catalog.render` SHALL validate `data` against it before rendering, returning `{ ok: false, error }` with the existing vocabulary — `MISSING_FIELD` for missing required properties, `INVALID_TYPE` for type or enum violations — and a dotted path into the data (e.g. `data.lines.0.qty`). Kinds without a schema SHALL keep today's lenient behavior.
+`WidgetDescriptor` SHALL accept an optional `dataSchema` object using the documented JSON-Schema subset (`type`, `properties`, `required`, `items`, `enum`, `pattern`; unknown keywords ignored). When a kind has a `dataSchema`, `catalog.render` SHALL validate `data` against it before rendering, returning `{ ok: false, error }` with the existing vocabulary — `MISSING_FIELD` for missing required properties, `INVALID_TYPE` for type, enum, or pattern violations — and a dotted path into the data (e.g. `data.lines.0.qty`). `pattern` SHALL apply only when both the data value and the pattern are strings, and SHALL be bounded against pathological input: patterns longer than 256 characters, patterns rejected by the RegExp constructor, and patterns matching a nested-quantifier heuristic SHALL be ignored rather than enforced (the subset's never-misinterpret policy); tested strings SHALL be capped at 10 000 characters (longer values validate their prefix). Kinds without a schema SHALL keep today's lenient behavior.
 
 #### Scenario: Schema violation fails before rendering
 - **WHEN** a kind with `dataSchema: { type: "object", required: ["lines"] }` renders `data: {}`
@@ -215,6 +215,19 @@ The catalog SHALL store a `WidgetDescriptor` per kind — `{ kind, description, 
 #### Scenario: Schemas are listed for discovery
 - **WHEN** a kind with a `dataSchema` appears in `list()`
 - **THEN** its descriptor SHALL include the schema verbatim
+
+#### Scenario: Pattern violations report the dotted path
+- **WHEN** a property schema `{ type: "string", pattern: "^[A-Z]{3}$" }` validates `data.currency: "usd!"`
+- **THEN** the result SHALL be `{ ok: false, error }` with `error.code: "INVALID_TYPE"` and `error.path: "data.currency"`
+- **AND** `"USD"` SHALL pass
+
+#### Scenario: Unsafe or invalid patterns are ignored, not enforced
+- **WHEN** a schema carries `pattern: "(a+)+$"` (nested quantifier) or an unparsable pattern
+- **THEN** validation SHALL behave as if `pattern` were absent and rendering SHALL proceed
+
+#### Scenario: Pattern never applies to non-strings
+- **WHEN** a schema with `pattern` validates a number
+- **THEN** `pattern` SHALL produce no violation (type checking is `type`'s concern)
 
 ### Requirement: Registered widget styles
 `WidgetDescriptor` SHALL accept optional `styles`: a map of CSS selectors to property/value maps, letting custom kinds ship their look as data. Every selector part SHALL target a `.wg-`-prefixed class; selectors, property names, and values are guarded (no braces, semicolons, angle brackets, `url(`, or `expression(`), and values MAY reference theme tokens via `var(--wg-*)`. Invalid entries SHALL be skipped, never emitted. `widgetStylesToCss(styles)` SHALL generate the CSS, and styles SHALL be exposed through `describe`/`list` so hosts can inject them.

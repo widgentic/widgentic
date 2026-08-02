@@ -84,6 +84,7 @@ export function themeToCss(theme: WidgetTheme, selector = ":root"): string {
 /** Dark preset — ordinary theme data, a starting point for custom themes. */
 export const darkTheme: WidgetTheme = {
   bg: "#0f131c",
+  surface: "#161b26",
   fg: "#e5e9f0",
   muted: "#8b93a7",
   accent: "#7aa2f7",

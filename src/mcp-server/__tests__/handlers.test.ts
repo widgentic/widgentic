@@ -8,8 +8,8 @@ import {
   LIST_THEME_TOKENS_TOOL
 } from "../index.js";
 import { THEME_TOKENS, validateTheme } from "../../theming/index.js";
-import { createCatalog } from "../../catalog/index.js";
-import type { WidgetCatalog } from "../../catalog/index.js";
+import { createCatalog, renderToHtml } from "../../catalog/index.js";
+import type { WidgetCatalog, WidgetNode } from "../../catalog/index.js";
 import { registerTemplate } from "../../templates/index.js";
 import { extractWidgetPayload } from "../../mcp/index.js";
 import type { McpToolResult } from "../../mcp/index.js";
@@ -373,6 +373,22 @@ describe("handleRenderWidget", () => {
     const withoutImgs = ui.resource.text.replace(/<img\b[^>]*>/g, "");
     expect(withoutImgs).not.toMatch(/https?:\/\//);
     expect(withoutImgs).not.toMatch(/url\s*\(/i);
+  });
+
+  it("structuredContent.tree and html are projections of the same render", () => {
+    for (const args of [
+      { widget: "card", data: { title: "T", fields: { price: 9.99 } } },
+      { widget: "table", data: [{ a: 1, avatar: "https://cdn.example/a.png" }] },
+      { widget: "tree", data: { label: "r", children: [{ label: "l" }] } },
+      { widget: "custom", data: [1, "two"] }
+    ]) {
+      const result = handleRenderWidget(catalog, args);
+      const tree = result.structuredContent?.tree as WidgetNode;
+      expect(tree).toBeDefined();
+      expect(renderToHtml(tree)).toBe(result.structuredContent?.html);
+      // Pure data: survives JSON round-tripping (what transports do to it).
+      expect(JSON.parse(JSON.stringify(tree))).toEqual(tree);
+    }
   });
 
   it("slim mode replaces the default HTML block with a confirmation line", () => {

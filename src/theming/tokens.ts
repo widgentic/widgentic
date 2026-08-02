@@ -6,6 +6,9 @@
  */
 export const TOKEN_DEFAULTS = {
   bg: "#ffffff",
+  // Widget surface (cards/tables) — defaults to the page background; the
+  // stylesheet falls back to `bg` so themes may set either or both.
+  surface: "#ffffff",
   fg: "#1f2430",
   muted: "#6b7280",
   accent: "#2563eb",

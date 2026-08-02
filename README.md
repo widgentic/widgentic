@@ -17,11 +17,11 @@ All capabilities are specified under `openspec/specs/` and implemented with zero
 | `widget-contract` | `widgentic/contract` | The normalized payload `{ kind, data, hints?, meta? }` + `validateWidgetPayload` |
 | `data-adapters` | `widgentic/adapters` | `parseJson` / `parseCsv` with structured errors and opt-in type inference |
 | `widget-mapper` | `widgentic/mapper` | `inferKind` / `mapToWidget`: default widget selection from data shape |
-| `widget-catalog` | `widgentic/catalog` | Built-ins (`card`, `table`, `tree`, `custom`), registration API, pure `WidgetNode` render tree, `renderToHtml` + `mountNode`, image-aware card fields and table cells (avatars/thumbs/heroes via `hints.images`) |
+| `widget-catalog` | `widgentic/catalog` | Built-ins (`card`, `table`, `tree`, `custom`), registration API, pure `WidgetNode` render tree, `renderToHtml` + `mountNode`, image-aware card fields and table cells (avatars/thumbs/heroes via `hints.images`), descriptor data schemas incl. ReDoS-bounded `pattern` |
 | `mcp-widget-output` | `widgentic/mcp` | The MCP convention: emit/extract widget payloads, capability negotiation — no SDK dependency |
 | `reactive-rendering` | `widgentic/reactive` | `mountWidget` handles with in-place DOM patching (identity-preserving updates) |
 | `template-widgets` | `widgentic/templates` | Serializable JSON template DSL (`bind`/`each`/`when`) — the widget-designer runtime, safe for untrusted authors |
-| `widget-theming` | `widgentic/theming` | `--wg-*` token registry, generated base stylesheet, themes as validated JSON |
+| `widget-theming` | `widgentic/theming` | `--wg-*` token registry, generated base stylesheet, themes as validated JSON, page/surface separation via the `surface` token |
 | `mcp-server` | `widgentic/mcp-server` | The Widgentic MCP server: `list_widgets` (descriptor discovery) + `render_widget` (validate → render → HTML + payload), as SDK-free handlers plus a runnable stdio server |
 
 ## Architecture
@@ -154,7 +154,9 @@ Hosts that support MCP Apps (Claude Desktop among them) can display widgets
 (spec 2026-01-26, via `@modelcontextprotocol/ext-apps`): `render_widget`
 declares its app template (`_meta.ui.resourceUri` → `ui://widgentic/app.html`,
 `text/html;profile=mcp-app`), the host mounts it in a sandboxed iframe, and
-every render streams into it as `structuredContent` (fragment + CSS + payload).
+every render streams into it as `structuredContent` (render tree + fragment +
+CSS + payload); the template mounts the tree natively — DOM built from data,
+successive results patched in place — with the HTML fragment as fallback.
 For legacy embedded-resource hosts (mcp-ui lineage), `format: "app"` also
 carries the self-contained styled page inline. Widget content stays script-free
 with zero external references; the widgentic payload block is always included

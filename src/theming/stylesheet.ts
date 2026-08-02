@@ -18,7 +18,7 @@ export const baseStylesheet = `
   color: ${v("fg")};
 }
 .wg-card {
-  background: ${v("bg")};
+  background: var(--wg-surface, ${v("bg")});
   border: 1px solid ${v("border")};
   border-radius: ${v("radius")};
   box-shadow: ${v("shadow")};
@@ -48,7 +48,7 @@ export const baseStylesheet = `
   margin: 0;
 }
 .wg-table {
-  background: ${v("bg")};
+  background: var(--wg-surface, ${v("bg")});
   border: 1px solid ${v("border")};
   border-radius: ${v("radius")};
   border-collapse: collapse;
@@ -80,7 +80,7 @@ export const baseStylesheet = `
   display: none;
 }
 .wg-custom {
-  background: ${v("bg")};
+  background: var(--wg-surface, ${v("bg")});
   border: 1px solid ${v("border")};
   border-radius: ${v("radius")};
   padding: ${v("spacing")};

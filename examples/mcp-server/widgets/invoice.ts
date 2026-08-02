@@ -89,11 +89,13 @@ const descriptor: WidgetDescriptorInput = {
           properties: {
             item: { type: "string" },
             qty: { type: "number" },
-            lineTotal: { type: "string" }
+            // Formatted money string, e.g. "$119.96" or "1.234,56 €" —
+            // bounded `pattern` keeps agents from sending bare numbers.
+            lineTotal: { type: "string", pattern: "^[^<>{}]*[0-9][^<>{}]*$" }
           }
         }
       },
-      total: { type: "string" }
+      total: { type: "string", pattern: "^[^<>{}]*[0-9][^<>{}]*$" }
     }
   }
 };
