@@ -1,0 +1,65 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>widgentic designer — demo host</title>
+<style>
+  /* The host frame mirrors the designer's chrome palette so the page and
+     the embedded designer read as one surface in both schemes. */
+  :root {
+    color-scheme: light dark;
+    --host-bg: #ffffff;
+    --host-panel: #fbfcfe;
+    --host-border: #d5dbe3;
+    --host-text: #1f2430;
+    --host-muted: #5b6472;
+    --host-hover: #eef2f7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --host-bg: #0f131c;
+      --host-panel: #161b26;
+      --host-border: #2a3140;
+      --host-text: #e5e9f0;
+      --host-muted: #96a0b5;
+      --host-hover: #1e2532;
+    }
+  }
+  body {
+    margin: 0;
+    padding: 16px;
+    font-family: system-ui, sans-serif;
+    background: var(--host-bg);
+    color: var(--host-text);
+  }
+  header {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--host-border);
+  }
+  header h1 { font-size: 18px; margin: 0; }
+  #status { color: var(--host-muted); font-size: 12px; }
+  button {
+    font: inherit;
+    padding: 4px 10px;
+    border: 1px solid var(--host-border);
+    border-radius: 4px;
+    background: var(--host-panel);
+    color: var(--host-text);
+    cursor: pointer;
+  }
+  button:hover { background: var(--host-hover); }
+</style>
+<body>
+  <header>
+    <h1>widgentic designer</h1>
+    <button id="load-invoice" type="button">Load invoice example</button>
+    <button id="reset" type="button">Reset draft</button>
+    <span id="status"></span>
+  </header>
+  <div id="designer-host"></div>
+  <script type="module" src="./designer.bundle.js"></script>
+</body>

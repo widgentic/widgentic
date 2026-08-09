@@ -2,7 +2,7 @@
   "name": "widgentic",
   "version": "0.0.0",
   "private": true,
-  "description": "Widgets for agents — generic UI for MCP skills/plugins.",
+  "description": "Widgets for agents \u2014 generic UI for MCP skills/plugins.",
   "type": "module",
   "main": "./src/contract/index.ts",
   "types": "./src/contract/index.ts",
@@ -15,7 +15,8 @@
     "./reactive": "./src/reactive/index.ts",
     "./templates": "./src/templates/index.ts",
     "./theming": "./src/theming/index.ts",
-    "./mcp-server": "./src/mcp-server/index.ts"
+    "./mcp-server": "./src/mcp-server/index.ts",
+    "./designer": "./src/designer/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -24,12 +25,14 @@
     "test:types": "vitest --typecheck.only run",
     "test:watch": "vitest",
     "mcp": "tsx examples/mcp-server/main.ts",
-    "mcp:http": "tsx examples/mcp-server/http.ts"
+    "mcp:http": "tsx examples/mcp-server/http.ts",
+    "designer": "tsx examples/designer/serve.ts"
   },
   "devDependencies": {
     "@modelcontextprotocol/ext-apps": "1.7.5",
     "@modelcontextprotocol/sdk": "1.30.0",
     "@types/node": "26.1.2",
+    "esbuild": "0.28.1",
     "happy-dom": "20.11.1",
     "tsx": "4.23.1",
     "typescript": "7.0.2",

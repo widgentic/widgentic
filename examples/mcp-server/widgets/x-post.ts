@@ -1,0 +1,359 @@
+import type { CustomWidget } from "./index.js";
+
+/**
+ * The `x-post` widget — authored end-to-end in the widgentic designer and
+ * exported with "Copy as TypeScript" (2026-08-09). Demonstrates images in a
+ * custom template widget (bound `img src`, inlined server-side for Apps
+ * hosts), `when`-gated optional blocks, a `pattern`-constrained handle, and
+ * styles driven entirely by --wg-* tokens.
+ */
+export const xPostWidget: CustomWidget = {
+  "kind": "x-post",
+  "template": {
+    "tag": "article",
+    "attrs": {
+      "class": "wg-xcard"
+    },
+    "children": [
+      {
+        "tag": "header",
+        "attrs": {
+          "class": "wg-xcard-head"
+        },
+        "children": [
+          {
+            "when": "author.avatar",
+            "template": {
+              "tag": "img",
+              "attrs": {
+                "class": "wg-xcard-avatar",
+                "src": {
+                  "bind": "author.avatar"
+                },
+                "alt": {
+                  "bind": "author.name"
+                },
+                "loading": "lazy",
+                "decoding": "async"
+              }
+            }
+          },
+          {
+            "tag": "div",
+            "attrs": {
+              "class": "wg-xcard-id"
+            },
+            "children": [
+              {
+                "tag": "div",
+                "attrs": {
+                  "class": "wg-xcard-nameline"
+                },
+                "children": [
+                  {
+                    "tag": "span",
+                    "attrs": {
+                      "class": "wg-xcard-name"
+                    },
+                    "children": [
+                      {
+                        "bind": "author.name"
+                      }
+                    ]
+                  },
+                  {
+                    "when": "author.verified",
+                    "template": {
+                      "tag": "span",
+                      "attrs": {
+                        "class": "wg-xcard-badge",
+                        "title": "Verified"
+                      },
+                      "children": [
+                        "✓"
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "tag": "span",
+                "attrs": {
+                  "class": "wg-xcard-handle"
+                },
+                "children": [
+                  {
+                    "bind": "author.handle"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "tag": "p",
+        "attrs": {
+          "class": "wg-xcard-text"
+        },
+        "children": [
+          {
+            "bind": "text"
+          }
+        ]
+      },
+      {
+        "when": "image",
+        "template": {
+          "tag": "img",
+          "attrs": {
+            "class": "wg-xcard-media",
+            "src": {
+              "bind": "image"
+            },
+            "alt": {
+              "bind": "imageAlt"
+            },
+            "loading": "lazy",
+            "decoding": "async"
+          }
+        }
+      },
+      {
+        "when": "timestamp",
+        "template": {
+          "tag": "div",
+          "attrs": {
+            "class": "wg-xcard-time"
+          },
+          "children": [
+            {
+              "bind": "timestamp"
+            }
+          ]
+        }
+      },
+      {
+        "when": "stats",
+        "template": {
+          "tag": "div",
+          "attrs": {
+            "class": "wg-xcard-stats"
+          },
+          "children": [
+            {
+              "tag": "span",
+              "attrs": {
+                "class": "wg-xcard-stat"
+              },
+              "children": [
+                "💬 ",
+                {
+                  "bind": "stats.replies"
+                }
+              ]
+            },
+            {
+              "tag": "span",
+              "attrs": {
+                "class": "wg-xcard-stat"
+              },
+              "children": [
+                "🔁 ",
+                {
+                  "bind": "stats.reposts"
+                }
+              ]
+            },
+            {
+              "tag": "span",
+              "attrs": {
+                "class": "wg-xcard-stat"
+              },
+              "children": [
+                "❤️ ",
+                {
+                  "bind": "stats.likes"
+                }
+              ]
+            },
+            {
+              "tag": "span",
+              "attrs": {
+                "class": "wg-xcard-stat"
+              },
+              "children": [
+                "📊 ",
+                {
+                  "bind": "stats.views"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "descriptor": {
+    "description": "A social post card (X/Twitter style): author with avatar, post text, optional media image, timestamp and engagement counts.",
+    "dataShape": "{ author: { name: string, handle: string, avatar?: string, verified?: boolean }, text: string, image?: string, imageAlt?: string, timestamp?: string, stats?: { replies: string, reposts: string, likes: string, views: string } }. Image URLs must be absolute https (or data:image/*); counts are pre-formatted display strings such as '1.2K'.",
+    "dataExample": {
+      "author": {
+        "name": "Ada Lovelace",
+        "handle": "@ada",
+        "avatar": "https://i.pravatar.cc/96?img=5",
+        "verified": true
+      },
+      "text": "The Analytical Engine weaves algebraic patterns just as the Jacquard loom weaves flowers and leaves.",
+      "image": "https://picsum.photos/id/1024/600/300.jpg",
+      "imageAlt": "Loom weaving a pattern",
+      "timestamp": "3:42 PM · Aug 9, 2026",
+      "stats": {
+        "replies": "128",
+        "reposts": "1.2K",
+        "likes": "8.4K",
+        "views": "312K"
+      }
+    },
+    "hints": {
+      "note": "This kind takes no hints — every element is driven by the data above. Omit optional fields to hide their blocks."
+    },
+    "dataSchema": {
+      "type": "object",
+      "required": [
+        "author",
+        "text"
+      ],
+      "properties": {
+        "author": {
+          "type": "object",
+          "required": [
+            "name",
+            "handle"
+          ],
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "handle": {
+              "type": "string",
+              "pattern": "^@[A-Za-z0-9_]{1,15}$"
+            },
+            "avatar": {
+              "type": "string"
+            },
+            "verified": {
+              "type": "boolean"
+            }
+          }
+        },
+        "text": {
+          "type": "string"
+        },
+        "image": {
+          "type": "string"
+        },
+        "imageAlt": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "string"
+        },
+        "stats": {
+          "type": "object",
+          "properties": {
+            "replies": {
+              "type": "string"
+            },
+            "reposts": {
+              "type": "string"
+            },
+            "likes": {
+              "type": "string"
+            },
+            "views": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "styles": {
+      ".wg-xcard": {
+        "background": "var(--wg-surface, var(--wg-bg, #ffffff))",
+        "color": "var(--wg-fg, #1f2430)",
+        "border": "1px solid var(--wg-border, #e2e8f0)",
+        "border-radius": "calc(var(--wg-radius, 6px) * 2)",
+        "padding": "calc(var(--wg-spacing, 8px) * 2)",
+        "max-width": "560px",
+        "display": "block",
+        "font-family": "var(--wg-font-family, system-ui, sans-serif)"
+      },
+      ".wg-xcard-head": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "var(--wg-spacing, 8px)"
+      },
+      ".wg-xcard-avatar": {
+        "width": "calc(var(--wg-avatar-size, 32px) * 1.5)",
+        "height": "calc(var(--wg-avatar-size, 32px) * 1.5)",
+        "border-radius": "50%",
+        "object-fit": "cover",
+        "flex": "0 0 auto"
+      },
+      ".wg-xcard-id": {
+        "display": "flex",
+        "flex-direction": "column",
+        "line-height": "1.2"
+      },
+      ".wg-xcard-nameline": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "4px"
+      },
+      ".wg-xcard-name": {
+        "font-weight": "700"
+      },
+      ".wg-xcard-badge": {
+        "color": "var(--wg-accent, #2563eb)",
+        "font-size": "0.85em"
+      },
+      ".wg-xcard-handle": {
+        "color": "var(--wg-muted, #6b7280)",
+        "font-size": "0.9em"
+      },
+      ".wg-xcard-text": {
+        "margin": "calc(var(--wg-spacing, 8px) * 1.5) 0",
+        "white-space": "pre-wrap",
+        "line-height": "1.45"
+      },
+      ".wg-xcard-media": {
+        "display": "block",
+        "width": "100%",
+        "max-width": "100%",
+        "height": "auto",
+        "border-radius": "var(--wg-radius, 6px)",
+        "border": "1px solid var(--wg-border, #e2e8f0)",
+        "object-fit": "cover"
+      },
+      ".wg-xcard-time": {
+        "color": "var(--wg-muted, #6b7280)",
+        "font-size": "0.85em",
+        "margin-top": "var(--wg-spacing, 8px)"
+      },
+      ".wg-xcard-stats": {
+        "display": "flex",
+        "gap": "calc(var(--wg-spacing, 8px) * 2)",
+        "margin-top": "var(--wg-spacing, 8px)",
+        "padding-top": "var(--wg-spacing, 8px)",
+        "border-top": "1px solid var(--wg-border, #e2e8f0)",
+        "color": "var(--wg-muted, #6b7280)",
+        "font-size": "0.9em"
+      },
+      ".wg-xcard-stat": {
+        "display": "inline-flex",
+        "gap": "4px"
+      }
+    }
+  }
+};

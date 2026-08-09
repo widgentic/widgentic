@@ -12,8 +12,8 @@ const template: WidgetTemplate = {
   attrs: { class: "wg-invoice" },
   children: [
     {
-      when: "$meta.title",
-      template: { tag: "h2", children: [{ bind: "$meta.title" }] }
+      when: "title",
+      template: { tag: "h2", children: [{ bind: "title" }] }
     },
     { tag: "p", children: ["Customer: ", { bind: "customer" }] },
     {
@@ -46,14 +46,15 @@ const descriptor: WidgetDescriptorInput = {
   description:
     "Invoice with customer, priced line items, and an optional total.",
   dataShape:
-    "{ customer: string, lines: { item: string, qty: number, lineTotal: " +
-    "string }[], total?: string }. Pre-format money as display strings " +
+    "{ title?: string, customer: string, lines: { item: string, qty: " +
+    "number, lineTotal: string }[], total?: string }. Pre-format money as display strings " +
     "(e.g. '$119.96') — templates render values verbatim, with no " +
     "arithmetic; compute line totals and the total caller-side, on a " +
     "consistent basis (line totals should sum to the total, or include a " +
-    "discount line item explaining the difference). meta.title becomes " +
-    "the heading.",
+    "discount line item explaining the difference). An optional `title` " +
+    "renders as the heading.",
   dataExample: {
+    title: "Invoice #1042",
     customer: "Ada Lovelace",
     lines: [{ item: "widgets", qty: 4, lineTotal: "$119.96" }],
     total: "$119.96"
@@ -80,6 +81,9 @@ const descriptor: WidgetDescriptorInput = {
     type: "object",
     required: ["customer", "lines"],
     properties: {
+      // Optional heading — declared in the schema rather than read from
+      // `$meta`, so everything the template binds is discoverable data.
+      title: { type: "string" },
       customer: { type: "string" },
       lines: {
         type: "array",

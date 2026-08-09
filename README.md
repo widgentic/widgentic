@@ -23,6 +23,7 @@ All capabilities are specified under `openspec/specs/` and implemented with zero
 | `template-widgets` | `widgentic/templates` | Serializable JSON template DSL (`bind`/`each`/`when`) — the widget-designer runtime, safe for untrusted authors |
 | `widget-theming` | `widgentic/theming` | `--wg-*` token registry, generated base stylesheet, themes as validated JSON, page/surface separation via the `surface` token |
 | `mcp-server` | `widgentic/mcp-server` | The Widgentic MCP server: `list_widgets` (descriptor discovery) + `render_widget` (validate → render → HTML + payload), as SDK-free handlers plus a runnable stdio server |
+| `widget-designer` | `widgentic/designer` | Embeddable designer (custom element + factory, zero deps): author custom widgets (template tree/JSON, full descriptor, styles, dataSchema) and themes with live validated preview; exports the server's `CustomWidget` shape |
 
 ## Architecture
 
@@ -173,6 +174,18 @@ Inline mounting is verified in the official **basic-host** reference and
 Claude Code degrades gracefully to text. Full runbooks — local basic-host
 setup, remote rig, host registration snippets — live in
 [examples/mcp-server/TESTING.md](examples/mcp-server/TESTING.md).
+
+### Design a widget
+
+`npm run designer` serves an embeddable-designer demo host on `:8082`
+([examples/designer/](examples/designer/)). Author a custom widget — template
+(tree or JSON), descriptor, styles, dataSchema — with widgentic's validators
+running on every edit and a live preview mounted through the real pipeline;
+design themes token-by-token against any kind. Export produces the exact
+`CustomWidget` JSON/TypeScript the server registers ([examples/mcp-server/widgets/](examples/mcp-server/widgets/)).
+Embed it anywhere via `createDesigner(container)` or
+`defineDesignerElement()` from `widgentic/designer` (no framework, no deps,
+no network — hosts persist drafts via `widgentic-change` events).
 
 ### Testing without Claude
 
