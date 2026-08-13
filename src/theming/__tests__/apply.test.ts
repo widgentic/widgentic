@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect } from "vitest";
-import { applyTheme, injectBaseStyles, baseStylesheet } from "../index.js";
+import { applyTheme, injectBaseStyles, baseStylesheet, themeToCss } from "../index.js";
 import type { WidgetTheme } from "../index.js";
 
 function container(): HTMLElement {
@@ -70,3 +70,27 @@ describe("injectBaseStyles", () => {
     expect(styles[0]?.textContent).toBe(baseStylesheet);
   });
 });
+
+describe("custom variables in application and CSS", () => {
+  it("applies and clears --wg-x-* alongside tokens", () => {
+    const target = container();
+    applyTheme(target, { bg: "#111", "x-badge-gap": "4px" });
+    expect(target.style.getPropertyValue("--wg-bg")).toBe("#111");
+    expect(target.style.getPropertyValue("--wg-x-badge-gap")).toBe("4px");
+    // Replace semantics must clear custom variables as well.
+    applyTheme(target, { bg: "#222" });
+    expect(target.style.getPropertyValue("--wg-x-badge-gap")).toBe("");
+  });
+
+  it("skips unsafe custom values at runtime", () => {
+    const target = container();
+    applyTheme(target, { "x-evil": "url(https://evil.example)" });
+    expect(target.style.getPropertyValue("--wg-x-evil")).toBe("");
+  });
+
+  it("emits custom variables in generated CSS", () => {
+    expect(themeToCss({ "x-gap": "4px" })).toContain("--wg-x-gap: 4px;");
+    expect(themeToCss({ "x-evil": "url(https://x)" })).not.toContain("--wg-x-evil");
+  });
+});
+

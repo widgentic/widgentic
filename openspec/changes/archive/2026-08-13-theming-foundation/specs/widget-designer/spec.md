@@ -1,8 +1,7 @@
-# widget-designer Specification
+# widget-designer — Delta: standalone theme designer, theme selection
 
-## Purpose
-The embeddable, zero-dependency designer for authoring custom widgets and themes. A programmatic factory (plus an opt-in custom element) mounts a DOM editor over a draft in the server's `CustomWidget` shape; every edit re-runs widgentic's own pure validators and re-renders a live preview through the real catalog/template/theming pipeline. It is a library, not an app: drafts import and export as the exact JSON shapes the server consumes, and the designer performs no network I/O — hosts own persistence.
-## Requirements
+## MODIFIED Requirements
+
 ### Requirement: Designer programmatic surface
 The package SHALL export from a `./designer` entry: `createDesigner(container: Element, options?)` returning a handle `{ getDraft(), loadWidget(definition), loadTheme(theme), subscribe(listener), dispose() }`, `createThemeDesigner(container: Element, options?)` returning `{ getTheme(), loadTheme(entry), subscribe(listener), dispose() }`, and the opt-in element registrars `defineDesignerElement(tagName?)` (default `widgentic-designer`) and `defineThemeDesignerElement(tagName?)` (default `widgentic-theme-designer`), each wrapping its factory and emitting `widgentic-change` CustomEvents whose `detail` carries the serialized draft or theme entry. Custom-element registration SHALL only happen through the explicit calls — importing the module SHALL have no registry side effects. The entry SHALL import other capabilities only through their public package entries, and SHALL perform no network I/O.
 
@@ -25,36 +24,6 @@ The package SHALL export from a `./designer` entry: `createDesigner(container: E
 - **THEN** a theme editor SHALL mount without any widget-authoring panels
 - **AND** `defineThemeDesignerElement()` SHALL register `widgentic-theme-designer` on the explicit call only
 
-### Requirement: Custom widget draft editing
-The designer SHALL edit a draft in the server's `CustomWidget` shape — `kind`, `template`, and a descriptor with `description`, `dataShape`, `dataExample`, `hints`, `styles`, and `dataSchema` — through dedicated panels. The template SHALL be editable both as a structured node tree covering every DSL form (text, `bind`, `each` with `empty`, `when` with `else`, elements with attrs including `{ bind }` values) and as a JSON source pane; both are projections of one canonical model, and invalid JSON SHALL never destroy the current tree (last-valid wins with the parse error shown). Every mutation SHALL re-run the relevant widgentic validators — `validateTemplate`, `validateDataAgainstSchema` (including `dataExample` cross-checked against `dataSchema`), the styles safety filters, and theme validation — surfacing their structured errors beside the panel that owns the offending value.
-
-#### Scenario: Template edits validate live
-- **WHEN** an element node gains an `onclick` attribute in the tree editor
-- **THEN** a `FORBIDDEN_ATTRIBUTE` diagnostic SHALL appear at that node without losing the draft
-
-#### Scenario: JSON pane cannot destroy the tree
-- **WHEN** the JSON source is edited into invalid JSON
-- **THEN** the canonical model SHALL remain the last valid template and the pane SHALL show the parse error
-
-#### Scenario: dataExample is checked against dataSchema
-- **WHEN** the draft's `dataSchema` requires `lines` and `dataExample` lacks it
-- **THEN** a diagnostic SHALL flag the mismatch with the schema's dotted path
-
-#### Scenario: Styles editor applies the same guards as the server
-- **WHEN** a style entry uses a non-`.wg-` selector or a `url(...)` value
-- **THEN** the entry SHALL be flagged as one the renderer would skip
-
-### Requirement: Live preview through the real pipeline
-The designer SHALL preview the draft continuously through widgentic's own pipeline: the draft template registered via `registerTemplate` into a scratch catalog (built-ins always present), rendered with `mountWidget` against `dataExample` or user-supplied sample data, under the currently selected theme — updates patching the existing DOM in place. When the draft is invalid, the preview SHALL freeze the last good render and show the structured error in a banner; it SHALL never show a blank or stale-placeholder state.
-
-#### Scenario: Valid edits patch the preview in place
-- **WHEN** a text node's content changes in a valid draft
-- **THEN** the preview SHALL update without replacing the mounted root element
-
-#### Scenario: Invalid drafts keep the last good preview
-- **WHEN** the template becomes invalid mid-edit
-- **THEN** the last valid preview SHALL remain visible with the validation error banner shown
-
 ### Requirement: Theme designer for catalog widgets
 The standalone theme designer SHALL edit a named theme entry — identity (`name`, optional `label`/`description`) plus a plain token map over `THEME_TOKENS` (one control per registry token, with the control chosen from the token's declared `type` — `color` tokens showing a picker/swatch of the effective value — and its documented `use` surfaced as help text) and author-defined `x-*` custom variables (add/rename/remove) — validating on every change and previewing against any kind in its scratch catalog. Unsafe token values SHALL be flagged inline with the validator's error and excluded from the applied preview theme. Export SHALL produce the registry entry shape (`{ name, label?, description?, tokens }`) and import SHALL accept the same, re-validating before it replaces the working entry.
 
@@ -76,6 +45,8 @@ The standalone theme designer SHALL edit a named theme entry — identity (`name
 - **THEN** the resulting entry SHALL deep-equal the original
 - **AND** an entry whose tokens fail validation SHALL be rejected without replacing the working entry
 
+## ADDED Requirements
+
 ### Requirement: Preview theme selection in the widget designer
 The widget designer SHALL accept `options.themes` — a list of named theme entries — and offer them as the preview theme through a selector (including a "none" choice for the built-in defaults), applying the chosen entry's tokens to the live preview. The widget designer SHALL NOT edit theme tokens; theme authoring belongs to the standalone theme designer. The draft's theme selection SHALL NOT affect the exported widget definition, which stays `{ kind, template, descriptor }`.
 
@@ -90,14 +61,3 @@ The widget designer SHALL accept `options.themes` — a list of named theme entr
 #### Scenario: No themes supplied is a valid embedding
 - **WHEN** a designer is created without `options.themes`
 - **THEN** it SHALL mount with the default preview appearance and no theme selector entries beyond "none"
-
-### Requirement: Import and export in the server's shapes
-The designer SHALL export the draft as JSON in exactly the `CustomWidget` shape (`{ kind, template, descriptor }`) and themes as bare token maps, and SHALL import the same shapes, re-validating everything on load (imports are untrusted input; invalid imports are rejected with the structured errors, leaving the current draft untouched). A copy-as-TypeScript convenience SHALL emit a module body compatible with `examples/mcp-server/widgets/` for manual registration. Exported widget JSON loaded back SHALL round-trip to a deep-equal draft.
-
-#### Scenario: Export/import round-trips
-- **WHEN** a draft equivalent to the invoice example is exported and re-imported
-- **THEN** the resulting draft SHALL deep-equal the original
-
-#### Scenario: Invalid imports never clobber the draft
-- **WHEN** an import contains a template failing validation
-- **THEN** the current draft SHALL remain and the import errors SHALL be shown

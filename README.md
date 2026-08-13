@@ -21,9 +21,9 @@ All capabilities are specified under `openspec/specs/` and implemented with zero
 | `mcp-widget-output` | `widgentic/mcp` | The MCP convention: emit/extract widget payloads, capability negotiation — no SDK dependency |
 | `reactive-rendering` | `widgentic/reactive` | `mountWidget` handles with in-place DOM patching (identity-preserving updates) |
 | `template-widgets` | `widgentic/templates` | Serializable JSON template DSL (`bind`/`each`/`when`) — the widget-designer runtime, safe for untrusted authors |
-| `widget-theming` | `widgentic/theming` | `--wg-*` token registry, generated base stylesheet, themes as validated JSON, page/surface separation via the `surface` token |
+| `widget-theming` | `widgentic/theming` | `--wg-*` token registry (colors, status, scale steps), author-defined `x-*` custom variables, named-theme registry with `extends`, generated base stylesheet, themes as validated JSON |
 | `mcp-server` | `widgentic/mcp-server` | The Widgentic MCP server: `list_widgets` (descriptor discovery) + `render_widget` (validate → render → HTML + payload), as SDK-free handlers plus a runnable stdio server |
-| `widget-designer` | `widgentic/designer` | Embeddable designer (custom element + factory, zero deps): author custom widgets (template tree/JSON, full descriptor, styles, dataSchema) and themes with live validated preview; exports the server's `CustomWidget` shape |
+| `widget-designer` | `widgentic/designer` | Two embeddable designers (factories + opt-in custom elements, zero deps): the **widget** designer (template tree/JSON, full descriptor, styles, dataSchema, theme selection) and the standalone **theme** designer (tokens, custom variables, named entries) — both with live validated preview |
 
 ## Architecture
 
@@ -96,9 +96,10 @@ widgentic is itself an MCP server: any MCP client can discover the available wid
 ```bash
 npm run mcp        # stdio server
 npm run mcp:http   # Streamable HTTP on :3001/mcp (for HTTP hosts and Apps testing)
-# tools: list_widgets, list_theme_tokens, render_widget
+# tools: list_widgets, list_themes, list_theme_tokens, render_widget
 ```
 
+- `list_themes` — the server's registered themes (`name`, `label`, `tokens`); pass any name as `render_widget`'s `theme` instead of composing tokens.
 - `list_widgets` — returns every registered kind's descriptor: purpose, expected `data` shape, an example to imitate, and supported hints.
 - `render_widget` — input `{ widget, data, hints?, meta? }`; validates the id and payload, then returns the rendered HTML **plus** an embedded widgentic payload block (aware hosts mount it natively). Invalid input comes back as a structured, correctable error (`UNKNOWN_KIND`, `MISSING_FIELD`, ...). Misaimed hints (misspelled keys, targets matching no field/column, unsafe image sources) never fail a render — they come back as a compact `Hint notes:` tail on the text output plus `structuredContent.diagnostics`, so agents can self-correct on the next call.
 - **Model-context slimming**: when the host is an MCP Apps host (session-negotiated, or assumed via `WIDGENTIC_ASSUME_UI=1` where negotiation can't happen — stateless HTTP), the default-format result replaces the full-HTML text block with a one-line confirmation telling the model the visual is already displayed. Explicit `format` requests are never slimmed.
@@ -177,15 +178,24 @@ setup, remote rig, host registration snippets — live in
 
 ### Design a widget
 
-`npm run designer` serves an embeddable-designer demo host on `:8082`
-([examples/designer/](examples/designer/)). Author a custom widget — template
-(tree or JSON), descriptor, styles, dataSchema — with widgentic's validators
-running on every edit and a live preview mounted through the real pipeline;
-design themes token-by-token against any kind. Export produces the exact
-`CustomWidget` JSON/TypeScript the server registers ([examples/mcp-server/widgets/](examples/mcp-server/widgets/)).
-Embed it anywhere via `createDesigner(container)` or
-`defineDesignerElement()` from `widgentic/designer` (no framework, no deps,
-no network — hosts persist drafts via `widgentic-change` events).
+`npm run designer` serves a demo host on `:8082` with both designers
+([examples/designer/](examples/designer/)):
+
+- **Widget designer** — template (tree or JSON), descriptor, styles,
+  dataSchema, with widgentic's validators running on every edit and a live
+  preview mounted through the real pipeline. Export produces the exact
+  `CustomWidget` JSON/TypeScript the server registers
+  ([examples/mcp-server/widgets/](examples/mcp-server/widgets/)).
+- **Theme designer** — a named theme entry (`{ name, label?, description?,
+  tokens }`): every registry token with color swatches, plus author-defined
+  `x-*` custom variables, previewed against any catalog kind.
+
+Themes the host supplies appear in the widget designer's preview selector,
+so the two cooperate without either owning the other. Embed via
+`createDesigner(container, { themes })` / `createThemeDesigner(container)`
+or the opt-in elements `defineDesignerElement()` /
+`defineThemeDesignerElement()` — no framework, no deps, no network; hosts
+persist via `widgentic-change` events.
 
 ### Testing without Claude
 

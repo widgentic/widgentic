@@ -15,22 +15,25 @@ export const baseStylesheet = `
 .wg-card, .wg-table, .wg-tree, .wg-custom, .wg-template {
   font-family: ${v("font-family")};
   font-size: ${v("font-size")};
+  line-height: ${v("line-height")};
   color: ${v("fg")};
 }
 .wg-card {
   background: var(--wg-surface, ${v("bg")});
-  border: 1px solid ${v("border")};
-  border-radius: ${v("radius")};
+  border: ${v("border-width")} solid ${v("border")};
+  border-radius: ${v("radius-lg")};
   box-shadow: ${v("shadow")};
-  padding: calc(${v("spacing")} * 2);
+  padding: ${v("spacing-lg")};
 }
 .wg-card-title {
   color: ${v("accent")};
-  font-weight: 600;
+  font-size: ${v("font-size-lg")};
+  font-weight: ${v("font-weight-bold")};
   margin-bottom: ${v("spacing")};
 }
 .wg-card-subtitle {
   color: ${v("muted")};
+  font-size: ${v("font-size-sm")};
   margin-bottom: ${v("spacing")};
 }
 .wg-card-fields {
@@ -39,7 +42,7 @@ export const baseStylesheet = `
 .wg-card-field {
   display: flex;
   gap: ${v("spacing")};
-  padding: calc(${v("spacing")} / 2) 0;
+  padding: ${v("spacing-sm")} 0;
 }
 .wg-card-field-key {
   color: ${v("muted")};
@@ -49,18 +52,20 @@ export const baseStylesheet = `
 }
 .wg-table {
   background: var(--wg-surface, ${v("bg")});
-  border: 1px solid ${v("border")};
+  border: ${v("border-width")} solid ${v("border")};
   border-radius: ${v("radius")};
   border-collapse: collapse;
 }
 .wg-table-header {
   color: ${v("muted")};
+  font-size: ${v("font-size-sm")};
+  font-weight: ${v("font-weight-bold")};
   text-align: left;
-  border-bottom: 2px solid ${v("border")};
+  border-bottom: calc(${v("border-width")} * 2) solid ${v("border")};
   padding: ${v("spacing")};
 }
 .wg-table-cell {
-  border-bottom: 1px solid ${v("border")};
+  border-bottom: ${v("border-width")} solid ${v("border")};
   padding: ${v("spacing")};
 }
 .wg-tree {
@@ -70,22 +75,35 @@ export const baseStylesheet = `
 }
 .wg-tree-children {
   list-style: none;
-  padding-left: calc(${v("spacing")} * 2);
-  border-left: 1px solid ${v("border")};
+  padding-left: ${v("spacing-lg")};
+  border-left: ${v("border-width")} solid ${v("border")};
 }
 .wg-tree-node {
-  padding: calc(${v("spacing")} / 2) 0;
+  padding: ${v("spacing-sm")} 0;
 }
 .wg-tree-node[data-expanded="false"] > .wg-tree-children {
   display: none;
 }
 .wg-custom {
+  font-family: ${v("font-mono")};
   background: var(--wg-surface, ${v("bg")});
-  border: 1px solid ${v("border")};
+  border: ${v("border-width")} solid ${v("border")};
   border-radius: ${v("radius")};
   padding: ${v("spacing")};
   overflow: auto;
 }
+.wg-status {
+  display: inline-block;
+  padding: 0 ${v("spacing-sm")};
+  border-radius: ${v("radius-sm")};
+  font-size: ${v("font-size-sm")};
+  font-weight: ${v("font-weight-bold")};
+}
+.wg-status-danger { background: ${v("danger")}; color: ${v("danger-fg")}; }
+.wg-status-success { background: ${v("success")}; color: ${v("success-fg")}; }
+.wg-status-warning { background: ${v("warning")}; color: ${v("warning-fg")}; }
+.wg-status-info { background: ${v("info")}; color: ${v("info-fg")}; }
+.wg-status-accent { background: ${v("accent")}; color: ${v("accent-fg")}; }
 .wg-img {
   object-fit: cover;
   vertical-align: middle;

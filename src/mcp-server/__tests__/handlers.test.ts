@@ -3,11 +3,18 @@ import {
   handleListWidgets,
   handleRenderWidget,
   handleListThemeTokens,
+  handleListThemes,
+  LIST_THEMES_TOOL,
   LIST_WIDGETS_TOOL,
   RENDER_WIDGET_TOOL,
   LIST_THEME_TOKENS_TOOL
 } from "../index.js";
-import { THEME_TOKENS, validateTheme } from "../../theming/index.js";
+import {
+  THEME_TOKENS,
+  createThemeRegistry,
+  darkTheme,
+  validateTheme
+} from "../../theming/index.js";
 import { createCatalog, renderToHtml } from "../../catalog/index.js";
 import type { WidgetCatalog, WidgetNode } from "../../catalog/index.js";
 import { registerTemplate } from "../../templates/index.js";
@@ -628,3 +635,90 @@ describe("handleRenderWidget", () => {
     });
   });
 });
+
+describe("named themes over the wire", () => {
+  const catalog = createCatalog();
+  const themes = createThemeRegistry();
+  themes.register({ name: "brand", label: "Brand", tokens: { accent: "#ff5a1f" } });
+
+  it("resolves a registered name to its tokens", () => {
+    const result = handleRenderWidget(
+      catalog,
+      { widget: "card", data: { a: 1 }, format: "page", theme: "dark" },
+      { themes }
+    );
+    expect(result.isError).toBeUndefined();
+    expect(textOf(result)).toContain(`--wg-bg: ${darkTheme.bg}`);
+    // The payload carries the RESOLVED map, not the name.
+    const extraction = extractWidgetPayload(result);
+    if (extraction.found && extraction.ok) {
+      expect(extraction.payload.theme).toEqual(darkTheme);
+    } else {
+      throw new Error("payload missing");
+    }
+  });
+
+  it("unknown names are self-sufficient errors", () => {
+    const result = handleRenderWidget(
+      catalog,
+      { widget: "card", data: { a: 1 }, theme: "midnight" },
+      { themes }
+    );
+    expect(result.isError).toBe(true);
+    const error = JSON.parse(textOf(result)) as Record<string, string>;
+    expect(error.code).toBe("UNKNOWN_THEME");
+    expect(error.path).toBe("theme");
+    expect(error.message).toContain("brand");
+    expect(error.message).toContain("dark");
+  });
+
+  it("inline token maps still work unchanged", () => {
+    const result = handleRenderWidget(catalog, {
+      widget: "card",
+      data: { a: 1 },
+      format: "page",
+      theme: { bg: "#0f131c" }
+    });
+    expect(result.isError).toBeUndefined();
+    expect(textOf(result)).toContain("--wg-bg: #0f131c");
+  });
+
+  it("a name with no registry supplied reports no available themes", () => {
+    const result = handleRenderWidget(catalog, {
+      widget: "card",
+      data: { a: 1 },
+      theme: "dark"
+    });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain("UNKNOWN_THEME");
+  });
+});
+
+describe("handleListThemes", () => {
+  it("lists every registered theme with its tokens", () => {
+    const themes = createThemeRegistry();
+    themes.register({ name: "brand", tokens: { accent: "#ff5a1f" } });
+    const listing = JSON.parse(textOf(handleListThemes(themes))) as {
+      themes: { name: string; tokens: Record<string, string> }[];
+    };
+    const names = listing.themes.map((t) => t.name);
+    expect(names).toEqual(["light", "dark", "brand"]);
+    expect(listing.themes[2]?.tokens.accent).toBe("#ff5a1f");
+  });
+
+  it("is a declared tool", () => {
+    expect(LIST_THEMES_TOOL.name).toBe("list_themes");
+    expect(LIST_THEMES_TOOL.inputSchema).toMatchObject({ type: "object" });
+  });
+});
+
+describe("list_theme_tokens documents custom variables", () => {
+  it("states the x-* rule", () => {
+    const listing = JSON.parse(textOf(handleListThemeTokens())) as {
+      rules: string;
+    };
+    expect(listing.rules).toContain("x-");
+    expect(listing.rules).toContain("custom variables");
+  });
+});
+

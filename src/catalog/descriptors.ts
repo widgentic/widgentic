@@ -82,8 +82,8 @@ export const BUILTIN_DESCRIPTORS: Record<
       "single row. Cell values that are image URLs render as avatars (see " +
       "hints.images).",
     dataExample: [
-      { name: "Ada", role: "eng", avatar: "https://cdn.example.com/ada.png" },
-      { name: "Lin", role: "ops", avatar: "https://cdn.example.com/lin.png" }
+      { name: "Ada", role: "eng", avatar: "https://picsum.photos/id/64/64/64.jpg" },
+      { name: "Lin", role: "ops", avatar: "https://picsum.photos/id/65/64/64.jpg" }
     ],
     hints: {
       columns: "string[] — overrides column selection and order",

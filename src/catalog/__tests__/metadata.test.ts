@@ -69,3 +69,15 @@ describe("widget metadata", () => {
     expect(catalog.list().length).toBeGreaterThan(0);
   });
 });
+
+describe("built-in examples are previewable", () => {
+  it("uses image hosts that resolve, not example.com placeholders", () => {
+    // The designer renders dataExamples client-side, where an unresolvable
+    // host shows as a broken image rather than a demo.
+    const catalog = createCatalog();
+    const json = JSON.stringify(catalog.list());
+    expect(json).not.toContain("cdn.example.com");
+    expect(json).not.toContain("example.com/");
+  });
+});
+

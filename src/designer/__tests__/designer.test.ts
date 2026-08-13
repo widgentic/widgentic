@@ -71,7 +71,7 @@ describe("designer shell", () => {
     expect(left.textContent).toContain("Template");
     expect(left.textContent).toContain("Import / Export");
     expect(right.textContent).toContain("Data for preview");
-    expect(right.textContent).toContain("Theme");
+    expect(right.textContent).toContain("Preview theme");
     expect(right.querySelector(".wgd-preview")).not.toBeNull();
   });
 
@@ -185,24 +185,7 @@ describe("data and styles diagnostics", () => {
   });
 });
 
-describe("theme designer", () => {
-  it("token edits reach the preview container as custom properties", () => {
-    const container = host();
-    createDesigner(container);
-    type(field(container, "--wg-surface"), "#1a2130");
-    const preview = container.querySelector(".wgd-preview") as HTMLElement;
-    expect(preview.style.getPropertyValue("--wg-surface")).toBe("#1a2130");
-  });
-
-  it("unsafe token values are flagged and withheld from the preview", () => {
-    const container = host();
-    createDesigner(container);
-    type(field(container, "--wg-bg"), "url(https://evil.example/x)");
-    expect(container.textContent).toContain("INVALID_TOKEN_VALUE");
-    const preview = container.querySelector(".wgd-preview") as HTMLElement;
-    expect(preview.style.getPropertyValue("--wg-bg")).toBe("");
-  });
-
+describe("preview controls", () => {
   it("preview-kind selector renders built-ins for theme previews", () => {
     const container = host();
     createDesigner(container);

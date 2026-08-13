@@ -1,8 +1,8 @@
-import type { ThemeError, WidgetTheme } from "./tokens.js";
+import type { ThemeError, WidgetTheme, WidgetThemeInput } from "./tokens.js";
 import { THEME_TOKENS, isSafeTokenValue } from "./tokens.js";
 
 export type ValidateThemeResult =
-  | { ok: true; theme: WidgetTheme }
+  | { ok: true; theme: WidgetThemeInput }
   | { ok: false; error: ThemeError };
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -10,6 +10,25 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 const KNOWN_TOKENS: ReadonlySet<string> = new Set(THEME_TOKENS);
+
+/**
+ * Author-defined variables: `x-<name>` keys are accepted alongside registry
+ * tokens and emitted as `--wg-x-<name>`. This is the sanctioned escape
+ * hatch for custom widgets that need their own knobs, so the registry does
+ * not have to grow for every one-off. Names are lowercase/kebab so the
+ * generated custom property is always a valid CSS identifier.
+ */
+const CUSTOM_VARIABLE = /^x-[a-z0-9][a-z0-9-]*$/;
+
+/** Custom-variable keys carried by a theme, in declaration order. */
+function customKeys(theme: WidgetThemeInput): string[] {
+  return Object.keys(theme).filter((key) => CUSTOM_VARIABLE.test(key));
+}
+
+/** The `--wg-*` property name a theme key maps to. */
+function propertyName(key: string): string {
+  return `--wg-${key}`;
+}
 
 /** Validate an unknown value as a theme. Never throws. */
 export function validateTheme(input: unknown): ValidateThemeResult {
@@ -20,12 +39,14 @@ export function validateTheme(input: unknown): ValidateThemeResult {
     };
   }
   for (const [token, value] of Object.entries(input)) {
-    if (!KNOWN_TOKENS.has(token)) {
+    if (!KNOWN_TOKENS.has(token) && !CUSTOM_VARIABLE.test(token)) {
       return {
         ok: false,
         error: {
           code: "UNKNOWN_TOKEN",
-          message: `Unknown theme token '${token}'.`,
+          message:
+            `Unknown theme token '${token}'. Use a registry token, or a ` +
+            `custom variable named 'x-<lowercase-kebab>'.`,
           token
         }
       };
@@ -41,7 +62,7 @@ export function validateTheme(input: unknown): ValidateThemeResult {
       };
     }
   }
-  return { ok: true, theme: input as WidgetTheme };
+  return { ok: true, theme: input as WidgetThemeInput };
 }
 
 /**
@@ -52,16 +73,24 @@ export function validateTheme(input: unknown): ValidateThemeResult {
  * are skipped; the CSSOM path (`setProperty`) parses no stylesheet text,
  * so declaration escape is structurally impossible here.
  */
-export function applyTheme(container: Element, theme: WidgetTheme): void {
+export function applyTheme(container: Element, theme: WidgetThemeInput): void {
   const style = (container as Partial<ElementCSSInlineStyle>).style;
   if (!style) return;
+  // Replace semantics: clear every property this module could have set,
+  // custom variables included (they are removed by name from the inline
+  // style, which is the only place applyTheme writes).
   for (const token of THEME_TOKENS) {
-    style.removeProperty(`--wg-${token}`);
+    style.removeProperty(propertyName(token));
   }
-  for (const token of THEME_TOKENS) {
-    const value = theme[token];
+  for (let i = style.length - 1; i >= 0; i--) {
+    const property = style.item(i);
+    if (property.startsWith("--wg-x-")) style.removeProperty(property);
+  }
+  const keys: string[] = [...THEME_TOKENS, ...customKeys(theme)];
+  for (const key of keys) {
+    const value = (theme as Record<string, unknown>)[key];
     if (typeof value === "string" && isSafeTokenValue(value)) {
-      style.setProperty(`--wg-${token}`, value);
+      style.setProperty(propertyName(key), value);
     }
   }
 }
@@ -70,12 +99,13 @@ export function applyTheme(container: Element, theme: WidgetTheme): void {
  * Generate a CSS rule assigning the theme's tokens under `selector`
  * (default `:root`). Only entries passing the safety guard are emitted.
  */
-export function themeToCss(theme: WidgetTheme, selector = ":root"): string {
+export function themeToCss(theme: WidgetThemeInput, selector = ":root"): string {
   const declarations: string[] = [];
-  for (const token of THEME_TOKENS) {
-    const value = theme[token];
+  const keys: string[] = [...THEME_TOKENS, ...customKeys(theme)];
+  for (const key of keys) {
+    const value = (theme as Record<string, unknown>)[key];
     if (typeof value === "string" && isSafeTokenValue(value)) {
-      declarations.push(`  --wg-${token}: ${value};`);
+      declarations.push(`  ${propertyName(key)}: ${value};`);
     }
   }
   return `${selector} {\n${declarations.join("\n")}\n}`;
@@ -88,6 +118,11 @@ export const darkTheme: WidgetTheme = {
   fg: "#e5e9f0",
   muted: "#8b93a7",
   accent: "#7aa2f7",
+  "accent-fg": "#0f131c",
   border: "#2a3140",
-  shadow: "0 1px 3px rgba(0, 0, 0, 0.6)"
+  shadow: "0 1px 3px rgba(0, 0, 0, 0.6)",
+  danger: "#f0a3a3",
+  success: "#8fd19e",
+  warning: "#e8b878",
+  info: "#7cc4e8"
 };

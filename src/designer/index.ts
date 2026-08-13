@@ -14,7 +14,18 @@ export type {
   LoadResult,
   WidgetDefinition
 } from "./shell.js";
-export { defineDesignerElement, DEFAULT_TAG } from "./element.js";
+export {
+  defineDesignerElement,
+  defineThemeDesignerElement,
+  DEFAULT_TAG,
+  DEFAULT_THEME_TAG
+} from "./element.js";
+export { createThemeDesigner, checkThemeEntry } from "./theme-designer.js";
+export type {
+  ThemeDesignerHandle,
+  ThemeDesignerOptions,
+  ThemeLoadResult
+} from "./theme-designer.js";
 export type { WidgetDraft, DraftStore } from "./store.js";
 export { starterDraft } from "./store.js";
 export { deriveDiagnostics } from "./validate.js";

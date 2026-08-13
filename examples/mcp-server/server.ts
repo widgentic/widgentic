@@ -20,13 +20,16 @@ import {
   LIST_WIDGETS_TOOL,
   RENDER_WIDGET_TOOL,
   LIST_THEME_TOKENS_TOOL,
+  LIST_THEMES_TOOL,
   WIDGENTIC_UI_URI_PREFIX,
   WIDGENTIC_APP_TEMPLATE_URI,
   handleListWidgets,
   handleRenderWidget,
   handleListThemeTokens,
+  handleListThemes,
   inlineRenderResultImages
 } from "widgentic/mcp-server";
+import { createThemeRegistry } from "widgentic/theming";
 
 const INLINE_IMAGES = !["0", "false"].includes(
   (process.env.WIDGENTIC_INLINE_IMAGES ?? "").toLowerCase()
@@ -34,6 +37,9 @@ const INLINE_IMAGES = !["0", "false"].includes(
 
 export function createWidgenticServer(): McpServer {
   const catalog = createCatalog();
+  // Named themes: agents can pass `theme: "dark"` instead of a token map.
+  // A later change resolves this per user; today it is server-wide.
+  const themes = createThemeRegistry();
   // Model-context slimming signal: session-negotiated UI capability wins in
   // either direction; the env assumption (WIDGENTIC_ASSUME_UI, read per
   // construction) covers un-negotiated instances — on stateless HTTP the
@@ -62,6 +68,12 @@ export function createWidgenticServer(): McpServer {
     LIST_THEME_TOKENS_TOOL.name,
     { description: LIST_THEME_TOKENS_TOOL.description },
     () => handleListThemeTokens() as CallToolResult
+  );
+
+  server.registerTool(
+    LIST_THEMES_TOOL.name,
+    { description: LIST_THEMES_TOOL.description },
+    () => handleListThemes(themes) as CallToolResult
   );
 
   // Formal MCP Apps declaration (spec 2026-01-26, via the official ext-apps
@@ -93,11 +105,17 @@ export function createWidgenticServer(): McpServer {
         hints: z.record(z.string(), z.unknown()).optional(),
         meta: z.record(z.string(), z.unknown()).optional(),
         format: z.enum(["both", "html", "widget", "page", "app"]).optional(),
-        theme: z.record(z.string(), z.string()).optional()
+        // A registered theme name, or an inline token map.
+        theme: z
+          .union([z.string(), z.record(z.string(), z.string())])
+          .optional()
       }
     },
     async (args) => {
-      const result = handleRenderWidget(catalog, args, { slim }) as CallToolResult;
+      const result = handleRenderWidget(catalog, args, {
+        slim,
+        themes
+      }) as CallToolResult;
       // Apps-host sandboxes block external img-src but allow data:, so the
       // iframe-facing surfaces get image bytes inlined as data URIs
       // (SSRF-guarded; see src/mcp-server/inline-images.ts). Disable with

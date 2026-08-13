@@ -5,7 +5,7 @@
  * in one document.
  */
 import { validateTheme } from "widgentic/theming";
-import type { WidgetTheme } from "widgentic/theming";
+import type { ThemeEntry, WidgetTheme } from "widgentic/theming";
 import { h, injectDesignerStyles } from "./dom.js";
 import { applyDefinition, checkDefinition } from "./io.js";
 import type { WidgetDefinition } from "./io.js";
@@ -21,6 +21,11 @@ export type { WidgetDefinition } from "./io.js";
 export interface DesignerOptions {
   initialWidget?: WidgetDefinition;
   initialTheme?: WidgetTheme;
+  /**
+   * Named themes offered as preview options. Theme authoring belongs to
+   * the standalone theme designer; the widget designer only selects.
+   */
+  themes?: ThemeEntry[];
   /**
    * Designer chrome appearance. "auto" (default) follows the host's
    * `prefers-color-scheme`; the explicit values pin it. This is the
@@ -71,13 +76,18 @@ export function createDesigner(
   }
   container.appendChild(root);
 
-  const panels = mountPanels(store, { left: leftColumn, right: rightSections }, {
-    setPreviewKind(kind: string) {
-      previewKind = kind;
-      refresh(store.get());
+  const panels = mountPanels(
+    store,
+    { left: leftColumn, right: rightSections },
+    {
+      setPreviewKind(kind: string) {
+        previewKind = kind;
+        refresh(store.get());
+      },
+      getPreviewKind: () => previewKind
     },
-    getPreviewKind: () => previewKind
-  });
+    options.themes ?? []
+  );
 
   function refresh(draft: WidgetDraft): void {
     const diagnostics = deriveDiagnostics(draft);

@@ -6,6 +6,7 @@
  * DOM is a projection.
  */
 import type { DataSchema } from "widgentic/catalog";
+import type { ThemeEntry } from "widgentic/theming";
 import { diagnosticLine, h, section, textArea, textField } from "./dom.js";
 import { attachJsonHighlight, repaintHighlight } from "./highlight.js";
 import { mountIoPanel } from "./io.js";
@@ -109,7 +110,8 @@ function jsonField(
 export function mountPanels(
   store: DraftStore,
   columns: PanelColumns,
-  context: PanelsContext
+  context: PanelsContext,
+  themes: ThemeEntry[] = []
 ): { dispose(): void } {
   const refreshers: Refresher[] = [];
   const disposers: (() => void)[] = [];
@@ -339,7 +341,7 @@ export function mountPanels(
   ]);
 
   const templatePanel = mountTemplatePanel(store, refreshers);
-  const themePanel = mountThemePanel(store, refreshers, context);
+  const themePanel = mountThemePanel(store, refreshers, context, themes);
   const ioPanel = mountIoPanel(store);
 
   // Left: the widget definition (what export produces). Right: presentation.

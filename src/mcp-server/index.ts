@@ -2,6 +2,7 @@ export {
   LIST_WIDGETS_TOOL,
   RENDER_WIDGET_TOOL,
   LIST_THEME_TOKENS_TOOL,
+  LIST_THEMES_TOOL,
   WIDGENTIC_UI_URI_PREFIX,
   WIDGENTIC_APP_MIME_TYPE,
   WIDGENTIC_APP_TEMPLATE_URI
@@ -10,7 +11,8 @@ export type { McpToolDefinition } from "./definitions.js";
 export {
   handleListWidgets,
   handleRenderWidget,
-  handleListThemeTokens
+  handleListThemeTokens,
+  handleListThemes
 } from "./handlers.js";
 export {
   inlineImagesInHtml,

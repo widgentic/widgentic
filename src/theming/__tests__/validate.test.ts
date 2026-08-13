@@ -74,3 +74,25 @@ describe("themeToCss", () => {
     expect(css).not.toContain("url(");
   });
 });
+
+describe("custom x-* variables", () => {
+  it("accepts well-formed custom names", () => {
+    expect(validateTheme({ "x-badge-gap": "4px" }).ok).toBe(true);
+    expect(validateTheme({ "x-1": "0" }).ok).toBe(true);
+  });
+
+  it("rejects malformed custom names as unknown tokens", () => {
+    for (const key of ["x-", "x-Bad_Name", "xcustom", "-x-a", "x--"]) {
+      const result = validateTheme({ [key]: "red" });
+      expect(result.ok, key).toBe(false);
+      if (!result.ok) expect(result.error.code).toBe("UNKNOWN_TOKEN");
+    }
+  });
+
+  it("applies the value guard to custom variables too", () => {
+    const result = validateTheme({ "x-ok": "url(https://evil.example/x)" });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("INVALID_TOKEN_VALUE");
+  });
+});
+

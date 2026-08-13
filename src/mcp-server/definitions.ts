@@ -36,6 +36,19 @@ export const WIDGENTIC_APP_MIME_TYPE = "text/html;profile=mcp-app";
 /** URI of the declared app template that renders `structuredContent`. */
 export const WIDGENTIC_APP_TEMPLATE_URI = "ui://widgentic/app.html";
 
+export const LIST_THEMES_TOOL: McpToolDefinition = {
+  name: "list_themes",
+  description:
+    "List the themes registered on this server — name, label, description " +
+    "and token map for each. Pass any listed name as render_widget's " +
+    "'theme' input instead of composing tokens by hand.",
+  inputSchema: {
+    type: "object",
+    properties: {},
+    additionalProperties: false
+  }
+};
+
 export const LIST_THEME_TOKENS_TOOL: McpToolDefinition = {
   name: "list_theme_tokens",
   description:
@@ -89,12 +102,15 @@ export const RENDER_WIDGET_TOOL: McpToolDefinition = {
           "use the html resource, native hosts the payload block."
       },
       theme: {
-        type: "object",
+        type: ["object", "string"],
         description:
-          "Theme token map: bare token names to CSS string values — always " +
-          "strings, e.g. '6px' not 6. Discover tokens, defaults, and " +
-          "presets with list_theme_tokens. Applied to 'page' output and " +
-          "embedded in the widget payload for native hosts on every format."
+          "Either a registered theme NAME (discover with list_themes — the " +
+          "simplest path, e.g. 'dark') or a token map of bare token names " +
+          "to CSS string values, always strings ('6px', not 6). Discover " +
+          "tokens, defaults, and presets with list_theme_tokens; author " +
+          "extras as 'x-<name>' custom variables. Applied to 'page' output " +
+          "and embedded in the widget payload for native hosts on every " +
+          "format."
       }
     },
     required: ["widget", "data"],

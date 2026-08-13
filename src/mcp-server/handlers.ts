@@ -3,10 +3,11 @@ import { analyzeHints, renderToHtml, widgetStylesToCss } from "../catalog/index.
 import type { WidgetContractError } from "../contract/index.js";
 import type { McpToolResult, McpContentBlock } from "../mcp/index.js";
 import { WIDGENTIC_MIME_TYPE, WIDGENTIC_URI } from "../mcp/index.js";
-import type { WidgetTheme } from "../theming/index.js";
+import type { ThemeRegistry, WidgetTheme } from "../theming/index.js";
 import {
   THEME_TOKENS,
   TOKEN_DEFAULTS,
+  TOKEN_SPECS,
   baseStylesheet,
   darkTheme,
   themeToCss,
@@ -94,8 +95,16 @@ function coerceData(data: unknown): unknown {
   return typeof candidate === "object" && candidate !== null ? candidate : data;
 }
 
+/**
+ * Tool-level errors: the contract vocabulary plus codes that only exist at
+ * this layer (theme resolution is a server concern, not a payload one).
+ */
+type ToolError =
+  | WidgetContractError
+  | { code: "UNKNOWN_THEME"; path: string; message: string };
+
 /** Structured, agent-correctable failure using the contract vocabulary. */
-function errorResult(error: WidgetContractError): McpToolResult {
+function errorResult(error: ToolError): McpToolResult {
   return {
     isError: true,
     content: [{ type: "text", text: JSON.stringify(error) }]
@@ -111,14 +120,21 @@ export function handleListThemeTokens(): McpToolResult {
   const listing = {
     tokens: THEME_TOKENS.map((token) => ({
       name: token,
-      default: TOKEN_DEFAULTS[token]
+      default: TOKEN_SPECS[token].default,
+      type: TOKEN_SPECS[token].type,
+      use: TOKEN_SPECS[token].use
     })),
     presets: { dark: darkTheme },
     rules:
       "Values are CSS strings (e.g. '6px', not 6). Unsafe values are " +
       "rejected: no ';', braces, angle brackets, url(), or expression(). " +
-      "Unset tokens fall back to the light defaults. Pass the map as " +
-      "render_widget's 'theme' input."
+      "Unset tokens fall back to the light defaults. Keys named " +
+      "'x-<lowercase-kebab>' are accepted as custom variables and emitted " +
+      "as --wg-x-<name>, for widgets that need their own knobs. Pass the " +
+      "map (or a registered theme name from list_themes) as " +
+      "render_widget's 'theme' input. Each token's 'type' states the kind " +
+      "of CSS value it expects (color, dimension, number, font-family, " +
+      "font-weight, shadow)."
   };
   return {
     content: [{ type: "text", text: JSON.stringify(listing, null, 2) }]
@@ -136,6 +152,23 @@ export function handleListWidgets(catalog: WidgetCatalog): McpToolResult {
 }
 
 /**
+ * `list_themes`: the registered named themes, so an agent can ask for
+ * `theme: "dark"` instead of composing a token map. Pure — the registry is
+ * supplied, mirroring `handleListWidgets(catalog)`.
+ */
+export function handleListThemes(registry: ThemeRegistry): McpToolResult {
+  const listing = {
+    themes: registry.list(),
+    rules:
+      "Pass any 'name' above as render_widget's 'theme' input. Tokens are " +
+      "shown for reference; a token map may still be passed inline."
+  };
+  return {
+    content: [{ type: "text", text: JSON.stringify(listing, null, 2) }]
+  };
+}
+
+/**
  * `render_widget`: validate `{ widget, data, hints?, meta? }` against the
  * catalog and the contract, render, and return the HTML plus the widgentic
  * payload block. Total — any input shape produces a result, never a throw.
@@ -143,7 +176,7 @@ export function handleListWidgets(catalog: WidgetCatalog): McpToolResult {
 export function handleRenderWidget(
   catalog: WidgetCatalog,
   input: unknown,
-  options?: { slim?: boolean | undefined }
+  options?: { slim?: boolean | undefined; themes?: ThemeRegistry | undefined }
 ): McpToolResult {
   if (!isPlainObject(input)) {
     return errorResult({
@@ -179,15 +212,29 @@ export function handleRenderWidget(
 
   let theme: WidgetTheme | undefined;
   if ("theme" in input && input.theme !== undefined) {
-    const validated = validateTheme(input.theme);
-    if (!validated.ok) {
-      return errorResult({
-        code: "INVALID_TYPE",
-        path: validated.error.token ? `theme.${validated.error.token}` : "theme",
-        message: validated.error.message
-      });
+    // A string is a registered theme name; an object is an inline map.
+    if (typeof input.theme === "string") {
+      const entry = options?.themes?.get(input.theme);
+      if (entry === undefined) {
+        const available = options?.themes?.names().sort().join(", ") ?? "(none)";
+        return errorResult({
+          code: "UNKNOWN_THEME",
+          path: "theme",
+          message: `Unknown theme '${input.theme}'. Available themes: ${available}.`
+        });
+      }
+      theme = entry.tokens;
+    } else {
+      const validated = validateTheme(input.theme);
+      if (!validated.ok) {
+        return errorResult({
+          code: "INVALID_TYPE",
+          path: validated.error.token ? `theme.${validated.error.token}` : "theme",
+          message: validated.error.message
+        });
+      }
+      theme = validated.theme;
     }
-    theme = validated.theme;
   }
 
   // Schema-aware marshalling: kinds declaring string-typed data receive the

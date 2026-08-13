@@ -1,8 +1,7 @@
-# widget-theming Specification
+# widget-theming — Delta: extended tokens, custom variables, named themes
 
-## Purpose
-Predefined styles and data-driven themes for the stable `wg-*` widget classes. A token registry (`--wg-*` custom properties) backs a generated base stylesheet with light defaults; a theme is a validated JSON token map applied per container (scoped, replace semantics) or emitted as CSS. Theme values from untrusted authors cannot escape declarations or fetch resources.
-## Requirements
+## MODIFIED Requirements
+
 ### Requirement: Theming programmatic surface
 The package SHALL export from a `./theming` entry: `THEME_TOKENS` (the token registry), `TOKEN_SPECS` (each token's default, value `type`, and documented `use`), `TOKEN_DEFAULTS` (derived from the specs), the `WidgetTheme`, `WidgetThemeInput`, `TokenType`, `TokenSpec` and `ThemeError` types, `baseStylesheet` (string), `injectBaseStyles(doc: Document): void`, `validateTheme(input: unknown)`, `applyTheme(container: Element, theme: WidgetTheme): void`, `themeToCss(theme: WidgetTheme, selector?: string): string`, the `darkTheme` preset, and the named-theme registry surface (`createThemeRegistry`, `DuplicateThemeError`, the `ThemeEntry` type). Themes SHALL be plain JSON-serializable maps of bare token names to string values, additionally accepting author-defined `x-*` custom variables. The `darkTheme` preset SHALL set `surface` to a value distinct from its `bg`.
 
@@ -22,39 +21,6 @@ The package SHALL export from a `./theming` entry: `THEME_TOKENS` (the token reg
 - **WHEN** `TOKEN_SPECS` is inspected
 - **THEN** each token SHALL declare a `type` of `"color" | "dimension" | "number" | "font-family" | "font-weight" | "shadow"` and a non-empty `use` describing what it controls
 - **AND** every `color`-typed token's default SHALL be a hex color, so tooling can trust the declared type instead of inferring it from the value
-
-### Requirement: Predefined base stylesheet
-`baseStylesheet` SHALL style the documented `wg-*` classes (`wg-card`, `wg-table`, `wg-tree`, `wg-custom`, `wg-template`, `wg-img` with its shape modifiers `wg-img-avatar`, `wg-img-thumb`, `wg-img-hero`, and their sub-element classes) using only `var(--wg-<token>, <fallback>)` references to registry tokens, with light-theme fallback values. Widget surface backgrounds (`wg-card`, `wg-table`, `wg-custom`) SHALL read `var(--wg-surface, var(--wg-bg, <light default>))` so that themes without a `surface` value inherit `bg` exactly as before, while themes may set the two independently. Text SHALL derive its density from the `line-height` token, its emphasis from `font-weight-bold`, and monospace content (`wg-custom`) from `font-mono`; hairlines SHALL derive their thickness from `border-width`. The stylesheet SHALL additionally define status utility classes (`wg-status` with `wg-status-danger|success|warning|info|accent`) pairing each status color with its `-fg` text color, so status tokens are consumed rather than decorative. EVERY registry token SHALL be referenced by the stylesheet — a token that nothing consumes SHALL NOT be added. Image rules SHALL size `wg-img-avatar` from the `avatar-size` token (circular crop), `wg-img-thumb` from the `thumb-size` token (rounded rectangle), and render `wg-img-hero` as a block spanning available width; all three SHALL use `object-fit: cover` or equivalent so mis-proportioned sources stay presentable. `injectBaseStyles(doc)` SHALL append the stylesheet as a marked `<style>` element exactly once per document (idempotent).
-
-#### Scenario: Stylesheet covers the built-in classes
-- **WHEN** `baseStylesheet` is inspected
-- **THEN** it SHALL contain rules for `.wg-card`, `.wg-table`, `.wg-tree`, `.wg-custom`, `.wg-img`, `.wg-img-avatar`, `.wg-img-thumb`, and `.wg-img-hero`
-
-#### Scenario: All variables come from the registry
-- **WHEN** every `--wg-*` reference in `baseStylesheet` is extracted
-- **THEN** each SHALL correspond to a token in `THEME_TOKENS`
-- **AND** each `var()` reference SHALL include a fallback value
-
-#### Scenario: Injection is idempotent
-- **WHEN** `injectBaseStyles(document)` is called twice
-- **THEN** the document SHALL contain exactly one widgentic style element
-
-#### Scenario: Avatar size is themeable
-- **WHEN** a theme sets `"avatar-size": "48px"` and is applied to a container with an `.wg-img-avatar` image
-- **THEN** the avatar SHALL derive its rendered box from the overridden token value
-
-#### Scenario: Surface falls back to bg
-- **WHEN** the surface rules are inspected
-- **THEN** `.wg-card` background SHALL be `var(--wg-surface, var(--wg-bg, …))`
-- **AND** a theme setting only `bg` SHALL color surfaces with that `bg` value, unchanged from prior behavior
-
-#### Scenario: No token is decorative
-- **WHEN** every `--wg-*` reference in `baseStylesheet` is collected and compared against `THEME_TOKENS`
-- **THEN** the set of tokens referenced by nothing SHALL be empty
-
-#### Scenario: Status utilities pair fill and text colors
-- **WHEN** the stylesheet is inspected
-- **THEN** `.wg-status-danger`, `.wg-status-success`, `.wg-status-warning`, `.wg-status-info`, and `.wg-status-accent` SHALL each set a background from their status token and a color from the matching `-fg` token
 
 ### Requirement: Theme validation
 `validateTheme(input)` SHALL return `{ ok: true, theme } | { ok: false, error: ThemeError }` where `ThemeError` has `code` (`"INVALID_THEME" | "UNKNOWN_TOKEN" | "INVALID_TOKEN_VALUE"`), `message`, and the offending `token` name when applicable. Non-object input SHALL fail with `INVALID_THEME`; keys outside `THEME_TOKENS` SHALL fail with `UNKNOWN_TOKEN` **unless** they match the custom-variable pattern `^x-[a-z0-9][a-z0-9-]*$`, which SHALL be accepted; values that are not strings or that contain `;`, `{`, `}`, `<`, `>`, `url(`, or `expression(` (case-insensitive, whitespace-tolerant before the parenthesis) SHALL fail with `INVALID_TOKEN_VALUE` — custom variables included. The guard rejects exfiltration and execution vectors, not invalid CSS — inert nonsense values pass.
@@ -123,6 +89,41 @@ The package SHALL export from a `./theming` entry: `THEME_TOKENS` (the token reg
 #### Scenario: Custom variables are emitted
 - **WHEN** `themeToCss({ "x-gap": "4px" })` is called
 - **THEN** the output SHALL contain `--wg-x-gap: 4px;`
+
+### Requirement: Predefined base stylesheet
+`baseStylesheet` SHALL style the documented `wg-*` classes (`wg-card`, `wg-table`, `wg-tree`, `wg-custom`, `wg-template`, `wg-img` with its shape modifiers `wg-img-avatar`, `wg-img-thumb`, `wg-img-hero`, and their sub-element classes) using only `var(--wg-<token>, <fallback>)` references to registry tokens, with light-theme fallback values. Widget surface backgrounds (`wg-card`, `wg-table`, `wg-custom`) SHALL read `var(--wg-surface, var(--wg-bg, <light default>))` so that themes without a `surface` value inherit `bg` exactly as before, while themes may set the two independently. Text SHALL derive its density from the `line-height` token, its emphasis from `font-weight-bold`, and monospace content (`wg-custom`) from `font-mono`; hairlines SHALL derive their thickness from `border-width`. The stylesheet SHALL additionally define status utility classes (`wg-status` with `wg-status-danger|success|warning|info|accent`) pairing each status color with its `-fg` text color, so status tokens are consumed rather than decorative. EVERY registry token SHALL be referenced by the stylesheet — a token that nothing consumes SHALL NOT be added. Image rules SHALL size `wg-img-avatar` from the `avatar-size` token (circular crop), `wg-img-thumb` from the `thumb-size` token (rounded rectangle), and render `wg-img-hero` as a block spanning available width; all three SHALL use `object-fit: cover` or equivalent so mis-proportioned sources stay presentable. `injectBaseStyles(doc)` SHALL append the stylesheet as a marked `<style>` element exactly once per document (idempotent).
+
+#### Scenario: Stylesheet covers the built-in classes
+- **WHEN** `baseStylesheet` is inspected
+- **THEN** it SHALL contain rules for `.wg-card`, `.wg-table`, `.wg-tree`, `.wg-custom`, `.wg-img`, `.wg-img-avatar`, `.wg-img-thumb`, and `.wg-img-hero`
+
+#### Scenario: All variables come from the registry
+- **WHEN** every `--wg-*` reference in `baseStylesheet` is extracted
+- **THEN** each SHALL correspond to a token in `THEME_TOKENS`
+- **AND** each `var()` reference SHALL include a fallback value
+
+#### Scenario: Injection is idempotent
+- **WHEN** `injectBaseStyles(document)` is called twice
+- **THEN** the document SHALL contain exactly one widgentic style element
+
+#### Scenario: Avatar size is themeable
+- **WHEN** a theme sets `"avatar-size": "48px"` and is applied to a container with an `.wg-img-avatar` image
+- **THEN** the avatar SHALL derive its rendered box from the overridden token value
+
+#### Scenario: Surface falls back to bg
+- **WHEN** the surface rules are inspected
+- **THEN** `.wg-card` background SHALL be `var(--wg-surface, var(--wg-bg, …))`
+- **AND** a theme setting only `bg` SHALL color surfaces with that `bg` value, unchanged from prior behavior
+
+#### Scenario: No token is decorative
+- **WHEN** every `--wg-*` reference in `baseStylesheet` is collected and compared against `THEME_TOKENS`
+- **THEN** the set of tokens referenced by nothing SHALL be empty
+
+#### Scenario: Status utilities pair fill and text colors
+- **WHEN** the stylesheet is inspected
+- **THEN** `.wg-status-danger`, `.wg-status-success`, `.wg-status-warning`, `.wg-status-info`, and `.wg-status-accent` SHALL each set a background from their status token and a color from the matching `-fg` token
+
+## ADDED Requirements
 
 ### Requirement: Named theme registry
 The package SHALL export `createThemeRegistry()` returning a registry of named themes with `register(entry)`, `get(name)`, `list()`, and `names()`. An entry SHALL be `{ name, label?, description?, tokens, extends? }` where `tokens` is a validated `WidgetTheme`. Registering a name twice SHALL throw `DuplicateThemeError` (matching the catalog's duplicate-kind ergonomics). `extends: <name>` SHALL be resolved **at registration** by merging the base entry's tokens under the new entry's own tokens, storing the flat result — no runtime cascade and no cycles; the `extends` name SHALL be retained on the entry for display. Registering an entry whose tokens fail validation SHALL throw with the validator's structured error. A fresh registry SHALL contain the built-in `light` (empty token map — the defaults) and `dark` (the `darkTheme` preset) entries.
