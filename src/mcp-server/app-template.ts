@@ -1,4 +1,4 @@
-import { baseStylesheet } from "widgentic/theming";
+import { baseStylesheet } from "../theming/index.js";
 
 /**
  * The declared MCP Apps template (`ui://widgentic/app.html`).

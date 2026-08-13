@@ -25,8 +25,8 @@
     "test": "vitest run",
     "test:types": "vitest --typecheck.only run",
     "test:watch": "vitest",
-    "mcp": "tsx examples/mcp-server/main.ts",
-    "mcp:http": "tsx examples/mcp-server/http.ts",
+    "mcp": "tsx apps/mcp-server/main.ts",
+    "mcp:http": "tsx apps/mcp-server/http.ts",
     "designer": "tsx examples/designer/serve.ts"
   },
   "devDependencies": {

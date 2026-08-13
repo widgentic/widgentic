@@ -16,8 +16,8 @@ import {
 import type { DesignerHandle, ThemeDesignerHandle } from "widgentic/designer";
 import { createThemeRegistry } from "widgentic/theming";
 import type { ThemeEntry } from "widgentic/theming";
-import { invoiceWidget } from "../mcp-server/widgets/invoice.js";
-import { xPostWidget } from "../mcp-server/widgets/x-post.js";
+import { invoiceWidget } from "../../apps/mcp-server/widgets/invoice.js";
+import { xPostWidget } from "../../apps/mcp-server/widgets/x-post.js";
 
 const DRAFT_KEY = "widgentic-designer-draft";
 const THEMES_KEY = "widgentic-designer-themes";

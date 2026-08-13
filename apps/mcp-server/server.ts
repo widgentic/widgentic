@@ -12,7 +12,6 @@ import {
   RESOURCE_MIME_TYPE
 } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
-import { buildAppTemplate } from "./app-template.js";
 import { createCatalog } from "widgentic/catalog";
 import type { WidgetCatalog } from "widgentic/catalog";
 import { registerTemplate } from "widgentic/templates";
@@ -28,7 +27,8 @@ import {
   handleRenderWidget,
   handleListThemeTokens,
   handleListThemes,
-  inlineRenderResultImages
+  inlineRenderResultImages,
+  buildAppTemplate
 } from "widgentic/mcp-server";
 import { createThemeRegistry } from "widgentic/theming";
 import type { ThemeRegistry } from "widgentic/theming";

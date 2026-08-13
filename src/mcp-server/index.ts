@@ -14,6 +14,7 @@ export {
   handleListThemeTokens,
   handleListThemes
 } from "./handlers.js";
+export { buildAppTemplate } from "./app-template.js";
 export {
   inlineImagesInHtml,
   inlineRenderResultImages,

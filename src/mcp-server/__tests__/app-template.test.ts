@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
+import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it } from "vitest";
-import { buildAppTemplate } from "../../../examples/mcp-server/app-template.js";
-import { customWidgets } from "../../../examples/mcp-server/widgets/index.js";
+import { buildAppTemplate } from "../index.js";
+import { customWidgets } from "../../../apps/mcp-server/widgets/index.js";
 import { createCatalog, renderToHtml } from "../../catalog/index.js";
 import type { WidgetNode } from "../../catalog/index.js";
 import { registerTemplate } from "../../templates/index.js";
@@ -140,6 +141,21 @@ describe("app template native mounting", () => {
       }
     });
     expect(root().querySelector(".wg-app-error")?.textContent).toBe("Unknown widget");
+  });
+
+  it("builder is a library module importing only widgentic entries", () => {
+    // The template ships from the library: no MCP SDK, no deployment code.
+    // happy-dom rewrites import.meta.url to an http scheme; vitest runs
+    // from the repo root, so resolve from cwd instead.
+    const source = readFileSync("src/mcp-server/app-template.ts", "utf8");
+    const imports = [...source.matchAll(/from\s+"([^"]+)"/g)].map((m) => m[1]);
+    expect(imports.length).toBeGreaterThan(0);
+    for (const specifier of imports) {
+      expect(specifier, specifier).toMatch(/^\.\.?\//);
+      expect(specifier).not.toContain("apps/");
+      expect(specifier).not.toContain("examples/");
+      expect(specifier).not.toContain("@modelcontextprotocol");
+    }
   });
 
   it("remounts cleanly after a tool-input placeholder", () => {

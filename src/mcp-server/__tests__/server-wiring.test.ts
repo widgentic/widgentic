@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { EXTENSION_ID, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
-import { createWidgenticServer } from "../../../examples/mcp-server/server.js";
+import { createWidgenticServer } from "../../../apps/mcp-server/server.js";
+import { buildAppTemplate, WIDGENTIC_APP_TEMPLATE_URI } from "../index.js";
 
 interface DeliveredResult {
   isError?: boolean;
@@ -66,4 +67,18 @@ describe("capability-aware slim wiring", () => {
   // always runs initialize, which authoritatively overwrites the default.
   // That path exists precisely for stateless HTTP tools/call and is
   // verified against the deployed endpoint (see TESTING.md).
+});
+
+describe("app template resource", () => {
+  it("serves exactly the library builder's output", async () => {
+    const { client } = await session({
+      extensions: { [EXTENSION_ID]: { mimeTypes: [RESOURCE_MIME_TYPE] } }
+    });
+    const read = (await client.readResource({
+      uri: WIDGENTIC_APP_TEMPLATE_URI
+    })) as { contents: { uri: string; mimeType?: string; text?: string }[] };
+    expect(read.contents).toHaveLength(1);
+    expect(read.contents[0]?.mimeType).toBe(RESOURCE_MIME_TYPE);
+    expect(read.contents[0]?.text).toBe(buildAppTemplate());
+  });
 });

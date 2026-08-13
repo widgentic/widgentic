@@ -10,7 +10,7 @@ RUN npm ci
 
 COPY tsconfig.json ./
 COPY src ./src
-COPY examples ./examples
+COPY apps ./apps
 
 ENV PORT=3001
 EXPOSE 3001
@@ -18,4 +18,4 @@ EXPOSE 3001
 # Unprivileged runtime user (the node image ships one).
 USER node
 
-CMD ["npx", "tsx", "examples/mcp-server/http.ts"]
+CMD ["npx", "tsx", "apps/mcp-server/http.ts"]

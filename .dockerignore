@@ -5,5 +5,6 @@ openspec
 .claude
 .github
 .vscode
+examples
 *.md
-!examples/**/*.md
+!apps/**/*.md

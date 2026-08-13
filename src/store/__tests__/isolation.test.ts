@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { createWidgenticServer } from "../../../examples/mcp-server/server.js";
+import { createWidgenticServer } from "../../../apps/mcp-server/server.js";
 import { composeCatalog, composeThemes, createMemoryStore } from "../index.js";
 import type { MemorySeedPrincipal, StoredWidget, WidgetStore } from "../index.js";
 import type { ThemeEntry } from "../../theming/index.js";

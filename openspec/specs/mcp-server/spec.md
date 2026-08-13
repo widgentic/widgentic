@@ -87,7 +87,7 @@ Failures SHALL be returned as `isError: true` results whose text content is the 
 - **THEN** each SHALL return an `isError: true` result with a structured error
 
 ### Requirement: Runnable server and SDK interoperability
-The repository SHALL provide `examples/mcp-server/main.ts` wiring the definitions and handlers onto an official-SDK MCP server over stdio (with the invoice template registered), started by `npm run mcp` using devDependencies only. The test suite SHALL verify via the SDK's in-memory transport that `list_widgets` and `render_widget` round-trip through the real protocol, including the `isError` path for an unknown widget.
+The repository SHALL provide `apps/mcp-server/main.ts` wiring the definitions and handlers onto an official-SDK MCP server over stdio (with the invoice template registered), started by `npm run mcp` using devDependencies only. The test suite SHALL verify via the SDK's in-memory transport that `list_widgets` and `render_widget` round-trip through the real protocol, including the `isError` path for an unknown widget.
 
 #### Scenario: Protocol round trip
 - **WHEN** an in-memory SDK client calls `render_widget` with `{ widget: "card", data: { title: "T" } }`
@@ -266,6 +266,17 @@ The repository SHALL provide the app template (`ui://widgentic/app.html`): a sel
 #### Scenario: Mounter skips unsafe names
 - **WHEN** a (tampered) tree carries an `onclick` attribute or an invalid tag name
 - **THEN** the mounted DOM SHALL contain neither
+
+### Requirement: App template builder is a library export
+The `./mcp-server` entry SHALL export `buildAppTemplate(): string`, producing the app template document (`ui://widgentic/app.html`) described by the app template loader requirement. The builder SHALL depend only on other widgentic public entries — no MCP SDK, no deployment code — so any host can serve the loader without copying files out of a deployment.
+
+#### Scenario: The export produces the served template
+- **WHEN** `buildAppTemplate()` is called and an SDK client reads `ui://widgentic/app.html` from the runnable server
+- **THEN** the resource contents SHALL equal the builder's output
+
+#### Scenario: The builder stays dependency-free
+- **WHEN** the module providing `buildAppTemplate` is inspected
+- **THEN** it SHALL import only from widgentic public entries and SHALL NOT import from an MCP SDK or from `apps/`
 
 ### Requirement: Server-side image inlining for iframe surfaces
 Because Apps-host sandboxes block external `img-src` while permitting `data:`, the runnable server SHALL, when inlining is enabled (the default; `WIDGENTIC_INLINE_IMAGES=0` disables), rewrite `img` sources on the iframe-facing surfaces of a `render_widget` result — the `structuredContent` HTML fragment, the `structuredContent.tree` render tree (element nodes with `tag: "img"`), and the `ui://widgentic/page/<kind>` embedded resource — replacing each `http(s)` source whose fetch succeeds with a `data:<content-type>;base64,` URI; the tree and HTML projections SHALL be rewritten from the same fetch results and never disagree. The model-facing HTML text block and `format: "page"` output SHALL keep original URLs. Each unique URL SHALL be fetched at most once per render. The fetch SHALL be guarded: `https` scheme only; hostnames resolving to loopback, private (RFC1918), link-local (including 169.254.169.254), carrier-grade NAT, or IPv6 unique-local/link-local addresses SHALL be rejected, re-validated on every redirect hop (at most 3); the response `Content-Type` MUST be `image/*`; per-image size SHALL be capped (1 MiB) and the fetch SHALL time out (~4 s); at most 8 images SHALL be inlined per render. Any failure SHALL leave the original URL in place (alt-text fallback) without failing the render.

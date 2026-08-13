@@ -157,20 +157,18 @@ authenticated app session, not to a pasted credential.
 
 ### Register with Claude Code
 
-This repo ships a project-scoped [`.mcp.json`](.mcp.json), so Claude Code picks the server up automatically: open a session in this workspace, approve the server when prompted, and confirm with `/mcp`. Then just ask — *"list the available widgets"*, *"render an invoice widget for ..."*.
-
-To register it outside this project instead:
-
 ```bash
-claude mcp add widgentic -- npx tsx /path/to/widgentic/examples/mcp-server/main.ts
+claude mcp add widgentic -- npx tsx /path/to/widgentic/apps/mcp-server/main.ts
 ```
+
+Confirm with `/mcp`, then just ask — *"list the available widgets"*, *"render an invoice widget for ..."*.
 
 For Claude Desktop, add to `claude_desktop_config.json` (absolute paths — Desktop has no working directory):
 
 ```json
 "widgentic": {
   "command": "npx",
-  "args": ["tsx", "/path/to/widgentic/examples/mcp-server/main.ts"]
+  "args": ["tsx", "/path/to/widgentic/apps/mcp-server/main.ts"]
 }
 ```
 
@@ -199,7 +197,7 @@ Inline mounting is verified in the official **basic-host** reference and
 **VS Code Copilot Chat** (all five widget kinds, live host re-theming);
 Claude Code degrades gracefully to text. Full runbooks — local basic-host
 setup, remote rig, host registration snippets — live in
-[examples/mcp-server/TESTING.md](examples/mcp-server/TESTING.md).
+[apps/mcp-server/TESTING.md](apps/mcp-server/TESTING.md).
 
 ### Design a widget
 
@@ -210,7 +208,7 @@ setup, remote rig, host registration snippets — live in
   dataSchema, with widgentic's validators running on every edit and a live
   preview mounted through the real pipeline. Export produces the exact
   `CustomWidget` JSON/TypeScript the server registers
-  ([examples/mcp-server/widgets/](examples/mcp-server/widgets/)).
+  ([apps/mcp-server/widgets/](apps/mcp-server/widgets/)).
 - **Theme designer** — a named theme entry (`{ name, label?, description?,
   tokens }`): every registry token with color swatches, plus author-defined
   `x-*` custom variables, previewed against any catalog kind.
@@ -224,13 +222,13 @@ persist via `widgentic-change` events.
 
 ### Testing without Claude
 
-- **MCP Inspector** (interactive UI): `npx @modelcontextprotocol/inspector npx tsx examples/mcp-server/main.ts`
+- **MCP Inspector** (interactive UI): `npx @modelcontextprotocol/inspector npx tsx apps/mcp-server/main.ts`
 - **Raw stdio**: pipe newline-delimited JSON-RPC (`initialize` → `notifications/initialized` → `tools/list` → `tools/call`) into `npm run mcp`.
 - **In-process**: the SDK interop suite (`src/mcp-server/__tests__/sdk-interop.test.ts`) runs client and server over an in-memory transport on every `npm test`.
 
 ## Status
 
-All nine capabilities are implemented and tested (`npm test` — unit, type, DOM, and MCP Apps interop suites; zero runtime dependencies). `render_widget` supports per-kind data schemas, formatting hints, themes, format selection, and MCP Apps inline mounting — visually verified in two production-grade Apps hosts (see [TESTING.md](examples/mcp-server/TESTING.md)). The server is live at `https://mcp.widgentic.dev/mcp` (Azure Container Apps, IaC in [infra/](infra/)). Development is spec-first via OpenSpec: see `openspec/specs/` for current behavior and `openspec/changes/archive/` for the full change history (14 changes). Earned backlog for the next cycle: capability-aware model-context slimming, native reactive mounting in the app template, hint-coherence diagnostics, bounded schema pattern checks, a `--wg-surface` token, and the widget designer UI on top of `widgentic/templates`.
+All nine capabilities are implemented and tested (`npm test` — unit, type, DOM, and MCP Apps interop suites; zero runtime dependencies). `render_widget` supports per-kind data schemas, formatting hints, themes, format selection, and MCP Apps inline mounting — visually verified in two production-grade Apps hosts (see [TESTING.md](apps/mcp-server/TESTING.md)). The server is live at `https://mcp.widgentic.dev/mcp` (Azure Container Apps, IaC in [infra/](infra/)). Development is spec-first via OpenSpec: see `openspec/specs/` for current behavior and `openspec/changes/archive/` for the full change history (14 changes). Earned backlog for the next cycle: capability-aware model-context slimming, native reactive mounting in the app template, hint-coherence diagnostics, bounded schema pattern checks, a `--wg-surface` token, and the widget designer UI on top of `widgentic/templates`.
 
 ## Reference material
 
