@@ -11,8 +11,28 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { createWidgenticServer } from "./server.js";
+import { customWidgets } from "./widgets/index.js";
+import {
+  ANONYMOUS_PRINCIPAL,
+  composeCatalog,
+  composeThemes,
+  createFileStore
+} from "widgentic/store";
+import type { Principal, WidgetStore } from "widgentic/store";
+import type { WidgetCatalog } from "widgentic/catalog";
+import type { ThemeRegistry } from "widgentic/theming";
 
 const PORT = Number(process.env.PORT ?? 3001);
+
+/**
+ * Optional per-principal store: with WIDGENTIC_STORE_DIR set, the key
+ * identifies a principal and the request is served that principal's
+ * catalog and themes. Unset, every caller shares the compiled-in set —
+ * exactly the behavior before per-principal catalogs existed.
+ */
+const STORE_DIR = process.env.WIDGENTIC_STORE_DIR;
+const store: WidgetStore | undefined =
+  STORE_DIR === undefined ? undefined : createFileStore(STORE_DIR);
 
 /**
  * Optional API-key guard: when WIDGENTIC_API_KEY is set (e.g. from an Azure
@@ -73,7 +93,41 @@ const httpServer = createHttpServer(async (req: IncomingMessage, res: ServerResp
     for await (const chunk of req) raw += chunk as string;
     const body = raw.length > 0 ? JSON.parse(raw) : undefined;
 
-    const server = createWidgenticServer();
+    // Resolve the principal BEFORE building the server, so the trust
+    // decision happens where the key is read. An unknown key degrades to
+    // the anonymous catalog rather than failing — and the key itself is
+    // never logged, only the outcome.
+    let principal: Principal = ANONYMOUS_PRINCIPAL;
+    if (store !== undefined) {
+      const resolved = await store.resolvePrincipal(requestKey(req) ?? "");
+      if (resolved === undefined) {
+        console.error(
+          "widgentic: presented key resolved to no principal; serving the anonymous catalog."
+        );
+      } else {
+        principal = resolved;
+      }
+    }
+    let composed: { catalog: WidgetCatalog; themes: ThemeRegistry } | undefined;
+    if (store !== undefined) {
+      // The widgets compiled into this image are the ANONYMOUS principal's
+      // set, so unauthenticated callers and the demo rig keep working.
+      const catalogResult = await composeCatalog(store, principal.id, {
+        ...(principal.id === ANONYMOUS_PRINCIPAL.id
+          ? { extraWidgets: customWidgets }
+          : {})
+      });
+      const themeResult = await composeThemes(store, principal.id);
+      for (const diagnostic of [
+        ...catalogResult.diagnostics,
+        ...themeResult.diagnostics
+      ]) {
+        console.error(`widgentic store [${principal.id}]: ${diagnostic}`);
+      }
+      composed = { catalog: catalogResult.value, themes: themeResult.value };
+    }
+
+    const server = createWidgenticServer(composed ?? {});
     // Stateless mode: no sessionIdGenerator (omitted — exactOptionalPropertyTypes
     // forbids an explicit undefined against the SDK's optional property).
     const transport = new StreamableHTTPServerTransport({

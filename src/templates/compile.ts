@@ -69,16 +69,44 @@ function resolvePath(path: string, scope: unknown, meta: unknown): unknown {
 }
 
 /**
+ * Interpretation budget. `each` multiplies template nodes by the length of
+ * AGENT-supplied data, so template size bounds nothing on its own — a
+ * stored template driven by a large payload could otherwise spend the
+ * process. Counting nodes (rather than watching a clock) keeps the bound
+ * exact and reproducible: the same template and data always truncate at
+ * the same place.
+ */
+export const DEFAULT_MAX_NODES = 50_000;
+
+interface Budget {
+  remaining: number;
+  truncated: boolean;
+}
+
+/**
  * Interpret a template node into zero or more render-tree nodes.
  * Lenient by design: validation is the strict layer, so unknown or
  * malformed forms render as nothing rather than throwing (defense in
  * depth for templates that bypassed validation).
  */
-function interpretNode(node: unknown, scope: unknown, meta: unknown): WidgetNode[] {
-  if (typeof node === "string") return [node];
+function interpretNode(
+  node: unknown,
+  scope: unknown,
+  meta: unknown,
+  budget: Budget
+): WidgetNode[] {
+  if (budget.remaining <= 0) {
+    budget.truncated = true;
+    return [];
+  }
+  if (typeof node === "string") {
+    budget.remaining--;
+    return [node];
+  }
   if (!isPlainObject(node)) return [];
 
   if (typeof node.bind === "string") {
+    budget.remaining--;
     return [formatValue(resolvePath(node.bind, scope, meta))];
   }
 
@@ -88,19 +116,28 @@ function interpretNode(node: unknown, scope: unknown, meta: unknown): WidgetNode
     if (items.length === 0) {
       return node.empty === undefined
         ? []
-        : interpretNode(node.empty, scope, meta);
+        : interpretNode(node.empty, scope, meta, budget);
     }
-    return items.flatMap((item) => interpretNode(node.template, item, meta));
+    const out: WidgetNode[] = [];
+    for (const item of items) {
+      if (budget.remaining <= 0) {
+        budget.truncated = true;
+        break;
+      }
+      out.push(...interpretNode(node.template, item, meta, budget));
+    }
+    return out;
   }
 
   if (typeof node.when === "string") {
     const branch = resolvePath(node.when, scope, meta)
       ? node.template
       : node.else;
-    return branch === undefined ? [] : interpretNode(branch, scope, meta);
+    return branch === undefined ? [] : interpretNode(branch, scope, meta, budget);
   }
 
   if (typeof node.tag === "string" && node.tag.length > 0) {
+    budget.remaining--;
     const attrs: WidgetNodeAttrs = {};
     if (isPlainObject(node.attrs)) {
       for (const [name, raw] of Object.entries(node.attrs)) {
@@ -126,7 +163,7 @@ function interpretNode(node: unknown, scope: unknown, meta: unknown): WidgetNode
       }
     }
     const children = Array.isArray(node.children)
-      ? node.children.flatMap((child) => interpretNode(child, scope, meta))
+      ? node.children.flatMap((child) => interpretNode(child, scope, meta, budget))
       : [];
     const element: WidgetElementNode = { tag: node.tag };
     if (Object.keys(attrs).length > 0) element.attrs = attrs;
@@ -137,19 +174,49 @@ function interpretNode(node: unknown, scope: unknown, meta: unknown): WidgetNode
   return [];
 }
 
+/** Count the nodes a template's STRUCTURE contains (not its output). */
+export function countTemplateNodes(template: unknown): number {
+  if (typeof template === "string") return 1;
+  if (!isPlainObject(template)) return 0;
+  if (typeof template.bind === "string") return 1;
+  let total = 1;
+  for (const key of ["template", "empty", "else"] as const) {
+    if (template[key] !== undefined) total += countTemplateNodes(template[key]);
+  }
+  if (Array.isArray(template.children)) {
+    for (const child of template.children) total += countTemplateNodes(child);
+  }
+  return total;
+}
+
+export interface CompileOptions {
+  /** Node budget for one render (default {@link DEFAULT_MAX_NODES}). */
+  maxNodes?: number;
+}
+
 /**
  * Compile a template into an ordinary widget renderer. The renderer is pure
  * and total; when the root interprets to anything other than exactly one
- * node, the output is wrapped in a `div.wg-template`.
+ * node, the output is wrapped in a `div.wg-template`. Renders are bounded
+ * by a node budget — an exhausted budget stops interpretation and marks
+ * the output with `data-truncated`, so the outcome is visible rather than
+ * silently short.
  */
-export function compileTemplate(template: WidgetTemplate): WidgetRenderer {
+export function compileTemplate(
+  template: WidgetTemplate,
+  options: CompileOptions = {}
+): WidgetRenderer {
+  const maxNodes = options.maxNodes ?? DEFAULT_MAX_NODES;
   return (payload: WidgetPayload): WidgetNode => {
-    const nodes = interpretNode(template, payload.data, payload.meta);
-    if (nodes.length === 1) {
+    const budget: Budget = { remaining: maxNodes, truncated: false };
+    const nodes = interpretNode(template, payload.data, payload.meta, budget);
+    if (!budget.truncated && nodes.length === 1) {
       const only = nodes[0];
       if (only !== undefined) return only;
     }
-    return { tag: "div", attrs: { class: "wg-template" }, children: nodes };
+    const attrs: WidgetNodeAttrs = { class: "wg-template" };
+    if (budget.truncated) attrs["data-truncated"] = "true";
+    return { tag: "div", attrs, children: nodes };
   };
 }
 
@@ -162,11 +229,12 @@ export function registerTemplate(
   catalog: WidgetCatalog,
   kind: string,
   template: unknown,
-  descriptor?: WidgetDescriptorInput
+  descriptor?: WidgetDescriptorInput,
+  options?: CompileOptions
 ): void {
   const validated = validateTemplate(template);
   if (!validated.ok) {
     throw new InvalidTemplateError(kind, validated.error);
   }
-  catalog.register(kind, compileTemplate(validated.template), descriptor);
+  catalog.register(kind, compileTemplate(validated.template, options), descriptor);
 }

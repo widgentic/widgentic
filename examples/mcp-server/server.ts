@@ -14,6 +14,7 @@ import {
 import { z } from "zod";
 import { buildAppTemplate } from "./app-template.js";
 import { createCatalog } from "widgentic/catalog";
+import type { WidgetCatalog } from "widgentic/catalog";
 import { registerTemplate } from "widgentic/templates";
 import { customWidgets } from "./widgets/index.js";
 import {
@@ -30,16 +31,40 @@ import {
   inlineRenderResultImages
 } from "widgentic/mcp-server";
 import { createThemeRegistry } from "widgentic/theming";
+import type { ThemeRegistry } from "widgentic/theming";
 
 const INLINE_IMAGES = !["0", "false"].includes(
   (process.env.WIDGENTIC_INLINE_IMAGES ?? "").toLowerCase()
 );
 
-export function createWidgenticServer(): McpServer {
+export interface WidgenticServerOptions {
+  /**
+   * The caller's composed catalog and themes. The transport edge reads the
+   * API key, resolves the principal, and composes — so the trust decision
+   * lives where the key is read, not inside the server. Omitted: the
+   * built-ins plus the compiled-in custom widgets, exactly as before.
+   */
+  catalog?: WidgetCatalog;
+  themes?: ThemeRegistry;
+}
+
+/** Built-ins + the widgets compiled into this image (the anonymous set). */
+export function createDefaultCatalog(): WidgetCatalog {
   const catalog = createCatalog();
+  // Custom template widgets (kind + template + descriptor as data), each
+  // surfacing in list_widgets and rendering through render_widget.
+  for (const widget of customWidgets) {
+    registerTemplate(catalog, widget.kind, widget.template, widget.descriptor);
+  }
+  return catalog;
+}
+
+export function createWidgenticServer(
+  options: WidgenticServerOptions = {}
+): McpServer {
+  const catalog = options.catalog ?? createDefaultCatalog();
   // Named themes: agents can pass `theme: "dark"` instead of a token map.
-  // A later change resolves this per user; today it is server-wide.
-  const themes = createThemeRegistry();
+  const themes = options.themes ?? createThemeRegistry();
   // Model-context slimming signal: session-negotiated UI capability wins in
   // either direction; the env assumption (WIDGENTIC_ASSUME_UI, read per
   // construction) covers un-negotiated instances — on stateless HTTP the
@@ -47,12 +72,6 @@ export function createWidgenticServer(): McpServer {
   let slim = ["1", "true"].includes(
     (process.env.WIDGENTIC_ASSUME_UI ?? "").toLowerCase()
   );
-
-  // Custom template widgets (kind + template + descriptor as data), each
-  // surfacing in list_widgets and rendering through render_widget.
-  for (const widget of customWidgets) {
-    registerTemplate(catalog, widget.kind, widget.template, widget.descriptor);
-  }
 
   const server = new McpServer({ name: "widgentic", version: "0.1.0" });
 

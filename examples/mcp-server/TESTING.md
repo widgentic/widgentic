@@ -104,6 +104,23 @@ surface as a `Hint notes:` tail + `structuredContent.diagnostics`.
 
 Rotate the key with `az containerapp secret set -n widgentic-mcp -g widgentic-rg --secrets widgentic-api-key=<new>` followed by a revision restart. DNS lives in Cloudflare: CNAME `mcp` → the app FQDN (DNS only / grey cloud — required for the Azure-managed certificate) plus the `asuid.mcp` TXT validation record.
 
+## Per-principal store (local)
+
+```bash
+# Seed two principals, then run the server against the store
+WIDGENTIC_STORE_DIR=/tmp/wg-store npm run mcp:http
+
+# Each key sees its own catalog
+curl -s -X POST "http://localhost:3001/mcp?key=<alice-key>" \
+  -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_widgets","arguments":{}}}'
+```
+
+An unknown key falls back to the anonymous catalog (built-ins + the
+compiled-in widgets); the server logs the unresolved-key event **without**
+the key. Widgets that fail validation are skipped with a stderr diagnostic
+naming the reason, so a hostile or corrupt entry never reaches a catalog.
+
 ## Host registration snippets
 
 **VS Code Copilot** (`.vscode/mcp.json`) — an MCP Apps host; widgets mount inline:

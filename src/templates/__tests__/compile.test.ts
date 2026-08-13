@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { compileTemplate } from "../index.js";
+import { compileTemplate, countTemplateNodes } from "../index.js";
 import type { WidgetTemplate } from "../index.js";
 import { renderToHtml } from "../../catalog/index.js";
 
@@ -111,5 +111,60 @@ describe("compileTemplate interpretation", () => {
       { tags: ["a", "b"] }
     );
     expect(html).toBe('<div class="wg-template"><li>a</li><li>b</li></div>');
+  });
+});
+
+describe("bounded interpretation", () => {
+  const runaway = {
+    tag: "ul",
+    children: [
+      { each: "rows", template: { tag: "li", children: [{ bind: "." }] } }
+    ]
+  };
+  const data = { rows: Array.from({ length: 100_000 }, (_, i) => i) };
+
+  it("stops a runaway each at the budget and marks the render truncated", () => {
+    const started = Date.now();
+    const node = compileTemplate(runaway, { maxNodes: 1000 })({
+      kind: "x",
+      data
+    }) as { attrs?: Record<string, string> };
+    expect(Date.now() - started).toBeLessThan(2000);
+    expect(node.attrs?.["data-truncated"]).toBe("true");
+    // Node count stays within the budget's order of magnitude.
+    const html = renderToHtml(node as never);
+    expect(html.match(/<li>/g)?.length ?? 0).toBeLessThanOrEqual(1000);
+  });
+
+  it("is deterministic: the same over-budget render twice is identical", () => {
+    const render = compileTemplate(runaway, { maxNodes: 500 });
+    const a = renderToHtml(render({ kind: "x", data }));
+    const b = renderToHtml(render({ kind: "x", data }));
+    expect(a).toBe(b);
+  });
+
+  it("leaves ordinary renders untouched and unmarked", () => {
+    const template = { tag: "p", children: [{ bind: "msg" }] };
+    const bounded = renderToHtml(
+      compileTemplate(template, { maxNodes: 50_000 })({ kind: "x", data: { msg: "hi" } })
+    );
+    const plain = renderToHtml(compileTemplate(template)({ kind: "x", data: { msg: "hi" } }));
+    expect(bounded).toBe(plain);
+    expect(bounded).not.toContain("data-truncated");
+  });
+
+  it("counts template structure for storage limits", () => {
+    expect(countTemplateNodes("text")).toBe(1);
+    expect(countTemplateNodes({ bind: "a" })).toBe(1);
+    // element + two children
+    expect(countTemplateNodes({ tag: "p", children: ["a", { bind: "b" }] })).toBe(3);
+    // each + its template subtree + empty branch
+    expect(
+      countTemplateNodes({
+        each: "rows",
+        template: { tag: "li", children: [{ bind: "x" }] },
+        empty: "none"
+      })
+    ).toBe(4);
   });
 });

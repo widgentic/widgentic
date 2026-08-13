@@ -16,7 +16,8 @@
     "./templates": "./src/templates/index.ts",
     "./theming": "./src/theming/index.ts",
     "./mcp-server": "./src/mcp-server/index.ts",
-    "./designer": "./src/designer/index.ts"
+    "./designer": "./src/designer/index.ts",
+    "./store": "./src/store/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

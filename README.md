@@ -23,6 +23,7 @@ All capabilities are specified under `openspec/specs/` and implemented with zero
 | `template-widgets` | `widgentic/templates` | Serializable JSON template DSL (`bind`/`each`/`when`) — the widget-designer runtime, safe for untrusted authors |
 | `widget-theming` | `widgentic/theming` | `--wg-*` token registry (colors, status, scale steps), author-defined `x-*` custom variables, named-theme registry with `extends`, generated base stylesheet, themes as validated JSON |
 | `mcp-server` | `widgentic/mcp-server` | The Widgentic MCP server: `list_widgets` (descriptor discovery) + `render_widget` (validate → render → HTML + payload), as SDK-free handlers plus a runnable stdio server |
+| `widget-store` | `widgentic/store` | Per-principal widgets and themes: a persistence-agnostic port (`resolvePrincipal`/`widgets`/`themes`), memory + file reference implementations, hashed constant-time keys, structural limits, and request-scoped `composeCatalog`/`composeThemes` |
 | `widget-designer` | `widgentic/designer` | Two embeddable designers (factories + opt-in custom elements, zero deps): the **widget** designer (template tree/JSON, full descriptor, styles, dataSchema, theme selection) and the standalone **theme** designer (tokens, custom variables, named entries) — both with live validated preview |
 
 ## Architecture
@@ -129,6 +130,30 @@ az acr build -r <registry> -t widgentic-mcp:vN .
 az deployment group create -g widgentic-rg -f infra/main.bicep \
   -p image=<registry>.azurecr.io/widgentic-mcp:vN -p apiKey=<current-key>
 ```
+
+### Serving per-principal catalogs
+
+Set `WIDGENTIC_STORE_DIR` and the API key stops being a shared password and
+starts identifying a principal: each request resolves the key, composes a
+**fresh** catalog and theme registry for that principal, and serves it.
+
+```
+<dir>/principals.json                     [{ id, scopes, keyDigest }]  # sha256 digests, never raw keys
+<dir>/<principalId>/widgets/<kind>.json   { kind, template, descriptor }
+<dir>/<principalId>/themes/<name>.json    { name, label?, tokens }
+```
+
+Guarantees worth knowing: entries are validated on write **and** on read (a
+store is editable out of band), an invalid entry is skipped with a
+diagnostic rather than failing the session, stored kinds may never shadow
+built-ins, per-principal limits bound how much one tenant can load, and an
+unknown key degrades to the anonymous catalog — the built-ins plus whatever
+the deployment compiles in — never to an error. With no store configured the
+server behaves exactly as before: one catalog for every caller.
+
+Registration is deliberately **not** an MCP tool: the key travels into
+third-party hosts and prompt-injectable contexts, so writes belong to an
+authenticated app session, not to a pasted credential.
 
 ### Register with Claude Code
 
