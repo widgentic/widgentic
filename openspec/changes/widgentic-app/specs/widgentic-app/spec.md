@@ -2,21 +2,26 @@
 
 ## ADDED Requirements
 
-### Requirement: Accounts through a single federated identity
-The app SHALL authenticate people through Entra External ID, with GitHub federated into it, so both email and GitHub sign-in arrive as one token type from one issuer. The app SHALL validate the token (issuer, audience, signature, expiry) on every authenticated request, SHALL map the token subject to a stable principal id on first sign-in, and SHALL never store or handle passwords. An unauthenticated request to any authoring route SHALL be refused, not silently downgraded.
+### Requirement: Accounts through two strictly validated sign-in methods
+The app SHALL authenticate people by email through Entra External ID (OIDC code flow; the app validates issuer, audience, signature, and expiry on the ID token) and by GitHub through the app's own OAuth code flow (state-bound, code exchanged server-side, identity read from GitHub's user API) — GitHub cannot federate into External ID, which supports only OIDC-compliant custom providers. Both methods SHALL produce the app's own sealed session and SHALL map to a stable principal id through the same subject derivation, with GitHub subjects namespaced (`github:<id>`) so the two identity sources can never collide. The app SHALL never store passwords or provider access tokens. An unauthenticated request to any authoring route SHALL be refused, not silently downgraded.
 
 #### Scenario: First sign-in provisions a principal
 - **WHEN** a person signs in for the first time by either method
-- **THEN** a principal SHALL be created with a stable id bound to the token subject
+- **THEN** a principal SHALL be created with a stable id bound to that method's subject
 - **AND** a subsequent sign-in by the same identity SHALL resolve to that same principal
 
 #### Scenario: Both methods reach the same account model
 - **WHEN** one person signs in with email and another with GitHub
-- **THEN** each SHALL receive a principal, and the app SHALL validate both sessions through the same issuer
+- **THEN** each SHALL receive a principal through the same subject→principal derivation and the same session mechanism
 
 #### Scenario: Invalid or expired sessions are refused
 - **WHEN** a request carries no token, a malformed token, or an expired one
 - **THEN** the response SHALL be `401` and no principal data SHALL be read or written
+
+#### Scenario: Provider credentials never persist
+- **WHEN** a GitHub sign-in completes
+- **THEN** the session cookie SHALL carry only the namespaced subject and label
+- **AND** the GitHub access token SHALL NOT appear in the session, the store, or any log
 
 ### Requirement: Multiple named API keys with individual revocation
 A principal SHALL be able to hold several named API keys. Creating a key SHALL return the raw key **exactly once**, in the creation response only, and SHALL persist nothing but its `sha256:` digest, name, creation time and scopes — the app SHALL be incapable of displaying an existing key again and SHALL say so at the point of creation. Each key SHALL be revocable individually without affecting the others; a revoked key SHALL resolve to no principal, which places its bearer on the anonymous catalog exactly as any unknown key does.

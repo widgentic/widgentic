@@ -25,14 +25,28 @@ import type { ThemeRegistry } from "widgentic/theming";
 const PORT = Number(process.env.PORT ?? 3001);
 
 /**
- * Optional per-principal store: with WIDGENTIC_STORE_DIR set, the key
- * identifies a principal and the request is served that principal's
- * catalog and themes. Unset, every caller shares the compiled-in set —
- * exactly the behavior before per-principal catalogs existed.
+ * Optional per-principal store, in configuration order:
+ *   - WIDGENTIC_COSMOS_ENDPOINT: the Cosmos adapter via managed identity
+ *     (read-only role — this server can never write, by RBAC and by the
+ *     narrow WidgetStore type it holds).
+ *   - WIDGENTIC_STORE_DIR: the file store (local rig).
+ *   - neither: every caller shares the compiled-in set — exactly the
+ *     behavior before per-principal catalogs existed.
  */
+const COSMOS_ENDPOINT = process.env.WIDGENTIC_COSMOS_ENDPOINT;
 const STORE_DIR = process.env.WIDGENTIC_STORE_DIR;
-const store: WidgetStore | undefined =
-  STORE_DIR === undefined ? undefined : createFileStore(STORE_DIR);
+let store: WidgetStore | undefined;
+if (COSMOS_ENDPOINT !== undefined) {
+  const { createCosmosStore } = await import("widgentic/store/cosmos");
+  const { DefaultAzureCredential } = await import("@azure/identity");
+  store = createCosmosStore({
+    endpoint: COSMOS_ENDPOINT,
+    credential: new DefaultAzureCredential()
+  });
+  console.error(`widgentic mcp: per-principal store on Cosmos at ${COSMOS_ENDPOINT}`);
+} else if (STORE_DIR !== undefined) {
+  store = createFileStore(STORE_DIR);
+}
 
 /**
  * Optional API-key guard: when WIDGENTIC_API_KEY is set (e.g. from an Azure
@@ -72,7 +86,12 @@ const httpServer = createHttpServer(async (req: IncomingMessage, res: ServerResp
     res.writeHead(404).end();
     return;
   }
-  if (API_KEY && requestKey(req) !== API_KEY) {
+  // The static key gate guards NO-STORE deployments (one shared secret).
+  // With a store configured, per-user keys are the access model: the
+  // store resolves them, and an unknown key serves the anonymous catalog
+  // (built-ins) rather than an error — per the widget-store spec. The
+  // static key stays valid there too, as the seeded bootstrap principal.
+  if (store === undefined && API_KEY && requestKey(req) !== API_KEY) {
     res.writeHead(401, { "Content-Type": "application/json" }).end(
       JSON.stringify({
         jsonrpc: "2.0",

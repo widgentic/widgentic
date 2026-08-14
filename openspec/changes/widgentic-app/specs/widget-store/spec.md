@@ -5,7 +5,7 @@
 ### Requirement: Store programmatic surface
 The package SHALL export from a `./store` entry: the `WidgetStore` port (`resolvePrincipal(apiKey: string): Promise<Principal | undefined>`, `widgets(principalId: string): Promise<StoredWidget[]>`, `themes(principalId: string): Promise<ThemeEntry[]>`), the `Principal` (`{ id, label?, scopes }`), `StoredWidget` (`{ kind, template, descriptor }`) and `StoreLimits` types, the reference implementations `createMemoryStore(seed?)` and `createFileStore(dir, limits?)`, the composition functions `composeCatalog(store, principalId, options?)` and `composeThemes(store, principalId, options?)`, and `ANONYMOUS_PRINCIPAL`. The entry SHALL depend only on other widgentic public entries and Node's standard library, and SHALL perform no network I/O.
 
-The entry SHALL additionally export a `WritableWidgetStore` port that extends `WidgetStore` with `putWidget(principalId, widget)`, `deleteWidget(principalId, kind)`, `putTheme(principalId, theme)`, `deleteTheme(principalId, name)`, `ensurePrincipal(subject, label?)`, `createKey(principalId, name)`, `listKeys(principalId)` and `revokeKey(principalId, keyId)`. Writability SHALL be a **separate type**, so a host holding a `WidgetStore` cannot write through it and a read-only deployment need not implement the write half. `createMemoryStore` SHALL satisfy `WritableWidgetStore` so the write contract is testable without a database. Adapters that reach a network service SHALL live behind their own entry (`./store/cosmos`), leaving `./store` itself free of network I/O.
+The entry SHALL additionally export a `WritableWidgetStore` port that extends `WidgetStore` with `putWidget(principalId, widget)`, `removeWidget(principalId, kind)`, `putTheme(principalId, theme)`, `removeTheme(principalId, name)`, `ensurePrincipal(subject, label?)`, `createKey(principalId, name)`, `listKeys(principalId)` and `revokeKey(principalId, keyId)`. Writability SHALL be a **separate type**, so a host holding a `WidgetStore` cannot write through it and a read-only deployment need not implement the write half. `createMemoryStore` SHALL satisfy `WritableWidgetStore` so the write contract is testable without a database. Adapters that reach a network service SHALL live behind their own entry (`./store/cosmos`), leaving `./store` itself free of network I/O.
 
 #### Scenario: Memory store round-trips entries
 - **WHEN** `createMemoryStore` is seeded with a principal owning one widget and one theme
@@ -19,7 +19,7 @@ The entry SHALL additionally export a `WritableWidgetStore` port that extends `W
 #### Scenario: Writes round-trip through the writable port
 - **WHEN** a widget is written with `putWidget` and a theme with `putTheme`
 - **THEN** `widgets` and `themes` for that principal SHALL include them
-- **AND** `deleteWidget` / `deleteTheme` SHALL remove them, leaving the principal's other entries intact
+- **AND** `removeWidget` / `removeTheme` SHALL remove them, leaving the principal's other entries intact
 
 #### Scenario: A read-only handle exposes no writes
 - **WHEN** a value typed as `WidgetStore` is used

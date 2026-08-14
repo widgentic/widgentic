@@ -8,7 +8,7 @@ It is also the only change in this arc that needs decisions outside the codebase
 
 ## What Changes
 
-- **Accounts**: sign-in via Entra External ID, with **GitHub federated** into it so both email and GitHub arrive as one token type the app validates once. No password code is written.
+- **Accounts**: email sign-in via Entra External ID (one-time passcode; strict OIDC validation in the app) and **GitHub via the app's own OAuth code flow** — External ID cannot federate GitHub (OIDC-only custom providers), so GitHub is first-party, sharing the same session and principal model with namespaced subjects. No password code is written; no provider tokens are stored.
 - **Multiple named API keys per user**: create, name, and individually revoke. The raw key is shown **once** at creation; only its `sha256:` digest is stored, so rotation is "make the new one, move your hosts, revoke the old" with no downtime.
 - **Cosmos-backed store**: a `CosmosWidgetStore` implementing change 2's port, shared by the app (writes) and the MCP server (reads) via managed identity and Cosmos RBAC — no connection strings in configuration.
 - **The write path**: session-authenticated HTTP endpoints for widgets, themes and keys. Deliberately **not** MCP tools (change 2, D5) — the pasted key stays read-only.

@@ -2,7 +2,7 @@
   "name": "widgentic",
   "version": "0.0.0",
   "private": true,
-  "description": "Widgets for agents \u2014 generic UI for MCP skills/plugins.",
+  "description": "Widgets for agents — generic UI for MCP skills/plugins.",
   "type": "module",
   "main": "./src/contract/index.ts",
   "types": "./src/contract/index.ts",
@@ -17,7 +17,16 @@
     "./theming": "./src/theming/index.ts",
     "./mcp-server": "./src/mcp-server/index.ts",
     "./designer": "./src/designer/index.ts",
-    "./store": "./src/store/index.ts"
+    "./store": "./src/store/index.ts",
+    "./store/cosmos": "./src/store/cosmos.ts"
+  },
+  "peerDependencies": {
+    "@azure/cosmos": "^4",
+    "@azure/identity": "^4"
+  },
+  "peerDependenciesMeta": {
+    "@azure/cosmos": { "optional": true },
+    "@azure/identity": { "optional": true }
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -27,9 +36,12 @@
     "test:watch": "vitest",
     "mcp": "tsx apps/mcp-server/main.ts",
     "mcp:http": "tsx apps/mcp-server/http.ts",
+    "web": "tsx apps/web/http.ts",
     "designer": "tsx examples/designer/serve.ts"
   },
   "devDependencies": {
+    "@azure/cosmos": "^4.10.0",
+    "@azure/identity": "^4.13.1",
     "@modelcontextprotocol/ext-apps": "1.7.5",
     "@modelcontextprotocol/sdk": "1.30.0",
     "@types/node": "26.1.2",

@@ -6,8 +6,10 @@
  * one principal's entries can never reach another's session.
  */
 export type {
+  CreatedKey,
   Principal,
   Scope,
+  StoredKey,
   StoredWidget,
   StoreLimits,
   WidgetStore,
@@ -16,6 +18,7 @@ export type {
 export {
   ANONYMOUS_PRINCIPAL,
   DEFAULT_LIMITS,
+  principalIdForSubject,
   StoreRejectionError
 } from "./types.js";
 export { hashKey, verifyKey, generateKey, findByKey, KEY_PREFIX } from "./keys.js";

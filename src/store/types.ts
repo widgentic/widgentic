@@ -5,6 +5,7 @@
  * here. The app supplies its own adapter; this package ships an in-memory
  * and a file-backed reference implementation.
  */
+import { createHash } from "node:crypto";
 import type { WidgetDescriptorInput } from "widgentic/catalog";
 import type { WidgetTemplate } from "widgentic/templates";
 import type { ThemeEntry } from "widgentic/theming";
@@ -64,12 +65,59 @@ export interface WidgetStore {
   themes(principalId: string): Promise<ThemeEntry[]>;
 }
 
+/**
+ * A key's stored record — everything the app may show again. The raw key
+ * is NOT here: it exists only in the `CreatedKey` returned by `createKey`,
+ * exactly once. `digestPreview` is the digest's first characters, enough
+ * for a user to tell keys apart, useless for authentication.
+ */
+export interface StoredKey {
+  id: string;
+  name: string;
+  /** ISO timestamp. */
+  createdAt: string;
+  /** Present once revoked; a revoked key resolves to no principal. */
+  revokedAt?: string;
+  scopes: Scope[];
+  digestPreview: string;
+}
+
+/** `createKey`'s result: the only moment the raw key exists outside a digest. */
+export interface CreatedKey {
+  /** The raw key. Shown once; the store keeps only its digest. */
+  key: string;
+  entry: StoredKey;
+}
+
 /** A store that also accepts writes (the app's path, not the MCP surface). */
 export interface WritableWidgetStore extends WidgetStore {
   putWidget(principalId: string, widget: StoredWidget): Promise<void>;
   putTheme(principalId: string, theme: ThemeEntry): Promise<void>;
   removeWidget(principalId: string, kind: string): Promise<void>;
   removeTheme(principalId: string, name: string): Promise<void>;
+  /**
+   * Map an external identity subject (e.g. an OIDC token's `sub`) to a
+   * stable principal, creating it on first sight. Repeat calls with the
+   * same subject return the same principal.
+   */
+  ensurePrincipal(subject: string, label?: string): Promise<Principal>;
+  /** Mint a named key. The raw key is returned here and never again. */
+  createKey(principalId: string, name: string): Promise<CreatedKey>;
+  /** The principal's keys — metadata only, never raw material. */
+  listKeys(principalId: string): Promise<StoredKey[]>;
+  /** Stamp one key revoked; the principal's other keys are untouched. */
+  revokeKey(principalId: string, keyId: string): Promise<void>;
+}
+
+/**
+ * Principal ids derive deterministically from the identity subject, so
+ * subject → principal is a point lookup in any store (no secondary index,
+ * no cross-partition query) and the raw subject never becomes an id.
+ */
+export function principalIdForSubject(subject: string): string {
+  // Local import would be circular; keys.ts already owns hashing, but this
+  // is identity derivation, not credential handling — plain sha256 here.
+  return `usr_${createHash("sha256").update(subject, "utf8").digest("hex").slice(0, 24)}`;
 }
 
 /** Refusal from a write, carrying which rule said no. */

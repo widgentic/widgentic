@@ -6,7 +6,9 @@
 |--|--|--|
 | `npm run mcp` | stdio | Claude Desktop, Claude Code, any stdio client |
 | `npm run mcp:http` | Streamable HTTP (stateless) on `:3001/mcp` | VS Code Copilot (HTTP), MCP Apps hosts, curl |
+| `npm run web` | HTTP on `:3002` | The authoring app locally (`WIDGENTIC_DEV_LOGIN=1` for subject-only sign-in; add `WIDGENTIC_COSMOS_ENDPOINT` to author against live data) |
 | *(hosted)* `https://mcp.widgentic.dev/mcp` | Streamable HTTP, API key required | Any HTTP host, no local setup |
+| *(hosted)* `https://widgentic.dev` | HTTPS | Accounts, API keys, both designers against production Cosmos |
 
 Quick checks without any host:
 
@@ -77,11 +79,17 @@ machine.
 `https://mcp.widgentic.dev/mcp` — the same HTTP server (`apps/mcp-server/http.ts`)
 containerized and deployed via [infra/main.bicep](../../infra/main.bicep) to app
 `widgentic-mcp` in resource group `widgentic-rg`. Scale-to-zero: the first
-request after idle takes a few seconds. `/mcp` requires the API key
-(distributed out-of-band; stored as the ACA secret `widgentic-api-key`),
-presented either as an `x-api-key` header or as a `?key=` query parameter —
-the latter exists for claude.ai / Claude Desktop remote connectors, whose
-settings accept only a URL. `/healthz` is open for probes.
+request after idle takes a few seconds. Since v11 the deployment runs in
+**per-principal mode** (`WIDGENTIC_COSMOS_ENDPOINT` set by Bicep's
+`mcpCosmosEnabled=true`): the presented key — `x-api-key` header or `?key=`
+query parameter (for claude.ai / Claude Desktop remote connectors, whose
+settings accept only a URL) — resolves against Cosmos by digest point read,
+and the request is served that principal's composed catalog. An unknown or
+revoked key degrades to the anonymous catalog (built-ins + the compiled-in
+widgets), never an error; the pre-portal production key is seeded as the
+`bootstrap:production` principal owning stored copies of `invoice` and
+`x-post`, so its catalog is unchanged from v10. The MCP identity holds the
+Cosmos **read-only** role. `/healthz` is open for probes.
 
 Smoke test:
 
@@ -102,7 +110,65 @@ HTML text block (Apps hosts mount the visual from `structuredContent`
 regardless; explicit `format` values are never slimmed). Misaimed hints
 surface as a `Hint notes:` tail + `structuredContent.diagnostics`.
 
-Rotate the key with `az containerapp secret set -n widgentic-mcp -g widgentic-rg --secrets widgentic-api-key=<new>` followed by a revision restart. DNS lives in Cloudflare: CNAME `mcp` → the app FQDN (DNS only / grey cloud — required for the Azure-managed certificate) plus the `asuid.mcp` TXT validation record.
+Key rotation is now self-service: create a new named key in the app, move
+your hosts, revoke the old one (no downtime window). The legacy
+`WIDGENTIC_API_KEY` secret still gates NO-store deployments only; in
+per-principal mode the store decides. DNS lives in Cloudflare: CNAME `mcp` →
+the app FQDN (DNS only / grey cloud — required for the Azure-managed
+certificate) plus the `asuid.mcp` TXT validation record.
+
+**Redeploy contract (learned at v11):** the Bicep template owns the apps'
+ingress. ALWAYS pass the live custom-domain bindings (`mcpCustomDomains` /
+`webCustomDomains` with the managed-cert resource id) on every
+`az deployment group create`, or the deploy silently unbinds the domain
+(observed: TLS reset on mcp.widgentic.dev until rebound with
+`az containerapp hostname add` + `hostname bind`).
+
+## The widgentic.dev app (production)
+
+`widgentic-web` in the same environment serves the authoring app
+(`apps/web/http.ts`, port 3002): sign-in, named API keys (shown once,
+revocable), both designers wired to persistence. Its identity holds Cosmos
+**Data Contributor**; the session cookie secret is the ACA secret
+`widgentic-session-secret`. Email sign-in requires the Entra External ID tenant
+(`WIDGENTIC_AUTH_ISSUER` / `WIDGENTIC_AUTH_CLIENT_ID` Bicep params);
+GitHub sign-in is the app's own OAuth flow (`githubClientId` /
+`githubClientSecret` params — External ID cannot federate GitHub; the
+OAuth app's callback is `https://widgentic.dev/auth/github/callback`).
+Until those are set the app serves but refuses sign-in.
+
+Entra config lessons (learned live at v13):
+- **Issuer**: external-tenant tokens carry the TENANT-ID host in `iss`
+  (`https://<tenant-id>.ciamlogin.com/<tenant-id>/v2.0`), not the
+  `<subdomain>.ciamlogin.com` form. Read it from the tenant's discovery
+  document and configure that exact value — validation is exact-match.
+- **Public client + PKCE**: redirect URIs must be registered under the
+  **Mobile and desktop applications** platform. Under the Web platform,
+  code redemption demands a secret (`AADSTS7000218`) even with "Allow
+  public client flows" enabled — the platform of the redirect URI wins. Local dev:
+`WIDGENTIC_DEV_LOGIN=1 npm run web` (honored only when no issuer is
+configured) gives a subject-only sign-in against an in-memory store — add
+`WIDGENTIC_COSMOS_ENDPOINT` to author against live Cosmos with your `az`
+credential.
+
+Apex + `www` DNS (Cloudflare, live since 2026-08-14; all grey cloud):
+
+```
+A     widgentic.dev        20.12.149.224  (env static IP)
+TXT   asuid.widgentic.dev  <domainVerificationId>
+CNAME www                  widgentic-web.wittysand-0949e6e9.centralus.azurecontainerapps.io
+TXT   asuid.www            <domainVerificationId>
+```
+
+Binding lesson (learned live): for the **apex**, bind with
+`--validation-method HTTP` — a TXT-validated managed cert for an apex sat
+`Pending` for over an hour and never completed; deleted and re-issued with
+HTTP it succeeded in minutes (the environment answers the challenge through
+the A record, so `hostname add` must come first). Subdomains (`www`, `mcp`)
+validate fine via CNAME. After any binding change, pass the live bindings
+as `mcpCustomDomains`/`webCustomDomains` on every deploy (see the redeploy
+contract above). `docs.widgentic.dev` stays unclaimed for the static site
+change.
 
 ## Per-principal store (local)
 

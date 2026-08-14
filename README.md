@@ -118,9 +118,9 @@ The API key is accepted two ways: an `x-api-key` header (hosts with header
 support, e.g. VS Code Copilot), or a `?key=` query parameter
 (`https://mcp.widgentic.dev/mcp?key=…`) for hosts whose connector settings
 cannot send custom headers — claude.ai and Claude Desktop remote connectors.
-`widgentic.dev` itself is reserved for the future registration/designer app,
-which will own per-user key issuance; for now the single API key is
-distributed out-of-band. The deployment is fully described by [infra/main.bicep](infra/main.bicep)
+Keys are personal: sign up at [widgentic.dev](https://widgentic.dev), create
+named keys (shown once, individually revocable), and each key serves **your**
+catalog — the widgets and themes you design there. The deployment is fully described by [infra/main.bicep](infra/main.bicep)
 (Log Analytics, private ACR pulled via a pre-granted user-assigned identity,
 managed environment, scale-to-zero app with the key as a Container Apps
 secret). To ship a new version:
@@ -154,6 +154,32 @@ server behaves exactly as before: one catalog for every caller.
 Registration is deliberately **not** an MCP tool: the key travels into
 third-party hosts and prompt-injectable contexts, so writes belong to an
 authenticated app session, not to a pasted credential.
+
+In production the store is **Cosmos DB serverless** via the
+`widgentic/store/cosmos` adapter (`@azure/cosmos` + `@azure/identity` are
+optional peer dependencies — only hosts importing that entry install
+them). Two containers: `data` partitioned by `/principalId` (a user's
+whole catalog is one single-partition query) and `keys` partitioned by
+`/digest` (key resolution is a 1-RU point read). Access is managed
+identity under Cosmos RBAC — account keys are disabled at the account
+(`disableLocalAuth`) — and the MCP server's identity holds the
+**read-only** role, so the read path cannot write even if compromised.
+Set `WIDGENTIC_COSMOS_ENDPOINT` to activate it; `WIDGENTIC_STORE_DIR`
+still selects the file store for local rigs.
+
+### The widgentic.dev app
+
+`apps/web/` is the authoring surface (`npm run web`, port 3002): sign in,
+create named API keys (shown once, individually revocable), and design
+widgets and themes with the embedded designers — saving writes through
+the session-authenticated API into your store, so the entry is in **your**
+MCP catalog on the next tool call. Sign-in is email via Entra
+External ID (OIDC + PKCE, validated with node `crypto`) and GitHub via
+the app's own OAuth code flow (External ID cannot federate GitHub) —
+both land on the same principal model with namespaced subjects, no new
+runtime dependency; sessions are the app's own HMAC-sealed cookie.
+API keys never authorize writes: presenting one to the authoring API is a
+`401` by design.
 
 ### Register with Claude Code
 
@@ -228,7 +254,7 @@ persist via `widgentic-change` events.
 
 ## Status
 
-All nine capabilities are implemented and tested (`npm test` — unit, type, DOM, and MCP Apps interop suites; zero runtime dependencies). `render_widget` supports per-kind data schemas, formatting hints, themes, format selection, and MCP Apps inline mounting — visually verified in two production-grade Apps hosts (see [TESTING.md](apps/mcp-server/TESTING.md)). The server is live at `https://mcp.widgentic.dev/mcp` (Azure Container Apps, IaC in [infra/](infra/)). Development is spec-first via OpenSpec: see `openspec/specs/` for current behavior and `openspec/changes/archive/` for the full change history (14 changes). Earned backlog for the next cycle: capability-aware model-context slimming, native reactive mounting in the app template, hint-coherence diagnostics, bounded schema pattern checks, a `--wg-surface` token, and the widget designer UI on top of `widgentic/templates`.
+All eleven capabilities are implemented and tested (`npm test` — 480+ unit, type, DOM, and MCP Apps interop tests; zero runtime dependencies — the Cosmos adapter's Azure SDKs are optional peers installed only by hosts importing `widgentic/store/cosmos`). Live in production: the MCP server at `https://mcp.widgentic.dev/mcp` serving **per-principal catalogs** from Cosmos DB (keys resolve by digest point read; unknown keys degrade to the anonymous catalog), and the authoring app at [widgentic.dev](https://widgentic.dev) — sign in with email (Entra External ID) or GitHub, create revocable API keys, and design widgets/themes that appear in your own catalog on the next tool call. IaC in [infra/](infra/); both container apps scale to zero. Development is spec-first via OpenSpec: see `openspec/specs/` for current behavior and `openspec/changes/archive/` for the full change history. Backlog for the next cycles: the static docs site at `docs.widgentic.dev`, account linking across sign-in methods, `ontoolinputpartial` streaming previews, and the pre-production hardening pass (per-deployment `resourceDomains`, DNS-rebinding pinning for the image inliner, MI-federated app credential, GitHub secret rotation).
 
 ## Reference material
 
