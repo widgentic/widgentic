@@ -121,6 +121,7 @@ export const baseStylesheet = `
 }
 .wg-img-hero {
   display: block;
+  width: 100%;
   max-width: 100%;
   height: auto;
   border-radius: ${v("radius")};

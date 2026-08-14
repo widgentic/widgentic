@@ -1,19 +1,15 @@
+// @vitest-environment node
+/**
+ * SDK interoperability over the in-memory transport — against the REAL
+ * library assembly (`createWidgenticServer`), per the runnable-server
+ * requirement. One assembly serves every transport; these tests are the
+ * in-memory one.
+ */
 import { describe, it, expect } from "vitest";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { z } from "zod";
-import { createCatalog } from "../../catalog/index.js";
 import { extractWidgetPayload } from "../../mcp/index.js";
-import {
-  LIST_WIDGETS_TOOL,
-  RENDER_WIDGET_TOOL,
-  LIST_THEME_TOKENS_TOOL,
-  handleListWidgets,
-  handleRenderWidget,
-  handleListThemeTokens
-} from "../index.js";
+import { createWidgenticServer } from "../server.js";
 
 interface DeliveredResult {
   isError?: boolean;
@@ -25,62 +21,31 @@ function textOf(result: DeliveredResult): string {
 }
 
 async function connect() {
-  const catalog = createCatalog();
-  const server = new McpServer({ name: "widgentic-test", version: "0.0.0" });
-  server.registerTool(
-    LIST_WIDGETS_TOOL.name,
-    { description: LIST_WIDGETS_TOOL.description },
-    () => handleListWidgets(catalog) as CallToolResult
-  );
-  server.registerTool(
-    LIST_THEME_TOKENS_TOOL.name,
-    { description: LIST_THEME_TOKENS_TOOL.description },
-    () => handleListThemeTokens() as CallToolResult
-  );
-  server.registerTool(
-    RENDER_WIDGET_TOOL.name,
-    {
-      description: RENDER_WIDGET_TOOL.description,
-      inputSchema: {
-        widget: z.string(),
-        data: z.union([
-          z.array(z.unknown()),
-          z.record(z.string(), z.unknown()),
-          z.string(),
-          z.number(),
-          z.boolean(),
-          z.null()
-        ]),
-        hints: z.record(z.string(), z.unknown()).optional(),
-        meta: z.record(z.string(), z.unknown()).optional(),
-        format: z.enum(["both", "html", "widget", "page", "app"]).optional(),
-        theme: z.record(z.string(), z.string()).optional()
-      }
-    },
-    (args) => handleRenderWidget(catalog, args) as CallToolResult
-  );
-
+  const server = createWidgenticServer();
   const client = new Client({ name: "widgentic-test-client", version: "0.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await Promise.all([
     server.connect(serverTransport),
     client.connect(clientTransport)
   ]);
-  return { client, catalog };
+  return { client };
 }
 
-describe("SDK interoperability (in-memory transport)", () => {
+describe("SDK interoperability (in-memory transport, library assembly)", () => {
   it("list_widgets round-trips the descriptor list", async () => {
-    const { client, catalog } = await connect();
+    const { client } = await connect();
     const result = (await client.callTool({
       name: "list_widgets",
       arguments: {}
     })) as DeliveredResult;
     expect(result.isError).toBeFalsy();
     const descriptors = JSON.parse(textOf(result)) as { kind: string }[];
-    expect(descriptors.map((d) => d.kind).sort()).toEqual(
-      [...catalog.kinds()].sort()
-    );
+    expect(descriptors.map((d) => d.kind).sort()).toEqual([
+      "card",
+      "custom",
+      "table",
+      "tree"
+    ]);
   });
 
   it("render_widget round-trips HTML and an extractable payload", async () => {
@@ -95,7 +60,7 @@ describe("SDK interoperability (in-memory transport)", () => {
     const extraction = extractWidgetPayload(result);
     expect(extraction).toMatchObject({ found: true, ok: true });
     if (extraction.found && extraction.ok) {
-      expect(extraction.payload).toEqual({
+      expect(extraction.payload).toMatchObject({
         kind: "card",
         data: { title: "T" }
       });
@@ -192,11 +157,25 @@ describe("SDK interoperability (in-memory transport)", () => {
     });
   });
 
-  it("tools are discoverable through the protocol", async () => {
+  it("tools are discoverable through the protocol — the assembly's real shape", async () => {
     const { client } = await connect();
     const tools = await client.listTools();
     const names = tools.tools.map((tool) => tool.name).sort();
-    expect(names).toEqual(["list_theme_tokens", "list_widgets", "render_widget"]);
+    expect(names).toEqual([
+      "list_theme_tokens",
+      "list_themes",
+      "list_widgets",
+      "render_widget"
+    ]);
+  });
+
+  it("render_widget declares its app template in tools/list", async () => {
+    const { client } = await connect();
+    const tools = await client.listTools();
+    const render = tools.tools.find((tool) => tool.name === "render_widget") as
+      | { _meta?: { ui?: { resourceUri?: string } } }
+      | undefined;
+    expect(render?._meta?.ui?.resourceUri).toBe("ui://widgentic/app.html");
   });
 
   it("theme vocabulary round-trips through the protocol", async () => {
@@ -209,5 +188,16 @@ describe("SDK interoperability (in-memory transport)", () => {
     const listing = JSON.parse(textOf(result));
     expect(listing.presets.dark.bg).toBeDefined();
     expect(listing.tokens.length).toBeGreaterThanOrEqual(10);
+  });
+
+  it("list_themes round-trips the named registry", async () => {
+    const { client } = await connect();
+    const result = (await client.callTool({
+      name: "list_themes",
+      arguments: {}
+    })) as DeliveredResult;
+    expect(result.isError).toBeFalsy();
+    const listing = JSON.parse(textOf(result)) as { themes: { name: string }[] };
+    expect(listing.themes.map((t) => t.name).sort()).toEqual(["dark", "light"]);
   });
 });

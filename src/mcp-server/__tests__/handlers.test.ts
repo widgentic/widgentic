@@ -431,6 +431,21 @@ describe("handleRenderWidget", () => {
     }
   });
 
+  it("page-format text stays free of Hint notes while diagnostics still report", () => {
+    const result = handleRenderWidget(catalog, {
+      widget: "table",
+      data: [{ a: 1 }],
+      hints: { colums: ["a"] }, // deliberate typo
+      format: "page"
+    });
+    expect(result.isError).toBeFalsy();
+    const doc = result.content.find((b) => b.type === "text")?.text ?? "";
+    // The page is a standalone document; agent-facing notes do not belong in it.
+    expect(doc).not.toContain("Hint notes:");
+    const sc = result.structuredContent as { diagnostics?: unknown[] };
+    expect(sc.diagnostics?.length).toBeGreaterThan(0);
+  });
+
   it("misaimed hints produce Hint notes and diagnostics without failing", () => {
     const result = handleRenderWidget(catalog, {
       widget: "table",

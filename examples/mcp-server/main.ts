@@ -30,5 +30,5 @@ for (const widget of customWidgets) {
 const server = createWidgenticServer({ catalog });
 await server.connect(new StdioServerTransport());
 console.error(
-  "widgentic MCP server ready on stdio (tools: list_widgets, list_theme_tokens, render_widget)"
+  "widgentic MCP server ready on stdio (tools: list_widgets, list_themes, list_theme_tokens, render_widget)"
 );

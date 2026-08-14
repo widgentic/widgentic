@@ -158,6 +158,63 @@ describe("app template native mounting", () => {
     }
   });
 
+  it("honors host context from initialize and host-context-changed", async () => {
+    const { sent, dispatch, root } = bootTemplate();
+    // Answer the bridge's ui/initialize with a host context.
+    const init = sent.find((m) => m.method === "ui/initialize") as
+      | { id?: number }
+      | undefined;
+    expect(init?.id).toBeDefined();
+    dispatch({
+      jsonrpc: "2.0",
+      id: init?.id,
+      result: {
+        hostContext: {
+          theme: "dark",
+          styles: { variables: { "--color-background-primary": "#101318" } },
+          safeAreaInsets: { top: 1, right: 2, bottom: 3, left: 4 }
+        }
+      }
+    });
+    // The response resolves a promise; applyHostContext runs a microtask later.
+    await Promise.resolve();
+    expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+    expect(document.documentElement.style.colorScheme).toBe("dark");
+    expect(
+      document.documentElement.style.getPropertyValue("--color-background-primary")
+    ).toBe("#101318");
+    expect(document.body.style.padding).toBe("1px 2px 3px 4px");
+
+    // Live re-theme: the host flips to light mid-session.
+    dispatch({
+      jsonrpc: "2.0",
+      method: "ui/notifications/host-context-changed",
+      params: {
+        theme: "light",
+        styles: { variables: { "--color-background-primary": "#ffffff" } }
+      }
+    });
+    expect(document.documentElement.getAttribute("data-theme")).toBe("light");
+    expect(
+      document.documentElement.style.getPropertyValue("--color-background-primary")
+    ).toBe("#ffffff");
+
+    // An explicit widgentic theme lands in the dynamic style element,
+    // which sits after the host token bridge — so it overrides host vars.
+    const tree = treeOf({ kind: "card", data: { a: 1 } });
+    dispatch(toolResult({ tree, css: ":root { --wg-bg: #123456; }" }));
+    expect(document.getElementById("wg-dynamic-css")?.textContent).toContain(
+      "--wg-bg: #123456"
+    );
+    expect(root().firstChild).not.toBeNull();
+  });
+
+  it("references no external origins anywhere in the template", () => {
+    // The Apps sandbox forbids external fetches; the template must be
+    // self-contained (host CSS custom properties only, literal fallbacks).
+    expect(buildAppTemplate()).not.toMatch(/https?:\/\//);
+  });
+
   it("remounts cleanly after a tool-input placeholder", () => {
     const { dispatch, root } = bootTemplate();
     const tree = treeOf({ kind: "card", data: { a: 1 } });

@@ -98,6 +98,8 @@ describe("baseStylesheet", () => {
   it("sizes image shapes from the registry tokens", () => {
     expect(baseStylesheet).toMatch(/\.wg-img-avatar[^}]*var\(--wg-avatar-size,/);
     expect(baseStylesheet).toMatch(/\.wg-img-thumb[^}]*var\(--wg-thumb-size,/);
+    // Heroes SPAN the available width (spec), not merely cap at it.
+    expect(baseStylesheet).toMatch(/\.wg-img-hero[^}]*width: 100%/);
     expect(baseStylesheet).toMatch(/\.wg-img-hero[^}]*max-width: 100%/);
   });
 

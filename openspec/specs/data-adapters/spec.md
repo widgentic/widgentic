@@ -16,7 +16,7 @@ The system SHALL accept either a JSON string or an already-parsed JS value and p
 
 #### Scenario: Invalid JSON is reported
 - **WHEN** the JSON adapter receives an unparseable string
-- **THEN** it SHALL return a structured error including the parse position
+- **THEN** it SHALL return a structured error, including the parse position when the engine's message reports one (position extraction is best-effort; the error itself is unconditional)
 
 ### Requirement: CSV adapter
 The system SHALL accept CSV text and produce an array of records suitable for the `table` widget.
@@ -111,4 +111,3 @@ The package SHALL export an `AdapterError` type with fields `code: "INVALID_JSON
 - **WHEN** any adapter fails
 - **THEN** `error.code` SHALL be one of the documented codes
 - **AND** `error.message` SHALL be a non-empty human-readable string
-

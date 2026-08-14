@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { EXTENSION_ID, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
@@ -92,6 +92,31 @@ describe("library assembly defaults", () => {
       const source = readFileSync(`src/mcp-server/${file}`, "utf8");
       expect(source, file).not.toMatch(/from "@modelcontextprotocol/);
       expect(source, file).not.toMatch(/from "zod"/);
+    }
+  });
+});
+
+describe("image inlining env knob", () => {
+  it("WIDGENTIC_INLINE_IMAGES=0 disables inlining without touching the network", async () => {
+    process.env.WIDGENTIC_INLINE_IMAGES = "0";
+    try {
+      const fetchSpy = vi.spyOn(globalThis, "fetch");
+      const { client } = await session({
+        extensions: { [EXTENSION_ID]: { mimeTypes: [RESOURCE_MIME_TYPE] } }
+      });
+      const result = (await client.callTool({
+        name: "render_widget",
+        arguments: {
+          widget: "card",
+          data: { photo: "https://cdn.example/pic.jpg" }
+        }
+      })) as DeliveredResult & { structuredContent?: { html?: string } };
+      expect(result.structuredContent?.html).toContain("https://cdn.example/pic.jpg");
+      expect(result.structuredContent?.html).not.toContain("data:image");
+      expect(fetchSpy).not.toHaveBeenCalled();
+      fetchSpy.mockRestore();
+    } finally {
+      delete process.env.WIDGENTIC_INLINE_IMAGES;
     }
   });
 });

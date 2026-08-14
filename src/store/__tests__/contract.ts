@@ -41,10 +41,14 @@ export function describeStoreContract(
       await store.putTheme(p.id, { name: "brand", tokens: { accent: "#123456" } });
       expect((await store.widgets(p.id)).map((w) => w.kind)).toContain("report");
       expect((await store.themes(p.id)).map((t) => t.name)).toContain("brand");
+      // Removal is scoped to the named entry: siblings stay.
+      await store.putWidget(p.id, widget("sibling"));
       await store.removeWidget(p.id, "report");
       await store.removeTheme(p.id, "brand");
-      expect(await store.widgets(p.id)).toEqual([]);
+      expect((await store.widgets(p.id)).map((w) => w.kind)).toEqual(["sibling"]);
       expect(await store.themes(p.id)).toEqual([]);
+      await store.removeWidget(p.id, "sibling");
+      expect(await store.widgets(p.id)).toEqual([]);
     });
 
     it("ensurePrincipal is idempotent per subject", async () => {
@@ -61,21 +65,27 @@ export function describeStoreContract(
       const p = await store.ensurePrincipal("contract:keys");
       const a = await store.createKey(p.id, "laptop");
       const b = await store.createKey(p.id, "ci");
+      const c = await store.createKey(p.id, "phone");
       expect(a.key).toMatch(/^wgk_/);
       expect((await store.resolvePrincipal(a.key))?.id).toBe(p.id);
       expect((await store.resolvePrincipal(b.key))?.id).toBe(p.id);
+      expect((await store.resolvePrincipal(c.key))?.id).toBe(p.id);
 
       const listed = await store.listKeys(p.id);
-      expect(listed.map((k) => k.name).sort()).toEqual(["ci", "laptop"]);
+      expect(listed.map((k) => k.name).sort()).toEqual(["ci", "laptop", "phone"]);
       expect(JSON.stringify(listed)).not.toContain(a.key);
       expect(JSON.stringify(listed)).not.toContain(b.key);
+      expect(JSON.stringify(listed)).not.toContain(c.key);
 
+      // Revocation scoped to ONE of three keys (the spec's scenario shape).
       await store.revokeKey(p.id, a.entry.id);
       expect(await store.resolvePrincipal(a.key)).toBeUndefined();
       expect((await store.resolvePrincipal(b.key))?.id).toBe(p.id);
+      expect((await store.resolvePrincipal(c.key))?.id).toBe(p.id);
       const after = await store.listKeys(p.id);
       expect(after.find((k) => k.id === a.entry.id)?.revokedAt).toBeTruthy();
       expect(after.find((k) => k.id === b.entry.id)?.revokedAt).toBeUndefined();
+      expect(after.find((k) => k.id === c.entry.id)?.revokedAt).toBeUndefined();
     });
 
     it("unknown and malformed keys resolve to undefined", async () => {

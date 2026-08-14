@@ -17,6 +17,13 @@ describe("validateTheme", () => {
     expect(validateTheme(darkTheme)).toEqual({ ok: true, theme: darkTheme });
   });
 
+  it("dark preset lifts surface off the page background", () => {
+    // Normative: darkTheme sets `surface` distinct from its `bg`, so
+    // cards read as elevated in dark mode.
+    expect(darkTheme.surface).toBeDefined();
+    expect(darkTheme.surface).not.toBe(darkTheme.bg);
+  });
+
   it("rejects non-object input", () => {
     for (const bad of [null, 42, "dark", ["bg"]]) {
       const result = validateTheme(bad);

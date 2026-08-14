@@ -17,6 +17,7 @@ const BUILTIN_KINDS: ReadonlySet<string> = new Set(createCatalog().kinds());
 export interface EntryProblem {
   code:
     | "INVALID_SHAPE"
+    | "INVALID_IDENTIFIER"
     | "RESERVED_KIND"
     | "INVALID_TEMPLATE"
     | "INVALID_THEME"
@@ -24,6 +25,14 @@ export interface EntryProblem {
     | "TOO_MANY_NODES";
   message: string;
 }
+
+/**
+ * One identifier charset for every adapter: the file store's path guard.
+ * Backends encode identifiers differently (the Cosmos adapter embeds them
+ * in document ids, where `/ \ # ?` are illegal); enforcing the rule at the
+ * port means memory, file, and Cosmos accept and reject identically.
+ */
+const SAFE_IDENTIFIER = /^[a-zA-Z0-9._-]+$/;
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -48,6 +57,12 @@ export function checkStoredWidget(
   const kind = entry.kind;
   if (typeof kind !== "string" || kind.trim() === "") {
     return { code: "INVALID_SHAPE", message: "'kind' must be a non-empty string." };
+  }
+  if (!SAFE_IDENTIFIER.test(kind)) {
+    return {
+      code: "INVALID_IDENTIFIER",
+      message: `'${kind}' is not a valid kind: use letters, digits, '.', '_' or '-'.`
+    };
   }
   // Shadowing a built-in would let a stored template capture renders the
   // agent believes are going to the built-in kind.
@@ -97,6 +112,12 @@ export function checkStoredTheme(
   }
   if (typeof entry.name !== "string" || entry.name.trim() === "") {
     return { code: "INVALID_SHAPE", message: "'name' must be a non-empty string." };
+  }
+  if (!SAFE_IDENTIFIER.test(entry.name)) {
+    return {
+      code: "INVALID_IDENTIFIER",
+      message: `'${entry.name}' is not a valid theme name: use letters, digits, '.', '_' or '-'.`
+    };
   }
   const theme = validateTheme(entry.tokens ?? {});
   if (!theme.ok) {

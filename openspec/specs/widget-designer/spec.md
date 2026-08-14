@@ -45,7 +45,7 @@ The designer SHALL edit a draft in the server's `CustomWidget` shape — `kind`,
 - **THEN** the entry SHALL be flagged as one the renderer would skip
 
 ### Requirement: Live preview through the real pipeline
-The designer SHALL preview the draft continuously through widgentic's own pipeline: the draft template registered via `registerTemplate` into a scratch catalog (built-ins always present), rendered with `mountWidget` against `dataExample` or user-supplied sample data, under the currently selected theme — updates patching the existing DOM in place. When the draft is invalid, the preview SHALL freeze the last good render and show the structured error in a banner; it SHALL never show a blank or stale-placeholder state.
+The designer SHALL preview the draft continuously through widgentic's own pipeline: the draft template compiled by the public template compiler and registered into a scratch catalog (built-ins always present; registration via `catalog.register` with a compile delegate, so one mounted preview survives every recompile), rendered with `mountWidget` against `dataExample` or user-supplied sample data, under the currently selected theme — updates patching the existing DOM in place. When the draft is invalid, the preview SHALL freeze the last good render and show the structured error in a banner; it SHALL never show a blank or stale-placeholder state.
 
 #### Scenario: Valid edits patch the preview in place
 - **WHEN** a text node's content changes in a valid draft

@@ -34,7 +34,10 @@ describe("parseJson", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe("INVALID_JSON");
-      // position is best-effort; if present it must be a finite number
+      // Per spec: the structured error is unconditional; the position is
+      // included only when the engine's message reports one (V8 formats
+      // vary across Node versions), and must then be a finite number.
+      expect(result.error.message.length).toBeGreaterThan(0);
       if (result.error.position !== undefined) {
         expect(Number.isFinite(result.error.position)).toBe(true);
       }

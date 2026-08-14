@@ -39,10 +39,6 @@ import { buildAppTemplate } from "./app-template.js";
 import { createThemeRegistry } from "../theming/index.js";
 import type { ThemeRegistry } from "../theming/index.js";
 
-const INLINE_IMAGES = !["0", "false"].includes(
-  (process.env.WIDGENTIC_INLINE_IMAGES ?? "").toLowerCase()
-);
-
 export interface WidgenticServerOptions {
   /**
    * The caller's composed catalog and themes. The transport edge reads the
@@ -69,6 +65,12 @@ export function createWidgenticServer(
   // tools/call POST builds a fresh server that never saw initialize.
   let slim = ["1", "true"].includes(
     (process.env.WIDGENTIC_ASSUME_UI ?? "").toLowerCase()
+  );
+  // Read per construction, exactly like WIDGENTIC_ASSUME_UI: every env
+  // knob in the assembly behaves the same way, and the disable path is
+  // testable in-process.
+  const inlineImages = !["0", "false"].includes(
+    (process.env.WIDGENTIC_INLINE_IMAGES ?? "").toLowerCase()
   );
 
   const server = new McpServer({ name: "widgentic", version: "0.1.0" });
@@ -137,7 +139,7 @@ export function createWidgenticServer(
       // iframe-facing surfaces get image bytes inlined as data URIs
       // (SSRF-guarded; see src/mcp-server/inline-images.ts). Disable with
       // WIDGENTIC_INLINE_IMAGES=0.
-      if (INLINE_IMAGES) await inlineRenderResultImages(result);
+      if (inlineImages) await inlineRenderResultImages(result);
       return result;
     }
   );

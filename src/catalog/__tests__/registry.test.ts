@@ -106,4 +106,19 @@ describe("render", () => {
       expect(result.ok).toBe(false);
     }
   });
+
+  it("a throwing custom renderer surfaces as RENDER_FAILED, not an exception", () => {
+    const catalog = createCatalog();
+    catalog.register("boom", () => {
+      throw new Error("renderer exploded");
+    });
+    const result = catalog.render({ kind: "boom", data: 1 });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("RENDER_FAILED");
+      expect(result.error.path).toBe("widget");
+      expect(result.error.message).toContain("boom");
+      expect(result.error.message).toContain("renderer exploded");
+    }
+  });
 });

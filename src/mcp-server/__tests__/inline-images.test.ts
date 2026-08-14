@@ -146,6 +146,26 @@ describe("fetchImageAsDataUri", () => {
     ]);
   });
 
+  it("refuses a redirect hop that lands on a private address", async () => {
+    // Hop-by-hop re-validation is the point: a public host must not be
+    // able to bounce the fetch into the network interior.
+    const fetched: string[] = [];
+    const fetchImpl = (async (input: RequestInfo | URL) => {
+      fetched.push(String(input));
+      return new Response(null, {
+        status: 302,
+        headers: { location: "https://169.254.169.254/latest/meta-data" }
+      });
+    }) as typeof fetch;
+    const uri = await fetchImageAsDataUri(
+      "https://cdn.example/a.png",
+      deps(fetchImpl)
+    );
+    expect(uri).toBeNull();
+    // Only the public first hop was fetched; the private target never was.
+    expect(fetched).toEqual(["https://cdn.example/a.png"]);
+  });
+
   it("caches successes per URL", async () => {
     const calls: string[] = [];
     const d = deps(pngFetch(calls));

@@ -8,6 +8,7 @@ import {
   composeThemes,
   createFileStore,
   createMemoryStore,
+  DEFAULT_LIMITS,
   generateKey,
   hashKey,
   verifyKey,
@@ -272,6 +273,88 @@ describe("composition", () => {
     expect(themes.value.names()).toContain("brand");
     expect(themes.value.names()).not.toContain("bad");
     expect(themes.diagnostics.join(" ")).toContain("bad");
+  });
+
+  it("refuses exotic identifiers on write, everywhere the same", async () => {
+    // One charset for all adapters: what breaks a Cosmos document id must
+    // be refused by the memory store too, so behavior never depends on
+    // the backend.
+    const store = createMemoryStore([
+      { principal: { id: "alice", scopes: ["read"] } }
+    ]);
+    await expect(
+      store.putWidget("alice", {
+        kind: "a/b#c",
+        template: { tag: "div", children: [{ bind: "t" }] },
+        descriptor: { description: "d", dataShape: "{ t }" }
+      })
+    ).rejects.toMatchObject({ code: "INVALID_IDENTIFIER" });
+    await expect(
+      store.putTheme("alice", { name: "no?slash", tokens: {} })
+    ).rejects.toMatchObject({ code: "INVALID_IDENTIFIER" });
+  });
+
+  it("skips exotic identifiers at composition with a diagnostic", async () => {
+    const rogue = {
+      async resolvePrincipal() {
+        return undefined;
+      },
+      async widgets() {
+        return [
+          reportWidget,
+          {
+            kind: "sneaky/one",
+            template: { tag: "div", children: ["x"] },
+            descriptor: { description: "d", dataShape: "x" }
+          } as StoredWidget
+        ];
+      },
+      async themes() {
+        return [] as ThemeEntry[];
+      }
+    };
+    const catalog = await composeCatalog(rogue, "alice");
+    expect(catalog.value.kinds()).toContain("report");
+    expect(catalog.value.kinds()).not.toContain("sneaky/one");
+    expect(catalog.diagnostics.join(" ")).toContain("sneaky/one");
+  });
+
+  it("skips oversized and over-budget entries at composition, not just write", async () => {
+    const tinyLimits = { ...DEFAULT_LIMITS, maxEntryBytes: 300, maxTemplateNodes: 3 };
+    const fat = {
+      kind: "fat",
+      template: { tag: "div", children: ["y".repeat(400)] },
+      descriptor: { description: "too big", dataShape: "x" }
+    } as StoredWidget;
+    const bushy = {
+      kind: "bushy",
+      template: {
+        tag: "div",
+        children: [
+          { tag: "span", children: ["a"] },
+          { tag: "span", children: ["b"] },
+          { tag: "span", children: ["c"] }
+        ]
+      },
+      descriptor: { description: "too many nodes", dataShape: "x" }
+    } as StoredWidget;
+    const rogue = {
+      async resolvePrincipal() {
+        return undefined;
+      },
+      async widgets() {
+        return [reportWidget, fat, bushy];
+      },
+      async themes() {
+        return [] as ThemeEntry[];
+      }
+    };
+    const catalog = await composeCatalog(rogue, "alice", { limits: tinyLimits });
+    expect(catalog.value.kinds()).toContain("report");
+    expect(catalog.value.kinds()).not.toContain("fat");
+    expect(catalog.value.kinds()).not.toContain("bushy");
+    expect(catalog.diagnostics.join(" ")).toMatch(/fat.*|.*bytes/);
+    expect(catalog.diagnostics.join(" ")).toContain("bushy");
   });
 
   it("never lets a stored entry shadow a built-in kind", async () => {

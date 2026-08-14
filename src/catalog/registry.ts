@@ -111,7 +111,23 @@ export function createCatalog(): WidgetCatalog {
           }
         };
       }
-      return { ok: true, node: renderer(validated.payload) };
+      // Built-ins are total by construction; this guards the extension
+      // point — a registered renderer that throws must surface as a
+      // structured error, never a propagated exception.
+      try {
+        return { ok: true, node: renderer(validated.payload) };
+      } catch (thrown) {
+        return {
+          ok: false,
+          error: {
+            code: "RENDER_FAILED",
+            path: "widget",
+            message: `Renderer for kind '${validated.payload.kind}' threw: ${
+              thrown instanceof Error ? thrown.message : String(thrown)
+            }`
+          }
+        };
+      }
     }
   };
 

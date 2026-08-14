@@ -16,6 +16,7 @@ describe("store types", () => {
     expectTypeOf<WidgetStore>().not.toHaveProperty("removeTheme");
     expectTypeOf<WidgetStore>().not.toHaveProperty("ensurePrincipal");
     expectTypeOf<WidgetStore>().not.toHaveProperty("createKey");
+    expectTypeOf<WidgetStore>().not.toHaveProperty("listKeys");
     expectTypeOf<WidgetStore>().not.toHaveProperty("revokeKey");
   });
 

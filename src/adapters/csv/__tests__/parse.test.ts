@@ -58,6 +58,15 @@ describe("parseCsv", () => {
     }
   });
 
+  it("returns INVALID_CSV for a row with fewer fields too", () => {
+    const result = parseCsv("a,b,c\n1,2");
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("INVALID_CSV");
+      expect(result.error.line).toBe(2);
+    }
+  });
+
   it("returns INVALID_CSV for an unterminated quoted field", () => {
     const result = parseCsv('a\n"oops');
     expect(result.ok).toBe(false);

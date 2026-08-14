@@ -1,7 +1,9 @@
 /**
  * Sign-in for the widgentic.dev app: OIDC authorization-code flow with
- * PKCE against Entra External ID (GitHub arrives federated through the
- * same issuer, so this file knows exactly one token type).
+ * PKCE against Entra External ID for email, plus a first-party GitHub
+ * OAuth code flow (External ID cannot federate GitHub — design D4
+ * revised). Both methods seal the same session cookie and land on the
+ * same principal model with namespaced subjects.
  *
  * Zero new runtime dependencies — JWTs are verified with node:crypto
  * (RS256 over the issuer's JWKS, fetched and cached), and sessions are

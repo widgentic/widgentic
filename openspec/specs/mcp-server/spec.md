@@ -239,7 +239,7 @@ Every successful `render_widget` result SHALL carry `structuredContent: { html, 
 - **THEN** serializing `structuredContent.tree` with `renderToHtml` SHALL reproduce `structuredContent.html` exactly
 
 ### Requirement: Formal Apps declaration at the wiring layer
-The runnable server SHALL declare the tool↔UI linkage per the MCP Apps specification using the official `@modelcontextprotocol/ext-apps` server helpers: `render_widget` registered with `_meta.ui.resourceUri: "ui://widgentic/app.html"`, and the app template registered as a resource with mime type `"text/html;profile=mcp-app"`. The server SHALL detect the client's Apps capability (`extensions["io.modelcontextprotocol/ui"]`) after initialization and note the outcome on stderr. `src/mcp-server/` SHALL remain free of SDK and host-flavor specifics.
+The server assembly SHALL declare the tool↔UI linkage per the MCP Apps specification using the official `@modelcontextprotocol/ext-apps` server helpers: `render_widget` registered with `_meta.ui.resourceUri: "ui://widgentic/app.html"`, and the app template registered as a resource with mime type `"text/html;profile=mcp-app"`. The assembly SHALL detect the client's Apps capability (`extensions["io.modelcontextprotocol/ui"]`) after initialization and note the outcome on stderr. SDK and host-flavor specifics SHALL live only behind the `widgentic/mcp-server/sdk` entry; the base `widgentic/mcp-server` entry remains SDK-free (per the server-assembly requirement).
 
 #### Scenario: Tool declares its template
 - **WHEN** an SDK client lists tools
@@ -347,7 +347,7 @@ Because Apps-host sandboxes block external `img-src` while permitting `data:`, t
 - **THEN** the text SHALL contain no `Hint notes:` and `structuredContent` SHALL have no `diagnostics` key
 
 ### Requirement: Per-request principal resolution
-When a store is configured, the runnable server SHALL resolve the caller's principal from the presented API key **before** constructing the request's server, and SHALL serve that principal's composed catalog and theme registry for the whole request. `createWidgenticServer(options?)` SHALL accept the composed `catalog` and `themes` rather than building its own, so the composition (and therefore the trust decision) happens at the transport edge where the key is read. A key that resolves to no principal SHALL fall back to the anonymous catalog — built-ins plus any entries the deployment supplies — never an error, and the server SHALL note the unresolved-key event on stderr **without** logging the key. With no store configured, behavior SHALL be exactly as before this change: the compiled-in custom widgets serve every caller.
+When a store is configured, the runnable server SHALL resolve the caller's principal from the presented API key **before** constructing the request's server, and SHALL serve that principal's composed catalog and theme registry for the whole request. `createWidgenticServer(options?)` SHALL accept the composed `catalog` and `themes` rather than building its own, so the composition (and therefore the trust decision) happens at the transport edge where the key is read. A key that resolves to no principal SHALL fall back to the anonymous catalog — built-ins plus any entries the deployment supplies — never an error, and the server SHALL note the unresolved-key event on stderr **without** logging the key. With no store configured, the server SHALL serve the assembly's catalog to every caller — the library default (built-ins only) unless the host passes its own composed catalog, as the compiled-in example deployment does.
 
 #### Scenario: Two keys see two catalogs
 - **WHEN** a request presents principal A's key and another presents principal B's key
@@ -371,7 +371,7 @@ When a store is configured, the runnable server SHALL resolve the caller's princ
 
 #### Scenario: No store configured preserves today's behavior
 - **WHEN** the server runs without a store
-- **THEN** every caller SHALL see the built-ins plus the compiled-in custom widgets, exactly as before
+- **THEN** every caller SHALL see the same catalog: the built-ins, plus exactly the extras the host compiled into the catalog it passed (none, in the hosted deployment; the example's own widgets, in the stdio example)
 
 ### Requirement: Composed catalogs never leak between requests
 Each request SHALL compose fresh catalog and theme-registry instances; the server SHALL NOT hold a mutable catalog across requests or cache composed instances keyed by anything less specific than the principal. Registration performed while serving one request SHALL NOT be observable in another.
