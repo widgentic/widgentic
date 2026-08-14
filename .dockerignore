@@ -7,4 +7,3 @@ openspec
 .vscode
 examples
 *.md
-!apps/**/*.md

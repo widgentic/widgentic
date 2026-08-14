@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it } from "vitest";
 import { buildAppTemplate } from "../index.js";
-import { customWidgets } from "../../../apps/mcp-server/widgets/index.js";
+import { customWidgets } from "../../../examples/mcp-server/widgets/index.js";
 import { createCatalog, renderToHtml } from "../../catalog/index.js";
 import type { WidgetNode } from "../../catalog/index.js";
 import { registerTemplate } from "../../templates/index.js";

@@ -10,8 +10,7 @@ import { createServer as createHttpServer } from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
-import { createWidgenticServer } from "./server.js";
-import { customWidgets } from "./widgets/index.js";
+import { createWidgenticServer } from "widgentic/mcp-server/sdk";
 import {
   ANONYMOUS_PRINCIPAL,
   composeCatalog,
@@ -129,13 +128,10 @@ const httpServer = createHttpServer(async (req: IncomingMessage, res: ServerResp
     }
     let composed: { catalog: WidgetCatalog; themes: ThemeRegistry } | undefined;
     if (store !== undefined) {
-      // The widgets compiled into this image are the ANONYMOUS principal's
-      // set, so unauthenticated callers and the demo rig keep working.
-      const catalogResult = await composeCatalog(store, principal.id, {
-        ...(principal.id === ANONYMOUS_PRINCIPAL.id
-          ? { extraWidgets: customWidgets }
-          : {})
-      });
+      // Nothing is compiled into production: anonymous callers get the
+      // built-ins, and custom widgets come from principals' stores. The
+      // guiding example for compiled-in widgets is examples/mcp-server.
+      const catalogResult = await composeCatalog(store, principal.id);
       const themeResult = await composeThemes(store, principal.id);
       for (const diagnostic of [
         ...catalogResult.diagnostics,

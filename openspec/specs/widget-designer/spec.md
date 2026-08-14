@@ -92,7 +92,7 @@ The widget designer SHALL accept `options.themes` — a list of named theme entr
 - **THEN** it SHALL mount with the default preview appearance and no theme selector entries beyond "none"
 
 ### Requirement: Import and export in the server's shapes
-The designer SHALL export the draft as JSON in exactly the `CustomWidget` shape (`{ kind, template, descriptor }`) and themes as bare token maps, and SHALL import the same shapes, re-validating everything on load (imports are untrusted input; invalid imports are rejected with the structured errors, leaving the current draft untouched). A copy-as-TypeScript convenience SHALL emit a module body compatible with `apps/mcp-server/widgets/` for manual registration. Exported widget JSON loaded back SHALL round-trip to a deep-equal draft.
+The designer SHALL export the draft as JSON in exactly the `CustomWidget` shape (`{ kind, template, descriptor }`) and themes as bare token maps, and SHALL import the same shapes, re-validating everything on load (imports are untrusted input; invalid imports are rejected with the structured errors, leaving the current draft untouched). A copy-as-TypeScript convenience SHALL emit a module body compatible with `examples/mcp-server/widgets/` for manual registration. Exported widget JSON loaded back SHALL round-trip to a deep-equal draft.
 
 #### Scenario: Export/import round-trips
 - **WHEN** a draft equivalent to the invoice example is exported and re-imported

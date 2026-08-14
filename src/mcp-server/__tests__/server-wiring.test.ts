@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { EXTENSION_ID, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
-import { createWidgenticServer } from "../../../apps/mcp-server/server.js";
+import { createWidgenticServer } from "../server.js";
 import { buildAppTemplate, WIDGENTIC_APP_TEMPLATE_URI } from "../index.js";
 
 interface DeliveredResult {
@@ -67,6 +67,33 @@ describe("capability-aware slim wiring", () => {
   // always runs initialize, which authoritatively overwrites the default.
   // That path exists precisely for stateless HTTP tools/call and is
   // verified against the deployed endpoint (see TESTING.md).
+});
+
+describe("library assembly defaults", () => {
+  it("no options serves exactly the built-in kinds", async () => {
+    const { client } = await session();
+    const result = (await client.callTool({
+      name: "list_widgets",
+      arguments: {}
+    })) as DeliveredResult;
+    const kinds = (JSON.parse(textOf(result)) as { kind: string }[]).map((d) => d.kind);
+    expect(kinds.sort()).toEqual(["card", "custom", "table", "tree"]);
+  });
+
+  it("the base mcp-server entry stays SDK-free", async () => {
+    // The assembly (server.ts) owns the SDK; nothing reachable from the
+    // base entry may import it. Source scan over the entry's modules.
+    const { readFileSync, readdirSync } = await import("node:fs");
+    const files = readdirSync("src/mcp-server").filter(
+      (f) => f.endsWith(".ts") && f !== "server.ts"
+    );
+    expect(files.length).toBeGreaterThan(0);
+    for (const file of files) {
+      const source = readFileSync(`src/mcp-server/${file}`, "utf8");
+      expect(source, file).not.toMatch(/from "@modelcontextprotocol/);
+      expect(source, file).not.toMatch(/from "zod"/);
+    }
+  });
 });
 
 describe("app template resource", () => {

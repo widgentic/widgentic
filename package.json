@@ -16,17 +16,24 @@
     "./templates": "./src/templates/index.ts",
     "./theming": "./src/theming/index.ts",
     "./mcp-server": "./src/mcp-server/index.ts",
+    "./mcp-server/sdk": "./src/mcp-server/server.ts",
     "./designer": "./src/designer/index.ts",
     "./store": "./src/store/index.ts",
     "./store/cosmos": "./src/store/cosmos.ts"
   },
   "peerDependencies": {
     "@azure/cosmos": "^4",
-    "@azure/identity": "^4"
+    "@azure/identity": "^4",
+    "@modelcontextprotocol/ext-apps": "^1",
+    "@modelcontextprotocol/sdk": "^1",
+    "zod": "^4"
   },
   "peerDependenciesMeta": {
     "@azure/cosmos": { "optional": true },
-    "@azure/identity": { "optional": true }
+    "@azure/identity": { "optional": true },
+    "@modelcontextprotocol/ext-apps": { "optional": true },
+    "@modelcontextprotocol/sdk": { "optional": true },
+    "zod": { "optional": true }
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -34,7 +41,7 @@
     "test": "vitest run",
     "test:types": "vitest --typecheck.only run",
     "test:watch": "vitest",
-    "mcp": "tsx apps/mcp-server/main.ts",
+    "mcp": "tsx examples/mcp-server/main.ts",
     "mcp:http": "tsx apps/mcp-server/http.ts",
     "web": "tsx apps/web/http.ts",
     "designer": "tsx examples/designer/serve.ts"

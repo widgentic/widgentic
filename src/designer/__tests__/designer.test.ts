@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from "vitest";
-import { invoiceWidget } from "../../../apps/mcp-server/widgets/invoice.js";
+import { invoiceWidget } from "../../../examples/mcp-server/widgets/invoice.js";
 import {
   createDesigner,
   defineDesignerElement,

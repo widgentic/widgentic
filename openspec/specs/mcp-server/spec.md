@@ -87,7 +87,7 @@ Failures SHALL be returned as `isError: true` results whose text content is the 
 - **THEN** each SHALL return an `isError: true` result with a structured error
 
 ### Requirement: Runnable server and SDK interoperability
-The repository SHALL provide `apps/mcp-server/main.ts` wiring the definitions and handlers onto an official-SDK MCP server over stdio (with the invoice template registered), started by `npm run mcp` using devDependencies only. The test suite SHALL verify via the SDK's in-memory transport that `list_widgets` and `render_widget` round-trip through the real protocol, including the `isError` path for an unknown widget.
+The repository SHALL provide `examples/mcp-server/main.ts` wiring the library's server assembly onto stdio with that example's compiled-in custom widgets registered (the invoice template among them) — a self-contained demonstration of hosting widgentic with your own widgets, importing only public `widgentic/*` entries — started by `npm run mcp` using devDependencies only. The test suite SHALL verify via the SDK's in-memory transport that `list_widgets` and `render_widget` round-trip through the real protocol against the library assembly, including the `isError` path for an unknown widget.
 
 #### Scenario: Protocol round trip
 - **WHEN** an in-memory SDK client calls `render_widget` with `{ widget: "card", data: { title: "T" } }`
@@ -103,7 +103,22 @@ The repository SHALL provide `apps/mcp-server/main.ts` wiring the definitions an
 
 #### Scenario: Dependencies stay dev-only
 - **WHEN** `package.json` is inspected after this change
-- **THEN** the SDK and tsx SHALL appear only under `devDependencies` and no `dependencies` section SHALL exist
+- **THEN** the SDK and tsx SHALL appear only under `devDependencies` — the SDK packages additionally as **optional** `peerDependencies` for the assembly entry — and no `dependencies` section SHALL exist
+
+### Requirement: Server assembly is a library export
+The package SHALL export `createWidgenticServer(options?: { catalog?, themes? })` from a `widgentic/mcp-server/sdk` entry, producing a connectable official-SDK `McpServer` with the full wiring: the tools, the formal Apps declaration, the app-template resource, capability-aware slimming, and image inlining. Its MCP SDK packages SHALL be optional peer dependencies — installed only by hosts importing this entry — and the base `widgentic/mcp-server` entry SHALL remain importable without any SDK present. With no options the assembly SHALL serve exactly the built-in kinds and built-in themes; compiled-in extras are the host's explicit choice via `catalog`.
+
+#### Scenario: One assembly serves every transport
+- **WHEN** the HTTP entry, the stdio example, and the in-memory interop tests construct their servers
+- **THEN** each SHALL use the library's `createWidgenticServer`, differing only in the catalog/themes they pass and the transport they connect
+
+#### Scenario: The default is the built-ins
+- **WHEN** `createWidgenticServer()` is constructed with no options and `list_widgets` is called
+- **THEN** the descriptor list SHALL contain exactly the built-in kinds
+
+#### Scenario: The base entry stays SDK-free
+- **WHEN** the modules reachable from the `widgentic/mcp-server` entry are inspected
+- **THEN** none SHALL import from an MCP SDK package — the SDK surface exists only behind `widgentic/mcp-server/sdk`
 
 ### Requirement: Output format selection
 `render_widget` SHALL accept `format?: "both" | "html" | "widget" | "page" | "app"` (default `"both"`, the current dual-block behavior). `"html"` SHALL return only the fragment text block; `"widget"` only the widgentic resource block; `"page"` SHALL return a self-contained styled HTML document (doctype, inlined base stylesheet, the rendered fragment) as the text block, keeping the widgentic resource block; `"app"` SHALL return the app composition (text fallback, `text/html` `ui://` resource, widgentic payload block). An unrecognized `format` SHALL return `INVALID_TYPE` at `path: "format"`.

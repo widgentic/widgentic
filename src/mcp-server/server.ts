@@ -1,7 +1,13 @@
 /**
- * Widgentic MCP server construction: wires the dependency-free tool
- * definitions and handlers onto the official SDK, with the formal MCP Apps
- * declaration. Transport-agnostic — entries: main.ts (stdio), http.ts.
+ * Widgentic MCP server assembly: wires the dependency-free tool
+ * definitions and handlers onto the official SDK, with the formal MCP
+ * Apps declaration. Transport-agnostic — hosts connect it to stdio,
+ * Streamable HTTP, or in-memory pipes.
+ *
+ * This module ships from its own entry (`widgentic/mcp-server/sdk`); the
+ * MCP SDK packages are optional peer dependencies installed only by
+ * hosts that import it. The base `widgentic/mcp-server` entry stays
+ * SDK-free.
  */
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
@@ -12,26 +18,26 @@ import {
   RESOURCE_MIME_TYPE
 } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
-import { createCatalog } from "widgentic/catalog";
-import type { WidgetCatalog } from "widgentic/catalog";
-import { registerTemplate } from "widgentic/templates";
-import { customWidgets } from "./widgets/index.js";
+import { createCatalog } from "../catalog/index.js";
+import type { WidgetCatalog } from "../catalog/index.js";
 import {
   LIST_WIDGETS_TOOL,
   RENDER_WIDGET_TOOL,
   LIST_THEME_TOKENS_TOOL,
   LIST_THEMES_TOOL,
   WIDGENTIC_UI_URI_PREFIX,
-  WIDGENTIC_APP_TEMPLATE_URI,
+  WIDGENTIC_APP_TEMPLATE_URI
+} from "./definitions.js";
+import {
   handleListWidgets,
   handleRenderWidget,
   handleListThemeTokens,
-  handleListThemes,
-  inlineRenderResultImages,
-  buildAppTemplate
-} from "widgentic/mcp-server";
-import { createThemeRegistry } from "widgentic/theming";
-import type { ThemeRegistry } from "widgentic/theming";
+  handleListThemes
+} from "./handlers.js";
+import { inlineRenderResultImages } from "./inline-images.js";
+import { buildAppTemplate } from "./app-template.js";
+import { createThemeRegistry } from "../theming/index.js";
+import type { ThemeRegistry } from "../theming/index.js";
 
 const INLINE_IMAGES = !["0", "false"].includes(
   (process.env.WIDGENTIC_INLINE_IMAGES ?? "").toLowerCase()
@@ -41,28 +47,20 @@ export interface WidgenticServerOptions {
   /**
    * The caller's composed catalog and themes. The transport edge reads the
    * API key, resolves the principal, and composes — so the trust decision
-   * lives where the key is read, not inside the server. Omitted: the
-   * built-ins plus the compiled-in custom widgets, exactly as before.
+   * lives where the key is read, not inside the server. Omitted: exactly
+   * the built-in kinds and themes.
    */
   catalog?: WidgetCatalog;
   themes?: ThemeRegistry;
 }
 
-/** Built-ins + the widgets compiled into this image (the anonymous set). */
-export function createDefaultCatalog(): WidgetCatalog {
-  const catalog = createCatalog();
-  // Custom template widgets (kind + template + descriptor as data), each
-  // surfacing in list_widgets and rendering through render_widget.
-  for (const widget of customWidgets) {
-    registerTemplate(catalog, widget.kind, widget.template, widget.descriptor);
-  }
-  return catalog;
-}
-
 export function createWidgenticServer(
   options: WidgenticServerOptions = {}
 ): McpServer {
-  const catalog = options.catalog ?? createDefaultCatalog();
+  // The library assumes nothing: no options means exactly the built-in
+  // kinds and themes. Compiled-in extras are the HOST's explicit choice,
+  // passed as a composed catalog (see examples/mcp-server for the shape).
+  const catalog = options.catalog ?? createCatalog();
   // Named themes: agents can pass `theme: "dark"` instead of a token map.
   const themes = options.themes ?? createThemeRegistry();
   // Model-context slimming signal: session-negotiated UI capability wins in

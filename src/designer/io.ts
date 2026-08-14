@@ -1,7 +1,7 @@
 /**
  * Import/export in the server's shapes: widget JSON is exactly the
  * `CustomWidget` definition (`{ kind, template, descriptor }`) that
- * `apps/mcp-server/widgets/` registers; themes are bare token maps.
+ * `examples/mcp-server/widgets/` registers; themes are bare token maps.
  * Imports are untrusted — everything re-validates, and a failed import
  * never touches the current draft.
  */
@@ -89,7 +89,7 @@ function camelCase(kind: string): string {
 }
 
 /**
- * Emit a module body compatible with `apps/mcp-server/widgets/` —
+ * Emit a module body compatible with `examples/mcp-server/widgets/` —
  * the manual-registration bridge until wire registration exists.
  */
 export function toTypeScriptModule(draft: WidgetDraft): string {

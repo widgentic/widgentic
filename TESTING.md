@@ -1,4 +1,7 @@
-# Testing the Widgentic MCP server
+# Widgentic — testing & operations runbook
+
+Everything runnable, hosted, and learned the hard way: local entries, the
+Apps rig, production for both container apps, and host registration.
 
 ## Entries
 
@@ -13,7 +16,7 @@
 Quick checks without any host:
 
 ```bash
-npx @modelcontextprotocol/inspector npx tsx apps/mcp-server/main.ts   # interactive UI
+npx @modelcontextprotocol/inspector npx tsx examples/mcp-server/main.ts   # interactive UI
 npm test                                                                  # incl. SDK interop suite
 ```
 
@@ -77,7 +80,7 @@ machine.
 ## Production (Azure Container Apps)
 
 `https://mcp.widgentic.dev/mcp` — the same HTTP server (`apps/mcp-server/http.ts`)
-containerized and deployed via [infra/main.bicep](../../infra/main.bicep) to app
+containerized and deployed via [infra/main.bicep](infra/main.bicep) to app
 `widgentic-mcp` in resource group `widgentic-rg`. Scale-to-zero: the first
 request after idle takes a few seconds. Since v11 the deployment runs in
 **per-principal mode** (`WIDGENTIC_COSMOS_ENDPOINT` set by Bicep's
@@ -85,11 +88,13 @@ request after idle takes a few seconds. Since v11 the deployment runs in
 query parameter (for claude.ai / Claude Desktop remote connectors, whose
 settings accept only a URL) — resolves against Cosmos by digest point read,
 and the request is served that principal's composed catalog. An unknown or
-revoked key degrades to the anonymous catalog (built-ins + the compiled-in
-widgets), never an error; the pre-portal production key is seeded as the
-`bootstrap:production` principal owning stored copies of `invoice` and
-`x-post`, so its catalog is unchanged from v10. The MCP identity holds the
-Cosmos **read-only** role. `/healthz` is open for probes.
+revoked key degrades to the anonymous catalog — since v14, exactly the
+built-in kinds (nothing is compiled into production; custom widgets come
+from principals' stores, and the compiled-in path lives on as
+`examples/mcp-server`) — never an error. The pre-portal production key is
+seeded as the `bootstrap:production` principal owning stored copies of
+`invoice` and `x-post`, so its catalog is unchanged from v10. The MCP
+identity holds the Cosmos **read-only** role. `/healthz` is open for probes.
 
 Smoke test:
 
@@ -98,9 +103,11 @@ curl https://mcp.widgentic.dev/healthz    # 200 ok
 curl -X POST https://mcp.widgentic.dev/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
-  -H "x-api-key: $WIDGENTIC_API_KEY" \
+  -H "x-api-key: <your-key>" \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"smoke","version":"0"}}}'
-# → 200 with "serverInfo":{"name":"widgentic",...}; without the header → 401
+# → 200 with "serverInfo":{"name":"widgentic",...}. In per-principal mode a
+#   missing/unknown key is NOT an error — it serves the anonymous catalog
+#   (the 401 gate applies only to no-store deployments).
 ```
 
 The hosted deployment sets `WIDGENTIC_ASSUME_UI=1`: stateless HTTP can't see
@@ -117,12 +124,17 @@ per-principal mode the store decides. DNS lives in Cloudflare: CNAME `mcp` →
 the app FQDN (DNS only / grey cloud — required for the Azure-managed
 certificate) plus the `asuid.mcp` TXT validation record.
 
-**Redeploy contract (learned at v11):** the Bicep template owns the apps'
-ingress. ALWAYS pass the live custom-domain bindings (`mcpCustomDomains` /
-`webCustomDomains` with the managed-cert resource id) on every
-`az deployment group create`, or the deploy silently unbinds the domain
-(observed: TLS reset on mcp.widgentic.dev until rebound with
-`az containerapp hostname add` + `hostname bind`).
+**Redeploy contract (learned at v11, extended at v14):** the Bicep template
+owns the apps' ingress AND secrets. On every `az deployment group create`:
+- ALWAYS pass the live custom-domain bindings (`mcpCustomDomains` /
+  `webCustomDomains` with the managed-cert resource id), or the deploy
+  silently unbinds the domain (observed: TLS reset on mcp.widgentic.dev
+  until rebound with `az containerapp hostname add` + `hostname bind`).
+- ALWAYS pass `sessionSecret` (and the GitHub/auth secrets) — an empty
+  secure param REMOVES the container secret (observed at v14: sessions
+  would break on every cold start). Recover the live value first, never
+  from a scratch file:
+  `az containerapp secret show -n widgentic-web -g widgentic-rg --secret-name widgentic-session-secret --query value -o tsv`
 
 ## The widgentic.dev app (production)
 
@@ -145,11 +157,12 @@ Entra config lessons (learned live at v13):
 - **Public client + PKCE**: redirect URIs must be registered under the
   **Mobile and desktop applications** platform. Under the Web platform,
   code redemption demands a secret (`AADSTS7000218`) even with "Allow
-  public client flows" enabled — the platform of the redirect URI wins. Local dev:
-`WIDGENTIC_DEV_LOGIN=1 npm run web` (honored only when no issuer is
-configured) gives a subject-only sign-in against an in-memory store — add
-`WIDGENTIC_COSMOS_ENDPOINT` to author against live Cosmos with your `az`
-credential.
+  public client flows" enabled — the platform of the redirect URI wins.
+
+Local dev: `WIDGENTIC_DEV_LOGIN=1 npm run web` (honored only when no issuer
+is configured) gives a subject-only sign-in against an in-memory store —
+add `WIDGENTIC_COSMOS_ENDPOINT` to author against live Cosmos with your
+`az` credential.
 
 Apex + `www` DNS (Cloudflare, live since 2026-08-14; all grey cloud):
 
@@ -182,10 +195,10 @@ curl -s -X POST "http://localhost:3001/mcp?key=<alice-key>" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_widgets","arguments":{}}}'
 ```
 
-An unknown key falls back to the anonymous catalog (built-ins + the
-compiled-in widgets); the server logs the unresolved-key event **without**
-the key. Widgets that fail validation are skipped with a stderr diagnostic
-naming the reason, so a hostile or corrupt entry never reaches a catalog.
+An unknown key falls back to the anonymous catalog (the built-ins); the
+server logs the unresolved-key event **without** the key. Widgets that fail
+validation are skipped with a stderr diagnostic naming the reason, so a
+hostile or corrupt entry never reaches a catalog.
 
 ## Host registration snippets
 
@@ -205,23 +218,26 @@ Add custom connector, with the key in the URL (no header support there):
 https://mcp.widgentic.dev/mcp?key=<api-key>
 ```
 
-**Claude Code** — this repo's `.mcp.json` registers the stdio server
-automatically (tool results are text; Claude Code does not mount MCP Apps UI).
+**Claude Code** (tool results are text; Claude Code does not mount MCP Apps UI):
+
+```bash
+claude mcp add widgentic -- npx tsx /path/to/widgentic/examples/mcp-server/main.ts
+```
 
 **Claude Desktop** (`claude_desktop_config.json`, absolute paths):
 
 ```json
-{ "mcpServers": { "widgentic": { "command": "npx", "args": ["tsx", "/path/to/widgentic/apps/mcp-server/main.ts"] } } }
+{ "mcpServers": { "widgentic": { "command": "npx", "args": ["tsx", "/path/to/widgentic/examples/mcp-server/main.ts"] } } }
 ```
 
-## Verified hosts (2026-07)
+## Verification log
 
 - **basic-host (ext-apps v1.7.5 reference)** — full 7-input visual sweep: all five kinds inline, live host re-theming via `host-context-changed`, error-state notice.
 - **VS Code Copilot Chat** — agent-driven end-to-end from a one-line steer; all five kinds mounted inline over HTTP.
 - **Claude Code 2.1.220** — graceful degradation confirmed (text results, no UI mounting by design).
 - **Production endpoint (mcp.widgentic.dev)** — deployed 2026-07-30; `/healthz`, 401-without-key, and keyed `initialize` handshake verified end-to-end through the custom domain with the Azure-managed certificate.
 - **Theming foundation (2026-08-13, v9, local rig)** — inverse test: a complete `midnight-neon` theme entry (all 32 tokens + three `x-*` custom variables) was authored as JSON, imported into the **standalone theme designer**, saved, then selected as the preview theme in the **widget designer**. Confirms the split and the token system: color pickers appear only on `color`-typed tokens (chosen from `TOKEN_SPECS.type`, not guessed), identity fields populate on import, the table preview renders 40px circular avatars from `avatar-size`, and the custom `x-post` widget picks up the theme — including deriving its avatar box from `calc(var(--wg-avatar-size) * 1.5)` and lifting its card onto `surface` above `bg`. Named themes over the wire verified separately via curl against production: `list_themes`, `theme: "dark"` resolution, and `UNKNOWN_THEME` for an unregistered name.
-- **Designer round-trip (2026-08-09, local rig)** — the `x-post` widget was authored/imported in the designer (`:9446`), exported, and pasted back via "Copy as TypeScript" into `apps/mcp-server/widgets/x-post.ts` with no edits; it registers and renders through `render_widget`. Confirms images work in **custom template widgets**: bound `img src` values are inlined server-side as `data:` URIs on both iframe surfaces (2/2 in html and tree) while the model-facing text keeps the original URLs, and the `pattern`-constrained handle rejects `no-at` with `INVALID_TYPE @ data.author.handle`. Visually confirmed in basic-host: the full post shows real avatar and media pixels inside the sandbox (external URLs, server-inlined), and a minimal post correctly hides every `when`-gated block (avatar, media, timestamp, stats). Also verified agent-driven in **VS Code Copilot against production v7** from a no-JSON prompt: the agent read the descriptor, invented schema-valid data (including a handle matching `^@[A-Za-z0-9_]{1,15}$`), mounted both posts as visuals with images visible, hit the pattern error exactly on the invalid handle, and restated no data as text.
+- **Designer round-trip (2026-08-09, local rig)** — the `x-post` widget was authored/imported in the designer (`:9446`), exported, and pasted back via "Copy as TypeScript" into what is now `examples/mcp-server/widgets/x-post.ts` with no edits; it registers and renders through `render_widget`. Confirms images work in **custom template widgets**: bound `img src` values are inlined server-side as `data:` URIs on both iframe surfaces (2/2 in html and tree) while the model-facing text keeps the original URLs, and the `pattern`-constrained handle rejects `no-at` with `INVALID_TYPE @ data.author.handle`. Visually confirmed in basic-host: the full post shows real avatar and media pixels inside the sandbox (external URLs, server-inlined), and a minimal post correctly hides every `when`-gated block (avatar, media, timestamp, stats). Also verified agent-driven in **VS Code Copilot against production v7** from a no-JSON prompt: the agent read the descriptor, invented schema-valid data (including a handle matching `^@[A-Za-z0-9_]{1,15}$`), mounted both posts as visuals with images visible, hit the pattern error exactly on the invalid handle, and restated no data as text.
 - **Native tree mounting + surface token (2026-08-02, v6, basic-host)** — the app template now mounts `structuredContent.tree` natively (DOM from data, in-place patching); the invoice renders pixel-identical to the HTML-injection era (the pass condition), and a dark theme with `surface` set shows cards visibly lifted off the page background. Schema `pattern` verified via curl and visually (the template's error notice shows the violation): a digit-less `lineTotal` fails with `INVALID_TYPE` at `data.lines.0.lineTotal`; tree/html image inlining verified in lockstep through production.
 - **Slimming + hint diagnostics (2026-08-01, v5, VS Code Copilot)** — the self-correction loop works end-to-end: given deliberately broken hints (`colums` typo, `fieldFormat` on `table`), the first render succeeded with two `Hint notes:`, and the agent unprompted renamed `colums` → `columns`, dropped the unsupported hint, re-rendered clean, and attributed both fixes to the tool feedback. The slim confirmation line also held: no restatement of widget data as text. Env path (`WIDGENTIC_ASSUME_UI=1` over stateless HTTP) verified via curl: slim line + intact `structuredContent.html`, diagnostics array present, `isError` unset.
 - **Image rendering (2026-07-31 → 08-01, v3/v4)** — `img` elements mount inline with the correct `wg-img-*` classes in both **VS Code Copilot** and **basic-host** (auto-detect and `hints.images` paths; `fieldFormat` coexists on sibling fields; suppression and hostile-URL rejection verified visually). Apps-host sandbox CSP blocks fetching **external** image URLs (basic-host: exactly `img-src 'self' data: blob:`) while `data:` is universally allowed — so since v4 the server **inlines image bytes as `data:` URIs at render time** on the iframe-facing surfaces (structuredContent fragment + `ui://` resource; model-facing HTML and `format: "page"` keep original URLs). The fetch is SSRF-guarded (https-only, private/metadata address rejection per redirect hop, `image/*` only, 1 MiB / 4 s / 8-images caps); any failure falls back to the original URL, where the alt-text broken-image state is the safety net. Verified in production via curl: external `picsum` image → `data:image/jpeg` in structuredContent; `https://169.254.169.254/...` refused and left un-inlined. Visually confirmed against v4 in **VS Code Copilot** and **basic-host** (full 5-payload sweep): round table avatars and a full-width card hero display as real pixels from external URLs (server-inlined), data-URI swatch renders, suppression and hostile-URL rejection hold, dark theme intact.

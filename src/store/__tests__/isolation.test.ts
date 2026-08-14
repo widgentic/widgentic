@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { createWidgenticServer } from "../../../apps/mcp-server/server.js";
+import { createWidgenticServer } from "../../mcp-server/server.js";
 import { composeCatalog, composeThemes, createMemoryStore } from "../index.js";
 import type { MemorySeedPrincipal, StoredWidget, WidgetStore } from "../index.js";
 import type { ThemeEntry } from "../../theming/index.js";
@@ -173,16 +173,15 @@ describe("per-principal isolation over the protocol", () => {
     expect(bobKinds).not.toContain("report");
   });
 
-  it("with no store, every caller shares the compiled-in set", async () => {
+  it("with no store, every caller shares the library default: the built-ins", async () => {
     const server = createWidgenticServer();
     const client = new Client({ name: "no-store", version: "0.0.0" });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
     await client.connect(clientTransport);
     const kinds = await kindsOf(client);
-    // Built-ins plus the widgets compiled into the image — today's behavior.
-    expect(kinds).toEqual(
-      expect.arrayContaining(["card", "table", "tree", "custom", "invoice", "x-post"])
-    );
+    // The assembly assumes nothing: compiled-in extras are a host choice
+    // (see examples/mcp-server), never a library default.
+    expect(kinds.sort()).toEqual(["card", "custom", "table", "tree"]);
   });
 });

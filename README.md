@@ -22,7 +22,7 @@ All capabilities are specified under `openspec/specs/` and implemented with zero
 | `reactive-rendering` | `widgentic/reactive` | `mountWidget` handles with in-place DOM patching (identity-preserving updates) |
 | `template-widgets` | `widgentic/templates` | Serializable JSON template DSL (`bind`/`each`/`when`) — the widget-designer runtime, safe for untrusted authors |
 | `widget-theming` | `widgentic/theming` | `--wg-*` token registry (colors, status, scale steps), author-defined `x-*` custom variables, named-theme registry with `extends`, generated base stylesheet, themes as validated JSON |
-| `mcp-server` | `widgentic/mcp-server` | The Widgentic MCP server: `list_widgets` (descriptor discovery) + `render_widget` (validate → render → HTML + payload), as SDK-free handlers plus a runnable stdio server |
+| `mcp-server` | `widgentic/mcp-server` | The Widgentic MCP server: `list_widgets` (descriptor discovery) + `render_widget` (validate → render → HTML + payload) as SDK-free definitions/handlers, plus the full server assembly behind `widgentic/mcp-server/sdk` (MCP SDK as optional peers) |
 | `widget-store` | `widgentic/store` | Per-principal widgets and themes: a persistence-agnostic port (`resolvePrincipal`/`widgets`/`themes`), memory + file reference implementations, hashed constant-time keys, structural limits, and request-scoped `composeCatalog`/`composeThemes` |
 | `widget-designer` | `widgentic/designer` | Two embeddable designers (factories + opt-in custom elements, zero deps): the **widget** designer (template tree/JSON, full descriptor, styles, dataSchema, theme selection) and the standalone **theme** designer (tokens, custom variables, named entries) — both with live validated preview |
 
@@ -147,9 +147,10 @@ Guarantees worth knowing: entries are validated on write **and** on read (a
 store is editable out of band), an invalid entry is skipped with a
 diagnostic rather than failing the session, stored kinds may never shadow
 built-ins, per-principal limits bound how much one tenant can load, and an
-unknown key degrades to the anonymous catalog — the built-ins plus whatever
-the deployment compiles in — never to an error. With no store configured the
-server behaves exactly as before: one catalog for every caller.
+unknown key degrades to the anonymous catalog — in production, exactly the
+built-in kinds — never to an error. With no store configured the server
+serves one catalog for every caller (the library default: built-ins; the
+stdio example shows compiling in your own widgets).
 
 Registration is deliberately **not** an MCP tool: the key travels into
 third-party hosts and prompt-injectable contexts, so writes belong to an
@@ -184,7 +185,7 @@ API keys never authorize writes: presenting one to the authoring API is a
 ### Register with Claude Code
 
 ```bash
-claude mcp add widgentic -- npx tsx /path/to/widgentic/apps/mcp-server/main.ts
+claude mcp add widgentic -- npx tsx /path/to/widgentic/examples/mcp-server/main.ts
 ```
 
 Confirm with `/mcp`, then just ask — *"list the available widgets"*, *"render an invoice widget for ..."*.
@@ -194,7 +195,7 @@ For Claude Desktop, add to `claude_desktop_config.json` (absolute paths — Desk
 ```json
 "widgentic": {
   "command": "npx",
-  "args": ["tsx", "/path/to/widgentic/apps/mcp-server/main.ts"]
+  "args": ["tsx", "/path/to/widgentic/examples/mcp-server/main.ts"]
 }
 ```
 
@@ -223,7 +224,7 @@ Inline mounting is verified in the official **basic-host** reference and
 **VS Code Copilot Chat** (all five widget kinds, live host re-theming);
 Claude Code degrades gracefully to text. Full runbooks — local basic-host
 setup, remote rig, host registration snippets — live in
-[apps/mcp-server/TESTING.md](apps/mcp-server/TESTING.md).
+[TESTING.md](TESTING.md).
 
 ### Design a widget
 
@@ -234,7 +235,7 @@ setup, remote rig, host registration snippets — live in
   dataSchema, with widgentic's validators running on every edit and a live
   preview mounted through the real pipeline. Export produces the exact
   `CustomWidget` JSON/TypeScript the server registers
-  ([apps/mcp-server/widgets/](apps/mcp-server/widgets/)).
+  ([examples/mcp-server/widgets/](examples/mcp-server/widgets/)).
 - **Theme designer** — a named theme entry (`{ name, label?, description?,
   tokens }`): every registry token with color swatches, plus author-defined
   `x-*` custom variables, previewed against any catalog kind.
@@ -248,7 +249,7 @@ persist via `widgentic-change` events.
 
 ### Testing without Claude
 
-- **MCP Inspector** (interactive UI): `npx @modelcontextprotocol/inspector npx tsx apps/mcp-server/main.ts`
+- **MCP Inspector** (interactive UI): `npx @modelcontextprotocol/inspector npx tsx examples/mcp-server/main.ts`
 - **Raw stdio**: pipe newline-delimited JSON-RPC (`initialize` → `notifications/initialized` → `tools/list` → `tools/call`) into `npm run mcp`.
 - **In-process**: the SDK interop suite (`src/mcp-server/__tests__/sdk-interop.test.ts`) runs client and server over an in-memory transport on every `npm test`.
 
