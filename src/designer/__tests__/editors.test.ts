@@ -194,13 +194,98 @@ describe("template tree usability", () => {
     return { container, getTemplate: () => designer.getDraft().template };
   }
 
-  it("adds children with one click from the toolbar (no select-then-confirm)", () => {
+  it("adds attributes and children through one compact menu (no button rows)", () => {
     const { container, getTemplate } = designerWith({ tag: "div", children: [] });
-    const toolbar = container.querySelector(".wgd-add-child") as HTMLElement;
-    const labels = [...toolbar.querySelectorAll("button")].map((b) => b.textContent);
-    expect(labels).toEqual(["+ text", "+ bind", "+ element", "+ each", "+ when"]);
-    (toolbar.querySelectorAll("button")[1] as HTMLButtonElement).click(); // + bind
+    // The old per-form toolbars are gone — the tree carries no standing rows.
+    expect(container.querySelector(".wgd-add-child")).toBeNull();
+    const toggle = container.querySelector(".wgd-menu-toggle") as HTMLButtonElement;
+    toggle.click();
+    const menu = container.querySelector(".wgd-menu") as HTMLElement;
+    expect(menu.hidden).toBe(false);
+    const labels = [...menu.querySelectorAll(".wgd-menu-item")].map((b) => b.textContent);
+    expect(labels).toEqual(["attribute", "text", "bind", "element", "each", "when"]);
+    (menu.querySelectorAll(".wgd-menu-item")[2] as HTMLButtonElement).click(); // bind
     expect(getTemplate()).toEqual({ tag: "div", children: [{ bind: "." }] });
+  });
+
+  it("closes the add menu on outside click and Escape without inserting", () => {
+    const { container, getTemplate } = designerWith({ tag: "div", children: [] });
+    const toggle = container.querySelector(".wgd-menu-toggle") as HTMLButtonElement;
+    const menu = container.querySelector(".wgd-menu") as HTMLElement;
+    toggle.click();
+    expect(menu.hidden).toBe(false);
+    document.body.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    expect(menu.hidden).toBe(true);
+    toggle.click();
+    expect(menu.hidden).toBe(false);
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    expect(menu.hidden).toBe(true);
+    // The hidden attribute must actually hide it — a display rule on
+    // .wgd-menu would silently defeat [hidden] (caught live once).
+    expect(getComputedStyle(menu).display).toBe("none");
+    expect(getTemplate()).toEqual({ tag: "div", children: [] });
+  });
+
+  it("sets unset slots through the same menu control", () => {
+    const { container, getTemplate } = designerWith({
+      each: "lines",
+      template: "line"
+    });
+    // 'empty' is unset: exactly one slot menu labeled for it, listing forms.
+    const slotToggle = [...container.querySelectorAll(".wgd-menu-toggle")].find(
+      (b) => b.textContent === "+ empty"
+    ) as HTMLButtonElement;
+    slotToggle.click();
+    const menu = slotToggle.parentElement?.querySelector(".wgd-menu") as HTMLElement;
+    const items = [...menu.querySelectorAll(".wgd-menu-item")];
+    expect(items.map((b) => b.textContent)).toEqual([
+      "text", "bind", "element", "each", "when"
+    ]);
+    (items[2] as HTMLButtonElement).click(); // element
+    expect(getTemplate()).toEqual({
+      each: "lines",
+      template: "line",
+      empty: { tag: "div", children: [] }
+    });
+  });
+
+  it("collapses structural nodes and keeps them collapsed across edits", () => {
+    const { container } = designerWith({
+      tag: "div",
+      children: ["hello", { tag: "p", attrs: { class: "wg-x" }, children: ["x"] }]
+    });
+    const inner = (): HTMLElement =>
+      container.querySelector('[data-path="children.1"]') as HTMLElement;
+    expect(inner().querySelector(".wgd-children")).not.toBeNull();
+    // Chevrons are buttons only on collapsible nodes: root, then the <p>.
+    const chevrons = container.querySelectorAll("button.wgd-chevron");
+    (chevrons[1] as HTMLButtonElement).click();
+    expect(inner().querySelector(".wgd-children")).toBeNull();
+    expect(inner().querySelector(".wgd-node-summary")?.textContent).toBe(
+      "1 attr · 1 child"
+    );
+    // Edit elsewhere — the re-render must not lose the fold.
+    const hello = [...container.querySelectorAll("input")].find(
+      (i) => i.value === "hello"
+    ) as HTMLInputElement;
+    change(hello, "hi");
+    expect(inner().querySelector(".wgd-children")).toBeNull();
+    expect(inner().querySelector(".wgd-node-summary")).not.toBeNull();
+  });
+
+  it("groups attributes under chrome distinct from the children rail", () => {
+    const { container } = designerWith({
+      tag: "div",
+      attrs: { class: "wg-a" },
+      children: ["x"]
+    });
+    const attrs = container.querySelector(".wgd-attrs") as HTMLElement;
+    const children = container.querySelector(".wgd-children") as HTMLElement;
+    expect(attrs).not.toBeNull();
+    expect(children).not.toBeNull();
+    expect(attrs.querySelector(".wgd-attr-row")).not.toBeNull();
+    expect(attrs.querySelector(".wgd-node")).toBeNull(); // no nodes among attrs
+    expect(children.querySelector(".wgd-attr-row")).toBeNull();
   });
 
   it("labels element nodes with the tag select alone (no redundant badge)", () => {

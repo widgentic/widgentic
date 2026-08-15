@@ -8,7 +8,7 @@
  */
 import type { DataSchema } from "widgentic/catalog";
 import type { WidgetTemplate } from "widgentic/templates";
-import { diagnosticLine, h } from "./dom.js";
+import { diagnosticLine, h, menuButton } from "./dom.js";
 import { attachJsonHighlight, repaintHighlight } from "./highlight.js";
 import type { DraftStore, WidgetDraft } from "./store.js";
 import type { DesignerDiagnostics } from "./validate.js";
@@ -231,8 +231,17 @@ export function mountTemplatePanel(
   }
 
   /**
-   * One node = one header row: badge, the node's own value control(s), then
-   * move/remove icons. Sub-structure (attrs, children, slots) nests below.
+   * Collapse state, keyed by node path so it survives the full re-render
+   * every draft edit triggers. Paths shift when siblings move or vanish —
+   * an accepted approximation, exactly like text-editor fold markers.
+   */
+  const collapsedPaths = new Set<string>();
+
+  /**
+   * One node = one header row: chevron, badge, the node's own value
+   * control(s), then add/move/remove icons (revealed on hover). Sub-
+   * structure (attrs, children, slots) nests below and folds away when
+   * the node is collapsed; a muted summary keeps the hidden shape legible.
    */
   function nodeShell(
     /** Omitted for elements — their tag select already names the node. */
@@ -242,13 +251,40 @@ export function mountTemplatePanel(
     body: (Node | string)[],
     errorText: string | undefined,
     removable: boolean,
-    moves?: { parent: Path; index: number; count: number }
+    moves?: { parent: Path; index: number; count: number },
+    extras?: { icons?: (Node | string)[]; summary?: string }
   ): HTMLElement {
+    const key = pathString(path);
+    const collapsible = body.length > 0;
+    const isCollapsed = collapsible && collapsedPaths.has(key);
+    let chevron: HTMLElement;
+    if (collapsible) {
+      chevron = h(
+        "button",
+        {
+          class: "wgd-chevron",
+          type: "button",
+          title: isCollapsed ? "Expand" : "Collapse"
+        },
+        [isCollapsed ? "▸" : "▾"]
+      );
+      chevron.addEventListener("click", () => {
+        if (isCollapsed) collapsedPaths.delete(key);
+        else collapsedPaths.add(key);
+        renderTree();
+      });
+    } else {
+      // Every row reserves the chevron column so values align.
+      chevron = h("span", { class: "wgd-chevron wgd-chevron-none" });
+    }
     const header: (Node | string)[] =
       badge === undefined
-        ? [...inline]
-        : [h("span", { class: "wgd-node-badge" }, [badge]), ...inline];
-    const icons: (Node | string)[] = [];
+        ? [chevron, ...inline]
+        : [chevron, h("span", { class: "wgd-node-badge" }, [badge]), ...inline];
+    if (isCollapsed && extras?.summary !== undefined) {
+      header.push(h("span", { class: "wgd-node-summary" }, [extras.summary]));
+    }
+    const icons: (Node | string)[] = [...(extras?.icons ?? [])];
     if (moves && moves.count > 1) {
       if (moves.index > 0) {
         const up = h("button", { class: "wgd-icon", type: "button", title: "Move up" }, ["↑"]);
@@ -276,25 +312,11 @@ export function mountTemplatePanel(
       header.push(h("span", { class: "wgd-node-icons" }, icons));
     }
     const children: (Node | string)[] = [h("div", { class: "wgd-node-row" }, header)];
+    // Diagnostics stay visible even on a collapsed node — folding must
+    // never hide an error.
     if (errorText !== undefined) children.push(diagnosticLine(errorText));
-    children.push(...body);
-    return h("div", { class: "wgd-node", "data-path": pathString(path) }, children);
-  }
-
-  /** One-click toolbar — no select-then-confirm dance. */
-  function addChildRow(parentPath: Path, childCount: number): HTMLElement {
-    const buttons = Object.entries(NODE_PRESETS).map(([name, preset]) => {
-      const button = h(
-        "button",
-        { class: "wgd-button wgd-add", type: "button", title: `Add ${name} child` },
-        [`+ ${name}`]
-      );
-      button.addEventListener("click", () =>
-        commitAt([...parentPath, childCount], preset())
-      );
-      return button;
-    });
-    return h("div", { class: "wgd-toolbar wgd-add-child" }, buttons);
+    if (!isCollapsed) children.push(...body);
+    return h("div", { class: "wgd-node", "data-path": key }, children);
   }
 
   /** Tags the built-in styles and typical widget markup actually use. */
@@ -379,22 +401,21 @@ export function mountTemplatePanel(
   ): HTMLElement {
     const slotPath = [...parentPath, slot];
     if (node === undefined) {
-      const buttons = Object.entries(NODE_PRESETS).map(([name, preset]) => {
-        const button = h(
-          "button",
-          { class: "wgd-button wgd-add", type: "button", title: `Set ${label} to a ${name} node` },
-          [`+ ${label}: ${name}`]
-        );
-        button.addEventListener("click", () => commitAt(slotPath, preset()));
-        return button;
-      });
-      const toolbar = h("div", { class: "wgd-toolbar" }, buttons);
+      const menu = menuButton(
+        `+ ${label}`,
+        `Set '${label}' to a node`,
+        Object.keys(NODE_PRESETS),
+        (name) => {
+          const preset = NODE_PRESETS[name];
+          if (preset) commitAt(slotPath, preset());
+        }
+      );
       return required
         ? h("div", { class: "wgd-slot" }, [
             diagnosticLine(`Missing required '${label}'.`),
-            toolbar
+            menu
           ])
-        : toolbar;
+        : h("div", { class: "wgd-slot wgd-slot-unset" }, [menu]);
     }
     return h("div", { class: "wgd-slot" }, [
       h("span", { class: "wgd-slot-label" }, [label]),
@@ -489,7 +510,8 @@ export function mountTemplatePanel(
         ],
         errorHere,
         removable,
-        moves
+        moves,
+        { summary: node.empty !== undefined ? "template · empty" : "template" }
       );
     }
     if (typeof node.when === "string") {
@@ -507,7 +529,8 @@ export function mountTemplatePanel(
         ],
         errorHere,
         removable,
-        moves
+        moves,
+        { summary: node.else !== undefined ? "template · else" : "template" }
       );
     }
     if (typeof node.tag === "string") {
@@ -554,18 +577,27 @@ export function mountTemplatePanel(
           removeAttr
         ]);
       });
-      const addAttr = h("button", { class: "wgd-button wgd-add", type: "button" }, ["+ attr"]);
-      addAttr.addEventListener("click", () => {
-        commitAt(path, { ...node, attrs: { ...attrs, "": "" } });
-      });
       const childNodes = Array.isArray(node.children) ? (node.children as unknown[]) : [];
-      return nodeShell(
-        undefined, // the tag select is the node's label
-        path,
-        [tagControl(node.tag, (value) => commitAt(path, { ...node, tag: value }))],
-        [
-          ...attrRows,
-          h("div", { class: "wgd-toolbar" }, [addAttr]),
+      // One add menu per element covers attributes and every child form —
+      // the tree carries no persistent per-form button rows.
+      const addMenu = menuButton(
+        "+",
+        "Add attribute or child node",
+        ["attribute", ...Object.keys(NODE_PRESETS)],
+        (choice) => {
+          collapsedPaths.delete(pathString(path)); // never add into a fold
+          const preset = NODE_PRESETS[choice];
+          if (choice === "attribute") {
+            commitAt(path, { ...node, attrs: { ...attrs, "": "" } });
+          } else if (preset) {
+            commitAt([...path, childNodes.length], preset());
+          }
+        }
+      );
+      const body: (Node | string)[] = [];
+      if (attrRows.length > 0) body.push(h("div", { class: "wgd-attrs" }, attrRows));
+      if (childNodes.length > 0) {
+        body.push(
           h(
             "div",
             { class: "wgd-children" },
@@ -579,12 +611,27 @@ export function mountTemplatePanel(
                 scope
               )
             )
-          ),
-          addChildRow(path, childNodes.length)
-        ],
+          )
+        );
+      }
+      const summaryParts: string[] = [];
+      if (attrRows.length > 0) {
+        summaryParts.push(`${attrRows.length} attr${attrRows.length === 1 ? "" : "s"}`);
+      }
+      if (childNodes.length > 0) {
+        summaryParts.push(
+          `${childNodes.length} ${childNodes.length === 1 ? "child" : "children"}`
+        );
+      }
+      return nodeShell(
+        undefined, // the tag select is the node's label
+        path,
+        [tagControl(node.tag, (value) => commitAt(path, { ...node, tag: value }))],
+        body,
         errorHere,
         removable,
-        moves
+        moves,
+        { icons: [addMenu], summary: summaryParts.join(" · ") }
       );
     }
     return nodeShell(
@@ -599,11 +646,30 @@ export function mountTemplatePanel(
   }
 
   let currentError: string | undefined;
+  let lastDraft: WidgetDraft | undefined;
+  let lastErrorPath: string | undefined;
+
+  /** Rebuild the tree from the last refresh inputs (collapse toggles). */
+  function renderTree(): void {
+    if (lastDraft === undefined) return;
+    treeHost.replaceChildren(
+      renderNode(
+        lastDraft.template,
+        [],
+        lastErrorPath,
+        true,
+        undefined,
+        lastDraft.descriptor.dataSchema
+      )
+    );
+  }
 
   function refresh(draft: WidgetDraft, diagnostics: DesignerDiagnostics): void {
     currentError = diagnostics.template
       ? `${diagnostics.template.code}: ${diagnostics.template.message}`
       : undefined;
+    lastDraft = draft;
+    lastErrorPath = diagnostics.template?.path;
     templateDiag.hidden = diagnostics.template === undefined;
     templateDiag.textContent = diagnostics.template
       ? `${diagnostics.template.code}: ${diagnostics.template.message}` +
@@ -612,16 +678,7 @@ export function mountTemplatePanel(
           : "")
       : "";
     if (!treeHost.hidden || treeHost.childNodes.length === 0) {
-      treeHost.replaceChildren(
-        renderNode(
-          draft.template,
-          [],
-          diagnostics.template?.path,
-          true,
-          undefined,
-          draft.descriptor.dataSchema
-        )
-      );
+      renderTree();
     }
     if (document.activeElement !== jsonArea) {
       jsonArea.value = JSON.stringify(draft.template, null, 2);

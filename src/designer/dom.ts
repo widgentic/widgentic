@@ -71,6 +71,63 @@ export function section(title: string, children: Child[], open = true): HTMLElem
   ]);
 }
 
+/**
+ * Compact add-menu: one toggle button revealing the options on demand —
+ * the tree stays calm instead of carrying a button per option at every
+ * level. Closes on pick, outside pointer-down, or Escape.
+ */
+export function menuButton(
+  label: string,
+  title: string,
+  options: string[],
+  onPick: (option: string) => void
+): HTMLElement {
+  const wrap = h("span", { class: "wgd-menuwrap" });
+  const toggle = h(
+    "button",
+    { class: "wgd-icon wgd-menu-toggle", type: "button", title },
+    [label]
+  );
+  const menu = h("div", { class: "wgd-menu" });
+  menu.hidden = true;
+
+  const close = (): void => {
+    menu.hidden = true;
+    document.removeEventListener("pointerdown", onOutside, true);
+    document.removeEventListener("keydown", onKey, true);
+  };
+  const onOutside = (event: Event): void => {
+    if (!wrap.contains(event.target as Node)) close();
+  };
+  const onKey = (event: KeyboardEvent): void => {
+    if (event.key === "Escape") close();
+  };
+
+  toggle.addEventListener("click", () => {
+    if (!menu.hidden) {
+      close();
+      return;
+    }
+    menu.hidden = false;
+    document.addEventListener("pointerdown", onOutside, true);
+    document.addEventListener("keydown", onKey, true);
+  });
+  for (const option of options) {
+    const item = h(
+      "button",
+      { class: "wgd-menu-item", type: "button" },
+      [option]
+    );
+    item.addEventListener("click", () => {
+      close();
+      onPick(option);
+    });
+    menu.append(item);
+  }
+  wrap.append(toggle, menu);
+  return wrap;
+}
+
 /** Inline diagnostic line (empty text removes it from the flow). */
 export function diagnosticLine(text: string | undefined): HTMLElement {
   const el = h("div", { class: "wgd-diagnostic" }, text === undefined ? [] : [text]);
@@ -162,16 +219,51 @@ export function injectDesignerStyles(doc: Document): void {
 .wgd-remove { color: var(--wgd-danger); }
 /* Breathing room between a tab strip and its active pane. */
 .wgd-tabs > .wgd-row { margin-bottom: 6px; }
-/* Template tree: one node = one row; sub-structure indents below. */
-.wgd-node { padding: 1px 0 1px 8px; border-left: 2px solid var(--wgd-accent-bg); }
-.wgd-node-row { display: flex; gap: 4px; align-items: center; flex-wrap: nowrap; padding: 1px 0; }
+/* Template tree: one node = one slim row; sub-structure indents below.
+   Controls stay flat (chrome appears on hover/focus) so a deep template
+   reads like the JSON it projects, not like a form. */
+.wgd-node { padding: 0 0 0 4px; }
+.wgd-node-row { display: flex; gap: 4px; align-items: center; flex-wrap: nowrap; padding: 1px 0; border-radius: 3px; }
+.wgd-node-row:hover { background: var(--wgd-hover); }
 .wgd-node-badge { font-family: ui-monospace, monospace; font-size: 11px; color: var(--wgd-accent); background: var(--wgd-accent-bg); border-radius: 3px; padding: 0 5px; flex: 0 0 auto; }
-.wgd-node-icons { display: flex; gap: 2px; margin-left: auto; flex: 0 0 auto; }
+.wgd-node-icons { display: flex; gap: 2px; margin-left: auto; flex: 0 0 auto; visibility: hidden; }
+.wgd-node-row:hover > .wgd-node-icons, .wgd-node-row:focus-within > .wgd-node-icons { visibility: visible; }
 .wgd-node-value { flex: 1 1 auto; min-width: 4ch; }
 .wgd-icon { font: inherit; font-size: 11px; line-height: 1.4; padding: 0 5px; border: 1px solid var(--wgd-border); border-radius: 3px; background: var(--wgd-bg); cursor: pointer; color: var(--wgd-muted); }
 .wgd-icon:hover { background: var(--wgd-hover); }
-.wgd-node .wgd-input, .wgd-node .wgd-select { padding: 1px 4px; font-size: 12px; }
+.wgd-node .wgd-input, .wgd-node .wgd-select { padding: 1px 4px; font-size: 12px; border-color: transparent; background: transparent; }
+.wgd-node .wgd-input:hover, .wgd-node .wgd-select:hover,
+.wgd-node .wgd-input:focus, .wgd-node .wgd-select:focus { border-color: var(--wgd-border); background: var(--wgd-bg); }
 .wgd-tagwrap, .wgd-pathwrap { display: contents; }
+/* Collapse chevron: every tree row reserves the column so values align. */
+.wgd-chevron { flex: 0 0 auto; width: 16px; padding: 0; border: none; background: none; color: var(--wgd-muted); font-size: 10px; cursor: pointer; }
+.wgd-chevron-none { visibility: hidden; }
+.wgd-node-summary { color: var(--wgd-muted); font-size: 11px; flex: 0 0 auto; }
+/* Attrs vs children: attributes group under a dotted muted rail with
+   key-colored names; children keep the solid accent rail. */
+.wgd-attrs { margin-left: 14px; padding-left: 8px; border-left: 2px dotted var(--wgd-border); display: flex; flex-direction: column; gap: 1px; }
+.wgd-attr-row { display: flex; gap: 4px; align-items: center; flex-wrap: nowrap; padding: 0; }
+.wgd-attr-row > .wgd-icon { visibility: hidden; }
+.wgd-attr-row:hover > .wgd-icon, .wgd-attr-row:focus-within > .wgd-icon { visibility: visible; }
+.wgd-attr-name { font-family: ui-monospace, monospace; color: var(--wgd-hl-key); flex: 0 1 auto; min-width: 5ch; }
+.wgd-attr-mode { flex: 0 0 auto; color: var(--wgd-muted); font-size: 11px; }
+.wgd-children { margin-left: 14px; padding-left: 8px; border-left: 2px solid var(--wgd-accent-line); gap: 1px; }
+.wgd-slot { display: flex; flex-direction: column; gap: 1px; }
+.wgd-slot-label { color: var(--wgd-muted); font-size: 11px; font-style: italic; padding-left: 4px; }
+/* Add menu: one toggle, options in a popover. */
+.wgd-menuwrap { position: relative; display: inline-flex; }
+.wgd-menu-toggle { color: var(--wgd-accent); }
+.wgd-menu { position: absolute; top: 100%; left: 0; z-index: 10; min-width: 9ch; display: flex; flex-direction: column; background: var(--wgd-panel); border: 1px solid var(--wgd-border); border-radius: 4px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25); padding: 2px; }
+/* display:flex above would defeat the hidden attribute — restate it. */
+.wgd-menu[hidden] { display: none; }
+/* An OPEN menu must not inherit the icons' hover-gated visibility:
+   visibility (unlike display) lets a child re-assert visible. */
+.wgd-menu:not([hidden]) { visibility: visible; }
+.wgd-menuwrap:has(> .wgd-menu:not([hidden])) { visibility: visible; }
+/* Menus in the right-aligned icons area hang leftward, not off-panel. */
+.wgd-node-icons .wgd-menu { left: auto; right: 0; }
+.wgd-menu-item { font: inherit; font-size: 12px; text-align: left; padding: 3px 8px; border: none; border-radius: 3px; background: none; color: var(--wgd-text); cursor: pointer; white-space: nowrap; }
+.wgd-menu-item:hover { background: var(--wgd-accent-bg); color: var(--wgd-accent); }
 /* The tag select IS the element node's label: flat, accent, monospace. */
 .wgd-node .wgd-tag { flex: 0 0 auto; max-width: 14ch; font-family: ui-monospace, monospace; font-size: 11px; color: var(--wgd-accent); background: var(--wgd-accent-bg); border: 1px solid transparent; border-radius: 3px; padding: 0 4px; }
 .wgd-node .wgd-tag:hover, .wgd-node .wgd-tag:focus { border-color: var(--wgd-accent-line); }

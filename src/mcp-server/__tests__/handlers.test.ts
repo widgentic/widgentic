@@ -80,9 +80,9 @@ describe("tool definitions", () => {
     ).theme;
     // Both forms stay legal; when the USER names a theme, the name wins —
     // saved themes are server-side truth, reconstructions drift.
-    expect(theme.type).toEqual(["object", "string"]);
-    expect(theme.description).toContain("pass the NAME");
-    expect(theme.description).toContain("do NOT reconstruct");
+    expect(theme?.type).toEqual(["object", "string"]);
+    expect(theme?.description).toContain("pass the NAME");
+    expect(theme?.description).toContain("do NOT reconstruct");
   });
 
   it("data is explicitly typed to steer client marshalling", () => {
