@@ -143,17 +143,22 @@ export function mountIoPanel(store: DraftStore): {
     applyDefinition(store, result.definition);
   });
 
-  const element = section("Import / Export", [
+  // Import and export are independent flows — two sections, import first
+  // (bringing a drafted definition in is the more common entry point).
+  const importSection = section("Import", [
+    importField,
+    importError,
+    h("div", { class: "wgd-row" }, [importButton])
+  ]);
+  const exportSection = section("Export", [
     h("div", { class: "wgd-row" }, [
       button("Export widget JSON", () => exportWidgetJson(store.get())),
       button("Export theme JSON", () => exportThemeJson(store.get())),
       button("Copy as TypeScript", () => toTypeScriptModule(store.get()))
     ]),
-    output,
-    importField,
-    importError,
-    h("div", { class: "wgd-row" }, [importButton])
+    output
   ]);
+  const element = h("div", { class: "wgd-io" }, [importSection, exportSection]);
   // After assembly: the layer wraps the textarea in place, so the element
   // must already have its parent.
   attachJsonHighlight(output);

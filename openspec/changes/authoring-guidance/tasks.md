@@ -43,3 +43,12 @@
 - [x] 5.6 Tests: menu opens/lists/inserts and closes on outside click + Escape; slot menus set `empty`/`else`; collapse hides sub-structure and survives a draft edit; `.wgd-attrs` distinct from `.wgd-children`; rewrite the old toolbar test
 - [x] 5.7 Rig check on :8082 (invoice-sized template reads flat and calm); full test + typecheck green
 - [x] 5.8 Dropdowns fit their SELECTED value (fitSelect: ch + em + fixed-px caret term; re-fits on change) so carets hug the text instead of drifting with leftover row width — tag select's 14ch cap and path select's flex-stretch removed; delta scenario + width tests; caret region is fixed-px in the UA, so a pure em term clips small-font selects (11px tags)
+
+## 6. Flat pass on the remaining panels (user feedback)
+
+- [x] 6.1 Delta specs: schema builder shares the flat treatment; styles editable as tree + JSON (parse-gated); Import and Export as independent sections, import first (MODIFIED requirement carrying both original scenarios)
+- [x] 6.2 `fitSelect` promoted to `dom.ts`; schema builder flat pass — slim rows with hover-revealed remove controls, fitted type selects, slim add/remove controls
+- [x] 6.3 `styles-editor.ts`: structured styles tree (selector rows + declaration rows, add via slim controls) + Tree/JSON tabs in the styles panel
+- [x] 6.4 `io.ts`: split into an Import section and an Export section, import first
+- [x] 6.5 Tests: schema rows hover-reveal + fitted selects; styles tree edits project to the draft and JSON stays parse-gated; io renders two sections in order; existing io tests still pass
+- [x] 6.6 Rig check on :8082; full test + typecheck green; commit and push

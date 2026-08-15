@@ -13,6 +13,7 @@ import { mountIoPanel } from "./io.js";
 import { createJsonTreeEditor } from "./json-tree-editor.js";
 import { createSchemaBuilder } from "./schema-builder.js";
 import { createSchemaForm } from "./schema-form.js";
+import { createStylesEditor } from "./styles-editor.js";
 import type { DraftStore, WidgetDraft } from "./store.js";
 import { mountTemplatePanel } from "./template-panel.js";
 import { mountThemePanel } from "./theme-panel.js";
@@ -308,29 +309,48 @@ export function mountPanels(
     false
   );
 
-  // --- Styles panel (right, presentation) --------------------------------
+  // --- Styles panel (right, presentation): Tree + JSON tabs --------------
+  // Two projections of the one draft value, exactly like the template's
+  // tree/JSON pair: the tree enforces the string-only two-level shape,
+  // the JSON pane stays parse-gated.
   const stylesDiag = h("div");
-  const stylesPanel = section("Styles (.wg- selectors, guarded like the server)", [
-    jsonField(
-      "styles (Record<selector, Record<property, value>>)",
-      (d) => d.descriptor.styles,
-      (d, v) => {
-        if (!isPlainObject(v)) return d;
-        return {
-          ...d,
-          descriptor: {
-            ...d.descriptor,
-            styles: v as Record<string, Record<string, string>>
-          }
-        };
-      },
-      (d) => {
+  const stylesEditor = createStylesEditor(store.get().descriptor.styles, (styles) =>
+    store.update((d) => {
+      if (styles === undefined) {
         const { styles: _s, ...rest } = d.descriptor;
         return { ...d, descriptor: rest };
-      },
-      store,
-      refreshers
-    ),
+      }
+      return { ...d, descriptor: { ...d.descriptor, styles } };
+    })
+  );
+  refreshers.push((draft) => stylesEditor.setValue(draft.descriptor.styles));
+  const stylesPanel = section("Styles (.wg- selectors, guarded like the server)", [
+    tabs([
+      { label: "Tree", element: stylesEditor.element },
+      {
+        label: "JSON",
+        element: jsonField(
+          "styles (Record<selector, Record<property, value>>)",
+          (d) => d.descriptor.styles,
+          (d, v) => {
+            if (!isPlainObject(v)) return d;
+            return {
+              ...d,
+              descriptor: {
+                ...d.descriptor,
+                styles: v as Record<string, Record<string, string>>
+              }
+            };
+          },
+          (d) => {
+            const { styles: _s, ...rest } = d.descriptor;
+            return { ...d, descriptor: rest };
+          },
+          store,
+          refreshers
+        )
+      }
+    ]),
     stylesDiag
   ]);
 

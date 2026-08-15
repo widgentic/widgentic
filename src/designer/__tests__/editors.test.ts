@@ -4,6 +4,7 @@ import { createDesigner } from "../index.js";
 import { createJsonTreeEditor } from "../json-tree-editor.js";
 import { createSchemaBuilder } from "../schema-builder.js";
 import { createSchemaForm } from "../schema-form.js";
+import { createStylesEditor } from "../styles-editor.js";
 
 beforeEach(() => {
   document.body.innerHTML = "";
@@ -175,6 +176,95 @@ describe("schema builder", () => {
     ) as HTMLButtonElement;
     start.click();
     expect(changes.at(-1)).toEqual({ type: "object" });
+  });
+});
+
+describe("schema builder flat treatment", () => {
+  it("hides removal controls until the row is hovered and fits type selects", () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    createDesigner(container); // starter draft ships a dataSchema
+    const builder = container.querySelector(".wgd-schemabuilder") as HTMLElement;
+    const removeIcon = [...builder.querySelectorAll(".wgd-sb-row > .wgd-icon")][0] as HTMLElement;
+    expect(removeIcon).toBeDefined();
+    // At rest the row chrome is hidden — the flat look the tree set.
+    expect(getComputedStyle(removeIcon).visibility).toBe("hidden");
+    const typeSelect = builder.querySelector(".wgd-sb-type") as HTMLSelectElement;
+    expect(typeSelect.style.width).toBe("calc(6ch + 1.2em + 18px)"); // 'object'
+  });
+});
+
+describe("styles tree editor", () => {
+  it("renders selectors with declaration rows and edits in place", () => {
+    const changes: unknown[] = [];
+    const editor = createStylesEditor(
+      { ".wg-card": { padding: "8px" } },
+      (v) => changes.push(v)
+    );
+    document.body.append(editor.element);
+    const selector = editor.element.querySelector(".wgd-st-selector") as HTMLInputElement;
+    expect(selector.value).toBe(".wg-card");
+    const value = editor.element.querySelector(".wgd-st-value") as HTMLInputElement;
+    change(value, "12px");
+    expect(changes.at(-1)).toEqual({ ".wg-card": { padding: "12px" } });
+  });
+
+  it("adds selectors and declarations, removes both", () => {
+    const editor = createStylesEditor(undefined, () => undefined);
+    document.body.append(editor.element);
+    const addSelector = editor.element.querySelector(".wgd-st-add") as HTMLButtonElement;
+    addSelector.click();
+    expect(editor.getValue()).toEqual({ ".wg-": {} });
+    const addDecl = [...editor.element.querySelectorAll(".wgd-icon")].find(
+      (b) => b.getAttribute("title") === "Add declaration"
+    ) as HTMLButtonElement;
+    addDecl.click();
+    expect(editor.getValue()).toEqual({ ".wg-": { "": "" } });
+    const removeDecl = [...editor.element.querySelectorAll(".wgd-icon")].find(
+      (b) => b.getAttribute("title") === "Remove declaration"
+    ) as HTMLButtonElement;
+    removeDecl.click();
+    expect(editor.getValue()).toEqual({ ".wg-": {} });
+    const removeSelector = [...editor.element.querySelectorAll(".wgd-icon")].find(
+      (b) => b.getAttribute("title") === "Remove selector"
+    ) as HTMLButtonElement;
+    removeSelector.click();
+    // Emptied record means "no styles" — the key drops from the descriptor.
+    expect(editor.getValue()).toBeUndefined();
+  });
+
+  it("renames a selector preserving its declarations", () => {
+    const editor = createStylesEditor(
+      { ".wg-a": { color: "var(--wg-fg)" } },
+      () => undefined
+    );
+    document.body.append(editor.element);
+    change(
+      editor.element.querySelector(".wgd-st-selector") as HTMLInputElement,
+      ".wg-b"
+    );
+    expect(editor.getValue()).toEqual({ ".wg-b": { color: "var(--wg-fg)" } });
+  });
+
+  it("projects into the draft next to the parse-gated JSON tab", () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const designer = createDesigner(container);
+    // The styles section carries the same Tree/JSON pair as the template.
+    const stylesSection = [...container.querySelectorAll(".wgd-section")].find(
+      (s) => s.querySelector(".wgd-section-title")?.textContent?.startsWith("Styles")
+    ) as HTMLElement;
+    const tabLabels = [...stylesSection.querySelectorAll(".wgd-tab")].map(
+      (b) => b.textContent
+    );
+    expect(tabLabels).toEqual(["Tree", "JSON"]);
+    const addSelector = stylesSection.querySelector(".wgd-st-add") as HTMLButtonElement;
+    addSelector.click();
+    change(
+      stylesSection.querySelector(".wgd-st-selector") as HTMLInputElement,
+      ".wg-hero"
+    );
+    expect(designer.getDraft().descriptor.styles).toEqual({ ".wg-hero": {} });
   });
 });
 

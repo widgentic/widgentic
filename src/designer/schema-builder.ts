@@ -5,7 +5,7 @@
  * dependency-free couple hundred lines.
  */
 import type { DataSchema } from "widgentic/catalog";
-import { diagnosticLine, h } from "./dom.js";
+import { diagnosticLine, fitSelect, h } from "./dom.js";
 
 const TYPES = ["object", "array", "string", "number", "integer", "boolean", "null", "any"] as const;
 
@@ -66,6 +66,7 @@ export function createSchemaBuilder(
     typeSelect.value = TYPES.includes(currentType as (typeof TYPES)[number])
       ? currentType
       : "any";
+    fitSelect(typeSelect);
     typeSelect.addEventListener("change", () => {
       let next = withKey(node, "type", typeSelect.value === "any" ? undefined : typeSelect.value);
       if (typeSelect.value !== "object") {

@@ -82,7 +82,11 @@ describe("designer shell", () => {
     const right = container.querySelector(".wgd-side") as HTMLElement;
     expect(left.textContent).toContain("General");
     expect(left.textContent).toContain("Template");
-    expect(left.textContent).toContain("Import / Export");
+    // Import and export are independent sections, import first.
+    const ioTitles = [...left.querySelectorAll(".wgd-io .wgd-section-title")].map(
+      (el) => el.textContent
+    );
+    expect(ioTitles).toEqual(["Import", "Export"]);
     expect(right.textContent).toContain("Data for preview");
     expect(right.textContent).toContain("Preview theme");
     expect(right.querySelector(".wgd-preview")).not.toBeNull();

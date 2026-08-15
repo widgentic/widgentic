@@ -72,6 +72,23 @@ export function section(title: string, children: Child[], open = true): HTMLElem
 }
 
 /**
+ * Size a select to its SELECTED label (a bare <select> sizes to its
+ * widest option, or to whatever flex hands it), so the caret sits beside
+ * the text instead of drifting with leftover row width. ch tracks
+ * monospace text exactly; the em term scales with padding, and the px
+ * term covers the UA's caret region, which does NOT scale with font size
+ * (11px selects clip under a pure em term). Re-fits on change.
+ */
+export function fitSelect(select: HTMLSelectElement): void {
+  const fit = (): void => {
+    const label = select.options[select.selectedIndex]?.text ?? select.value;
+    select.style.width = `calc(${Math.max(label.length, 1)}ch + 1.2em + 18px)`;
+  };
+  fit();
+  select.addEventListener("change", fit);
+}
+
+/**
  * Compact add-menu: one toggle button revealing the options on demand —
  * the tree stays calm instead of carrying a button per option at every
  * level. Closes on pick, outside pointer-down, or Escape.
@@ -215,7 +232,19 @@ export function injectDesignerStyles(doc: Document): void {
 .wgd-sb-req { display: flex; gap: 2px; align-items: center; color: var(--wgd-muted); font-size: 11px; flex: 0 0 auto; }
 .wgd-sb-constraint { flex: 1 1 auto; min-width: 6ch; font-size: 12px; }
 .wgd-sb-root { padding: 2px 0 2px 8px; border-left: 2px solid transparent; }
-.wgd-schemabuilder .wgd-input, .wgd-schemabuilder .wgd-select { padding: 1px 4px; }
+/* Schema builder: the template tree's flat discipline — chrome on
+   hover/focus only, removal revealed by the row, fitted type selects. */
+.wgd-schemabuilder .wgd-input, .wgd-schemabuilder .wgd-select { padding: 1px 4px; font-size: 12px; border-color: transparent; background: transparent; }
+.wgd-schemabuilder .wgd-input:hover, .wgd-schemabuilder .wgd-select:hover,
+.wgd-schemabuilder .wgd-input:focus, .wgd-schemabuilder .wgd-select:focus { border-color: var(--wgd-border); background: var(--wgd-bg); }
+.wgd-schemabuilder .wgd-sb-type { flex: 0 0 auto; box-sizing: border-box; max-width: none; color: var(--wgd-accent); }
+.wgd-schemabuilder .wgd-sb-prop { font-size: 12px; color: var(--wgd-hl-key); }
+.wgd-sb-row { border-radius: 3px; }
+.wgd-sb-row:hover { background: var(--wgd-hover); }
+.wgd-sb-row > .wgd-icon { visibility: hidden; }
+.wgd-sb-row:hover > .wgd-icon, .wgd-sb-row:focus-within > .wgd-icon { visibility: visible; }
+.wgd-schemabuilder .wgd-button { font-size: 11px; padding: 0 6px; border-color: transparent; color: var(--wgd-accent); background: none; }
+.wgd-schemabuilder .wgd-button:hover { border-color: var(--wgd-border); background: var(--wgd-hover); }
 .wgd-remove { color: var(--wgd-danger); }
 /* Breathing room between a tab strip and its active pane. */
 .wgd-tabs > .wgd-row { margin-bottom: 6px; }
@@ -264,6 +293,27 @@ export function injectDesignerStyles(doc: Document): void {
 .wgd-node-icons .wgd-menu { left: auto; right: 0; }
 .wgd-menu-item { font: inherit; font-size: 12px; text-align: left; padding: 3px 8px; border: none; border-radius: 3px; background: none; color: var(--wgd-text); cursor: pointer; white-space: nowrap; }
 .wgd-menu-item:hover { background: var(--wgd-accent-bg); color: var(--wgd-accent); }
+/* Styles tree: selector rows with declaration rows — the same flat
+   template-tree discipline (flat inputs, hover-revealed icons). */
+.wgd-styles { display: flex; flex-direction: column; gap: 2px; }
+.wgd-st-row { display: flex; gap: 4px; align-items: center; border-radius: 3px; }
+.wgd-st-row:hover { background: var(--wgd-hover); }
+.wgd-st-row:hover > .wgd-node-icons, .wgd-st-row:focus-within > .wgd-node-icons { visibility: visible; }
+.wgd-styles .wgd-input { padding: 1px 4px; font-size: 12px; font-family: ui-monospace, monospace; border-color: transparent; background: transparent; }
+.wgd-styles .wgd-input:hover, .wgd-styles .wgd-input:focus { border-color: var(--wgd-border); background: var(--wgd-bg); }
+.wgd-st-selector { flex: 1 1 auto; min-width: 8ch; color: var(--wgd-accent); }
+.wgd-st-decls { margin-left: 14px; padding-left: 8px; border-left: 2px dotted var(--wgd-border); display: flex; flex-direction: column; gap: 1px; }
+.wgd-st-decl { display: flex; gap: 2px; align-items: center; border-radius: 3px; }
+.wgd-st-decl:hover { background: var(--wgd-hover); }
+.wgd-st-decl > .wgd-icon { visibility: hidden; }
+.wgd-st-decl:hover > .wgd-icon, .wgd-st-decl:focus-within > .wgd-icon { visibility: visible; }
+.wgd-st-prop { flex: 0 1 auto; min-width: 8ch; color: var(--wgd-hl-key); }
+.wgd-st-value { flex: 1 1 auto; min-width: 8ch; }
+.wgd-st-colon { color: var(--wgd-muted); flex: 0 0 auto; }
+.wgd-st-add { font-size: 11px; padding: 0 6px; border-color: transparent; color: var(--wgd-accent); background: none; }
+.wgd-st-add:hover { border-color: var(--wgd-border); background: var(--wgd-hover); }
+/* Import and export stack as sibling sections with the column's rhythm. */
+.wgd-io { display: flex; flex-direction: column; gap: 8px; }
 /* The tag select IS the element node's label: flat, accent, monospace.
    Tag and path selects are width-fitted to their SELECTED value by the
    panel (fitSelect), so carets hug the text — no flex stretching here. */
