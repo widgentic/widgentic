@@ -97,9 +97,10 @@ widgentic is itself an MCP server: any MCP client can discover the available wid
 ```bash
 npm run mcp        # stdio server
 npm run mcp:http   # Streamable HTTP on :3001/mcp (for HTTP hosts and Apps testing)
-# tools: list_widgets, list_themes, list_theme_tokens, render_widget
+# tools: list_widgets, list_themes, list_theme_tokens, render_widget, get_authoring_guide
 ```
 
+- `get_authoring_guide` — the complete authoring contract for agents drafting custom widget/theme JSON: entry shapes, template DSL forms and safety rules, identifier rules, style/schema constraints, tokens, and limits — derived from the live validators. Agents draft; users import, validate, and save in the designer at [widgentic.dev](https://widgentic.dev) (registration over MCP deliberately does not exist).
 - `list_themes` — the server's registered themes (`name`, `label`, `tokens`); pass any name as `render_widget`'s `theme` instead of composing tokens.
 - `list_widgets` — returns every registered kind's descriptor: purpose, expected `data` shape, an example to imitate, and supported hints.
 - `render_widget` — input `{ widget, data, hints?, meta? }`; validates the id and payload, then returns the rendered HTML **plus** an embedded widgentic payload block (aware hosts mount it natively). Invalid input comes back as a structured, correctable error (`UNKNOWN_KIND`, `MISSING_FIELD`, ...). Misaimed hints (misspelled keys, targets matching no field/column, unsafe image sources) never fail a render — they come back as a compact `Hint notes:` tail on the text output plus `structuredContent.diagnostics`, so agents can self-correct on the next call.

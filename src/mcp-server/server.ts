@@ -25,6 +25,7 @@ import {
   RENDER_WIDGET_TOOL,
   LIST_THEME_TOKENS_TOOL,
   LIST_THEMES_TOOL,
+  GET_AUTHORING_GUIDE_TOOL,
   WIDGENTIC_UI_URI_PREFIX,
   WIDGENTIC_APP_TEMPLATE_URI
 } from "./definitions.js";
@@ -36,6 +37,7 @@ import {
 } from "./handlers.js";
 import { inlineRenderResultImages } from "./inline-images.js";
 import { buildAppTemplate } from "./app-template.js";
+import { handleGetAuthoringGuide } from "./guide.js";
 import { createThemeRegistry } from "../theming/index.js";
 import type { ThemeRegistry } from "../theming/index.js";
 
@@ -93,6 +95,12 @@ export function createWidgenticServer(
     LIST_THEMES_TOOL.name,
     { description: LIST_THEMES_TOOL.description },
     () => handleListThemes(themes) as CallToolResult
+  );
+
+  server.registerTool(
+    GET_AUTHORING_GUIDE_TOOL.name,
+    { description: GET_AUTHORING_GUIDE_TOOL.description },
+    () => handleGetAuthoringGuide() as CallToolResult
   );
 
   // Formal MCP Apps declaration (spec 2026-01-26, via the official ext-apps

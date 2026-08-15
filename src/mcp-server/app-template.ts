@@ -1,4 +1,4 @@
-import { baseStylesheet } from "../theming/index.js";
+import { baseStylesheet, darkTheme } from "../theming/index.js";
 
 /**
  * The declared MCP Apps template (`ui://widgentic/app.html`).
@@ -236,9 +236,28 @@ body {
   padding: calc(var(--wg-spacing, 8px) * 2);
 }`;
 
+  // Theme coherence for tokens the host bridge does NOT map: the base
+  // stylesheet's :root defaults are the LIGHT literals, so on dark hosts
+  // (data-theme set by applyHostContext) the unbridged colors must flip
+  // to the dark preset — otherwise a light `surface` card renders under
+  // the host's near-white bridged `fg` (observed live at v19: white-on-
+  // white values). Bridged tokens are excluded so host-exact values keep
+  // winning in both modes; an explicit render theme still beats this via
+  // the later dynamic style element at equal specificity.
+  const bridgedTokens = new Set([
+    "bg", "fg", "muted", "border", "accent", "font-family", "radius", "shadow"
+  ]);
+  const darkOverridesCss =
+    `:root[data-theme="dark"] {\n` +
+    Object.entries(darkTheme)
+      .filter(([token]) => !bridgedTokens.has(token))
+      .map(([token, value]) => `  --wg-${token}: ${value};`)
+      .join("\n") +
+    `\n}`;
+
   return (
     `<!doctype html>\n<meta charset="utf-8">\n<title>widgentic</title>\n` +
-    `<style>\n${baseStylesheet}\n${hostTokenBridgeCss}\n</style>\n` +
+    `<style>\n${baseStylesheet}\n${hostTokenBridgeCss}\n${darkOverridesCss}\n</style>\n` +
     `<style id="wg-dynamic-css"></style>\n` +
     `<body><div id="wg-root"></div>\n<script>${bridge}</script></body>`
   );

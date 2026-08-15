@@ -10,7 +10,7 @@ import { h, injectDesignerStyles } from "./dom.js";
 import { applyDefinition, checkDefinition } from "./io.js";
 import type { WidgetDefinition } from "./io.js";
 import { mountPanels } from "./panels.js";
-import { createPreview, PREVIEW_KIND } from "./preview.js";
+import { createPreview } from "./preview.js";
 import type { WidgetDraft } from "./store.js";
 import { cloneDraft, createDraftStore, starterDraft } from "./store.js";
 import { deriveDiagnostics } from "./validate.js";
@@ -63,9 +63,6 @@ export function createDesigner(
     (draft: WidgetDraft, diagnostics: DesignerDiagnostics) => void
   >();
 
-  // UI state that is not part of the draft: what the preview pane shows.
-  let previewKind: string = PREVIEW_KIND;
-
   const preview = createPreview();
   const leftColumn = h("div", { class: "wgd-panels" });
   const rightSections = h("div", { class: "wgd-preview-pane" });
@@ -79,19 +76,12 @@ export function createDesigner(
   const panels = mountPanels(
     store,
     { left: leftColumn, right: rightSections },
-    {
-      setPreviewKind(kind: string) {
-        previewKind = kind;
-        refresh(store.get());
-      },
-      getPreviewKind: () => previewKind
-    },
     options.themes ?? []
   );
 
   function refresh(draft: WidgetDraft): void {
     const diagnostics = deriveDiagnostics(draft);
-    preview.update(draft, diagnostics, previewKind);
+    preview.update(draft, diagnostics);
     for (const listener of [...listeners]) listener(draft, diagnostics);
   }
 

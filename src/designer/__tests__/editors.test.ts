@@ -354,8 +354,14 @@ describe("panel integration", () => {
   it("data editors switch from tree to schema-driven form when a schema appears", () => {
     const container = document.createElement("div");
     document.body.append(container);
-    createDesigner(container);
-    // Starter draft has no schema → tree editor present in Sample data.
+    const designer = createDesigner(container);
+    // A schema-less widget → tree editor present in Sample data. (The
+    // starter draft now ships WITH a schema, so load one without.)
+    designer.loadWidget({
+      kind: "schemaless",
+      template: { tag: "div", children: [{ bind: "message" }] },
+      descriptor: { description: "d", dataShape: "{ message }" }
+    });
     expect(container.querySelector(".wgd-jsontree")).not.toBeNull();
     // Add a schema via the builder.
     const start = [...container.querySelectorAll("button")].find((b) =>

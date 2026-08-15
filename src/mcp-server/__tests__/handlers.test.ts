@@ -509,6 +509,9 @@ describe("handleRenderWidget", () => {
     expect(sc.html).toContain('class="wg-badge"');
     expect(sc.css).toContain(".wg-badge {");
     expect(sc.css).toContain("--wg-bg: #0f131c;");
+    // The theme block's selector matches the app template's dark-override
+    // specificity, so an explicit theme wins on dark hosts too.
+    expect(sc.css).toContain(':root, :root[data-theme="dark"] {');
     expect(sc.payload.kind).toBe("badge");
 
     // single-block formats carry it too
@@ -734,6 +737,21 @@ describe("list_theme_tokens documents custom variables", () => {
     };
     expect(listing.rules).toContain("x-");
     expect(listing.rules).toContain("custom variables");
+  });
+
+  it("both theme tools point agents at the importable entry shape", () => {
+    // A theme worth building is usually worth KEEPING: the rules text must
+    // steer agents to deliver the { name, ..., tokens } entry for designer
+    // import, not just the one-render inline map.
+    const tokens = JSON.parse(textOf(handleListThemeTokens())) as { rules: string };
+    expect(tokens.rules).toContain("{ name, label?, description?, tokens }");
+    expect(tokens.rules).toContain("widgentic.dev");
+    expect(tokens.rules).toContain("get_authoring_guide");
+    const themes = JSON.parse(textOf(handleListThemes(createThemeRegistry()))) as {
+      rules: string;
+    };
+    expect(themes.rules).toContain("{ name, label?, description?, tokens }");
+    expect(themes.rules).toContain("get_authoring_guide");
   });
 });
 

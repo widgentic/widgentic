@@ -191,9 +191,42 @@ describe("widget designer theme selection", () => {
   it("does not edit theme tokens any more", () => {
     const container = host();
     createDesigner(container, { themes });
-    // Token inputs belong to the theme designer now.
-    expect(container.textContent).not.toContain("--wg-accent");
+    // Token EDITING belongs to the theme designer; the widget designer's
+    // token panel is a read-only reference (no inputs, no picker swatches).
     expect(container.querySelector(".wgd-swatch")).toBeNull();
+    const reference = container.querySelector(".wgd-token-ref");
+    expect(reference).not.toBeNull();
+    expect(reference?.querySelector("input")).toBeNull();
+  });
+
+  it("token reference shows the selected entry's values over the defaults", () => {
+    const container = host();
+    createDesigner(container, { themes });
+    const rowFor = (name: string) =>
+      [...container.querySelectorAll(".wgd-token-ref-row")].find((row) =>
+        row.querySelector(".wgd-token-ref-name")?.textContent === `--wg-${name}`
+      );
+    // Defaults first ("none" selected).
+    const defaultBg = rowFor("bg")?.querySelector(".wgd-token-ref-value")?.textContent;
+    expect(defaultBg).toBeTruthy();
+
+    const select = container.querySelector(".wgd-theme-select") as HTMLSelectElement;
+    select.value = "dark";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    const darkEntry = themes.find((t) => t.name === "dark");
+    expect(rowFor("bg")?.querySelector(".wgd-token-ref-value")?.textContent).toBe(
+      darkEntry?.tokens.bg
+    );
+    // Color-typed tokens carry a swatch painted with the effective value.
+    const swatch = rowFor("bg")?.querySelector(".wgd-token-ref-swatch") as HTMLElement;
+    expect(swatch?.getAttribute("style")).toContain(darkEntry?.tokens.bg as string);
+
+    // Back to none: defaults again.
+    select.value = "";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(rowFor("bg")?.querySelector(".wgd-token-ref-value")?.textContent).toBe(
+      defaultBg
+    );
   });
 
   it("keeps the theme selection out of the export", () => {

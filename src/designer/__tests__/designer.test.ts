@@ -57,9 +57,22 @@ describe("designer shell", () => {
     createDesigner(container);
     // Tree editor shows the starter root node immediately…
     expect(container.querySelector(".wgd-tree .wgd-node")).not.toBeNull();
-    // …and the JSON pane carries the template source.
+    // …and the JSON pane carries the template source. The starter binds
+    // only schema-declared properties — no $meta (unvalidated) paths.
     const json = container.querySelector(".wgd-template-json") as HTMLTextAreaElement;
-    expect(json.value).toContain('"$meta.title"');
+    expect(json.value).toContain('"title"');
+    expect(json.value).not.toContain("$meta");
+  });
+
+  it("starter draft declares everything it binds in its dataSchema", () => {
+    const draft = starterDraft();
+    const schema = draft.descriptor.dataSchema as {
+      required: string[];
+      properties: Record<string, unknown>;
+    };
+    expect(Object.keys(schema.properties).sort()).toEqual(["message", "title"]);
+    expect(schema.required).toEqual(["message"]);
+    expect(JSON.stringify(draft.template)).not.toContain("$meta");
   });
 
   it("lays out definition panels left and presentation panels right", () => {
@@ -186,13 +199,14 @@ describe("data and styles diagnostics", () => {
 });
 
 describe("preview controls", () => {
-  it("preview-kind selector renders built-ins for theme previews", () => {
+  it("offers no kind selection — the preview renders the draft only", () => {
     const container = host();
     createDesigner(container);
-    const select = container.querySelector(".wgd-preview-kind") as HTMLSelectElement;
-    select.value = "card";
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-    expect(container.querySelector(".wgd-preview")?.innerHTML).toContain("wg-card");
+    // Previewing arbitrary kinds under a theme is the theme designer's job.
+    expect(container.querySelector(".wgd-preview-kind")).toBeNull();
+    expect(container.querySelector(".wgd-preview")?.innerHTML).toContain(
+      "wg-template"
+    );
   });
 });
 

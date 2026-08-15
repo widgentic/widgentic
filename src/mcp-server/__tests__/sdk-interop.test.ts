@@ -162,6 +162,7 @@ describe("SDK interoperability (in-memory transport, library assembly)", () => {
     const tools = await client.listTools();
     const names = tools.tools.map((tool) => tool.name).sort();
     expect(names).toEqual([
+      "get_authoring_guide",
       "list_theme_tokens",
       "list_themes",
       "list_widgets",

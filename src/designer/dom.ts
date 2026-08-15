@@ -202,6 +202,13 @@ textarea.wgd-hl-input {
 .wgd-swatch { flex: 0 0 auto; width: 26px; height: 22px; padding: 0; border: 1px solid var(--wgd-border); border-radius: 4px; background: none; cursor: pointer; }
 .wgd-token-row { display: flex; gap: 6px; align-items: center; }
 .wgd-token-row .wgd-input { flex: 1 1 auto; min-width: 6ch; font-family: ui-monospace, monospace; font-size: 12px; }
+.wgd-token-ref { display: flex; flex-direction: column; gap: 2px; max-height: 220px; overflow-y: auto; margin-top: 4px; }
+.wgd-token-ref-row { display: flex; gap: 6px; align-items: center; font-size: 11px; }
+.wgd-token-ref-swatch { flex: 0 0 auto; width: 14px; height: 14px; border: 1px solid var(--wgd-border); border-radius: 3px; }
+.wgd-token-ref-noswatch { border-style: dashed; opacity: 0.35; }
+.wgd-token-ref-name { font-family: ui-monospace, monospace; color: var(--wgd-accent, #2563eb); }
+.wgd-token-ref-value { color: var(--wgd-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wgd-token-ref-details summary { cursor: pointer; }
 `;
   doc.head.appendChild(style);
 }

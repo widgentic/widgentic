@@ -36,6 +36,22 @@ export const WIDGENTIC_APP_MIME_TYPE = "text/html;profile=mcp-app";
 /** URI of the declared app template that renders `structuredContent`. */
 export const WIDGENTIC_APP_TEMPLATE_URI = "ui://widgentic/app.html";
 
+export const GET_AUTHORING_GUIDE_TOOL: McpToolDefinition = {
+  name: "get_authoring_guide",
+  description:
+    "Get the complete guide for AUTHORING widget and theme JSON: entry " +
+    "shapes, the template DSL's node forms and safety rules, identifier " +
+    "rules and reserved kinds, style and schema constraints, theme tokens, " +
+    "and per-user limits. Call this before drafting a custom widget or " +
+    "theme for your user — you draft the JSON, your user imports and saves " +
+    "it in the designer at widgentic.dev (there is no registration tool).",
+  inputSchema: {
+    type: "object",
+    properties: {},
+    additionalProperties: false
+  }
+};
+
 export const LIST_THEMES_TOOL: McpToolDefinition = {
   name: "list_themes",
   description:

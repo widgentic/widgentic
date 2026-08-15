@@ -1,5 +1,5 @@
 import type { ThemeToken } from "./tokens.js";
-import { TOKEN_DEFAULTS } from "./tokens.js";
+import { THEME_TOKENS, TOKEN_DEFAULTS } from "./tokens.js";
 
 /** `var(--wg-<token>, <light default>)` — every themeable knob goes through this. */
 function v(token: ThemeToken): string {
@@ -7,11 +7,27 @@ function v(token: ThemeToken): string {
 }
 
 /**
+ * Every registry token DEFINED at :root with its default, so custom
+ * widget styles may reference bare `var(--wg-<token>)` and always
+ * resolve. The built-in rules below carry their own fallbacks and never
+ * needed this; custom authors write plain references (per the authoring
+ * guide), and before this block an applied theme was the only thing that
+ * defined tokens — every token it didn't set silently collapsed the
+ * author's declaration (observed live: a valid widget rendered jammed
+ * because `--wg-spacing-lg` was "not defined"). Themes override these
+ * (later style elements and element-level applyTheme both win).
+ */
+const tokenDefaultsBlock = `:root {
+${THEME_TOKENS.map((token) => `  --wg-${token}: ${TOKEN_DEFAULTS[token]};`).join("\n")}
+}`;
+
+/**
  * Predefined styles for the built-in `wg-*` classes. Generated from the
  * token defaults table, so the light theme lives in exactly one place and
  * every visual knob is overridable by a theme.
  */
 export const baseStylesheet = `
+${tokenDefaultsBlock}
 .wg-card, .wg-table, .wg-tree, .wg-custom, .wg-template {
   font-family: ${v("font-family")};
   font-size: ${v("font-size")};

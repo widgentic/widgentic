@@ -134,7 +134,11 @@ export function handleListThemeTokens(): McpToolResult {
       "map (or a registered theme name from list_themes) as " +
       "render_widget's 'theme' input. Each token's 'type' states the kind " +
       "of CSS value it expects (color, dimension, number, font-family, " +
-      "font-weight, shadow)."
+      "font-weight, shadow). When you build a theme the user may want to " +
+      "KEEP, also deliver it as the importable entry " +
+      "{ name, label?, description?, tokens } and point them to Import in " +
+      "the theme designer at widgentic.dev — the inline map only styles " +
+      "one render (see get_authoring_guide)."
   };
   return {
     content: [{ type: "text", text: JSON.stringify(listing, null, 2) }]
@@ -161,7 +165,10 @@ export function handleListThemes(registry: ThemeRegistry): McpToolResult {
     themes: registry.list(),
     rules:
       "Pass any 'name' above as render_widget's 'theme' input. Tokens are " +
-      "shown for reference; a token map may still be passed inline."
+      "shown for reference; a token map may still be passed inline. A new " +
+      "theme the user wants to keep belongs in the designer: deliver it as " +
+      "{ name, label?, description?, tokens } for Import at widgentic.dev " +
+      "(see get_authoring_guide)."
   };
   return {
     content: [{ type: "text", text: JSON.stringify(listing, null, 2) }]
@@ -295,7 +302,10 @@ export function handleRenderWidget(
   // whole result into the mounted iframe via ui/notifications/tool-result,
   // and per the Apps convention structuredContent is not model context.
   const styleCss = kindStyles ? widgetStylesToCss(kindStyles) : "";
-  const themeCss = theme ? themeToCss(theme, ":root") : "";
+  // The doubled selector matches the app template's dark-override
+  // specificity (:root[data-theme="dark"]), so an explicit render theme
+  // wins on dark hosts too — same specificity, later style element.
+  const themeCss = theme ? themeToCss(theme, ':root, :root[data-theme="dark"]') : "";
   const structuredContent: Record<string, unknown> = {
     html,
     css: [styleCss, themeCss].filter((part) => part.length > 0).join("\n"),

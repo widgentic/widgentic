@@ -3,6 +3,7 @@ export {
   RENDER_WIDGET_TOOL,
   LIST_THEME_TOKENS_TOOL,
   LIST_THEMES_TOOL,
+  GET_AUTHORING_GUIDE_TOOL,
   WIDGENTIC_UI_URI_PREFIX,
   WIDGENTIC_APP_MIME_TYPE,
   WIDGENTIC_APP_TEMPLATE_URI
@@ -15,6 +16,7 @@ export {
   handleListThemes
 } from "./handlers.js";
 export { buildAppTemplate } from "./app-template.js";
+export { buildAuthoringGuide, handleGetAuthoringGuide } from "./guide.js";
 export {
   inlineImagesInHtml,
   inlineRenderResultImages,

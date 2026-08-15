@@ -10,6 +10,7 @@ export type {
   TemplateErrorCode
 } from "./types.js";
 export { validateTemplate, InvalidTemplateError } from "./validate.js";
+export { MAX_TEMPLATE_DEPTH, URL_ATTRS } from "./guards.js";
 export type { ValidateTemplateResult } from "./validate.js";
 export {
   compileTemplate,

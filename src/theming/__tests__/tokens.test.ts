@@ -103,6 +103,16 @@ describe("baseStylesheet", () => {
     expect(baseStylesheet).toMatch(/\.wg-img-hero[^}]*max-width: 100%/);
   });
 
+  it("defines EVERY registry token at :root so bare var() refs resolve", () => {
+    // Custom widget styles use bare var(--wg-x) (per the authoring
+    // guide); without these definitions, any token the active theme
+    // doesn't set silently invalidates the author's declaration.
+    const rootBlock = /^:root \{([\s\S]*?)\}/.exec(baseStylesheet.trim())?.[1] ?? "";
+    for (const token of THEME_TOKENS) {
+      expect(rootBlock, token).toContain(`--wg-${token}: ${TOKEN_DEFAULTS[token]};`);
+    }
+  });
+
   it("consumes EVERY registry token — no decorative tokens", () => {
     // The standing rule: a token exists because the stylesheet uses it.
     // This is what makes the registry a design system rather than a

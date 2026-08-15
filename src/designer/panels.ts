@@ -41,11 +41,6 @@ function tabs(entries: { label: string; element: HTMLElement }[]): HTMLElement {
   ]);
 }
 
-export interface PanelsContext {
-  setPreviewKind(kind: string): void;
-  getPreviewKind(): string;
-}
-
 /** Column layout: definition (exported) on the left, presentation on the right. */
 export interface PanelColumns {
   left: HTMLElement;
@@ -110,7 +105,6 @@ function jsonField(
 export function mountPanels(
   store: DraftStore,
   columns: PanelColumns,
-  context: PanelsContext,
   themes: ThemeEntry[] = []
 ): { dispose(): void } {
   const refreshers: Refresher[] = [];
@@ -341,7 +335,7 @@ export function mountPanels(
   ]);
 
   const templatePanel = mountTemplatePanel(store, refreshers);
-  const themePanel = mountThemePanel(store, refreshers, context, themes);
+  const themePanel = mountThemePanel(store, refreshers, themes);
   const ioPanel = mountIoPanel(store);
 
   // Left: the widget definition (what export produces). Right: presentation.

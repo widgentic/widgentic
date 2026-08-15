@@ -25,8 +25,9 @@ export const PREVIEW_KIND = "designer-preview";
 export interface PreviewController {
   readonly pane: HTMLElement;
   /**
-   * Re-render for a draft revision. `previewKind` selects what renders:
-   * the draft itself (default) or any built-in for theme previews.
+   * Re-render for a draft revision. The WIDGET designer always renders
+   * the draft (no `previewKind`); the optional kind parameter exists for
+   * the THEME designer, whose job is previewing built-ins under a theme.
    */
   update(
     draft: WidgetDraft,
@@ -103,7 +104,7 @@ export function createPreview(): PreviewController {
     }
   }
 
-  /** Built-in preview data for theme mode, from each kind's own example. */
+  /** Built-in preview data for the THEME designer's kind previews. */
   function sampleFor(kind: string): unknown {
     return catalog.describe(kind)?.dataExample ?? { value: "preview" };
   }

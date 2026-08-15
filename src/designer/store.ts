@@ -39,17 +39,31 @@ export function cloneDraft(draft: WidgetDraft): WidgetDraft {
 }
 
 export function starterDraft(): WidgetDraft {
+  // Everything the starter binds is DECLARED in its dataSchema — the
+  // preferred pattern: schema-declared properties validate, `$meta.*`
+  // paths do not, so new drafts start on the validated side.
   return {
     kind: "my-widget",
     template: {
       tag: "div",
       attrs: { class: "wg-template" },
-      children: [{ tag: "h2", children: [{ bind: "$meta.title" }] }, { bind: "message" }]
+      children: [{ tag: "h2", children: [{ bind: "title" }] }, { bind: "message" }]
     },
     descriptor: {
       description: "Describe what this widget is for.",
-      dataShape: "A plain object with a `message` string.",
-      dataExample: { message: "Hello from the widgentic designer" }
+      dataShape: "{ title?, message }",
+      dataExample: {
+        title: "My widget",
+        message: "Hello from the widgentic designer"
+      },
+      dataSchema: {
+        type: "object",
+        required: ["message"],
+        properties: {
+          title: { type: "string" },
+          message: { type: "string" }
+        }
+      }
     }
   };
 }

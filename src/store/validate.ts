@@ -32,7 +32,7 @@ export interface EntryProblem {
  * in document ids, where `/ \ # ?` are illegal); enforcing the rule at the
  * port means memory, file, and Cosmos accept and reject identically.
  */
-const SAFE_IDENTIFIER = /^[a-zA-Z0-9._-]+$/;
+export const SAFE_IDENTIFIER = /^[a-zA-Z0-9._-]+$/;
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);

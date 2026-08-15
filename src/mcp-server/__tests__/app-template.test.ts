@@ -209,6 +209,18 @@ describe("app template native mounting", () => {
     expect(root().firstChild).not.toBeNull();
   });
 
+  it("flips unbridged tokens to the dark preset under data-theme=dark", () => {
+    const template = buildAppTemplate();
+    const darkBlock = /:root\[data-theme="dark"\] \{([^}]*)\}/.exec(template)?.[1] ?? "";
+    // Unbridged colors flip (surface is the one that burned us live)…
+    expect(darkBlock).toContain("--wg-surface: #161b26;");
+    expect(darkBlock).toContain("--wg-danger:");
+    // …while host-bridged tokens stay host-exact in both modes.
+    expect(darkBlock).not.toContain("--wg-bg:");
+    expect(darkBlock).not.toContain("--wg-fg:");
+    expect(darkBlock).not.toContain("--wg-accent:");
+  });
+
   it("references no external origins anywhere in the template", () => {
     // The Apps sandbox forbids external fetches; the template must be
     // self-contained (host CSS custom properties only, literal fallbacks).

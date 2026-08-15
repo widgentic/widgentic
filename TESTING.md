@@ -117,6 +117,13 @@ HTML text block (Apps hosts mount the visual from `structuredContent`
 regardless; explicit `format` values are never slimmed). Misaimed hints
 surface as a `Hint notes:` tail + `structuredContent.diagnostics`.
 
+**Hosts cache the app template per conversation** (observed at v19: a
+Claude Desktop chat kept rendering with the pre-deploy
+`ui://widgentic/app.html` it had fetched earlier — styles looked broken
+while the server was already fixed). After deploying template-affecting
+changes, verify in a FRESH conversation; the remote-host analog of the
+local "reconnect after server changes" rule.
+
 Key rotation is now self-service: create a new named key in the app, move
 your hosts, revoke the old one (no downtime window). The legacy
 `WIDGENTIC_API_KEY` secret still gates NO-store deployments only; in
