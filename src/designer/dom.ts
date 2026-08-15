@@ -318,6 +318,16 @@ export function injectDesignerStyles(doc: Document): void {
 .wgd-st-add:hover { border-color: var(--wgd-border); background: var(--wgd-hover); }
 /* Import and export stack as sibling sections with the column's rhythm. */
 .wgd-io { display: flex; flex-direction: column; gap: 8px; }
+/* Flat string→string record rows (hints): mono keys, prose values. */
+.wgd-record { display: flex; flex-direction: column; gap: 1px; }
+.wgd-rec-row { display: flex; gap: 2px; align-items: center; border-radius: 3px; }
+.wgd-rec-row:hover { background: var(--wgd-hover); }
+.wgd-rec-row > .wgd-icon { visibility: hidden; }
+.wgd-rec-row:hover > .wgd-icon, .wgd-rec-row:focus-within > .wgd-icon { visibility: visible; }
+.wgd-record .wgd-input { padding: 1px 4px; font-size: 12px; border-color: transparent; background: transparent; }
+.wgd-record .wgd-input:hover, .wgd-record .wgd-input:focus { border-color: var(--wgd-border); background: var(--wgd-bg); }
+.wgd-rec-key { flex: 0 1 auto; min-width: 8ch; font-family: ui-monospace, monospace; color: var(--wgd-hl-key); }
+.wgd-rec-value { flex: 1 1 auto; min-width: 8ch; }
 /* The tag select IS the element node's label: flat, accent, monospace.
    Tag and path selects are width-fitted to their SELECTED value by the
    panel (fitSelect), so carets hug the text — no flex stretching here. */

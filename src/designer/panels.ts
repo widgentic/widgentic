@@ -12,6 +12,7 @@ import { attachJsonHighlight, repaintHighlight } from "./highlight.js";
 import { mountIoPanel } from "./io.js";
 import { createJsonTreeEditor } from "./json-tree-editor.js";
 import { createSchemaBuilder } from "./schema-builder.js";
+import { createRecordEditor } from "./record-editor.js";
 import { createSchemaForm } from "./schema-form.js";
 import { createStylesEditor } from "./styles-editor.js";
 import type { DraftStore, WidgetDraft } from "./store.js";
@@ -128,6 +129,21 @@ export function mountPanels(
 
   // --- General: kind + prose descriptor fields (left) -------------------
   const kindDiag = diagnosticLine(undefined);
+  // Hints: name→doc rows beside the parse-gated JSON pane — the same
+  // Tree/JSON pair as styles, scaled down to a flat record.
+  const hintsEditor = createRecordEditor(
+    store.get().descriptor.hints,
+    { key: "hint name", value: "what the hint does", add: "+ hint" },
+    (hints) =>
+      store.update((d) => {
+        if (hints === undefined) {
+          const { hints: _h, ...rest } = d.descriptor;
+          return { ...d, descriptor: rest };
+        }
+        return { ...d, descriptor: { ...d.descriptor, hints } };
+      })
+  );
+  refreshers.push((draft) => hintsEditor.setValue(draft.descriptor.hints));
   const generalPanel = section("General", [
     bindText("Kind (id)", (d) => d.kind, (d, v) => ({ ...d, kind: v })),
     kindDiag,
@@ -141,24 +157,33 @@ export function mountPanels(
       (d) => d.descriptor.dataShape ?? "",
       (d, v) => ({ ...d, descriptor: { ...d.descriptor, dataShape: v } })
     ),
-    jsonField(
-      "Hints (Record<name, doc>)",
-      (d) => d.descriptor.hints,
-      (d, v) => {
-        if (!isPlainObject(v)) return d;
-        const hints = Object.fromEntries(
-          Object.entries(v).map(([k, doc]) => [k, String(doc)])
-        ) as Record<string, string>;
-        return { ...d, descriptor: { ...d.descriptor, hints } };
-      },
-      (d) => {
-        const { hints: _hints, ...rest } = d.descriptor;
-        return { ...d, descriptor: rest };
-      },
-      store,
-      refreshers,
-      3
-    )
+    h("div", { class: "wgd-field" }, [
+      h("span", { class: "wgd-field-label" }, ["Hints"]),
+      tabs([
+        { label: "Tree", element: hintsEditor.element },
+        {
+          label: "JSON",
+          element: jsonField(
+            "",
+            (d) => d.descriptor.hints,
+            (d, v) => {
+              if (!isPlainObject(v)) return d;
+              const hints = Object.fromEntries(
+                Object.entries(v).map(([k, doc]) => [k, String(doc)])
+              ) as Record<string, string>;
+              return { ...d, descriptor: { ...d.descriptor, hints } };
+            },
+            (d) => {
+              const { hints: _hints, ...rest } = d.descriptor;
+              return { ...d, descriptor: rest };
+            },
+            store,
+            refreshers,
+            3
+          )
+        }
+      ])
+    ])
   ]);
 
   // --- Data schema (left, definition): Builder + JSON tabs ---------------

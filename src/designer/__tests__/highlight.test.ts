@@ -40,6 +40,48 @@ describe("highlight layer", () => {
     return area;
   }
 
+  it("indents on Tab instead of moving focus; Shift+Tab and readonly keep defaults", () => {
+    const area = textarea('{\n"a": 1\n}');
+    attachJsonHighlight(area);
+    area.selectionStart = area.selectionEnd = 2; // caret after '{\n'
+    area.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true })
+    );
+    expect(area.value).toBe('{\n  "a": 1\n}');
+    expect(area.selectionStart).toBe(4);
+    // Shift+Tab stays the keyboard escape — no insertion.
+    area.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Tab",
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true
+      })
+    );
+    expect(area.value).toBe('{\n  "a": 1\n}');
+    // Readonly panes (the export output) never mutate.
+    area.readOnly = true;
+    area.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true })
+    );
+    expect(area.value).toBe('{\n  "a": 1\n}');
+  });
+
+  it("Tab replaces a selection with the indent and commits through input", () => {
+    const area = textarea("abcdef");
+    attachJsonHighlight(area);
+    let inputs = 0;
+    area.addEventListener("input", () => inputs++);
+    area.selectionStart = 1;
+    area.selectionEnd = 4; // 'bcd' selected
+    area.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true })
+    );
+    expect(area.value).toBe("a  ef");
+    expect(area.selectionStart).toBe(3);
+    expect(inputs).toBe(1); // the store's commit path listens for input
+  });
+
   it("wraps the textarea and mirrors its content, restoring on dispose", () => {
     const area = textarea('{"a": 1}');
     const dispose = attachJsonHighlight(area);

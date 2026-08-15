@@ -289,6 +289,55 @@ describe("styles tree editor", () => {
   });
 });
 
+describe("hints record editor", () => {
+  function generalSection(container: HTMLElement): HTMLElement {
+    return [...container.querySelectorAll(".wgd-section")].find(
+      (s) => s.querySelector(".wgd-section-title")?.textContent === "General"
+    ) as HTMLElement;
+  }
+
+  it("edits hints as name→doc rows beside the JSON tab, no legend", () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const designer = createDesigner(container);
+    const general = generalSection(container);
+    const hintsTabs = [...general.querySelectorAll(".wgd-tab")].map((b) => b.textContent);
+    expect(hintsTabs).toEqual(["Tree", "JSON"]);
+    // The plain "Hints" label stays; the (Record<name, doc>) legend is gone.
+    expect(general.textContent).toContain("Hints");
+    expect(general.textContent).not.toContain("Record<name, doc>");
+    const add = [...general.querySelectorAll("button")].find(
+      (b) => b.textContent === "+ hint"
+    ) as HTMLButtonElement;
+    add.click();
+    change(general.querySelector(".wgd-rec-key") as HTMLInputElement, "columns");
+    change(
+      general.querySelector(".wgd-rec-value") as HTMLInputElement,
+      "Column order for tables"
+    );
+    expect(designer.getDraft().descriptor.hints).toEqual({
+      columns: "Column order for tables"
+    });
+  });
+
+  it("removing the last hint drops the hints key entirely", () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const designer = createDesigner(container);
+    designer.loadWidget({
+      kind: "probe",
+      template: "x",
+      descriptor: { description: "d", dataShape: "s", hints: { a: "doc" } }
+    });
+    const general = generalSection(container);
+    const remove = [...general.querySelectorAll(".wgd-rec-row .wgd-icon")].find(
+      (b) => b.getAttribute("title") === "Remove entry"
+    ) as HTMLButtonElement;
+    remove.click();
+    expect(designer.getDraft().descriptor.hints).toBeUndefined();
+  });
+});
+
 describe("template tree usability", () => {
   function designerWith(template: unknown): {
     container: HTMLElement;

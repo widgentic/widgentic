@@ -93,14 +93,28 @@ export function attachJsonHighlight(textarea: HTMLTextAreaElement): () => void {
     layer.scrollTop = textarea.scrollTop;
     layer.scrollLeft = textarea.scrollLeft;
   };
+  // Tab indents instead of moving focus — these panes hold indented JSON.
+  // Shift+Tab keeps its focus-moving default as the keyboard escape.
+  const onTab = (event: KeyboardEvent): void => {
+    if (event.key !== "Tab" || event.shiftKey || textarea.readOnly) return;
+    event.preventDefault();
+    const { selectionStart, selectionEnd, value } = textarea;
+    textarea.value = `${value.slice(0, selectionStart)}  ${value.slice(selectionEnd)}`;
+    textarea.selectionStart = textarea.selectionEnd = selectionStart + 2;
+    // The commit path listens for input; a synthetic one keeps the store
+    // and the paint layer in step with the inserted spaces.
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+  };
 
   textarea.addEventListener("input", sync);
   textarea.addEventListener("scroll", syncScroll);
+  textarea.addEventListener("keydown", onTab);
   sync();
 
   return () => {
     textarea.removeEventListener("input", sync);
     textarea.removeEventListener("scroll", syncScroll);
+    textarea.removeEventListener("keydown", onTab);
     textarea.classList.remove("wgd-hl-input");
     wrap.replaceWith(textarea);
   };
