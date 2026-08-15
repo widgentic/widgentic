@@ -52,3 +52,4 @@
 - [x] 6.4 `io.ts`: split into an Import section and an Export section, import first
 - [x] 6.5 Tests: schema rows hover-reveal + fitted selects; styles tree edits project to the draft and JSON stays parse-gated; io renders two sections in order; existing io tests still pass
 - [x] 6.6 Rig check on :8082; full test + typecheck green; commit and push
+- [x] 6.7 Live finding (tailnet check): the styles JSON tab showed BOTH views — .wgd-styles' display:flex defeated the tab's hidden attribute, the same bug class as the menu. Fix: scoped blanket `.wgd-root [hidden] { display: none !important; }` replaces per-class patches; the styles JSON legend removed (empty textArea label skips the legend row); computed-style regression test

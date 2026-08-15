@@ -266,6 +266,27 @@ describe("styles tree editor", () => {
     );
     expect(designer.getDraft().descriptor.styles).toEqual({ ".wg-hero": {} });
   });
+
+  it("shows only the selected view — hidden must beat the tree's display", () => {
+    // .wgd-styles sets display:flex, which would defeat the tab's hidden
+    // attribute without the scoped [hidden] guard (seen live: both views
+    // rendered under the JSON tab).
+    const container = document.createElement("div");
+    document.body.append(container);
+    createDesigner(container);
+    const stylesSection = [...container.querySelectorAll(".wgd-section")].find(
+      (s) => s.querySelector(".wgd-section-title")?.textContent?.startsWith("Styles")
+    ) as HTMLElement;
+    const tree = stylesSection.querySelector(".wgd-styles") as HTMLElement;
+    const jsonTab = [...stylesSection.querySelectorAll(".wgd-tab")].find(
+      (b) => b.textContent === "JSON"
+    ) as HTMLButtonElement;
+    jsonTab.click();
+    expect(tree.hidden).toBe(true);
+    expect(getComputedStyle(tree).display).toBe("none");
+    // And no legend row in the JSON pane — the section title names it.
+    expect(stylesSection.querySelector(".wgd-field-label")).toBeNull();
+  });
 });
 
 describe("template tree usability", () => {

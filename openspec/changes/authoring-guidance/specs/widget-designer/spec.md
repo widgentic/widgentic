@@ -48,6 +48,7 @@ The designer SHALL edit a draft in the server's `CustomWidget` shape — `kind`,
 - **WHEN** a styles entry `.wg-card` with a `padding` declaration exists
 - **THEN** the styles tree SHALL show the selector with its declaration rows, editable in place
 - **AND** edits in either view SHALL project into the other, with invalid JSON keeping the last valid styles and showing the parse error
+- **AND** only the selected view SHALL be visible at a time
 
 ### Requirement: Import and export in the server's shapes
 The designer SHALL export the draft as JSON in exactly the `CustomWidget` shape (`{ kind, template, descriptor }`) and themes as bare token maps, and SHALL import the same shapes, re-validating everything on load (imports are untrusted input; invalid imports are rejected with the structured errors, leaving the current draft untouched). Import and export SHALL be presented as two independent sections, with import placed before export. A copy-as-TypeScript convenience SHALL emit a module body compatible with `examples/mcp-server/widgets/` for manual registration. Exported widget JSON loaded back SHALL round-trip to a deep-equal draft.

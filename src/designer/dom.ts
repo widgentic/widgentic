@@ -55,8 +55,10 @@ export function textArea(
   }) as HTMLTextAreaElement;
   area.value = value;
   area.addEventListener("input", () => onInput(area.value));
+  // An empty label means the surrounding chrome already names the field —
+  // no legend row.
   return h("label", { class: "wgd-field" }, [
-    h("span", { class: "wgd-field-label" }, [label]),
+    ...(label === "" ? [] : [h("span", { class: "wgd-field-label" }, [label])]),
     area
   ]);
 }
@@ -192,6 +194,10 @@ export function injectDesignerStyles(doc: Document): void {
   --wgd-hl-bool: #bb9af7; --wgd-hl-punct: #8b94a7;
 }
 .wgd-root { display: flex; gap: 16px; font-family: system-ui, sans-serif; font-size: 13px; align-items: flex-start; color: var(--wgd-text); background: var(--wgd-bg); }
+/* Any chrome class that sets display would silently defeat the hidden
+   attribute (learned live twice: the add menu, then the styles tree as a
+   tab pane). hidden always wins — scoped to the designer's own tree. */
+.wgd-root [hidden] { display: none !important; }
 .wgd-panels { flex: 1 1 460px; min-width: 340px; display: flex; flex-direction: column; gap: 8px; }
 .wgd-side { flex: 1 1 420px; min-width: 320px; display: flex; flex-direction: column; gap: 8px; position: sticky; top: 8px; }
 .wgd-preview-pane { display: flex; flex-direction: column; gap: 8px; }
@@ -283,8 +289,6 @@ export function injectDesignerStyles(doc: Document): void {
 .wgd-menuwrap { position: relative; display: inline-flex; }
 .wgd-menu-toggle { color: var(--wgd-accent); }
 .wgd-menu { position: absolute; top: 100%; left: 0; z-index: 10; min-width: 9ch; display: flex; flex-direction: column; background: var(--wgd-panel); border: 1px solid var(--wgd-border); border-radius: 4px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25); padding: 2px; }
-/* display:flex above would defeat the hidden attribute — restate it. */
-.wgd-menu[hidden] { display: none; }
 /* An OPEN menu must not inherit the icons' hover-gated visibility:
    visibility (unlike display) lets a child re-assert visible. */
 .wgd-menu:not([hidden]) { visibility: visible; }

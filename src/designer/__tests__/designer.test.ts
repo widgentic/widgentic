@@ -193,8 +193,12 @@ describe("data and styles diagnostics", () => {
   it("flags style entries the renderer would skip", () => {
     const container = host();
     createDesigner(container);
+    // The styles JSON pane carries no legend — the section title names it.
+    const stylesSection = [...container.querySelectorAll(".wgd-section")].find(
+      (s) => s.querySelector(".wgd-section-title")?.textContent?.startsWith("Styles")
+    ) as HTMLElement;
     type(
-      field(container, "styles (Record<selector, Record<property, value>>)"),
+      stylesSection.querySelector("textarea") as HTMLTextAreaElement,
       JSON.stringify({ ".rogue": { color: "red" } })
     );
     expect(container.textContent).toContain(".rogue");

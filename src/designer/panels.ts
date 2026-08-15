@@ -329,8 +329,9 @@ export function mountPanels(
       { label: "Tree", element: stylesEditor.element },
       {
         label: "JSON",
+        // No legend — the section title already names the shape.
         element: jsonField(
-          "styles (Record<selector, Record<property, value>>)",
+          "",
           (d) => d.descriptor.styles,
           (d, v) => {
             if (!isPlainObject(v)) return d;
