@@ -264,10 +264,13 @@ export function injectDesignerStyles(doc: Document): void {
 .wgd-node-icons .wgd-menu { left: auto; right: 0; }
 .wgd-menu-item { font: inherit; font-size: 12px; text-align: left; padding: 3px 8px; border: none; border-radius: 3px; background: none; color: var(--wgd-text); cursor: pointer; white-space: nowrap; }
 .wgd-menu-item:hover { background: var(--wgd-accent-bg); color: var(--wgd-accent); }
-/* The tag select IS the element node's label: flat, accent, monospace. */
-.wgd-node .wgd-tag { flex: 0 0 auto; max-width: 14ch; font-family: ui-monospace, monospace; font-size: 11px; color: var(--wgd-accent); background: var(--wgd-accent-bg); border: 1px solid transparent; border-radius: 3px; padding: 0 4px; }
+/* The tag select IS the element node's label: flat, accent, monospace.
+   Tag and path selects are width-fitted to their SELECTED value by the
+   panel (fitSelect), so carets hug the text — no flex stretching here. */
+.wgd-node .wgd-tag { flex: 0 0 auto; font-family: ui-monospace, monospace; font-size: 11px; color: var(--wgd-accent); background: var(--wgd-accent-bg); border: 1px solid transparent; border-radius: 3px; padding: 0 4px; }
 .wgd-node .wgd-tag:hover, .wgd-node .wgd-tag:focus { border-color: var(--wgd-accent-line); }
-.wgd-node .wgd-path { flex: 1 1 auto; min-width: 6ch; font-family: ui-monospace, monospace; }
+.wgd-node .wgd-path { flex: 0 1 auto; min-width: 6ch; max-width: 100%; font-family: ui-monospace, monospace; }
+.wgd-node .wgd-select { box-sizing: border-box; }
 /* Theme panel: swatch beside each color token. */
 /* Syntax coloring: <pre> layer behind a transparent-text textarea. Every
    metric here must mirror .wgd-textarea or the glyphs drift apart. */

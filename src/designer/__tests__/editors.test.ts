@@ -273,6 +273,42 @@ describe("template tree usability", () => {
     expect(inner().querySelector(".wgd-node-summary")).not.toBeNull();
   });
 
+  it("dropdowns hug their selected value and re-fit on change", () => {
+    const { container } = designerWith({ tag: "div", children: [] });
+    const tag = (): HTMLSelectElement =>
+      container.querySelector(".wgd-tag") as HTMLSelectElement;
+    expect(tag().style.width).toBe("calc(3ch + 1.2em + 18px)"); // 'div'
+    tag().value = "section";
+    tag().dispatchEvent(new Event("change", { bubbles: true }));
+    // The commit re-renders the tree; the fresh select fits the new label.
+    expect(tag().style.width).toBe("calc(7ch + 1.2em + 18px)"); // 'section'
+    // Attr mode select is fitted too.
+    const withAttr = designerWith({ tag: "div", attrs: { class: "wg-a" }, children: [] });
+    const mode = withAttr.container.querySelector(".wgd-attr-mode") as HTMLSelectElement;
+    expect(mode.style.width).toBe("calc(7ch + 1.2em + 18px)"); // 'literal'
+  });
+
+  it("path selects fit their selected path instead of stretching", () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const designer = createDesigner(container);
+    designer.loadWidget({
+      kind: "probe",
+      template: { tag: "div", children: [{ bind: "title" }] },
+      descriptor: {
+        description: "d",
+        dataShape: "s",
+        dataSchema: {
+          type: "object",
+          properties: { title: { type: "string" } }
+        }
+      }
+    });
+    const path = container.querySelector(".wgd-path") as HTMLSelectElement;
+    expect(path).not.toBeNull();
+    expect(path.style.width).toBe("calc(5ch + 1.2em + 18px)"); // 'title'
+  });
+
   it("groups attributes under chrome distinct from the children rail", () => {
     const { container } = designerWith({
       tag: "div",

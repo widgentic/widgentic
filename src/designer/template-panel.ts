@@ -219,6 +219,24 @@ export function mountTemplatePanel(
   });
 
   // --- Tree editor -------------------------------------------------------
+  /**
+   * Size a select to its SELECTED label (a bare <select> sizes to its
+   * widest option), so the caret sits beside the text instead of drifting
+   * with leftover row width. ch tracks the tree's monospace exactly; the
+   * em term scales with padding, and the px term covers the UA's caret
+   * region, which does NOT scale with font size (11px tags clipped
+   * without it).
+   */
+  function fitSelect(select: HTMLSelectElement): void {
+    const fit = (): void => {
+      const label =
+        select.options[select.selectedIndex]?.text ?? select.value;
+      select.style.width = `calc(${Math.max(label.length, 1)}ch + 1.2em + 18px)`;
+    };
+    fit();
+    select.addEventListener("change", fit);
+  }
+
   function changeInput(
     value: string,
     onCommit: (value: string) => void,
@@ -354,6 +372,7 @@ export function mountTemplatePanel(
     }
     select.append(h("option", { value: "__custom__" }, ["custom…"]));
     select.value = value;
+    fitSelect(select);
     const custom = changeInput(value, onCommit);
     custom.hidden = true;
     select.addEventListener("change", () => {
@@ -376,6 +395,7 @@ export function mountTemplatePanel(
     }
     select.append(h("option", { value: "__custom__" }, ["custom…"]));
     select.value = tag;
+    fitSelect(select);
     const custom = changeInput(tag, onCommit, "wgd-input wgd-tag-custom");
     custom.hidden = true;
     select.addEventListener("change", () => {
@@ -551,6 +571,7 @@ export function mountTemplatePanel(
         mode.append(h("option", { value: "literal" }, ["literal"]));
         mode.append(h("option", { value: "bind" }, ["bind"]));
         mode.value = isBind ? "bind" : "literal";
+        fitSelect(mode);
         const valueInput = changeInput(
           isBind ? String((value as { bind: string }).bind) : String(value),
           (next) => {

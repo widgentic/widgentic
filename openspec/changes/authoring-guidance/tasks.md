@@ -42,3 +42,4 @@
 - [x] 5.5 Styles: attrs grouped in `.wgd-attrs` with distinct border/color/typography from `.wgd-children`; tree inputs/selects flat (transparent chrome until hover/focus); tighter indent and row gaps
 - [x] 5.6 Tests: menu opens/lists/inserts and closes on outside click + Escape; slot menus set `empty`/`else`; collapse hides sub-structure and survives a draft edit; `.wgd-attrs` distinct from `.wgd-children`; rewrite the old toolbar test
 - [x] 5.7 Rig check on :8082 (invoice-sized template reads flat and calm); full test + typecheck green
+- [x] 5.8 Dropdowns fit their SELECTED value (fitSelect: ch + em + fixed-px caret term; re-fits on change) so carets hug the text instead of drifting with leftover row width — tag select's 14ch cap and path select's flex-stretch removed; delta scenario + width tests; caret region is fixed-px in the UA, so a pure em term clips small-font selects (11px tags)
