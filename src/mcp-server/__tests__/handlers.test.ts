@@ -71,6 +71,20 @@ describe("tool definitions", () => {
     expect(RENDER_WIDGET_TOOL.inputSchema.required).toEqual(["widget", "data"]);
   });
 
+  it("theme input steers agents to names for saved themes", () => {
+    const theme = (
+      RENDER_WIDGET_TOOL.inputSchema.properties as Record<
+        string,
+        { type?: unknown; description?: string }
+      >
+    ).theme;
+    // Both forms stay legal; when the USER names a theme, the name wins —
+    // saved themes are server-side truth, reconstructions drift.
+    expect(theme.type).toEqual(["object", "string"]);
+    expect(theme.description).toContain("pass the NAME");
+    expect(theme.description).toContain("do NOT reconstruct");
+  });
+
   it("data is explicitly typed to steer client marshalling", () => {
     const properties = RENDER_WIDGET_TOOL.inputSchema.properties as Record<
       string,

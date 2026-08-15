@@ -122,11 +122,15 @@ export const RENDER_WIDGET_TOOL: McpToolDefinition = {
         description:
           "Either a registered theme NAME (discover with list_themes — the " +
           "simplest path, e.g. 'dark') or a token map of bare token names " +
-          "to CSS string values, always strings ('6px', not 6). Discover " +
-          "tokens, defaults, and presets with list_theme_tokens; author " +
-          "extras as 'x-<name>' custom variables. Applied to 'page' output " +
-          "and embedded in the widget payload for native hosts on every " +
-          "format."
+          "to CSS string values, always strings ('6px', not 6). When the " +
+          "user refers to a theme by name ('use nord dark'), pass the NAME " +
+          "— their saved themes live server-side and are the source of " +
+          "truth; do NOT reconstruct the tokens from memory (your copy " +
+          "drifts the moment they edit it). Inline maps are for one-off, " +
+          "unsaved styling. Discover tokens, defaults, and presets with " +
+          "list_theme_tokens; author extras as 'x-<name>' custom " +
+          "variables. Applied to 'page' output and embedded in the widget " +
+          "payload for native hosts on every format."
       }
     },
     required: ["widget", "data"],

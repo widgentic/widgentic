@@ -170,6 +170,24 @@ describe("SDK interoperability (in-memory transport, library assembly)", () => {
     ]);
   });
 
+  it("field descriptions from definitions reach the wire schema", async () => {
+    // The wire schema is what agents actually read; definitions.ts text
+    // that never crosses it steers nobody (learned live: theme guidance
+    // existed model-side while the wire carried a bare anyOf).
+    const { client } = await connect();
+    const tools = await client.listTools();
+    const render = tools.tools.find((t) => t.name === "render_widget");
+    const props = (render?.inputSchema as {
+      properties?: Record<string, { description?: string }>;
+    })?.properties;
+    expect(props?.theme?.description).toContain("pass the NAME");
+    expect(props?.theme?.description).toContain("do NOT reconstruct");
+    expect(props?.widget?.description).toBeTruthy();
+    expect(props?.data?.description).toBeTruthy();
+    expect(props?.format?.description).toBeTruthy();
+    expect(props?.hints?.description).toBeTruthy();
+  });
+
   it("render_widget declares its app template in tools/list", async () => {
     const { client } = await connect();
     const tools = await client.listTools();

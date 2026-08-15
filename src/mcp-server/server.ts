@@ -114,29 +114,42 @@ export function createWidgenticServer(
       description: RENDER_WIDGET_TOOL.description,
       _meta: { ui: { resourceUri: WIDGENTIC_APP_TEMPLATE_URI } },
       // zod flavor of RENDER_WIDGET_TOOL.inputSchema (the SDK requires zod
-      // shapes; the JSON Schema in definitions.ts is the source of truth).
-      inputSchema: {
-        widget: z.string().describe("Widget kind id, as returned by list_widgets."),
-        // Typed union (mirrors RENDER_WIDGET_TOOL.inputSchema) so the wire
-        // schema tells clients to send structured JSON, not a serialized string.
-        data: z
-          .union([
-            z.array(z.unknown()),
-            z.record(z.string(), z.unknown()),
-            z.string(),
-            z.number(),
-            z.boolean(),
-            z.null()
-          ])
-          .describe("Widget data matching the kind's dataShape."),
-        hints: z.record(z.string(), z.unknown()).optional(),
-        meta: z.record(z.string(), z.unknown()).optional(),
-        format: z.enum(["both", "html", "widget", "page", "app"]).optional(),
-        // A registered theme name, or an inline token map.
-        theme: z
-          .union([z.string(), z.record(z.string(), z.string())])
-          .optional()
-      }
+      // shapes). Field DESCRIPTIONS come from definitions.ts — the wire
+      // schema is what agents actually read, and an undescribed field is
+      // steering nobody (observed live: agents inlined token maps for
+      // saved themes because the wire never carried the name preference).
+      inputSchema: (() => {
+        const docs = RENDER_WIDGET_TOOL.inputSchema.properties as Record<
+          string,
+          { description?: string }
+        >;
+        const doc = (field: string) => docs[field]?.description ?? "";
+        return {
+          widget: z.string().describe(doc("widget")),
+          // Typed union (mirrors RENDER_WIDGET_TOOL.inputSchema) so the wire
+          // schema tells clients to send structured JSON, not a string.
+          data: z
+            .union([
+              z.array(z.unknown()),
+              z.record(z.string(), z.unknown()),
+              z.string(),
+              z.number(),
+              z.boolean(),
+              z.null()
+            ])
+            .describe(doc("data")),
+          hints: z.record(z.string(), z.unknown()).optional().describe(doc("hints")),
+          meta: z.record(z.string(), z.unknown()).optional().describe(doc("meta")),
+          format: z
+            .enum(["both", "html", "widget", "page", "app"])
+            .optional()
+            .describe(doc("format")),
+          theme: z
+            .union([z.string(), z.record(z.string(), z.string())])
+            .optional()
+            .describe(doc("theme"))
+        };
+      })()
     },
     async (args) => {
       const result = handleRenderWidget(catalog, args, {
