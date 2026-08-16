@@ -54,6 +54,13 @@ bound to the tailscale interface only):
 | `:9444` | `:3001` | widgentic MCP (`/mcp`) |
 | `:9445` | `:8081` | basic-host sandbox page |
 | `:9446` | `:8082` | designer demo — widget + theme tabs (`npm run designer`) |
+| `:9447` | `:3002` | the widgentic.dev app (`WIDGENTIC_DEV_LOGIN=1 npm run web`) |
+
+The app on `:9447` signs in through the dev harness (`/auth/login` → subject +
+label), which works over the tailnet as-is: the session cookie rides the same
+HTTPS origin Caddy terminates. Both bundling servers (`npm run web`, `npm run
+designer`) build their client at STARTUP — restart them after any client
+change or the tailnet serves the old bundle.
 
 Because the browser (not the VM) fetches all three, basic-host needs two
 patches for remote operation — both are same-machine assumptions in the
