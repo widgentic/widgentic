@@ -36,12 +36,12 @@
 
 ## 7. Docs
 
-- [ ] 7.1 README: 5 tools; `render_widget` input incl. `format`/`theme` (+ the name-over-map steering); `widgentic-change` attributed to the elements, `subscribe` to the factories; twelve capabilities; test count; designer surface (readOnly/setReadOnly/widgets/handles) and the reworked UI; token-defaults note
-- [ ] 7.2 TESTING: `npm run designer` row; `get_authoring_guide` + wire-description smoke checks; current deployed version; the v19/v20/v22 live findings in the verification log
+- [x] 7.1 README: 5 tools; `render_widget` input incl. `format`/`theme` (+ the name-over-map steering); `widgentic-change` attributed to the elements, `subscribe` to the factories; twelve capabilities; test count; designer surface (readOnly/setReadOnly/widgets/handles) and the reworked UI; token-defaults note
+- [x] 7.2 TESTING: `npm run designer` row; `get_authoring_guide` + wire-description smoke checks; current deployed version; the v19/v20/v22 live findings in the verification log
 
 ## 8. Ship
 
-- [ ] 8.1 Full gate + strict validation
-- [ ] 8.2 Rig check on the affected surfaces
+- [x] 8.1 Full gate + strict validation
+- [x] 8.2 Rig check on the affected surfaces
 - [ ] 8.3 Build and deploy; verify the surface fix live
 - [ ] 8.4 Commit and push

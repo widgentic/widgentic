@@ -9,7 +9,8 @@ Apps rig, production for both container apps, and host registration.
 |--|--|--|
 | `npm run mcp` | stdio | Claude Desktop, Claude Code, any stdio client |
 | `npm run mcp:http` | Streamable HTTP (stateless) on `:3001/mcp` | VS Code Copilot (HTTP), MCP Apps hosts, curl |
-| `npm run web` | HTTP on `:3002` | The authoring app locally (`WIDGENTIC_DEV_LOGIN=1` for subject-only sign-in; add `WIDGENTIC_COSMOS_ENDPOINT` to author against live data) |
+| `npm run web` | HTTP on `:3002` | The authoring app locally (`WIDGENTIC_DEV_LOGIN=1` for subject-only sign-in; add `WIDGENTIC_COSMOS_ENDPOINT` to author against live data). A stored entry opens READ-ONLY when selected — `Edit` makes it editable; that is the flow, not a bug) |
+| `npm run designer` | HTTP on `:8082` | Both designers in a demo host (widget + theme tabs); rig: `:9446` |
 | *(hosted)* `https://mcp.widgentic.dev/mcp` | Streamable HTTP, API key required | Any HTTP host, no local setup |
 | *(hosted)* `https://widgentic.dev` | HTTPS | Accounts, API keys, both designers against production Cosmos |
 
@@ -18,6 +19,27 @@ Quick checks without any host:
 ```bash
 npx @modelcontextprotocol/inspector npx tsx examples/mcp-server/main.ts   # interactive UI
 npm test                                                                  # incl. SDK interop suite
+npm run build                                                             # packaging + declarations
+```
+
+Two protocol-level smokes worth running against any deployment, because
+neither shows up in a normal render check:
+
+```bash
+# 1. The authoring guide is DERIVED from the live validators, so this is
+#    the cheapest proof a deploy carries the current rules.
+curl -s -X POST "$URL/mcp" -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_authoring_guide","arguments":{}}}'
+
+# 2. render_widget's FIELD DESCRIPTIONS must survive onto the wire. They
+#    are built from definitions.ts at registration; when that wiring broke,
+#    agents saw a bare anyOf for `theme` and no test noticed — only
+#    tools/list shows it.
+curl -s -X POST "$URL/mcp" -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' |
+  grep -o 'pass the NAME'   # non-empty = the steering is live
 ```
 
 ## Inline widgets with the official basic-host (local)
@@ -138,6 +160,8 @@ per-principal mode the store decides. DNS lives in Cloudflare: CNAME `mcp` →
 the app FQDN (DNS only / grey cloud — required for the Azure-managed
 certificate) plus the `asuid.mcp` TXT validation record.
 
+**Currently deployed: `v25`** (both container apps share one image; check with `az containerapp list -g widgentic-rg --query "[].properties.template.containers[0].image"`).
+
 **Redeploy contract (learned at v11, extended at v14):** the Bicep template
 owns the apps' ingress AND secrets. On every `az deployment group create`:
 - ALWAYS pass the live custom-domain bindings (`mcpCustomDomains` /
@@ -246,6 +270,10 @@ claude mcp add widgentic -- npx tsx /path/to/widgentic/examples/mcp-server/main.
 
 ## Verification log
 
+- **Verification fixes (2026-08-16, v25)** — a cross-spec verification against the archived `authoring-guidance` work turned up five defects, four of them live. The one worth remembering: the `:root` token-defaults block (added at v19 so custom styles could use bare `var(--wg-*)`) **severed the `surface → bg` fallback** — a CSS `var()` fallback fires only when the property is UNSET, so defining `--wg-surface` made `var(--wg-surface, var(--wg-bg, …))` unreachable and a dark theme setting only `bg` painted WHITE cards. The test that should have caught it regex-matched the stylesheet TEXT and passed throughout. Fallbacks now resolve where the theme is applied (`withFallbacks`), because a `:root` chain cannot work either: substitution happens at the declaring element and descendants inherit the already-resolved value. Also closed: a theme saved as `light`/`dark` passed validation then vanished during compose (`RESERVED_THEME` now refuses it at the door); the preview rendered blank when the FIRST draft was invalid; theme validation errors were computed and dropped; and the README's deploy recipe omitted every parameter whose Bicep default mutates live state.
+- **Read-only view/edit flow (2026-08-16, v23/v24, browser sweep)** — the app's whole select → Edit → Save/Cancel cycle driven headlessly on BOTH tabs: selecting a stored entry opens it read-only with Edit/Delete, Edit swaps the row to Save/Cancel and hides New + "Save to my catalog", Cancel discards, and the preview plus its selectors stay live throughout. Lesson: opacity-only de-emphasis was invisible on dark chrome, so read-only also flattens control borders. v24 added the theme designer's custom-widget previews.
+- **Token defaults and the dark bridge (2026-08-15, v19/v20)** — a flawless agent-authored widget rendered jammed: every `var(--wg-…)` named a real token, but NOTHING defined registry tokens where widgets render, so any token the active theme didn't set silently invalidated the declaration (DevTools: "--wg-spacing-lg is not defined"). Fixed with the `:root` defaults block. Layer two, found in a fresh chat: those defaults are LIGHT literals and the host bridge maps only 8 tokens, so an unbridged `surface` rendered a white card under a near-white bridged `fg` — the app template now flips the unbridged dark tokens under `:root[data-theme="dark"]`.
+- **Wire-level tool descriptions (2026-08-15, v21/v22)** — an agent inlined a full token map for a theme the user named. Root cause was not the model: the assembly built `render_widget`'s zod schema by hand, so **definitions.ts descriptions never reached the wire** — agents saw a bare `anyOf` for `theme`. The fields now take their `.describe()` text from `RENDER_WIDGET_TOOL.inputSchema`, with a `tools/list` test. Invisible to every other test class.
 - **basic-host (ext-apps v1.7.5 reference)** — full 7-input visual sweep: all five kinds inline, live host re-theming via `host-context-changed`, error-state notice.
 - **VS Code Copilot Chat** — agent-driven end-to-end from a one-line steer; all five kinds mounted inline over HTTP.
 - **Claude Code 2.1.220** — graceful degradation confirmed (text results, no UI mounting by design).

@@ -21,10 +21,10 @@ All capabilities are specified under `openspec/specs/` and implemented with zero
 | `mcp-widget-output` | `widgentic/mcp` | The MCP convention: emit/extract widget payloads, capability negotiation — no SDK dependency |
 | `reactive-rendering` | `widgentic/reactive` | `mountWidget` handles with in-place DOM patching (identity-preserving updates) |
 | `template-widgets` | `widgentic/templates` | Serializable JSON template DSL (`bind`/`each`/`when`) — the widget-designer runtime, safe for untrusted authors |
-| `widget-theming` | `widgentic/theming` | `--wg-*` token registry (colors, status, scale steps), author-defined `x-*` custom variables, named-theme registry with `extends`, generated base stylesheet, themes as validated JSON |
-| `mcp-server` | `widgentic/mcp-server` | The Widgentic MCP server: `list_widgets` (descriptor discovery) + `render_widget` (validate → render → HTML + payload) as SDK-free definitions/handlers, plus the full server assembly behind `widgentic/mcp-server/sdk` (MCP SDK as optional peers) |
+| `widget-theming` | `widgentic/theming` | `--wg-*` token registry (colors, status, scale steps), author-defined `x-*` custom variables, named-theme registry with `extends`, a generated base stylesheet that **defines every registry token at `:root`** so custom widget styles can use bare `var(--wg-*)` safely, themes as validated JSON |
+| `mcp-server` | `widgentic/mcp-server` | The Widgentic MCP server: five tools — `list_widgets`, `list_themes`, `list_theme_tokens` and `get_authoring_guide` (discovery) + `render_widget` (validate → render → HTML + payload) — as SDK-free definitions/handlers, plus the full server assembly behind `widgentic/mcp-server/sdk` (MCP SDK as optional peers) |
 | `widget-store` | `widgentic/store` | Per-principal widgets and themes: a persistence-agnostic port (`resolvePrincipal`/`widgets`/`themes`), memory + file reference implementations, hashed constant-time keys, structural limits, and request-scoped `composeCatalog`/`composeThemes` |
-| `widget-designer` | `widgentic/designer` | Two embeddable designers (factories + opt-in custom elements, zero deps): the **widget** designer (template tree/JSON, full descriptor, styles, dataSchema, theme selection) and the standalone **theme** designer (tokens, custom variables, named entries) — both with live validated preview |
+| `widget-designer` | `widgentic/designer` | Two embeddable designers (factories + opt-in custom elements, zero deps): the **widget** designer (template tree/JSON, full descriptor, styles and hints as tree-or-JSON, dataSchema, theme selection with a token reference) and the standalone **theme** designer (tokens, custom variables, named entries, previewing host-supplied widgets) — both with live validated preview and an optional read-only mode |
 
 ## Architecture
 
@@ -101,9 +101,10 @@ npm run mcp:http   # Streamable HTTP on :3001/mcp (for HTTP hosts and Apps testi
 ```
 
 - `get_authoring_guide` — the complete authoring contract for agents drafting custom widget/theme JSON: entry shapes, template DSL forms and safety rules, identifier rules, style/schema constraints, tokens, and limits — derived from the live validators. Agents draft; users import, validate, and save in the designer at [widgentic.dev](https://widgentic.dev) (registration over MCP deliberately does not exist).
+- `list_theme_tokens` — the theming vocabulary: every token with its type, documented use and light default, plus ready-made presets and the value rules. Call it before building a theme.
 - `list_themes` — the server's registered themes (`name`, `label`, `tokens`); pass any name as `render_widget`'s `theme` instead of composing tokens.
 - `list_widgets` — returns every registered kind's descriptor: purpose, expected `data` shape, an example to imitate, and supported hints.
-- `render_widget` — input `{ widget, data, hints?, meta? }`; validates the id and payload, then returns the rendered HTML **plus** an embedded widgentic payload block (aware hosts mount it natively). Invalid input comes back as a structured, correctable error (`UNKNOWN_KIND`, `MISSING_FIELD`, ...). Misaimed hints (misspelled keys, targets matching no field/column, unsafe image sources) never fail a render — they come back as a compact `Hint notes:` tail on the text output plus `structuredContent.diagnostics`, so agents can self-correct on the next call.
+- `render_widget` — input `{ widget, data, hints?, meta?, format?, theme? }`; validates the id and payload, then returns the rendered HTML **plus** an embedded widgentic payload block (aware hosts mount it natively). Invalid input comes back as a structured, correctable error (`UNKNOWN_KIND`, `MISSING_FIELD`, ...). Misaimed hints (misspelled keys, targets matching no field/column, unsafe image sources) never fail a render — they come back as a compact `Hint notes:` tail on the text output plus `structuredContent.diagnostics`, so agents can self-correct on the next call. `theme` takes either a registered theme **name** or an inline token map — when the user names a saved theme, pass the NAME: their saved themes are the server-side source of truth and a reconstructed map drifts the moment they edit it.
 - **Model-context slimming**: when the host is an MCP Apps host (session-negotiated, or assumed via `WIDGENTIC_ASSUME_UI=1` where negotiation can't happen — stateless HTTP), the default-format result replaces the full-HTML text block with a one-line confirmation telling the model the visual is already displayed. Explicit `format` requests are never slimmed.
 
 ### Hosted endpoint
@@ -121,7 +122,10 @@ support, e.g. VS Code Copilot), or a `?key=` query parameter
 cannot send custom headers — claude.ai and Claude Desktop remote connectors.
 Keys are personal: sign up at [widgentic.dev](https://widgentic.dev), create
 named keys (shown once, individually revocable), and each key serves **your**
-catalog — the widgets and themes you design there. The deployment is fully described by [infra/main.bicep](infra/main.bicep)
+catalog — the widgets and themes you design there. Saved entries open
+**read-only** when selected, with `Edit` and `Delete`; `Edit` swaps those for
+`Save` and `Cancel` (and hides `New` / `Save to my catalog`, which belong to
+a fresh draft), so viewing your catalog can never edit it by accident. The deployment is fully described by [infra/main.bicep](infra/main.bicep)
 (Log Analytics, private ACR pulled via a pre-granted user-assigned identity,
 managed environment, scale-to-zero app with the key as a Container Apps
 secret). To ship a new version:
@@ -235,7 +239,7 @@ result as text; there, use `format: "page"` and open the document in a browser
 instead.
 
 Inline mounting is verified in the official **basic-host** reference and
-**VS Code Copilot Chat** (all five widget kinds, live host re-theming);
+**VS Code Copilot Chat** (all four built-in kinds plus a custom template widget, live host re-theming);
 Claude Code degrades gracefully to text. Full runbooks — local basic-host
 setup, remote rig, host registration snippets — live in
 [TESTING.md](TESTING.md).
@@ -245,21 +249,49 @@ setup, remote rig, host registration snippets — live in
 `npm run designer` serves a demo host on `:8082` with both designers
 ([examples/designer/](examples/designer/)):
 
-- **Widget designer** — template (tree or JSON), descriptor, styles,
-  dataSchema, with widgentic's validators running on every edit and a live
-  preview mounted through the real pipeline. Export produces the exact
-  `CustomWidget` JSON/TypeScript the server registers
+- **Widget designer** — template (flat node tree or JSON), descriptor,
+  styles and hints (each editable as a tree *or* JSON), and dataSchema,
+  with widgentic's validators running on every edit and a live preview
+  mounted through the real pipeline. A read-only **token reference** lists
+  the effective preview tokens with color swatches, so styles can reach for
+  `var(--wg-…)` by sight. It previews the draft and nothing else — there is
+  deliberately no kind selector here. Import and Export are two independent
+  sections (import first); export produces the exact `CustomWidget`
+  JSON/TypeScript the server registers
   ([examples/mcp-server/widgets/](examples/mcp-server/widgets/)).
 - **Theme designer** — a named theme entry (`{ name, label?, description?,
   tokens }`): every registry token with color swatches, plus author-defined
   `x-*` custom variables, previewed against any catalog kind.
 
-Themes the host supplies appear in the widget designer's preview selector,
-so the two cooperate without either owning the other. Embed via
-`createDesigner(container, { themes })` / `createThemeDesigner(container)`
-or the opt-in elements `defineDesignerElement()` /
-`defineThemeDesignerElement()` — no framework, no deps, no network; hosts
-persist via `widgentic-change` events.
+The two cooperate without either owning the other: themes flow into the
+widget designer via `{ themes }`, and widgets flow into the theme designer
+via `{ widgets }`, so a theme is judged against the widgets it will
+actually dress (invalid definitions are skipped, never fatal).
+
+```ts
+import { createDesigner, createThemeDesigner } from "widgentic/designer";
+
+const designer = createDesigner(el, {
+  themes,             // named entries offered as preview themes
+  readOnly: false,    // true mounts every editing surface inert
+  appearance: "auto", // designer chrome: auto | light | dark
+  initialWidget, initialTheme
+});
+// → { getDraft, loadWidget, loadTheme, setReadOnly, subscribe, dispose }
+
+const themeDesigner = createThemeDesigner(el, { widgets, readOnly });
+// → { getTheme, loadTheme, setReadOnly, subscribe, dispose }
+```
+
+`readOnly` (or `setReadOnly(true)`) makes every editing surface inert —
+visible, inoperable, de-emphasized — while the preview, its selectors, and
+Export stay live: the mode restricts editing, not looking.
+
+No framework, no deps, no network. The factories notify through
+`handle.subscribe(listener)`; the opt-in custom elements
+(`defineDesignerElement()` / `defineThemeDesignerElement()`) wrap that and
+re-emit it as `widgentic-change` CustomEvents for hosts that prefer
+events. Persistence is always the host's.
 
 ### Testing without Claude
 
@@ -269,7 +301,7 @@ persist via `widgentic-change` events.
 
 ## Status
 
-All eleven capabilities are implemented and tested (`npm test` — 530+ unit, type, DOM, and MCP Apps interop tests — type suites run in the default gate; zero runtime dependencies — the Cosmos adapter's Azure SDKs are optional peers installed only by hosts importing `widgentic/store/cosmos`). Live in production: the MCP server at `https://mcp.widgentic.dev/mcp` serving **per-principal catalogs** from Cosmos DB (keys resolve by digest point read; unknown keys degrade to the anonymous catalog), and the authoring app at [widgentic.dev](https://widgentic.dev) — sign in with email (Entra External ID) or GitHub, create revocable API keys, and design widgets/themes that appear in your own catalog on the next tool call. IaC in [infra/](infra/); both container apps scale to zero. Development is spec-first via OpenSpec: see `openspec/specs/` for current behavior and `openspec/changes/archive/` for the full change history. Backlog for the next cycles: the static docs site at `docs.widgentic.dev`, account linking across sign-in methods, `ontoolinputpartial` streaming previews, and the pre-production hardening pass (per-deployment `resourceDomains`, DNS-rebinding pinning for the image inliner, MI-federated app credential, GitHub secret rotation).
+All twelve specified capabilities are implemented and tested — the eleven with package entries above, plus `widgentic-app`, the hosted authoring app (`npm test` — 580+ unit, type, DOM, and MCP Apps interop tests — type suites run in the default gate; zero runtime dependencies — the Cosmos adapter's Azure SDKs are optional peers installed only by hosts importing `widgentic/store/cosmos`). Live in production: the MCP server at `https://mcp.widgentic.dev/mcp` serving **per-principal catalogs** from Cosmos DB (keys resolve by digest point read; unknown keys degrade to the anonymous catalog), and the authoring app at [widgentic.dev](https://widgentic.dev) — sign in with email (Entra External ID) or GitHub, create revocable API keys, and design widgets/themes that appear in your own catalog on the next tool call. IaC in [infra/](infra/); both container apps scale to zero. Development is spec-first via OpenSpec: see `openspec/specs/` for current behavior and `openspec/changes/archive/` for the full change history. Backlog for the next cycles: the static docs site at `docs.widgentic.dev`, account linking across sign-in methods, `ontoolinputpartial` streaming previews, and the pre-production hardening pass (per-deployment `resourceDomains`, DNS-rebinding pinning for the image inliner, MI-federated app credential, GitHub secret rotation).
 
 ## Reference material
 
