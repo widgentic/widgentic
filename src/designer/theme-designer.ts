@@ -39,6 +39,11 @@ function toHexInput(value: string): string | undefined {
 export interface ThemeDesignerOptions {
   initialTheme?: ThemeEntry;
   appearance?: "auto" | "light" | "dark";
+  /**
+   * Mount with editing disabled: panels stay visible but inert, only the
+   * preview and its kind selector operate. Toggle later via `setReadOnly`.
+   */
+  readOnly?: boolean;
 }
 
 export type ThemeLoadResult = { ok: true } | { ok: false; errors: string[] };
@@ -46,6 +51,8 @@ export type ThemeLoadResult = { ok: true } | { ok: false; errors: string[] };
 export interface ThemeDesignerHandle {
   getTheme(): ThemeEntry;
   loadTheme(entry: unknown): ThemeLoadResult;
+  /** Disable/enable editing; the preview and kind selector stay live. */
+  setReadOnly(readOnly: boolean): void;
   subscribe(listener: (entry: ThemeEntry) => void): () => void;
   dispose(): void;
 }
@@ -154,25 +161,28 @@ export function createThemeDesigner(
         entry = { ...entry, description: value };
         refresh();
       }
-    ),
-    (() => {
-      const kindSelect = h("select", {
-        class: "wgd-select wgd-preview-kind"
-      }) as HTMLSelectElement;
-      for (const kind of BASE_KINDS) {
-        kindSelect.append(h("option", { value: kind }, [kind]));
-      }
-      kindSelect.value = previewKind;
-      kindSelect.addEventListener("change", () => {
-        previewKind = kindSelect.value;
-        refresh();
-      });
-      return h("div", { class: "wgd-row" }, [
-        h("span", { class: "wgd-field-label" }, ["Preview kind"]),
-        kindSelect
-      ]);
-    })()
+    )
   ]);
+
+  // The kind selector is a PREVIEW control, so it lives beside the
+  // preview, outside the editing panels — read-only mode keeps it live.
+  const kindSelect = h("select", {
+    class: "wgd-select wgd-preview-kind"
+  }) as HTMLSelectElement;
+  for (const kind of BASE_KINDS) {
+    kindSelect.append(h("option", { value: kind }, [kind]));
+  }
+  kindSelect.value = previewKind;
+  kindSelect.addEventListener("change", () => {
+    previewKind = kindSelect.value;
+    refresh();
+  });
+  side.prepend(
+    h("div", { class: "wgd-row" }, [
+      h("span", { class: "wgd-field-label" }, ["Preview kind"]),
+      kindSelect
+    ])
+  );
 
   // --- Token panel -------------------------------------------------------
   const tokenRefreshers: (() => void)[] = [];
@@ -358,9 +368,20 @@ export function createThemeDesigner(
 
   refresh();
 
+  /** Same mechanism as the widget designer: inert the section bodies. */
+  function setReadOnly(readOnly: boolean): void {
+    root.classList.toggle("wgd-readonly", readOnly);
+    for (const body of panels.querySelectorAll(".wgd-section-body")) {
+      if (readOnly) body.setAttribute("inert", "");
+      else body.removeAttribute("inert");
+    }
+  }
+  if (options.readOnly === true) setReadOnly(true);
+
   return {
     getTheme: getEntry,
     loadTheme,
+    setReadOnly,
     subscribe(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);

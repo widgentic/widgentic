@@ -384,6 +384,11 @@ export function mountPanels(
   const themePanel = mountThemePanel(store, refreshers, themes);
   const ioPanel = mountIoPanel(store);
 
+  // Read-only marks the right column's EDITING sections; the theme panel
+  // (preview selector + token reference) stays live in that mode.
+  previewDataPanel.classList.add("wgd-edit-only");
+  stylesPanel.classList.add("wgd-edit-only");
+
   // Left: the widget definition (what export produces). Right: presentation.
   columns.left.append(
     generalPanel,

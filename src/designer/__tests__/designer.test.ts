@@ -218,6 +218,57 @@ describe("preview controls", () => {
   });
 });
 
+describe("read-only mode", () => {
+  it("inerts editing surfaces but keeps the theme selector and preview live", () => {
+    const container = host();
+    const designer = createDesigner(container, {
+      themes: [{ name: "dark", tokens: { bg: "#0f131c" } }],
+      readOnly: true
+    });
+    const root = container.querySelector(".wgd-root") as HTMLElement;
+    expect(root.classList.contains("wgd-readonly")).toBe(true);
+    // Every editing section body is inert: the whole definition column
+    // plus the right column's preview-data and styles sections.
+    const leftBodies = root.querySelectorAll(".wgd-panels .wgd-section-body");
+    expect(leftBodies.length).toBeGreaterThan(3);
+    for (const body of leftBodies) expect(body.hasAttribute("inert")).toBe(true);
+    for (const body of root.querySelectorAll(".wgd-edit-only > .wgd-section-body")) {
+      expect(body.hasAttribute("inert")).toBe(true);
+    }
+    // The theme panel stays operable: selecting a theme updates the draft
+    // and the preview even while read-only.
+    const themeSelect = root.querySelector(".wgd-theme-select") as HTMLSelectElement;
+    expect(themeSelect.closest("[inert]")).toBeNull();
+    themeSelect.value = "dark";
+    themeSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(designer.getDraft().theme).toEqual({ bg: "#0f131c" });
+  });
+
+  it("de-emphasizes the inert surfaces visibly", () => {
+    const container = host();
+    createDesigner(container, { readOnly: true });
+    const chrome = document.head.querySelector(
+      "style[data-widgentic-designer]"
+    ) as HTMLStyleElement;
+    // Opacity alone was invisible on dark chrome (seen live): read-only
+    // also flattens the control borders so fields read as plain values.
+    expect(chrome.textContent).toMatch(
+      /\.wgd-readonly \[inert\] \.wgd-input[^{]*\{[^}]*border-color:\s*transparent/
+    );
+  });
+
+  it("setReadOnly toggles both ways", () => {
+    const container = host();
+    const designer = createDesigner(container);
+    const root = container.querySelector(".wgd-root") as HTMLElement;
+    expect(root.querySelector(".wgd-section-body[inert]")).toBeNull();
+    designer.setReadOnly(true);
+    expect(root.querySelector(".wgd-panels .wgd-section-body[inert]")).not.toBeNull();
+    designer.setReadOnly(false);
+    expect(root.querySelector(".wgd-section-body[inert]")).toBeNull();
+  });
+});
+
 describe("import/export", () => {
   it("round-trips the invoice example", () => {
     const designer = createDesigner(host());

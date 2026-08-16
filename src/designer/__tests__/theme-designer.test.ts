@@ -252,3 +252,36 @@ describe("widget designer theme selection", () => {
     expect(container.textContent).toContain("No themes supplied");
   });
 });
+
+describe("theme designer read-only mode", () => {
+  it("inerts the editing panels while the kind selector keeps previewing", () => {
+    const container = host();
+    const designer = createThemeDesigner(container, {
+      initialTheme: { name: "nord", tokens: { surface: "#2e3440" } },
+      readOnly: true
+    });
+    const root = container.querySelector(".wgd-root") as HTMLElement;
+    expect(root.classList.contains("wgd-readonly")).toBe(true);
+    // Identity, tokens, custom variables, import/export — all inert.
+    const bodies = root.querySelectorAll(".wgd-panels .wgd-section-body");
+    expect(bodies.length).toBeGreaterThanOrEqual(4);
+    for (const body of bodies) expect(body.hasAttribute("inert")).toBe(true);
+    // The kind selector lives beside the preview, outside the inert
+    // panels, and still drives it.
+    const kind = root.querySelector(".wgd-preview-kind") as HTMLSelectElement;
+    expect(kind.closest("[inert]")).toBeNull();
+    kind.value = "table";
+    kind.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(
+      (container.querySelector(".wgd-preview") as HTMLElement).innerHTML
+    ).toContain("wg-table");
+    // The loaded theme still paints the preview in read-only mode.
+    expect(
+      (container.querySelector(".wgd-preview") as HTMLElement).style.getPropertyValue(
+        "--wg-surface"
+      )
+    ).toBe("#2e3440");
+    designer.setReadOnly(false);
+    expect(root.querySelector(".wgd-section-body[inert]")).toBeNull();
+  });
+});

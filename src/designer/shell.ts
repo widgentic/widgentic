@@ -32,6 +32,12 @@ export interface DesignerOptions {
    * designer's own UI — the widget preview uses the draft's theme.
    */
   appearance?: "auto" | "light" | "dark";
+  /**
+   * Mount with editing disabled: panels stay visible but inert, only the
+   * preview and its theme selector operate. Toggle later via
+   * `setReadOnly`.
+   */
+  readOnly?: boolean;
 }
 
 export type LoadResult = { ok: true } | { ok: false; errors: string[] };
@@ -40,6 +46,8 @@ export interface DesignerHandle {
   getDraft(): WidgetDraft;
   loadWidget(definition: unknown): LoadResult;
   loadTheme(theme: unknown): LoadResult;
+  /** Disable/enable editing; the preview and theme selector stay live. */
+  setReadOnly(readOnly: boolean): void;
   subscribe(
     listener: (draft: WidgetDraft, diagnostics: DesignerDiagnostics) => void
   ): () => void;
@@ -88,8 +96,28 @@ export function createDesigner(
   const unsubscribe = store.subscribe(refresh);
   refresh(store.get());
 
+  /**
+   * Read-only: every editing surface goes inert (visible, inoperable —
+   * section summaries stay clickable so content can still be inspected),
+   * while the preview and the theme panel's selector keep working. inert
+   * is applied to section BODIES, which are stable elements: panel
+   * re-renders replace children inside them, never the bodies themselves.
+   */
+  function setReadOnly(readOnly: boolean): void {
+    root.classList.toggle("wgd-readonly", readOnly);
+    const bodies = root.querySelectorAll(
+      ".wgd-panels .wgd-section-body, .wgd-edit-only > .wgd-section-body"
+    );
+    for (const body of bodies) {
+      if (readOnly) body.setAttribute("inert", "");
+      else body.removeAttribute("inert");
+    }
+  }
+  if (options.readOnly === true) setReadOnly(true);
+
   return {
     getDraft: () => cloneDraft(store.get()),
+    setReadOnly,
     loadWidget(definition) {
       const errors = checkDefinition(definition);
       if (errors.length > 0) return { ok: false, errors };

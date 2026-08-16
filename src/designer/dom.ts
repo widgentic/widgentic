@@ -198,6 +198,23 @@ export function injectDesignerStyles(doc: Document): void {
    attribute (learned live twice: the add menu, then the styles tree as a
    tab pane). hidden always wins — scoped to the designer's own tree. */
 .wgd-root [hidden] { display: none !important; }
+/* Read-only: editing surfaces are inert (visible, inoperable) and read
+   de-emphasized; the preview and its selectors stay full-strength. The
+   controls flatten into plain values — a form that cannot be typed in
+   should not look like a form (opacity alone was invisible on dark). */
+.wgd-readonly .wgd-section-body[inert] { opacity: 0.75; }
+.wgd-readonly [inert] .wgd-input,
+.wgd-readonly [inert] .wgd-select,
+.wgd-readonly [inert] .wgd-textarea,
+.wgd-readonly [inert] textarea.wgd-hl-input {
+  border-color: transparent; background: transparent; box-shadow: none;
+}
+.wgd-readonly [inert] .wgd-hl { background: transparent; }
+/* Controls that only exist to mutate carry no meaning here. */
+.wgd-readonly [inert] .wgd-button,
+.wgd-readonly [inert] .wgd-icon,
+.wgd-readonly [inert] .wgd-add,
+.wgd-readonly [inert] input[type="checkbox"] { opacity: 0.4; }
 .wgd-panels { flex: 1 1 460px; min-width: 340px; display: flex; flex-direction: column; gap: 8px; }
 .wgd-side { flex: 1 1 420px; min-width: 320px; display: flex; flex-direction: column; gap: 8px; position: sticky; top: 8px; }
 .wgd-preview-pane { display: flex; flex-direction: column; gap: 8px; }

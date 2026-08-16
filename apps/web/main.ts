@@ -44,10 +44,19 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 
 /* ------------------------------ widgets ------------------------------ */
 
+/**
+ * Per-list mode: "new" is a fresh editable draft, "viewing" shows a
+ * stored entry read-only (Edit/Delete), "editing" edits a stored entry
+ * (Save/Cancel; the New and Save-to-my-catalog controls hide until the
+ * edit ends).
+ */
+type ListMode = "new" | "viewing" | "editing";
+
 let widgetDesigner: DesignerHandle | undefined;
 let myThemes: ThemeEntry[] = [];
 let myWidgets: StoredWidgetJson[] = [];
 let selectedKind: string | undefined;
+let widgetMode: ListMode = "new";
 
 function designerThemes(): ThemeEntry[] {
   const builtIns = createThemeRegistry().list();
@@ -55,15 +64,28 @@ function designerThemes(): ThemeEntry[] {
   return [...builtIns, ...myThemes.filter((t) => !names.has(t.name))];
 }
 
-function mountWidgetDesigner(loadDefinition?: unknown): void {
+function mountWidgetDesigner(loadDefinition?: unknown, readOnly = false): void {
   const host = $("widget-designer");
   widgetDesigner?.dispose();
   host.replaceChildren();
-  widgetDesigner = createDesigner(host, { themes: designerThemes() });
+  widgetDesigner = createDesigner(host, { themes: designerThemes(), readOnly });
   if (loadDefinition !== undefined) {
     const result = widgetDesigner.loadWidget(loadDefinition);
     if (!result.ok) status(`load failed: ${result.errors.join("; ")}`);
   }
+}
+
+function syncWidgetControls(): void {
+  $("widget-new").hidden = widgetMode === "editing";
+  $("widget-save").hidden = widgetMode === "editing";
+}
+
+function showWidget(widget: StoredWidgetJson, mode: "viewing" | "editing"): void {
+  selectedKind = widget.kind;
+  widgetMode = mode;
+  mountWidgetDesigner(widget, mode === "viewing");
+  renderWidgetList();
+  syncWidgetControls();
 }
 
 function renderWidgetList(): void {
@@ -82,24 +104,44 @@ function renderWidgetList(): void {
     const name = document.createElement("span");
     name.className = "name";
     name.textContent = widget.kind;
-    const open = document.createElement("button");
-    open.textContent = "Edit";
-    open.addEventListener("click", () => {
-      selectedKind = widget.kind;
-      mountWidgetDesigner(widget);
-      renderWidgetList();
-    });
-    const remove = document.createElement("button");
-    remove.textContent = "Delete";
-    remove.className = "danger";
-    remove.addEventListener("click", () => {
-      void (async () => {
-        await api(`/api/widgets/${encodeURIComponent(widget.kind)}`, { method: "DELETE" });
-        await refreshWidgets();
-        status(`deleted ${widget.kind}`);
-      })().catch((error: Error) => status(error.message));
-    });
-    row.append(name, open, remove);
+    name.title = "View";
+    name.addEventListener("click", () => showWidget(widget, "viewing"));
+    const editing = widget.kind === selectedKind && widgetMode === "editing";
+    const buttons: HTMLButtonElement[] = [];
+    if (editing) {
+      const save = document.createElement("button");
+      save.textContent = "Save";
+      save.className = "primary";
+      save.addEventListener("click", () => {
+        void saveWidget().catch((error: Error) => status(error.message));
+      });
+      const cancel = document.createElement("button");
+      cancel.textContent = "Cancel";
+      cancel.addEventListener("click", () => showWidget(widget, "viewing"));
+      buttons.push(save, cancel);
+    } else {
+      const edit = document.createElement("button");
+      edit.textContent = "Edit";
+      edit.addEventListener("click", () => showWidget(widget, "editing"));
+      const remove = document.createElement("button");
+      remove.textContent = "Delete";
+      remove.className = "danger";
+      remove.addEventListener("click", () => {
+        void (async () => {
+          await api(`/api/widgets/${encodeURIComponent(widget.kind)}`, { method: "DELETE" });
+          if (selectedKind === widget.kind) {
+            selectedKind = undefined;
+            widgetMode = "new";
+            mountWidgetDesigner();
+            syncWidgetControls();
+          }
+          await refreshWidgets();
+          status(`deleted ${widget.kind}`);
+        })().catch((error: Error) => status(error.message));
+      });
+      buttons.push(edit, remove);
+    }
+    row.append(name, ...buttons);
     list.append(row);
   }
 }
@@ -119,6 +161,9 @@ async function saveWidget(): Promise<void> {
   });
   selectedKind = draft.kind;
   await refreshWidgets();
+  // A save ends the edit: back to viewing the stored entry read-only.
+  const saved = myWidgets.find((w) => w.kind === draft.kind);
+  if (saved !== undefined) showWidget(saved, "viewing");
   status(`saved ${draft.kind} — it is in your MCP catalog now`);
 }
 
@@ -126,16 +171,30 @@ async function saveWidget(): Promise<void> {
 
 let themeDesigner: ThemeDesignerHandle | undefined;
 let selectedTheme: string | undefined;
+let themeMode: ListMode = "new";
 
-function mountThemeDesigner(loadEntry?: unknown): void {
+function mountThemeDesigner(loadEntry?: unknown, readOnly = false): void {
   const host = $("theme-designer");
   themeDesigner?.dispose();
   host.replaceChildren();
-  themeDesigner = createThemeDesigner(host);
+  themeDesigner = createThemeDesigner(host, { readOnly });
   if (loadEntry !== undefined) {
     const result = themeDesigner.loadTheme(loadEntry);
     if (!result.ok) status(`load failed: ${result.errors.join("; ")}`);
   }
+}
+
+function syncThemeControls(): void {
+  $("theme-new").hidden = themeMode === "editing";
+  $("theme-save").hidden = themeMode === "editing";
+}
+
+function showTheme(theme: ThemeEntry, mode: "viewing" | "editing"): void {
+  selectedTheme = theme.name;
+  themeMode = mode;
+  mountThemeDesigner(theme, mode === "viewing");
+  renderThemeList();
+  syncThemeControls();
 }
 
 function renderThemeList(): void {
@@ -154,24 +213,44 @@ function renderThemeList(): void {
     const name = document.createElement("span");
     name.className = "name";
     name.textContent = theme.label ?? theme.name;
-    const open = document.createElement("button");
-    open.textContent = "Edit";
-    open.addEventListener("click", () => {
-      selectedTheme = theme.name;
-      mountThemeDesigner(theme);
-      renderThemeList();
-    });
-    const remove = document.createElement("button");
-    remove.textContent = "Delete";
-    remove.className = "danger";
-    remove.addEventListener("click", () => {
-      void (async () => {
-        await api(`/api/themes/${encodeURIComponent(theme.name)}`, { method: "DELETE" });
-        await refreshThemes();
-        status(`deleted ${theme.name}`);
-      })().catch((error: Error) => status(error.message));
-    });
-    row.append(name, open, remove);
+    name.title = "View";
+    name.addEventListener("click", () => showTheme(theme, "viewing"));
+    const editing = theme.name === selectedTheme && themeMode === "editing";
+    const buttons: HTMLButtonElement[] = [];
+    if (editing) {
+      const save = document.createElement("button");
+      save.textContent = "Save";
+      save.className = "primary";
+      save.addEventListener("click", () => {
+        void saveTheme().catch((error: Error) => status(error.message));
+      });
+      const cancel = document.createElement("button");
+      cancel.textContent = "Cancel";
+      cancel.addEventListener("click", () => showTheme(theme, "viewing"));
+      buttons.push(save, cancel);
+    } else {
+      const edit = document.createElement("button");
+      edit.textContent = "Edit";
+      edit.addEventListener("click", () => showTheme(theme, "editing"));
+      const remove = document.createElement("button");
+      remove.textContent = "Delete";
+      remove.className = "danger";
+      remove.addEventListener("click", () => {
+        void (async () => {
+          await api(`/api/themes/${encodeURIComponent(theme.name)}`, { method: "DELETE" });
+          if (selectedTheme === theme.name) {
+            selectedTheme = undefined;
+            themeMode = "new";
+            mountThemeDesigner();
+            syncThemeControls();
+          }
+          await refreshThemes();
+          status(`deleted ${theme.name}`);
+        })().catch((error: Error) => status(error.message));
+      });
+      buttons.push(edit, remove);
+    }
+    row.append(name, ...buttons);
     list.append(row);
   }
 }
@@ -191,6 +270,9 @@ async function saveTheme(): Promise<void> {
   });
   selectedTheme = entry.name;
   await refreshThemes();
+  // A save ends the edit: back to viewing the stored entry read-only.
+  const saved = myThemes.find((t) => t.name === entry.name);
+  if (saved !== undefined) showTheme(saved, "viewing");
   status(`saved theme ${entry.name} — usable as theme: "${entry.name}" now`);
 }
 
@@ -267,8 +349,10 @@ function showTab(name: (typeof SECTIONS)[number]): void {
     $(`tab-${section}`).classList.toggle("active", section === name);
   }
   // Returning to widgets re-mounts the designer so newly saved themes
-  // appear in its preview selector.
-  if (name === "widgets") mountWidgetDesigner(currentDefinition());
+  // appear in its preview selector — preserving the current mode.
+  if (name === "widgets") {
+    mountWidgetDesigner(currentDefinition(), widgetMode === "viewing");
+  }
 }
 
 function currentDefinition(): unknown {
@@ -302,16 +386,20 @@ async function boot(): Promise<void> {
 
   $("widget-new").addEventListener("click", () => {
     selectedKind = undefined;
+    widgetMode = "new";
     mountWidgetDesigner();
     renderWidgetList();
+    syncWidgetControls();
   });
   $("widget-save").addEventListener("click", () => {
     void saveWidget().catch((error: Error) => status(error.message));
   });
   $("theme-new").addEventListener("click", () => {
     selectedTheme = undefined;
+    themeMode = "new";
     mountThemeDesigner();
     renderThemeList();
+    syncThemeControls();
   });
   $("theme-save").addEventListener("click", () => {
     void saveTheme().catch((error: Error) => status(error.message));

@@ -2,6 +2,34 @@
 
 ## MODIFIED Requirements
 
+### Requirement: Designer programmatic surface
+The package SHALL export from a `./designer` entry: `createDesigner(container: Element, options?)` returning a handle `{ getDraft(), loadWidget(definition), loadTheme(theme), setReadOnly(readOnly), subscribe(listener), dispose() }`, `createThemeDesigner(container: Element, options?)` returning `{ getTheme(), loadTheme(entry), setReadOnly(readOnly), subscribe(listener), dispose() }`, and the opt-in element registrars `defineDesignerElement(tagName?)` (default `widgentic-designer`) and `defineThemeDesignerElement(tagName?)` (default `widgentic-theme-designer`), each wrapping its factory and emitting `widgentic-change` CustomEvents whose `detail` carries the serialized draft or theme entry. Both factories SHALL accept `readOnly` in options and both handles SHALL expose `setReadOnly(readOnly)`: in read-only mode every editing surface is inert — visible but inoperable and visibly de-emphasized — while the preview stays live along with the widget designer's preview-theme selector and the theme designer's preview-kind selector. Custom-element registration SHALL only happen through the explicit calls — importing the module SHALL have no registry side effects. The entry SHALL import other capabilities only through their public package entries, and SHALL perform no network I/O.
+
+#### Scenario: Factory mounts and disposes cleanly
+- **WHEN** `createDesigner(container)` is called and later `dispose()`
+- **THEN** the designer UI SHALL render inside `container` and be fully removed on dispose
+
+#### Scenario: Multiple instances coexist
+- **WHEN** two designers are created in one document
+- **THEN** edits in one SHALL NOT affect the other's draft or preview
+
+#### Scenario: Element registration is explicit
+- **WHEN** the module is imported without calling `defineDesignerElement`
+- **THEN** `customElements.get("widgentic-designer")` SHALL be undefined
+- **AND WHEN** `defineDesignerElement()` is called and an element is attached
+- **THEN** edits SHALL dispatch `widgentic-change` events with the serialized draft
+
+#### Scenario: The theme designer is independently embeddable
+- **WHEN** `createThemeDesigner(container)` is called
+- **THEN** a theme editor SHALL mount without any widget-authoring panels
+- **AND** `defineThemeDesignerElement()` SHALL register `widgentic-theme-designer` on the explicit call only
+
+#### Scenario: Read-only mode disables editing but keeps the preview live
+- **WHEN** a designer is created with `readOnly: true` or `setReadOnly(true)` is called
+- **THEN** its editing surfaces SHALL be inert while the preview keeps rendering
+- **AND** the widget designer's preview-theme selector (and the theme designer's preview-kind selector) SHALL remain operable, updating the preview
+- **AND** `setReadOnly(false)` SHALL restore editing
+
 ### Requirement: Custom widget draft editing
 The designer SHALL edit a draft in the server's `CustomWidget` shape — `kind`, `template`, and a descriptor with `description`, `dataShape`, `dataExample`, `hints`, `styles`, and `dataSchema` — through dedicated panels. The template SHALL be editable both as a structured node tree covering every DSL form (text, `bind`, `each` with `empty`, `when` with `else`, elements with attrs including `{ bind }` values) and as a JSON source pane; both are projections of one canonical model, and invalid JSON SHALL never destroy the current tree (last-valid wins with the parse error shown). The node tree SHALL stay flat and compact: each node renders as one slim row with its sub-structure indented beneath it, and value controls carry minimal chrome until hovered or focused. Dropdown controls in the tree SHALL size themselves to their selected value — re-fitting when the selection changes — so their carets sit beside the text instead of drifting with leftover row width. The data-schema builder SHALL share the same flat treatment: slim rows, minimal control chrome until hover or focus, hover-revealed removal controls, and selects fitted to their selected value. The descriptor's `styles` SHALL be editable both as a structured tree of selectors with their declarations and as a JSON source pane, both projections of the one draft value with the same parse gating as the template's JSON pane. The descriptor's `hints` SHALL likewise be editable as flat name→doc rows beside a parse-gated JSON pane. JSON source panes SHALL accept Tab as indentation — inserting spaces at the caret without moving focus — while Shift+Tab keeps its focus-moving default as the keyboard escape. Node insertion — child nodes, element attributes, and the `template`/`empty`/`else` slots — SHALL go through a single compact add-menu control that lists the available forms on demand, never through persistent per-form button rows. Structural nodes (elements, `each`, `when`) SHALL be collapsible from their row, with collapse state keyed to the node path so it survives the re-renders caused by draft edits; a collapsed node SHALL keep its header row and show a muted summary of what is hidden. An element's attribute rows SHALL be grouped under chrome visually distinct from its children (differentiated color, border, or typography). Every mutation SHALL re-run the relevant widgentic validators — `validateTemplate`, `validateDataAgainstSchema` (including `dataExample` cross-checked against `dataSchema`), the styles safety filters, and theme validation — surfacing their structured errors beside the panel that owns the offending value.
 
