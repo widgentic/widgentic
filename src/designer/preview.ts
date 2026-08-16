@@ -22,12 +22,39 @@ import type { DesignerDiagnostics } from "./validate.js";
 /** Internal kind the draft renders under (stable across recompiles). */
 export const PREVIEW_KIND = "designer-preview";
 
+/**
+ * A host-supplied definition the preview can render by kind. `descriptor`
+ * stays `unknown` on purpose: hosts hand these straight off the wire, so
+ * the preview narrows what it needs and ignores the rest.
+ */
+export interface PreviewWidget {
+  kind: string;
+  template: unknown;
+  descriptor?: unknown;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export interface PreviewOptions {
+  /**
+   * Custom widget definitions to make previewable by kind — a theme is
+   * judged against the widgets it will actually dress, not only the
+   * built-ins. Definitions that fail template validation are skipped.
+   */
+  widgets?: PreviewWidget[];
+}
+
 export interface PreviewController {
   readonly pane: HTMLElement;
+  /** Selectable kinds: built-ins plus the registered customs. */
+  readonly kinds: string[];
   /**
    * Re-render for a draft revision. The WIDGET designer always renders
    * the draft (no `previewKind`); the optional kind parameter exists for
-   * the THEME designer, whose job is previewing built-ins under a theme.
+   * the THEME designer, whose job is previewing catalog kinds under a
+   * theme.
    */
   update(
     draft: WidgetDraft,
@@ -37,7 +64,7 @@ export interface PreviewController {
   dispose(): void;
 }
 
-export function createPreview(): PreviewController {
+export function createPreview(options: PreviewOptions = {}): PreviewController {
   injectBaseStyles(document);
 
   const banner = h("div", { class: "wgd-banner" });
@@ -56,6 +83,35 @@ export function createPreview(): PreviewController {
       dataShape: "Defined by the draft being designed."
     }
   );
+
+  // Host-supplied customs join the scratch catalog so the theme designer
+  // can preview them. Each carries its own styles, emitted when selected.
+  const customStyles = new Map<string, string>();
+  for (const widget of options.widgets ?? []) {
+    const validated = validateTemplate(widget.template);
+    // Untrusted-ish input: a bad definition is skipped, never fatal.
+    if (!validated.ok || typeof widget.kind !== "string" || widget.kind === "") continue;
+    const compiled = compileTemplate(validated.template);
+    const descriptor = isPlainObject(widget.descriptor) ? widget.descriptor : {};
+    try {
+      catalog.register(widget.kind, (payload: WidgetPayload) => compiled(payload), {
+        description: `Custom widget '${widget.kind}' supplied for preview.`,
+        dataShape: "Defined by the supplied definition.",
+        ...(descriptor.dataExample !== undefined
+          ? { dataExample: descriptor.dataExample }
+          : {})
+      });
+    } catch {
+      continue; // a reserved/duplicate kind never breaks the designer
+    }
+    if (isPlainObject(descriptor.styles)) {
+      customStyles.set(
+        widget.kind,
+        widgetStylesToCss(descriptor.styles as Record<string, Record<string, string>>)
+      );
+    }
+  }
+  const kinds = catalog.kinds().filter((kind) => kind !== PREVIEW_KIND);
 
   let mount: WidgetMount | undefined;
 
@@ -84,10 +140,13 @@ export function createPreview(): PreviewController {
       if (!validated.ok) return; // defensive: previewable implies ok
       renderer = compileTemplate(validated.template);
     }
-    kindStyles.textContent =
-      renderingDraft && draft.descriptor.styles
+    // Styles follow whatever is on screen: the draft's own, or the
+    // selected custom kind's (a built-in needs none).
+    kindStyles.textContent = renderingDraft
+      ? draft.descriptor.styles
         ? widgetStylesToCss(draft.descriptor.styles)
-        : "";
+        : ""
+      : customStyles.get(previewKind as string) ?? "";
     // Unsafe values are also skipped inside applyTheme (lenient layer).
     applyTheme(mountRoot, draft.theme ?? {});
 
@@ -111,6 +170,7 @@ export function createPreview(): PreviewController {
 
   return {
     pane,
+    kinds,
     update,
     dispose() {
       mount?.dispose();

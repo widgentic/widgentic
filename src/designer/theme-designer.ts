@@ -20,6 +20,7 @@ import {
 import type { ThemeEntry, WidgetThemeInput } from "widgentic/theming";
 import { diagnosticLine, h, injectDesignerStyles, section, textField } from "./dom.js";
 import { createPreview } from "./preview.js";
+import type { PreviewWidget } from "./preview.js";
 import { starterDraft } from "./store.js";
 import type { WidgetDraft } from "./store.js";
 
@@ -39,6 +40,12 @@ function toHexInput(value: string): string | undefined {
 export interface ThemeDesignerOptions {
   initialTheme?: ThemeEntry;
   appearance?: "auto" | "light" | "dark";
+  /**
+   * Custom widget definitions to offer in the preview-kind selector
+   * beside the built-ins — a theme is judged against the widgets it will
+   * actually dress. Invalid definitions are skipped.
+   */
+  widgets?: PreviewWidget[];
   /**
    * Mount with editing disabled: panels stay visible but inert, only the
    * preview and its kind selector operate. Toggle later via `setReadOnly`.
@@ -88,9 +95,13 @@ export function createThemeDesigner(
     ? (JSON.parse(JSON.stringify(options.initialTheme)) as ThemeEntry)
     : starterEntry();
   const listeners = new Set<(entry: ThemeEntry) => void>();
-  let previewKind = BASE_KINDS[0] ?? "card";
 
-  const preview = createPreview();
+  const preview = createPreview(
+    options.widgets ? { widgets: options.widgets } : {}
+  );
+  // Built-ins plus whatever custom definitions the host supplied.
+  const previewKinds = preview.kinds.length > 0 ? preview.kinds : BASE_KINDS;
+  let previewKind = previewKinds[0] ?? "card";
   const panels = h("div", { class: "wgd-panels" });
   const side = h("div", { class: "wgd-side" }, [preview.pane]);
   const root = h("div", { class: "wgd-root wgd-theme-designer" }, [panels, side]);
@@ -169,7 +180,7 @@ export function createThemeDesigner(
   const kindSelect = h("select", {
     class: "wgd-select wgd-preview-kind"
   }) as HTMLSelectElement;
-  for (const kind of BASE_KINDS) {
+  for (const kind of previewKinds) {
     kindSelect.append(h("option", { value: kind }, [kind]));
   }
   kindSelect.value = previewKind;

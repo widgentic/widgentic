@@ -285,3 +285,59 @@ describe("theme designer read-only mode", () => {
     expect(root.querySelector(".wgd-section-body[inert]")).toBeNull();
   });
 });
+
+describe("theme designer previews custom widgets", () => {
+  const custom = {
+    kind: "invoice-lite",
+    template: {
+      tag: "div",
+      attrs: { class: "wg-invoice-lite" },
+      children: [{ bind: "customer" }]
+    },
+    descriptor: {
+      description: "d",
+      dataShape: "s",
+      dataExample: { customer: "Acme Corp" },
+      styles: { ".wg-invoice-lite": { color: "var(--wg-accent)" } }
+    }
+  };
+
+  it("offers supplied kinds beside the built-ins and renders them styled", () => {
+    const container = host();
+    createThemeDesigner(container, {
+      widgets: [custom],
+      initialTheme: { name: "t", tokens: { accent: "#ff00aa" } }
+    });
+    const kind = container.querySelector(".wgd-preview-kind") as HTMLSelectElement;
+    const offered = [...kind.options].map((o) => o.value);
+    expect(offered).toContain("card"); // built-ins still there
+    expect(offered).toContain("invoice-lite");
+    // The internal draft delegate is never offered as a kind.
+    expect(offered).not.toContain("designer-preview");
+
+    kind.value = "invoice-lite";
+    kind.dispatchEvent(new Event("change", { bubbles: true }));
+    const preview = container.querySelector(".wgd-preview") as HTMLElement;
+    // Rendered from its OWN dataExample...
+    expect(preview.textContent).toContain("Acme Corp");
+    // ...with its OWN descriptor styles emitted...
+    const styles = [...container.querySelectorAll("style")]
+      .map((s) => s.textContent ?? "")
+      .join("\n");
+    expect(styles).toContain(".wg-invoice-lite");
+    // ...under the edited tokens.
+    expect(preview.style.getPropertyValue("--wg-accent")).toBe("#ff00aa");
+  });
+
+  it("skips an invalid definition without losing the rest", () => {
+    const container = host();
+    createThemeDesigner(container, {
+      widgets: [{ kind: "broken", template: { tag: 123 } }, custom]
+    });
+    const offered = [
+      ...(container.querySelector(".wgd-preview-kind") as HTMLSelectElement).options
+    ].map((o) => o.value);
+    expect(offered).not.toContain("broken");
+    expect(offered).toContain("invoice-lite");
+  });
+});

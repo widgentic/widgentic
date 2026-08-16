@@ -77,7 +77,9 @@ function mountWidgetDesigner(loadDefinition?: unknown, readOnly = false): void {
 
 function syncWidgetControls(): void {
   $("widget-new").hidden = widgetMode === "editing";
-  $("widget-save").hidden = widgetMode === "editing";
+  // "Save to my catalog" belongs to a NEW draft only — a stored entry
+  // saves through its own row, so the top control would be ambiguous.
+  $("widget-save").hidden = widgetMode !== "new";
 }
 
 function showWidget(widget: StoredWidgetJson, mode: "viewing" | "editing"): void {
@@ -177,7 +179,9 @@ function mountThemeDesigner(loadEntry?: unknown, readOnly = false): void {
   const host = $("theme-designer");
   themeDesigner?.dispose();
   host.replaceChildren();
-  themeDesigner = createThemeDesigner(host, { readOnly });
+  // The principal's own widgets join the preview-kind selector: a theme
+  // is judged against the widgets it will actually dress.
+  themeDesigner = createThemeDesigner(host, { readOnly, widgets: myWidgets });
   if (loadEntry !== undefined) {
     const result = themeDesigner.loadTheme(loadEntry);
     if (!result.ok) status(`load failed: ${result.errors.join("; ")}`);
@@ -186,7 +190,7 @@ function mountThemeDesigner(loadEntry?: unknown, readOnly = false): void {
 
 function syncThemeControls(): void {
   $("theme-new").hidden = themeMode === "editing";
-  $("theme-save").hidden = themeMode === "editing";
+  $("theme-save").hidden = themeMode !== "new";
 }
 
 function showTheme(theme: ThemeEntry, mode: "viewing" | "editing"): void {
@@ -352,6 +356,11 @@ function showTab(name: (typeof SECTIONS)[number]): void {
   // appear in its preview selector — preserving the current mode.
   if (name === "widgets") {
     mountWidgetDesigner(currentDefinition(), widgetMode === "viewing");
+  }
+  // Symmetrically: returning to themes re-mounts so newly saved WIDGETS
+  // appear in its preview-kind selector, preserving entry and mode.
+  if (name === "themes") {
+    mountThemeDesigner(themeDesigner?.getTheme(), themeMode === "viewing");
   }
 }
 

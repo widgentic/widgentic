@@ -87,7 +87,11 @@ let themeDesigner: ThemeDesignerHandle | undefined;
 function mountThemeDesigner(): void {
   themeDesigner?.dispose();
   themeHost.replaceChildren();
-  themeDesigner = createThemeDesigner(themeHost);
+  // The example widgets join the preview-kind selector, so a theme can be
+  // judged against custom widgets and not only the built-ins.
+  themeDesigner = createThemeDesigner(themeHost, {
+    widgets: [invoiceWidget, xPostWidget]
+  });
 }
 
 // --- Tabs ----------------------------------------------------------------

@@ -3,7 +3,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Designing and publishing are the same act
-The app SHALL host the widget designer and the theme designer against persistence: saving in the designer SHALL write through the authoring API to the signed-in principal's store, and the entry SHALL then appear in that principal's MCP catalog without any further step. The app SHALL load the principal's existing widgets and themes into the designers, and SHALL offer the principal's themes as the widget designer's preview options. Selecting a stored entry from the list SHALL open it in the designer in read-only mode — editing disabled, preview and preview selectors live — with `Edit` and `Delete` as the entry's actions. `Edit` SHALL switch the designer to edit mode: the entry's actions become `Save` and `Cancel`, and the `New` and `Save to my catalog` controls SHALL be hidden while an existing entry is under edit. `Save` SHALL persist through the authoring API and return to read-only mode; `Cancel` SHALL discard the edits and restore the stored entry in read-only mode.
+The app SHALL host the widget designer and the theme designer against persistence: saving in the designer SHALL write through the authoring API to the signed-in principal's store, and the entry SHALL then appear in that principal's MCP catalog without any further step. The app SHALL load the principal's existing widgets and themes into the designers, and SHALL offer the principal's themes as the widget designer's preview options. Selecting a stored entry from the list SHALL open it in the designer in read-only mode — editing disabled, preview and preview selectors live — with `Edit` and `Delete` as the entry's actions. `Edit` SHALL switch the designer to edit mode: the entry's actions become `Save` and `Cancel`, and the `New` control SHALL be hidden while an existing entry is under edit. `Save to my catalog` SHALL be visible only while designing a NEW entry — selecting a stored entry hides it (that entry saves through its own row), and it returns when `New` is pressed. The app SHALL also supply the principal's stored widgets to the theme designer so its preview-kind selector covers their own widgets, not only the built-in kinds. `Save` SHALL persist through the authoring API and return to read-only mode; `Cancel` SHALL discard the edits and restore the stored entry in read-only mode.
 
 #### Scenario: A saved widget appears in the caller's catalog
 - **WHEN** a signed-in user saves a widget in the designer and then calls `list_widgets` with one of their keys
@@ -28,6 +28,16 @@ The app SHALL host the widget designer and the theme designer against persistenc
 - **WHEN** `Edit` is clicked on the selected entry
 - **THEN** the designer SHALL become editable and the entry's actions SHALL become `Save` and `Cancel`
 - **AND** the `New` and `Save to my catalog` controls SHALL be hidden until the edit ends
+
+#### Scenario: Save to my catalog belongs to new entries only
+- **WHEN** a stored entry is selected (read-only or under edit)
+- **THEN** `Save to my catalog` SHALL be hidden
+- **AND WHEN** `New` is pressed
+- **THEN** it SHALL be visible again
+
+#### Scenario: The theme designer previews the principal's own widgets
+- **WHEN** a signed-in user with a stored widget opens the theme designer
+- **THEN** that widget's kind SHALL be selectable in the preview-kind selector
 
 #### Scenario: Cancel abandons the edits
 - **WHEN** `Cancel` is clicked during an edit

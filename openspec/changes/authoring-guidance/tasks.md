@@ -63,3 +63,11 @@
 - [x] 7.4 Tests: readOnly at creation and via setReadOnly (inert on editing surfaces, theme panel free, preview updates on theme selection while read-only); theme designer kind selector operable read-only; setReadOnly(false) restores
 - [x] 7.5 Full gate; live end-to-end browser check of BOTH tabs against the dev-login app (select→read-only with Edit/Delete, Edit→Save/Cancel with New+Save hidden, Cancel discards, preview+theme/kind selectors live throughout); commit and push
 - [x] 7.6 Live finding: opacity-only de-emphasis was invisible on dark chrome — read-only now flattens control borders/backgrounds so fields read as plain values and mutation controls dim; stylesheet assertion added
+
+## 8. Post-deploy corrections (user feedback on v23)
+
+- [x] 8.1 Delta specs: Save-to-my-catalog is new-entry-only; theme designer accepts `options.widgets` and previews them (MODIFIED "Theme designer for catalog widgets" with all 4 original scenarios carried)
+- [x] 8.2 `preview.ts`: register host-supplied custom widgets into the scratch catalog (compile + skip invalid), expose `kinds`, apply the previewed kind's OWN descriptor styles
+- [x] 8.3 `theme-designer.ts`: `options.widgets` through to the preview; kind selector lists built-ins + customs
+- [x] 8.4 App + demo rig pass their widgets to the theme designer; `syncWidgetControls`/`syncThemeControls` hide Save-to-my-catalog outside "new"
+- [x] 8.5 Tests + full gate; live browser check; deploy v24

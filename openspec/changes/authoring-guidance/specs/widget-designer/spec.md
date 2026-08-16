@@ -30,6 +30,33 @@ The package SHALL export from a `./designer` entry: `createDesigner(container: E
 - **AND** the widget designer's preview-theme selector (and the theme designer's preview-kind selector) SHALL remain operable, updating the preview
 - **AND** `setReadOnly(false)` SHALL restore editing
 
+### Requirement: Theme designer for catalog widgets
+The standalone theme designer SHALL edit a named theme entry — identity (`name`, optional `label`/`description`) plus a plain token map over `THEME_TOKENS` (one control per registry token, with the control chosen from the token's declared `type` — `color` tokens showing a picker/swatch of the effective value — and its documented `use` surfaced as help text) and author-defined `x-*` custom variables (add/rename/remove) — validating on every change and previewing against any kind in its scratch catalog. It SHALL accept host-supplied custom widget definitions in `options.widgets` and offer them alongside the built-in kinds in its preview-kind selector, rendering each with its own descriptor styles — a theme is judged against the widgets it will actually dress. A supplied definition that fails template validation SHALL be skipped without breaking the designer. Unsafe token values SHALL be flagged inline with the validator's error and excluded from the applied preview theme. Export SHALL produce the registry entry shape (`{ name, label?, description?, tokens }`) and import SHALL accept the same, re-validating before it replaces the working entry.
+
+#### Scenario: Token edits preview immediately
+- **WHEN** the `surface` token is set to a color distinct from `bg` with a `card` preview selected
+- **THEN** the previewed card SHALL reflect the new surface immediately
+
+#### Scenario: Unsafe values are flagged and not applied
+- **WHEN** a token value contains `url(https://evil.example/x)`
+- **THEN** the control SHALL show the `INVALID_TOKEN_VALUE` error and the preview SHALL not apply that value
+
+#### Scenario: Custom variables are editable and previewed
+- **WHEN** a custom variable `x-badge-gap` is added with value `4px`
+- **THEN** it SHALL be applied to the preview as `--wg-x-badge-gap`
+- **AND** it SHALL appear in the exported entry's tokens
+
+#### Scenario: Export and import use the registry entry shape
+- **WHEN** an edited entry is exported and re-imported
+- **THEN** the resulting entry SHALL deep-equal the original
+- **AND** an entry whose tokens fail validation SHALL be rejected without replacing the working entry
+
+#### Scenario: Custom widgets are previewable under the theme
+- **WHEN** a theme designer is created with `options.widgets` carrying a custom definition
+- **THEN** its kind selector SHALL offer that kind beside the built-ins
+- **AND** selecting it SHALL render that widget from its own `dataExample`, with its descriptor styles applied and the edited tokens in effect
+- **AND** a definition with an invalid template SHALL be skipped while the rest stay selectable
+
 ### Requirement: Custom widget draft editing
 The designer SHALL edit a draft in the server's `CustomWidget` shape — `kind`, `template`, and a descriptor with `description`, `dataShape`, `dataExample`, `hints`, `styles`, and `dataSchema` — through dedicated panels. The template SHALL be editable both as a structured node tree covering every DSL form (text, `bind`, `each` with `empty`, `when` with `else`, elements with attrs including `{ bind }` values) and as a JSON source pane; both are projections of one canonical model, and invalid JSON SHALL never destroy the current tree (last-valid wins with the parse error shown). The node tree SHALL stay flat and compact: each node renders as one slim row with its sub-structure indented beneath it, and value controls carry minimal chrome until hovered or focused. Dropdown controls in the tree SHALL size themselves to their selected value — re-fitting when the selection changes — so their carets sit beside the text instead of drifting with leftover row width. The data-schema builder SHALL share the same flat treatment: slim rows, minimal control chrome until hover or focus, hover-revealed removal controls, and selects fitted to their selected value. The descriptor's `styles` SHALL be editable both as a structured tree of selectors with their declarations and as a JSON source pane, both projections of the one draft value with the same parse gating as the template's JSON pane. The descriptor's `hints` SHALL likewise be editable as flat name→doc rows beside a parse-gated JSON pane. JSON source panes SHALL accept Tab as indentation — inserting spaces at the caret without moving focus — while Shift+Tab keeps its focus-moving default as the keyboard escape. Node insertion — child nodes, element attributes, and the `template`/`empty`/`else` slots — SHALL go through a single compact add-menu control that lists the available forms on demand, never through persistent per-form button rows. Structural nodes (elements, `each`, `when`) SHALL be collapsible from their row, with collapse state keyed to the node path so it survives the re-renders caused by draft edits; a collapsed node SHALL keep its header row and show a muted summary of what is hidden. An element's attribute rows SHALL be grouped under chrome visually distinct from its children (differentiated color, border, or typography). Every mutation SHALL re-run the relevant widgentic validators — `validateTemplate`, `validateDataAgainstSchema` (including `dataExample` cross-checked against `dataSchema`), the styles safety filters, and theme validation — surfacing their structured errors beside the panel that owns the offending value.
 
