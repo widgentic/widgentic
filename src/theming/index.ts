@@ -9,7 +9,13 @@ export type {
   ThemeErrorCode
 } from "./tokens.js";
 export { baseStylesheet, injectBaseStyles } from "./stylesheet.js";
-export { validateTheme, applyTheme, themeToCss, darkTheme } from "./apply.js";
+export {
+  validateTheme,
+  applyTheme,
+  themeToCss,
+  darkTheme,
+  CUSTOM_VARIABLE
+} from "./apply.js";
 export type { ValidateThemeResult } from "./apply.js";
 export {
   createThemeRegistry,

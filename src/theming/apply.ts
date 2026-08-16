@@ -1,5 +1,5 @@
-import type { ThemeError, WidgetTheme, WidgetThemeInput } from "./tokens.js";
-import { THEME_TOKENS, isSafeTokenValue } from "./tokens.js";
+import type { ThemeError, TokenSpec, WidgetTheme, WidgetThemeInput } from "./tokens.js";
+import { THEME_TOKENS, TOKEN_SPECS, isSafeTokenValue } from "./tokens.js";
 
 export type ValidateThemeResult =
   | { ok: true; theme: WidgetThemeInput }
@@ -16,9 +16,10 @@ const KNOWN_TOKENS: ReadonlySet<string> = new Set(THEME_TOKENS);
  * tokens and emitted as `--wg-x-<name>`. This is the sanctioned escape
  * hatch for custom widgets that need their own knobs, so the registry does
  * not have to grow for every one-off. Names are lowercase/kebab so the
- * generated custom property is always a valid CSS identifier.
+ * generated custom property is always a valid CSS identifier. Exported so
+ * tooling states this rule by reading it, never by restating it.
  */
-const CUSTOM_VARIABLE = /^x-[a-z0-9][a-z0-9-]*$/;
+export const CUSTOM_VARIABLE = /^x-[a-z0-9][a-z0-9-]*$/;
 
 /** Custom-variable keys carried by a theme, in declaration order. */
 function customKeys(theme: WidgetThemeInput): string[] {
@@ -66,6 +67,33 @@ export function validateTheme(input: unknown): ValidateThemeResult {
 }
 
 /**
+ * Fill in tokens a theme left unset that declare a `fallback`, using the
+ * fallback token's value FROM THIS THEME.
+ *
+ * This cannot live in the base stylesheet: a `:root` chain
+ * (`--wg-surface: var(--wg-bg, …)`) substitutes against `:root`'s own
+ * `--wg-bg` at computed-value time and then inherits that resolved
+ * value, so a descendant overriding `--wg-bg` never reaches it. Resolving
+ * where the theme is applied puts both declarations on the same element,
+ * which is the only place the relationship holds (observed live at v24: a
+ * bg-only dark theme painted white cards).
+ */
+function withFallbacks(theme: WidgetThemeInput): WidgetThemeInput {
+  const source = theme as Record<string, unknown>;
+  let filled: Record<string, unknown> | undefined;
+  for (const token of THEME_TOKENS) {
+    const { fallback } = TOKEN_SPECS[token] as TokenSpec;
+    if (fallback === undefined) continue;
+    if (typeof source[token] === "string") continue; // theme set it explicitly
+    const inherited = source[fallback];
+    if (typeof inherited !== "string") continue; // nothing to inherit from
+    filled ??= { ...source };
+    filled[token] = inherited;
+  }
+  return (filled ?? theme) as WidgetThemeInput;
+}
+
+/**
  * Apply a theme to a container as inline `--wg-*` custom properties
  * (scoped: descendants inherit them; siblings are unaffected). Replace
  * semantics — previously applied tokens are removed first, so
@@ -73,7 +101,8 @@ export function validateTheme(input: unknown): ValidateThemeResult {
  * are skipped; the CSSOM path (`setProperty`) parses no stylesheet text,
  * so declaration escape is structurally impossible here.
  */
-export function applyTheme(container: Element, theme: WidgetThemeInput): void {
+export function applyTheme(container: Element, input: WidgetThemeInput): void {
+  const theme = withFallbacks(input);
   const style = (container as Partial<ElementCSSInlineStyle>).style;
   if (!style) return;
   // Replace semantics: clear every property this module could have set,
@@ -99,7 +128,8 @@ export function applyTheme(container: Element, theme: WidgetThemeInput): void {
  * Generate a CSS rule assigning the theme's tokens under `selector`
  * (default `:root`). Only entries passing the safety guard are emitted.
  */
-export function themeToCss(theme: WidgetThemeInput, selector = ":root"): string {
+export function themeToCss(input: WidgetThemeInput, selector = ":root"): string {
+  const theme = withFallbacks(input);
   const declarations: string[] = [];
   const keys: string[] = [...THEME_TOKENS, ...customKeys(theme)];
   for (const key of keys) {

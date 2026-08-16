@@ -150,6 +150,8 @@ export function mountIoPanel(store: DraftStore): {
     importError,
     h("div", { class: "wgd-row" }, [importButton])
   ]);
+  // Export copies out what is already on screen, so read-only leaves it
+  // operable: the mode restricts editing, not looking.
   const exportSection = section("Export", [
     h("div", { class: "wgd-row" }, [
       button("Export widget JSON", () => exportWidgetJson(store.get())),
@@ -158,6 +160,7 @@ export function mountIoPanel(store: DraftStore): {
     ]),
     output
   ]);
+  exportSection.classList.add("wgd-view-only");
   const element = h("div", { class: "wgd-io" }, [importSection, exportSection]);
   // After assembly: the layer wraps the textarea in place, so the element
   // must already have its parent.

@@ -11,14 +11,22 @@
  */
 import type { ThemeEntry } from "widgentic/theming";
 import { TOKEN_SPECS } from "widgentic/theming";
-import { h, section } from "./dom.js";
+import { diagnosticLine, h, section } from "./dom.js";
 import type { DraftStore, WidgetDraft } from "./store.js";
 
 export function mountThemePanel(
   store: DraftStore,
   refreshers: ((draft: WidgetDraft) => void)[],
   themes: ThemeEntry[] = []
-): { element: HTMLElement; dispose(): void } {
+): {
+  element: HTMLElement;
+  /** Show the theme validator's error — this panel owns the value. */
+  setDiagnostic(message: string | undefined): void;
+  dispose(): void;
+} {
+  // Theme validation errors were computed and dropped before this: the
+  // panel that owns the offending value showed nothing at all.
+  const themeDiag = diagnosticLine(undefined);
   // Theme selector: "none" plus whatever the host supplied.
   const themeSelect = h("select", {
     class: "wgd-select wgd-theme-select"
@@ -96,6 +104,7 @@ export function mountThemePanel(
         ? "No themes supplied by the host — design themes in the theme designer."
         : "Themes come from the host; edit them in the theme designer."
     ]),
+    themeDiag,
     h("details", { class: "wgd-token-ref-details" }, [
       h("summary", { class: "wgd-field-label" }, [
         "Theme tokens (reference for styles)"
@@ -105,5 +114,12 @@ export function mountThemePanel(
   ];
 
   const element = section("Preview", rows);
-  return { element, dispose: () => element.remove() };
+  return {
+    element,
+    setDiagnostic(message) {
+      themeDiag.hidden = message === undefined;
+      themeDiag.textContent = message ?? "";
+    },
+    dispose: () => element.remove()
+  };
 }

@@ -11,14 +11,19 @@
  *   - The guide teaches the write boundary: there is no MCP registration
  *     tool, deliberately. Saving is the user's authenticated act.
  */
-import { createCatalog } from "../catalog/index.js";
+import {
+  PATTERN_MAX_LENGTH,
+  PROPERTY_NAME,
+  UNSAFE,
+  createCatalog
+} from "../catalog/index.js";
 import { ALLOWED_SCHEMES } from "../contract/index.js";
 import {
   DEFAULT_MAX_NODES,
   MAX_TEMPLATE_DEPTH,
   URL_ATTRS
 } from "../templates/index.js";
-import { TOKEN_SPECS } from "../theming/index.js";
+import { CUSTOM_VARIABLE, TOKEN_SPECS } from "../theming/index.js";
 import { DEFAULT_LIMITS, SAFE_IDENTIFIER } from "../store/index.js";
 import type { McpToolResult } from "../mcp/index.js";
 
@@ -80,7 +85,7 @@ export function buildAuthoringGuide(): Record<string, unknown> {
         default: spec.default
       })),
       customVariables: {
-        namePattern: "^x-[a-z0-9][a-z0-9-]*$",
+        namePattern: CUSTOM_VARIABLE.source,
         appliedAs:
           "A custom variable x-foo becomes --wg-x-foo on the themed scope; " +
           "reference it from widget styles as var(--wg-x-foo)."
@@ -135,9 +140,17 @@ export function buildAuthoringGuide(): Record<string, unknown> {
         selectors:
           "Every selector (and every comma-separated part) must target a " +
           ".wg- class, e.g. '.wg-card .wg-xcard-head'.",
+        // Derived: the guard's own character class, plus the two
+        // function forms the value check rejects on top of it.
         banned:
-          "Selectors, properties, or values containing ';', '{', '}', " +
-          "'<', '>', '@', '\\\\', 'url(' or 'expression(' are dropped.",
+          `Selectors, properties, or values matching ${UNSAFE.source} — or ` +
+          "containing 'url(' or 'expression(' — are dropped.",
+        // The property rule is an ALLOWLIST, not merely "no banned
+        // characters": a property with a digit or underscore is dropped
+        // even though it contains nothing banned.
+        propertyNames:
+          `Property names must match ${PROPERTY_NAME.source} (letters and ` +
+          "hyphens, optionally leading '-'); anything else is dropped.",
         tokens:
           "Reference theme tokens with var(--wg-<token>) and custom " +
           "variables with var(--wg-x-<name>); prefer tokens over literals " +
@@ -153,7 +166,7 @@ export function buildAuthoringGuide(): Record<string, unknown> {
           "boolean/null, or an array of those), properties, required, " +
           "items, enum, pattern. Unknown keywords are ignored.",
         pattern:
-          "pattern is a bounded regex: max 256 chars, no nested " +
+          `pattern is a bounded regex: max ${PATTERN_MAX_LENGTH} chars, no nested ` +
           "quantifiers, applied only to strings and capped input length; " +
           "unsafe or invalid patterns are ignored rather than enforced.",
         effect:

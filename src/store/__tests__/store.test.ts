@@ -98,6 +98,14 @@ describe("memory store", () => {
     await expect(
       store.putWidget("alice", { ...reportWidget, kind: "table" })
     ).rejects.toThrow(/RESERVED_KIND/);
+    // Nor built-in THEME names: without this the write succeeded and the
+    // entry was silently dropped at compose (registry.register throws).
+    await expect(
+      store.putTheme("alice", { name: "dark", tokens: { bg: "#000000" } })
+    ).rejects.toThrow(/RESERVED_THEME/);
+    await expect(
+      store.putTheme("alice", { name: "light", tokens: { bg: "#ffffff" } })
+    ).rejects.toThrow(/RESERVED_THEME/);
     // Templates must validate.
     await expect(
       store.putWidget("alice", {
@@ -273,6 +281,30 @@ describe("composition", () => {
     expect(themes.value.names()).toContain("brand");
     expect(themes.value.names()).not.toContain("bad");
     expect(themes.diagnostics.join(" ")).toContain("bad");
+  });
+
+  it("never lets a stored theme shadow a built-in theme name", async () => {
+    // Out-of-band stores can hold one even though writes now refuse it.
+    const rogue = {
+      async resolvePrincipal() {
+        return undefined;
+      },
+      async widgets() {
+        return [] as StoredWidget[];
+      },
+      async themes() {
+        return [
+          { name: "dark", tokens: { bg: "#ff0000" } } as ThemeEntry,
+          brandTheme
+        ];
+      }
+    };
+    const themes = await composeThemes(rogue, "alice");
+    // Skipped with a diagnostic naming the reason, the rest intact.
+    expect(themes.diagnostics.join(" ")).toContain("RESERVED_THEME");
+    expect(themes.value.names()).toContain("brand");
+    // `dark` still resolves — to the BUILT-IN preset, not the stored one.
+    expect(themes.value.get("dark")?.tokens.bg).not.toBe("#ff0000");
   });
 
   it("refuses exotic identifiers on write, everywhere the same", async () => {

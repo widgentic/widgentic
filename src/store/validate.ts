@@ -6,7 +6,7 @@
  */
 import { createCatalog } from "widgentic/catalog";
 import { countTemplateNodes, validateTemplate } from "widgentic/templates";
-import { validateTheme } from "widgentic/theming";
+import { createThemeRegistry, validateTheme } from "widgentic/theming";
 import type { ThemeEntry } from "widgentic/theming";
 import type { StoreLimits, StoredWidget } from "./types.js";
 import { DEFAULT_LIMITS } from "./types.js";
@@ -14,11 +14,25 @@ import { DEFAULT_LIMITS } from "./types.js";
 /** Kind names the built-ins own; a stored widget may never shadow them. */
 const BUILTIN_KINDS: ReadonlySet<string> = new Set(createCatalog().kinds());
 
+/**
+ * Theme names the registry pre-registers. Derived, not restated, so the
+ * two cannot drift. Without this check a theme named `dark` passed
+ * validation, then failed `registry.register` during composition and was
+ * swallowed into a diagnostic — the caller was told it saved while the
+ * entry was unreachable everywhere (observed live at v24).
+ */
+const BUILTIN_THEMES: ReadonlySet<string> = new Set(
+  createThemeRegistry()
+    .list()
+    .map((entry) => entry.name)
+);
+
 export interface EntryProblem {
   code:
     | "INVALID_SHAPE"
     | "INVALID_IDENTIFIER"
     | "RESERVED_KIND"
+    | "RESERVED_THEME"
     | "INVALID_TEMPLATE"
     | "INVALID_THEME"
     | "TOO_LARGE"
@@ -117,6 +131,12 @@ export function checkStoredTheme(
     return {
       code: "INVALID_IDENTIFIER",
       message: `'${entry.name}' is not a valid theme name: use letters, digits, '.', '_' or '-'.`
+    };
+  }
+  if (BUILTIN_THEMES.has(entry.name)) {
+    return {
+      code: "RESERVED_THEME",
+      message: `'${entry.name}' is a built-in theme and cannot be overridden.`
     };
   }
   const theme = validateTheme(entry.tokens ?? {});

@@ -25,6 +25,15 @@ export interface TokenSpec {
   default: string;
   type: TokenType;
   use: string;
+  /**
+   * Token this one inherits from when a theme leaves it unset. Declared
+   * here rather than special-cased in the stylesheet because a literal
+   * default at `:root` would sever that inheritance: a `var()` fallback
+   * applies only when the property is UNSET, so defining
+   * `--wg-surface: #ffffff` makes `var(--wg-surface, var(--wg-bg, …))`
+   * unreachable. The defaults block emits a chain for these instead.
+   */
+  fallback?: string;
 }
 
 export const TOKEN_SPECS = {
@@ -32,6 +41,7 @@ export const TOKEN_SPECS = {
   surface: {
     default: "#ffffff",
     type: "color",
+    fallback: "bg",
     use: "Widget panel background (cards, tables); falls back to bg when unset."
   },
   fg: { default: "#1f2430", type: "color", use: "Primary text." },

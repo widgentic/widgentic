@@ -203,6 +203,9 @@ export function injectDesignerStyles(doc: Document): void {
    controls flatten into plain values — a form that cannot be typed in
    should not look like a form (opacity alone was invisible on dark). */
 .wgd-readonly .wgd-section-body[inert] { opacity: 0.75; }
+/* Empty preview state — shown only when there has never been a valid
+   render to freeze on; a blank pane is the one state the contract bans. */
+.wgd-preview-empty { color: var(--wgd-muted); font-style: italic; font-size: 12px; }
 .wgd-readonly [inert] .wgd-input,
 .wgd-readonly [inert] .wgd-select,
 .wgd-readonly [inert] .wgd-textarea,

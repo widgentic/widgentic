@@ -218,6 +218,98 @@ describe("preview controls", () => {
   });
 });
 
+describe("preview never blanks", () => {
+  it("shows an empty state when the FIRST draft is invalid", () => {
+    // Freezing needs something to freeze on; before this the pane was
+    // simply left empty — the one state the contract forbids.
+    const container = host();
+    createDesigner(container, {
+      initialWidget: {
+        kind: "probe",
+        template: { tag: "div", attrs: { onclick: "x()" }, children: [] },
+        descriptor: { description: "d", dataShape: "s" }
+      }
+    });
+    const preview = container.querySelector(".wgd-preview") as HTMLElement;
+    expect(preview.innerHTML).not.toBe("");
+    expect(preview.querySelector(".wgd-preview-empty")).not.toBeNull();
+    const banner = container.querySelector(".wgd-banner") as HTMLElement;
+    expect(banner.hidden).toBe(false);
+    expect(banner.textContent).toContain("FORBIDDEN_ATTRIBUTE");
+  });
+
+  it("shows an empty state when the first draft's kind is reserved", () => {
+    const container = host();
+    createDesigner(container, {
+      initialWidget: {
+        kind: "card", // valid template, unusable kind
+        template: { tag: "div", children: ["hi"] },
+        descriptor: { description: "d", dataShape: "s" }
+      }
+    });
+    const preview = container.querySelector(".wgd-preview") as HTMLElement;
+    expect(preview.querySelector(".wgd-preview-empty")).not.toBeNull();
+  });
+
+  it("the empty state gives way to the first valid render", () => {
+    const container = host();
+    const designer = createDesigner(container, {
+      initialWidget: {
+        kind: "card",
+        template: { tag: "div", children: ["hi"] },
+        descriptor: { description: "d", dataShape: "s" }
+      }
+    });
+    expect(
+      container.querySelector(".wgd-preview .wgd-preview-empty")
+    ).not.toBeNull();
+    designer.loadWidget({
+      kind: "fine",
+      template: { tag: "div", children: ["rendered"] },
+      descriptor: { description: "d", dataShape: "s" }
+    });
+    const preview = container.querySelector(".wgd-preview") as HTMLElement;
+    expect(preview.querySelector(".wgd-preview-empty")).toBeNull();
+    expect(preview.textContent).toContain("rendered");
+  });
+});
+
+describe("theme diagnostics surface", () => {
+  it("shows the theme validator's error in the panel that owns the value", () => {
+    const container = host();
+    createDesigner(container, {
+      themes: [{ name: "bad", tokens: { bg: "url(https://evil.example/x)" } }]
+    });
+    const select = container.querySelector(".wgd-theme-select") as HTMLSelectElement;
+    select.value = "bad";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    const previewSection = [...container.querySelectorAll(".wgd-section")].find(
+      (s) => s.querySelector(".wgd-section-title")?.textContent === "Preview"
+    ) as HTMLElement;
+    const shown = [...previewSection.querySelectorAll(".wgd-diagnostic")].filter(
+      (d) => !(d as HTMLElement).hidden
+    );
+    expect(shown.length).toBeGreaterThan(0);
+    expect(previewSection.textContent).toContain("INVALID_TOKEN_VALUE");
+  });
+
+  it("clears the diagnostic when a safe theme is selected", () => {
+    const container = host();
+    createDesigner(container, {
+      themes: [
+        { name: "bad", tokens: { bg: "url(https://evil.example/x)" } },
+        { name: "good", tokens: { bg: "#0f131c" } }
+      ]
+    });
+    const select = container.querySelector(".wgd-theme-select") as HTMLSelectElement;
+    select.value = "bad";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    select.value = "good";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(container.textContent).not.toContain("INVALID_TOKEN_VALUE");
+  });
+});
+
 describe("read-only mode", () => {
   it("inerts editing surfaces but keeps the theme selector and preview live", () => {
     const container = host();
@@ -229,9 +321,16 @@ describe("read-only mode", () => {
     expect(root.classList.contains("wgd-readonly")).toBe(true);
     // Every editing section body is inert: the whole definition column
     // plus the right column's preview-data and styles sections.
-    const leftBodies = root.querySelectorAll(".wgd-panels .wgd-section-body");
+    // …except the view-only Export section: read-only restricts editing,
+    // not looking.
+    const leftBodies = [
+      ...root.querySelectorAll(".wgd-panels .wgd-section-body")
+    ].filter((b) => !b.parentElement?.classList.contains("wgd-view-only"));
     expect(leftBodies.length).toBeGreaterThan(3);
     for (const body of leftBodies) expect(body.hasAttribute("inert")).toBe(true);
+    expect(
+      root.querySelector(".wgd-view-only > .wgd-section-body")?.hasAttribute("inert")
+    ).toBe(false);
     for (const body of root.querySelectorAll(".wgd-edit-only > .wgd-section-body")) {
       expect(body.hasAttribute("inert")).toBe(true);
     }
@@ -255,6 +354,20 @@ describe("read-only mode", () => {
     expect(chrome.textContent).toMatch(
       /\.wgd-readonly \[inert\] \.wgd-input[^{]*\{[^}]*border-color:\s*transparent/
     );
+  });
+
+  it("leaves the Export section operable — read-only restricts editing, not looking", () => {
+    const container = host();
+    createDesigner(container, { readOnly: true });
+    const exportButton = [...container.querySelectorAll("button")].find(
+      (b) => b.textContent === "Export widget JSON"
+    ) as HTMLButtonElement;
+    expect(exportButton.closest("[inert]")).toBeNull();
+    exportButton.click();
+    const output = container.querySelector(
+      ".wgd-view-only textarea"
+    ) as HTMLTextAreaElement;
+    expect(JSON.parse(output.value)).toMatchObject({ kind: expect.any(String) });
   });
 
   it("setReadOnly toggles both ways", () => {

@@ -129,9 +129,24 @@ export function createPreview(options: PreviewOptions = {}): PreviewController {
             (diagnostics.template.path ? ` (at ${diagnostics.template.path})` : "")
           : "Draft is not previewable.");
       banner.hidden = false;
+      // Freezing needs something to freeze ON. On the first update there
+      // is no mount yet — reachable whenever a host supplies an invalid
+      // or reserved-kind `initialWidget` — and returning here left the
+      // pane blank, the one state the contract forbids.
+      if (mount === undefined) {
+        banner.textContent = `Nothing to preview yet — ${issue}`;
+        mountRoot.replaceChildren(
+          h("div", { class: "wgd-preview-empty" }, [
+            "No preview: the draft has never been valid."
+          ])
+        );
+        return;
+      }
       banner.textContent = `Preview frozen on the last valid draft — ${issue}`;
       return; // keep the last good render mounted
     }
+    // A first valid render replaces the empty state.
+    mountRoot.querySelector(".wgd-preview-empty")?.remove();
     banner.hidden = true;
     banner.textContent = "";
 

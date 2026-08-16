@@ -16,6 +16,14 @@ function v(token: ThemeToken): string {
  * author's declaration (observed live: a valid widget rendered jammed
  * because `--wg-spacing-lg` was "not defined"). Themes override these
  * (later style elements and element-level applyTheme both win).
+ *
+ * Literals only — a chain here would NOT work: `--wg-surface:
+ * var(--wg-bg, …)` substitutes against `:root`'s own `--wg-bg` at
+ * computed-value time and inherits that resolved value, so a descendant
+ * overriding `--wg-bg` never reaches it. Tokens declaring a `fallback`
+ * are resolved where the theme is applied instead (see `withFallbacks`
+ * in apply.ts); this block only guarantees a bare `var(--wg-<token>)`
+ * always resolves to something.
  */
 const tokenDefaultsBlock = `:root {
 ${THEME_TOKENS.map((token) => `  --wg-${token}: ${TOKEN_DEFAULTS[token]};`).join("\n")}

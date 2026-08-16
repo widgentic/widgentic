@@ -1,10 +1,13 @@
+// @vitest-environment happy-dom
 import { describe, it, expect } from "vitest";
 import {
   THEME_TOKENS,
   TOKEN_DEFAULTS,
   TOKEN_SPECS,
+  applyTheme,
   baseStylesheet,
-  isSafeTokenValue
+  isSafeTokenValue,
+  themeToCss
 } from "../index.js";
 
 describe("token registry", () => {
@@ -145,6 +148,43 @@ describe("baseStylesheet", () => {
       expect(baseStylesheet).toMatch(
         new RegExp(`${cls} \\{[^}]*background: var\\(--wg-surface, var\\(--wg-bg,`)
       );
+    }
+  });
+
+  it("a bg-only theme carries surface with it (the chain, resolved)", () => {
+    // The text assertion above passed throughout a live regression: once
+    // the :root defaults block defined --wg-surface, the rules' fallback
+    // became unreachable and bg-only dark themes painted white cards.
+    // Custom-property substitution happens where the property is
+    // DECLARED, so the relationship is resolved at theme-application
+    // time — assert the emitted declarations, not the stylesheet text.
+    const bgOnly = themeToCss({ bg: "#0f131c" }, ":root");
+    expect(bgOnly).toContain("--wg-bg: #0f131c;");
+    expect(bgOnly).toContain("--wg-surface: #0f131c;");
+
+    // An explicit surface is never overwritten by the fallback.
+    const both = themeToCss({ bg: "#0f131c", surface: "#1a2130" }, ":root");
+    expect(both).toContain("--wg-surface: #1a2130;");
+
+    // Nothing to inherit from: no surface is invented, so the :root
+    // default (white) still applies.
+    expect(themeToCss({ fg: "#fff" }, ":root")).not.toContain("--wg-surface");
+  });
+
+  it("applyTheme resolves declared fallbacks onto the element", () => {
+    const el = document.createElement("div");
+    applyTheme(el, { bg: "#0f131c" });
+    expect(el.style.getPropertyValue("--wg-surface")).toBe("#0f131c");
+    // Replace semantics still hold: re-applying without bg clears both.
+    applyTheme(el, {});
+    expect(el.style.getPropertyValue("--wg-surface")).toBe("");
+  });
+
+  it("every token declaring a fallback names a real token", () => {
+    for (const token of THEME_TOKENS) {
+      const fallback = (TOKEN_SPECS[token] as { fallback?: string }).fallback;
+      if (fallback === undefined) continue;
+      expect(THEME_TOKENS).toContain(fallback);
     }
   });
 

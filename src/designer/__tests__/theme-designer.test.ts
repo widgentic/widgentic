@@ -263,7 +263,10 @@ describe("theme designer read-only mode", () => {
     const root = container.querySelector(".wgd-root") as HTMLElement;
     expect(root.classList.contains("wgd-readonly")).toBe(true);
     // Identity, tokens, custom variables, import/export — all inert.
-    const bodies = root.querySelectorAll(".wgd-panels .wgd-section-body");
+    // …except the view-only Export section.
+    const bodies = [
+      ...root.querySelectorAll(".wgd-panels .wgd-section-body")
+    ].filter((b) => !b.parentElement?.classList.contains("wgd-view-only"));
     expect(bodies.length).toBeGreaterThanOrEqual(4);
     for (const body of bodies) expect(body.hasAttribute("inert")).toBe(true);
     // The kind selector lives beside the preview, outside the inert
@@ -339,5 +342,36 @@ describe("theme designer previews custom widgets", () => {
     ].map((o) => o.value);
     expect(offered).not.toContain("broken");
     expect(offered).toContain("invoice-lite");
+  });
+});
+
+describe("theme designer io sections", () => {
+  it("splits Import and Export into two sections, import first", () => {
+    const container = host();
+    createThemeDesigner(container);
+    const titles = [...container.querySelectorAll(".wgd-section-title")].map(
+      (t) => t.textContent
+    );
+    expect(titles).toContain("Import");
+    expect(titles).toContain("Export");
+    expect(titles.indexOf("Import")).toBeLessThan(titles.indexOf("Export"));
+    expect(titles).not.toContain("Import / Export");
+  });
+
+  it("keeps Export operable in read-only mode", () => {
+    const container = host();
+    createThemeDesigner(container, {
+      initialTheme: { name: "nord", tokens: { surface: "#2e3440" } },
+      readOnly: true
+    });
+    const exportButton = [...container.querySelectorAll("button")].find(
+      (b) => b.textContent === "Export theme entry"
+    ) as HTMLButtonElement;
+    expect(exportButton.closest("[inert]")).toBeNull();
+    exportButton.click();
+    const output = container.querySelector(
+      ".wgd-view-only textarea"
+    ) as HTMLTextAreaElement;
+    expect(JSON.parse(output.value)).toMatchObject({ name: "nord" });
   });
 });

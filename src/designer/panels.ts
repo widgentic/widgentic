@@ -414,6 +414,11 @@ export function mountPanels(
     sampleDiag.textContent = diagnostics.sample
       ? `sample vs dataSchema: ${diagnostics.sample.code} at ${diagnostics.sample.path} — ${diagnostics.sample.message}`
       : "";
+    themePanel.setDiagnostic(
+      diagnostics.theme
+        ? `${diagnostics.theme.code}: ${diagnostics.theme.message}`
+        : undefined
+    );
     stylesDiag.replaceChildren(
       ...diagnostics.styles.map((issue) =>
         diagnosticLine(

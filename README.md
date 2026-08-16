@@ -129,8 +129,21 @@ secret). To ship a new version:
 ```bash
 az acr build -r <registry> -t widgentic-mcp:vN .
 az deployment group create -g widgentic-rg -f infra/main.bicep \
-  -p image=<registry>.azurecr.io/widgentic-mcp:vN -p apiKey=<current-key>
+  -p @deploy.params.json     # the STANDING parameter set — see below
 ```
+
+**Never deploy with a partial parameter set.** The template owns ingress
+and secrets, so every parameter you omit falls back to a default that
+*changes live state*: `webImage` reverts the app to the Azure quickstart
+image, `mcpCosmosEnabled` drops per-principal mode, empty custom-domain
+arrays unbind the domains, and an empty `sessionSecret` deletes the
+session cookie secret. The standing set is `image`, `webImage`, `apiKey`,
+`mcpCosmosEnabled=true`, `authIssuer`, `authClientId`, `sessionSecret`,
+`githubClientId`, `githubClientSecret`, `mcpCustomDomains` and
+`webCustomDomains` (both with their live managed-certificate ids). Recover
+the secrets from the running apps — never from a scratch file — with
+`az containerapp secret show`. The full contract, with the failures that
+taught it, is in [TESTING.md](TESTING.md#production-azure-container-apps).
 
 ### Serving per-principal catalogs
 

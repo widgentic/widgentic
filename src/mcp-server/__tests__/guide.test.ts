@@ -5,8 +5,13 @@
  * ONLY the guide produces a widget and theme that import cleanly.
  */
 import { describe, expect, it } from "vitest";
-import { createCatalog } from "../../catalog/index.js";
-import { TOKEN_SPECS, validateTheme } from "../../theming/index.js";
+import {
+  PATTERN_MAX_LENGTH,
+  PROPERTY_NAME,
+  UNSAFE,
+  createCatalog
+} from "../../catalog/index.js";
+import { CUSTOM_VARIABLE, TOKEN_SPECS, validateTheme } from "../../theming/index.js";
 import {
   checkStoredTheme,
   checkStoredWidget,
@@ -173,5 +178,34 @@ describe("agent simulation: drafts built only from the guide import cleanly", ()
     const themeDesigner = createThemeDesigner(themeHost);
     expect(themeDesigner.loadTheme(agentTheme).ok).toBe(true);
     themeDesigner.dispose();
+  });
+});
+
+describe("guide facts are derived, never restated", () => {
+  it("quotes the validators' own constants", () => {
+    const guide = buildAuthoringGuide() as {
+      theme: { customVariables: { namePattern: string } };
+      rules: {
+        styles: { banned: string; propertyNames: string };
+        dataSchema: { pattern: string };
+      };
+    };
+    // Each of these shadowed a real constant as prose and would have
+    // lied silently the moment the validator moved.
+    expect(guide.theme.customVariables.namePattern).toBe(CUSTOM_VARIABLE.source);
+    expect(guide.rules.styles.banned).toContain(UNSAFE.source);
+    expect(guide.rules.styles.propertyNames).toContain(PROPERTY_NAME.source);
+    expect(guide.rules.dataSchema.pattern).toContain(String(PATTERN_MAX_LENGTH));
+  });
+
+  it("states the property ALLOWLIST, not just the banned characters", () => {
+    const guide = buildAuthoringGuide() as {
+      rules: { styles: { propertyNames: string } };
+    };
+    // A property with a digit contains nothing banned yet is dropped —
+    // an agent following the ban list alone would emit vanishing styles.
+    expect(PROPERTY_NAME.test("grid-template")).toBe(true);
+    expect(PROPERTY_NAME.test("grid2")).toBe(false);
+    expect(guide.rules.styles.propertyNames).toBeTruthy();
   });
 });

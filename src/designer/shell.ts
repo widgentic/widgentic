@@ -105,9 +105,13 @@ export function createDesigner(
    */
   function setReadOnly(readOnly: boolean): void {
     root.classList.toggle("wgd-readonly", readOnly);
-    const bodies = root.querySelectorAll(
-      ".wgd-panels .wgd-section-body, .wgd-edit-only > .wgd-section-body"
-    );
+    // Complex selectors inside :not() are not universally supported, so
+    // the view-only exclusion is filtered here rather than in the query.
+    const bodies = [
+      ...root.querySelectorAll(
+        ".wgd-panels .wgd-section-body, .wgd-edit-only > .wgd-section-body"
+      )
+    ].filter((body) => !body.parentElement?.classList.contains("wgd-view-only"));
     for (const body of bodies) {
       if (readOnly) body.setAttribute("inert", "");
       else body.removeAttribute("inert");

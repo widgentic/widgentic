@@ -6,8 +6,11 @@
  */
 export type WidgetStyles = Record<string, Record<string, string>>;
 
-const UNSAFE = /[;{}<>@\\]/;
-const PROPERTY_NAME = /^-?[a-zA-Z][a-zA-Z-]*$/;
+/** Substrings that disqualify a selector, property or value. Exported
+ * so the authoring guide derives the rule instead of restating it. */
+export const UNSAFE = /[;{}<>@\\]/;
+/** The property-name allowlist: not merely "no banned characters". */
+export const PROPERTY_NAME = /^-?[a-zA-Z][a-zA-Z-]*$/;
 
 /** Every comma-separated selector part must target a .wg- class. */
 function isSafeSelector(selector: string): boolean {

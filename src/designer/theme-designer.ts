@@ -355,16 +355,21 @@ export function createThemeDesigner(
     importError.hidden = result.ok;
     importError.textContent = result.ok ? "" : result.errors.join("\n");
   });
-  const ioPanel = section("Import / Export", [
-    h("div", { class: "wgd-toolbar" }, [exportButton]),
-    output,
+  // Two independent sections, import first — the same shape the widget
+  // designer uses, so both designers read alike.
+  const importPanel = section("Import", [
     h("span", { class: "wgd-field-label" }, ["Import theme entry JSON"]),
     importArea,
     importError,
     h("div", { class: "wgd-row" }, [importButton])
   ]);
+  const exportPanel = section("Export", [
+    h("div", { class: "wgd-toolbar" }, [exportButton]),
+    output
+  ]);
+  exportPanel.classList.add("wgd-view-only");
 
-  panels.append(identity, tokenPanel, customPanel, ioPanel);
+  panels.append(identity, tokenPanel, customPanel, importPanel, exportPanel);
 
   function loadTheme(input: unknown): ThemeLoadResult {
     const errors = checkThemeEntry(input);
@@ -382,7 +387,10 @@ export function createThemeDesigner(
   /** Same mechanism as the widget designer: inert the section bodies. */
   function setReadOnly(readOnly: boolean): void {
     root.classList.toggle("wgd-readonly", readOnly);
-    for (const body of panels.querySelectorAll(".wgd-section-body")) {
+    const bodies = [...panels.querySelectorAll(".wgd-section-body")].filter(
+      (body) => !body.parentElement?.classList.contains("wgd-view-only")
+    );
+    for (const body of bodies) {
       if (readOnly) body.setAttribute("inert", "");
       else body.removeAttribute("inert");
     }

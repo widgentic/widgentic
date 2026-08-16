@@ -15,7 +15,8 @@ export type DataSchema = Record<string, unknown>;
 // attacker-lengthened input is a denial of service. Overlong patterns,
 // nested-quantifier shapes, and RegExp-invalid sources are IGNORED (never
 // misinterpreted as passing or failing); tested strings are capped.
-const PATTERN_MAX_LENGTH = 256;
+/** Longest `pattern` the validator will compile. */
+export const PATTERN_MAX_LENGTH = 256;
 const TESTED_STRING_MAX = 10_000;
 const NESTED_QUANTIFIER = /(\([^)]*[+*][^)]*\)|\[[^\]]*\][+*])[+*{]/;
 

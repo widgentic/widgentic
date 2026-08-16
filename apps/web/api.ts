@@ -50,7 +50,7 @@ function rejectionStatus(code: string): number {
   if (code === "TOO_MANY_WIDGETS" || code === "TOO_MANY_THEMES") return 409;
   if (code === "FORBIDDEN") return 403;
   if (code === "STORE_ERROR") return 502;
-  return 422; // validation family: RESERVED_KIND, INVALID_TEMPLATE, ...
+  return 422; // validation family: RESERVED_KIND, RESERVED_THEME, INVALID_TEMPLATE, ...
 }
 
 /**

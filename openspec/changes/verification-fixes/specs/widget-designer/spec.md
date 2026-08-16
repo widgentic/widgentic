@@ -1,0 +1,130 @@
+# widget-designer — no blank previews, visible theme errors, exportable while read-only
+
+## MODIFIED Requirements
+
+### Requirement: Designer programmatic surface
+The package SHALL export from a `./designer` entry: `createDesigner(container: Element, options?)` returning a handle `{ getDraft(), loadWidget(definition), loadTheme(theme), setReadOnly(readOnly), subscribe(listener), dispose() }`, `createThemeDesigner(container: Element, options?)` returning `{ getTheme(), loadTheme(entry), setReadOnly(readOnly), subscribe(listener), dispose() }`, and the opt-in element registrars `defineDesignerElement(tagName?)` (default `widgentic-designer`) and `defineThemeDesignerElement(tagName?)` (default `widgentic-theme-designer`), each wrapping its factory and emitting `widgentic-change` CustomEvents whose `detail` carries the serialized draft or theme entry. Both factories SHALL accept `readOnly` in options and both handles SHALL expose `setReadOnly(readOnly)`: in read-only mode every editing surface is inert — visible but inoperable and visibly de-emphasized — while the preview stays live along with the widget designer's preview-theme selector, the theme designer's preview-kind selector, and the Export controls (export copies out what is already on screen; read-only restricts editing, not looking). Custom-element registration SHALL only happen through the explicit calls — importing the module SHALL have no registry side effects. The entry SHALL import other capabilities only through their public package entries, and SHALL perform no network I/O.
+
+#### Scenario: Factory mounts and disposes cleanly
+- **WHEN** `createDesigner(container)` is called and later `dispose()`
+- **THEN** the designer UI SHALL render inside `container` and be fully removed on dispose
+
+#### Scenario: Multiple instances coexist
+- **WHEN** two designers are created in one document
+- **THEN** edits in one SHALL NOT affect the other's draft or preview
+
+#### Scenario: Element registration is explicit
+- **WHEN** the module is imported without calling `defineDesignerElement`
+- **THEN** `customElements.get("widgentic-designer")` SHALL be undefined
+- **AND WHEN** `defineDesignerElement()` is called and an element is attached
+- **THEN** edits SHALL dispatch `widgentic-change` events with the serialized draft
+
+#### Scenario: The theme designer is independently embeddable
+- **WHEN** `createThemeDesigner(container)` is called
+- **THEN** a theme editor SHALL mount without any widget-authoring panels
+- **AND** `defineThemeDesignerElement()` SHALL register `widgentic-theme-designer` on the explicit call only
+
+#### Scenario: Read-only mode disables editing but keeps the preview live
+- **WHEN** a designer is created with `readOnly: true` or `setReadOnly(true)` is called
+- **THEN** its editing surfaces SHALL be inert while the preview keeps rendering
+- **AND** the widget designer's preview-theme selector (and the theme designer's preview-kind selector) SHALL remain operable, updating the preview
+- **AND** `setReadOnly(false)` SHALL restore editing
+
+#### Scenario: Read-only leaves export operable
+- **WHEN** a designer is mounted read-only
+- **THEN** its Export controls SHALL remain clickable and produce the current definition
+
+### Requirement: Custom widget draft editing
+The designer SHALL edit a draft in the server's `CustomWidget` shape — `kind`, `template`, and a descriptor with `description`, `dataShape`, `dataExample`, `hints`, `styles`, and `dataSchema` — through dedicated panels. The template SHALL be editable both as a structured node tree covering every DSL form (text, `bind`, `each` with `empty`, `when` with `else`, elements with attrs including `{ bind }` values) and as a JSON source pane; both are projections of one canonical model, and invalid JSON SHALL never destroy the current tree (last-valid wins with the parse error shown). The node tree SHALL stay flat and compact: each node renders as one slim row with its sub-structure indented beneath it, and value controls carry minimal chrome until hovered or focused. Dropdown controls in the tree SHALL size themselves to their selected value — re-fitting when the selection changes — so their carets sit beside the text instead of drifting with leftover row width. The data-schema builder SHALL share the same flat treatment: slim rows, minimal control chrome until hover or focus, hover-revealed removal controls, and selects fitted to their selected value. The descriptor's `styles` SHALL be editable both as a structured tree of selectors with their declarations and as a JSON source pane, both projections of the one draft value with the same parse gating as the template's JSON pane. The descriptor's `hints` SHALL likewise be editable as flat name→doc rows beside a parse-gated JSON pane. JSON source panes SHALL accept Tab as indentation — inserting spaces at the caret without moving focus — while Shift+Tab keeps its focus-moving default as the keyboard escape. Node insertion — child nodes, element attributes, and the `template`/`empty`/`else` slots — SHALL go through a single compact add-menu control that lists the available forms on demand, never through persistent per-form button rows. Structural nodes (elements, `each`, `when`) SHALL be collapsible from their row, with collapse state keyed to the node path so it survives the re-renders caused by draft edits; a collapsed node SHALL keep its header row and show a muted summary of what is hidden. An element's attribute rows SHALL be grouped under chrome visually distinct from its children (differentiated color, border, or typography). Every mutation SHALL re-run the relevant widgentic validators — `validateTemplate`, `validateDataAgainstSchema` (including `dataExample` cross-checked against `dataSchema`), the styles safety filters, and theme validation — surfacing their structured errors beside the panel that owns the offending value — theme validation included, whose errors belong to the preview-theme panel.
+
+#### Scenario: Template edits validate live
+- **WHEN** an element node gains an `onclick` attribute in the tree editor
+- **THEN** a `FORBIDDEN_ATTRIBUTE` diagnostic SHALL appear at that node without losing the draft
+
+#### Scenario: JSON pane cannot destroy the tree
+- **WHEN** the JSON source is edited into invalid JSON
+- **THEN** the canonical model SHALL remain the last valid template and the pane SHALL show the parse error
+
+#### Scenario: dataExample is checked against dataSchema
+- **WHEN** the draft's `dataSchema` requires `lines` and `dataExample` lacks it
+- **THEN** a diagnostic SHALL flag the mismatch with the schema's dotted path
+
+#### Scenario: Styles editor applies the same guards as the server
+- **WHEN** a style entry uses a non-`.wg-` selector or a `url(...)` value
+- **THEN** the entry SHALL be flagged as one the renderer would skip
+
+#### Scenario: Nodes are added through one compact menu
+- **WHEN** the add menu on an element node is opened
+- **THEN** it SHALL list the insertable forms (attribute plus the DSL node forms) and choosing one SHALL insert that form
+- **AND** unset `template`/`empty`/`else` slots SHALL offer the same menu control instead of per-form button rows
+- **AND** the menu SHALL close on an outside click or Escape without inserting
+
+#### Scenario: Structural nodes collapse and stay collapsed across edits
+- **WHEN** an element node with children is collapsed from its row
+- **THEN** its attribute and child rows SHALL be hidden while the header row remains, with a muted summary of the hidden content
+- **AND** after a draft edit elsewhere in the template the node SHALL remain collapsed
+
+#### Scenario: Attributes read differently from children
+- **WHEN** an element with both attributes and children is rendered in the tree
+- **THEN** the attribute rows SHALL be grouped under distinct chrome from the children container
+
+#### Scenario: Dropdowns hug their selected value
+- **WHEN** an element's tag select shows `div` and the selection changes to `section`
+- **THEN** the control's width SHALL track the selected label in both states rather than stretching to the row's width
+
+#### Scenario: The schema builder reads flat like the tree
+- **WHEN** the data-schema builder renders an object schema with properties
+- **THEN** each property SHALL render as one slim row with its removal control revealed on hover or focus and its type select fitted to the selected value
+
+#### Scenario: Styles edit as a tree and as JSON
+- **WHEN** a styles entry `.wg-card` with a `padding` declaration exists
+- **THEN** the styles tree SHALL show the selector with its declaration rows, editable in place
+- **AND** edits in either view SHALL project into the other, with invalid JSON keeping the last valid styles and showing the parse error
+- **AND** only the selected view SHALL be visible at a time
+
+#### Scenario: Hints edit as rows and as JSON
+- **WHEN** a hint named `columns` with a doc string exists
+- **THEN** the hints tree SHALL show it as an editable name→doc row beside the parse-gated JSON pane, one view visible at a time
+
+#### Scenario: JSON panes indent on Tab
+- **WHEN** Tab is pressed inside an editable JSON source pane
+- **THEN** indentation SHALL be inserted at the caret and focus SHALL remain in the pane
+- **AND** Shift+Tab SHALL keep its focus-moving default
+
+#### Scenario: Theme validation errors reach the theme panel
+- **WHEN** the selected preview theme carries an unsafe token value
+- **THEN** the theme panel SHALL show that validator's structured error
+
+### Requirement: Live preview through the real pipeline
+The designer SHALL preview the draft continuously through widgentic's own pipeline: the draft template compiled by the public template compiler and registered into a scratch catalog (built-ins always present; registration via `catalog.register` with a compile delegate, so one mounted preview survives every recompile), rendered with `mountWidget` against `dataExample` or user-supplied sample data, under the currently selected theme — updates patching the existing DOM in place. When the draft is invalid, the preview SHALL freeze the last good render and show the structured error in a banner; it SHALL never show a blank or stale-placeholder state — including on the FIRST render, where there is no last good render to freeze on (an invalid or reserved-kind `initialWidget` must still leave a legible pane, not an empty one).
+
+#### Scenario: Valid edits patch the preview in place
+- **WHEN** a text node's content changes in a valid draft
+- **THEN** the preview SHALL update without replacing the mounted root element
+
+#### Scenario: Invalid drafts keep the last good preview
+- **WHEN** the template becomes invalid mid-edit
+- **THEN** the last valid preview SHALL remain visible with the validation error banner shown
+
+#### Scenario: An invalid initial draft never renders blank
+- **WHEN** a designer is created with an `initialWidget` whose template fails validation, or whose `kind` is a reserved built-in
+- **THEN** the preview pane SHALL show an explicit empty state rather than nothing, with the structured error in the banner
+
+### Requirement: Import and export in the server's shapes
+The designer SHALL export the draft as JSON in exactly the `CustomWidget` shape (`{ kind, template, descriptor }`) and themes as bare token maps, and SHALL import the same shapes, re-validating everything on load (imports are untrusted input; invalid imports are rejected with the structured errors, leaving the current draft untouched). Import and export SHALL be presented as two independent sections, with import placed before export — in BOTH designers, the widget designer and the standalone theme designer alike. A copy-as-TypeScript convenience SHALL emit a module body compatible with `examples/mcp-server/widgets/` for manual registration. Exported widget JSON loaded back SHALL round-trip to a deep-equal draft.
+
+#### Scenario: Export/import round-trips
+- **WHEN** a draft equivalent to the invoice example is exported and re-imported
+- **THEN** the resulting draft SHALL deep-equal the original
+
+#### Scenario: Invalid imports never clobber the draft
+- **WHEN** an import contains a template failing validation
+- **THEN** the current draft SHALL remain and the import errors SHALL be shown
+
+#### Scenario: Import and export are independent sections
+- **WHEN** the designer mounts
+- **THEN** import and export SHALL each render as their own titled section, with import before export
+
+#### Scenario: The theme designer splits its io sections too
+- **WHEN** the standalone theme designer mounts
+- **THEN** it SHALL render an Import section before an Export section, not one combined panel
