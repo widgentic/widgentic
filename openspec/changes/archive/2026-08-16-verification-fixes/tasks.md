@@ -43,5 +43,5 @@
 
 - [x] 8.1 Full gate + strict validation
 - [x] 8.2 Rig check on the affected surfaces
-- [ ] 8.3 Build and deploy; verify the surface fix live
-- [ ] 8.4 Commit and push
+- [x] 8.3 Build and deploy; verify the surface fix live
+- [x] 8.4 Commit and push
