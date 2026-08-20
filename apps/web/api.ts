@@ -15,7 +15,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ThemeEntry } from "widgentic/theming";
 import { StoreRejectionError } from "widgentic/store";
-import type { StoredWidget, WritableWidgetStore } from "widgentic/store";
+import type { StoredSchema, StoredWidget, WritableWidgetStore } from "widgentic/store";
 import type { SessionClaims } from "./auth.js";
 
 export interface ApiDeps {
@@ -47,7 +47,8 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
 
 function rejectionStatus(code: string): number {
   if (code === "UNKNOWN_PRINCIPAL" || code === "UNKNOWN_KEY") return 404;
-  if (code === "TOO_MANY_WIDGETS" || code === "TOO_MANY_THEMES") return 409;
+  if (code === "TOO_MANY_WIDGETS" || code === "TOO_MANY_THEMES" || code === "TOO_MANY_SCHEMAS") return 409;
+  if (code === "SCHEMA_IN_USE") return 409; // conflict: re-point the widgets first
   if (code === "FORBIDDEN") return 403;
   if (code === "STORE_ERROR") return 502;
   return 422; // validation family: RESERVED_KIND, RESERVED_THEME, INVALID_TEMPLATE, ...
@@ -139,6 +140,32 @@ export async function handleApiRequest(
       }
       if (method === "DELETE" && id !== "") {
         await deps.store.removeTheme(principal.id, id);
+        send(res, 200, { removed: id });
+        return true;
+      }
+    }
+
+    if (resource === "schemas") {
+      if (method === "GET" && id === "") {
+        send(res, 200, { schemas: await deps.store.schemas(principal.id) });
+        return true;
+      }
+      if (method === "PUT" && id !== "") {
+        const body = (await readBody(req)) as Partial<StoredSchema> | undefined;
+        if (body === undefined || typeof body !== "object") {
+          sendError(res, 400, "INVALID_BODY", "Expected a schema JSON body.");
+          return true;
+        }
+        // The path names the schema, exactly like widgets and themes.
+        const entry = { ...body, name: id } as StoredSchema;
+        await deps.store.putSchema(principal.id, entry);
+        send(res, 200, { saved: id });
+        return true;
+      }
+      if (method === "DELETE" && id !== "") {
+        // SCHEMA_IN_USE surfaces through the rejection path, naming the
+        // referencing widgets — never a silent failure.
+        await deps.store.removeSchema(principal.id, id);
         send(res, 200, { removed: id });
         return true;
       }

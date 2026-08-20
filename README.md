@@ -23,8 +23,8 @@ All capabilities are specified under `openspec/specs/` and implemented with zero
 | `template-widgets` | `widgentic/templates` | Serializable JSON template DSL (`bind`/`each`/`when`) — the widget-designer runtime, safe for untrusted authors |
 | `widget-theming` | `widgentic/theming` | `--wg-*` token registry (colors, status, scale steps), author-defined `x-*` custom variables, named-theme registry with `extends`, a generated base stylesheet that **defines every registry token at `:root`** so custom widget styles can use bare `var(--wg-*)` safely, themes as validated JSON |
 | `mcp-server` | `widgentic/mcp-server` | The Widgentic MCP server: five tools — `list_widgets`, `list_themes`, `list_theme_tokens` and `get_authoring_guide` (discovery) + `render_widget` (validate → render → HTML + payload) — as SDK-free definitions/handlers, plus the full server assembly behind `widgentic/mcp-server/sdk` (MCP SDK as optional peers) |
-| `widget-store` | `widgentic/store` | Per-principal widgets and themes: a persistence-agnostic port (`resolvePrincipal`/`widgets`/`themes`), memory + file reference implementations, hashed constant-time keys, structural limits, and request-scoped `composeCatalog`/`composeThemes` |
-| `widget-designer` | `widgentic/designer` | Two embeddable designers (factories + opt-in custom elements, zero deps): the **widget** designer (template tree/JSON, full descriptor, styles and hints as tree-or-JSON, dataSchema, theme selection with a token reference) and the standalone **theme** designer (tokens, custom variables, named entries, previewing host-supplied widgets) — both with live validated preview and an optional read-only mode |
+| `widget-store` | `widgentic/store` | Per-principal widgets, themes, and shared data schemas: a persistence-agnostic port (`resolvePrincipal`/`widgets`/`themes`/`schemas`), memory + file reference implementations, hashed constant-time keys, structural limits, and request-scoped `composeCatalog`/`composeThemes` — widgets may reference a shared schema by name (`dataSchemaRef`), resolved at composition so one `person` schema serves every person widget |
+| `widget-designer` | `widgentic/designer` | Three embeddable designers (factories + opt-in custom elements, zero deps): the **widget** designer (template tree/JSON, full descriptor, styles and hints as tree-or-JSON, dataSchema, theme selection with a token reference) and the standalone **theme** designer (tokens, custom variables, named entries, previewing host-supplied widgets) and the standalone **schema** designer (shared data-schema entries) — all with live validation and an optional read-only mode |
 
 ## Architecture
 
@@ -122,7 +122,7 @@ support, e.g. VS Code Copilot), or a `?key=` query parameter
 cannot send custom headers — claude.ai and Claude Desktop remote connectors.
 Keys are personal: sign up at [widgentic.dev](https://widgentic.dev), create
 named keys (shown once, individually revocable), and each key serves **your**
-catalog — the widgets and themes you design there. Saved entries open
+catalog — the widgets, themes, and shared data schemas you design there. Saved entries open
 **read-only** when selected, with `Edit` and `Delete`; `Edit` swaps those for
 `Save` and `Cancel` (and hides `New` / `Save to my catalog`, which belong to
 a fresh draft), so viewing your catalog can never edit it by accident. The deployment is fully described by [infra/main.bicep](infra/main.bicep)
@@ -159,6 +159,7 @@ starts identifying a principal: each request resolves the key, composes a
 <dir>/principals.json                     [{ id, scopes, keyDigest }]  # sha256 digests, never raw keys
 <dir>/<principalId>/widgets/<kind>.json   { kind, template, descriptor }
 <dir>/<principalId>/themes/<name>.json    { name, label?, tokens }
+<dir>/<principalId>/schemas/<name>.json   { name, label?, description?, schema }
 ```
 
 Guarantees worth knowing: entries are validated on write **and** on read (a
@@ -269,7 +270,7 @@ via `{ widgets }`, so a theme is judged against the widgets it will
 actually dress (invalid definitions are skipped, never fatal).
 
 ```ts
-import { createDesigner, createThemeDesigner } from "widgentic/designer";
+import { createDesigner, createSchemaDesigner, createThemeDesigner } from "widgentic/designer";
 
 const designer = createDesigner(el, {
   themes,             // named entries offered as preview themes
@@ -281,7 +282,17 @@ const designer = createDesigner(el, {
 
 const themeDesigner = createThemeDesigner(el, { widgets, readOnly });
 // → { getTheme, loadTheme, setReadOnly, subscribe, dispose }
+
+const schemaDesigner = createSchemaDesigner(el, { readOnly });
+// → { getSchema, loadSchema, setReadOnly, subscribe, dispose }
 ```
+
+Widgets can share one data schema instead of duplicating it: pass the
+host's schema entries as `createDesigner(el, { schemas })` and the Data
+schema section offers **define inline** or **use shared** — shared mode
+stores `descriptor.dataSchemaRef` (shown read-only in the draft; edited
+in its own designer), and the server resolves the ref at composition so
+one `person` schema serves the person card and the person table alike.
 
 `readOnly` (or `setReadOnly(true)`) makes every editing surface inert —
 visible, inoperable, de-emphasized — while the preview, its selectors, and

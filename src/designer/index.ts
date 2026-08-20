@@ -17,10 +17,19 @@ export type {
 export {
   defineDesignerElement,
   defineThemeDesignerElement,
+  defineSchemaDesignerElement,
   DEFAULT_TAG,
-  DEFAULT_THEME_TAG
+  DEFAULT_THEME_TAG,
+  DEFAULT_SCHEMA_TAG
 } from "./element.js";
 export { createThemeDesigner, checkThemeEntry } from "./theme-designer.js";
+export { createSchemaDesigner, checkSchemaEntry } from "./schema-designer.js";
+export type {
+  SchemaDesignerHandle,
+  SchemaDesignerOptions,
+  SchemaEntry,
+  SchemaLoadResult
+} from "./schema-designer.js";
 export type {
   ThemeDesignerHandle,
   ThemeDesignerOptions,

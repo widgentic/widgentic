@@ -429,3 +429,101 @@ describe("custom element", () => {
     expect(el.querySelector(".wgd-root")).toBeNull();
   });
 });
+
+describe("shared data schemas in the widget designer", () => {
+  const person = {
+    name: "person",
+    label: "Person",
+    schema: {
+      type: "object",
+      required: ["name"],
+      properties: { name: { type: "string" } }
+    }
+  };
+
+  function schemaSection(container: HTMLElement): HTMLElement {
+    return [...container.querySelectorAll(".wgd-section")].find(
+      (s) => s.querySelector(".wgd-section-title")?.textContent === "Data schema"
+    ) as HTMLElement;
+  }
+
+  it("shared mode stores the ref, shows the schema read-only, and inline restores", () => {
+    const container = host();
+    const designer = createDesigner(container, { schemas: [person] });
+    const section = schemaSection(container);
+    const mode = section.querySelector(".wgd-schema-mode") as HTMLSelectElement;
+    mode.value = "shared";
+    mode.dispatchEvent(new Event("change", { bubbles: true }));
+    const draft = designer.getDraft();
+    expect(draft.descriptor.dataSchemaRef).toBe("person");
+    expect(draft.descriptor.dataSchema).toBeUndefined();
+    const sharedView = section.querySelector(".wgd-schema-shared") as HTMLTextAreaElement;
+    expect(sharedView.readOnly).toBe(true);
+    expect(sharedView.value).toContain('"name"');
+    // Back to inline: the ref drops and an editable copy seeds the schema.
+    mode.value = "inline";
+    mode.dispatchEvent(new Event("change", { bubbles: true }));
+    const after = designer.getDraft();
+    expect(after.descriptor.dataSchemaRef).toBeUndefined();
+    expect(after.descriptor.dataSchema).toEqual(person.schema);
+  });
+
+  it("refs resolve locally: dataExample validates against the shared schema", () => {
+    const container = host();
+    const designer = createDesigner(container, { schemas: [person] });
+    designer.loadWidget({
+      kind: "person-card",
+      template: { tag: "div", children: [{ bind: "name" }] },
+      descriptor: {
+        description: "d",
+        dataShape: "s",
+        dataExample: { role: "no name here" },
+        dataSchemaRef: "person"
+      }
+    });
+    // Loading a ref-carrying widget lands in shared mode…
+    const section = schemaSection(container);
+    const mode = section.querySelector(".wgd-schema-mode") as HTMLSelectElement;
+    expect(mode.value).toBe("shared");
+    // …and the example check runs against the RESOLVED schema.
+    expect(container.textContent).toContain("MISSING_FIELD");
+    expect(container.textContent).toContain("name");
+  });
+
+  it("an unknown ref surfaces a diagnostic at the section", () => {
+    const container = host();
+    const designer = createDesigner(container); // no schemas supplied
+    designer.loadWidget({
+      kind: "person-card",
+      template: { tag: "div", children: ["x"] },
+      descriptor: { description: "d", dataShape: "s", dataSchemaRef: "person" }
+    });
+    const section = schemaSection(container);
+    expect(section.textContent).toContain("unknown schema 'person'");
+  });
+
+  it("export carries the ref exactly as authored", () => {
+    const container = host();
+    const designer = createDesigner(container, { schemas: [person] });
+    const section = schemaSection(container);
+    const mode = section.querySelector(".wgd-schema-mode") as HTMLSelectElement;
+    mode.value = "shared";
+    mode.dispatchEvent(new Event("change", { bubbles: true }));
+    const draft = designer.getDraft();
+    const exported = JSON.parse(
+      exportWidgetJson(draft)
+    ) as { descriptor: Record<string, unknown> };
+    expect(exported.descriptor.dataSchemaRef).toBe("person");
+    expect(exported.descriptor.dataSchema).toBeUndefined();
+  });
+
+  it("without supplied schemas the shared option is disabled", () => {
+    const container = host();
+    createDesigner(container);
+    const section = schemaSection(container);
+    const shared = section.querySelector(
+      '.wgd-schema-mode option[value="shared"]'
+    ) as HTMLOptionElement;
+    expect(shared.disabled).toBe(true);
+  });
+});

@@ -10,6 +10,7 @@
  *       id "profile"        → { principalId, subject, label?, scopes }
  *       id "widget:<kind>"  → { principalId, widget: StoredWidget }
  *       id "theme:<name>"   → { principalId, theme: ThemeEntry }
+ *       id "schema:<name>"  → { principalId, schema: StoredSchema }
  *     Every read is a point read or a single-partition query.
  *   - `keys` container, partition key `/digest`, id = digest:
  *       { digest, principalId, keyId, name, scopes, createdAt, revokedAt? }
@@ -40,6 +41,7 @@ import type {
   Scope,
   StoreLimits,
   StoredKey,
+  StoredSchema,
   StoredWidget,
   WritableWidgetStore
 } from "./types.js";
@@ -48,7 +50,7 @@ import {
   principalIdForSubject,
   StoreRejectionError
 } from "./types.js";
-import { checkStoredTheme, checkStoredWidget } from "./validate.js";
+import { checkStoredSchema, checkStoredTheme, checkStoredWidget } from "./validate.js";
 
 /* ------------------------------------------------------------------ */
 /* Structural client types — satisfied by the real @azure/cosmos client
@@ -125,6 +127,12 @@ interface ThemeDoc {
   id: string;
   principalId: string;
   theme: ThemeEntry;
+}
+
+interface SchemaDoc {
+  id: string;
+  principalId: string;
+  schema: StoredSchema;
 }
 
 interface KeyDoc {
@@ -296,6 +304,20 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
       const problem = checkStoredWidget(widget, limits);
       if (problem) throw new StoreRejectionError(problem.code, problem.message);
       await requirePrincipal(principalId);
+      // A ref must name a schema this principal stores — a point read on
+      // the same partition, refusing at the door like every other rule.
+      const ref = widget.descriptor.dataSchemaRef;
+      if (ref !== undefined) {
+        const { statusCode: schemaStatus } = await data
+          .item(`schema:${ref}`, principalId)
+          .read();
+        if (schemaStatus === 404) {
+          throw new StoreRejectionError(
+            "UNKNOWN_SCHEMA",
+            `widget references missing schema '${ref}'.`
+          );
+        }
+      }
       const id = `widget:${widget.kind}`;
       const { statusCode } = await data.item(id, principalId).read();
       if (statusCode === 404) {
@@ -338,6 +360,59 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
       }
     },
 
+    async schemas(principalId) {
+      const { resources } = await data.items
+        .query(
+          {
+            query:
+              "SELECT * FROM c WHERE c.principalId = @p AND STARTSWITH(c.id, 'schema:')",
+            parameters: [{ name: "@p", value: principalId }]
+          },
+          { partitionKey: principalId }
+        )
+        .fetchAll();
+      const out: StoredSchema[] = [];
+      for (const raw of resources) {
+        const doc = raw as SchemaDoc;
+        if (doc.schema === undefined || typeof doc.schema.name !== "string") {
+          log(`widgentic store: skipping malformed schema doc '${doc.id}' for ${principalId}.`);
+          continue;
+        }
+        const problem = checkStoredSchema(doc.schema, limits);
+        if (problem) {
+          log(
+            `widgentic store: skipping schema '${doc.schema.name}' for ${principalId}: ${problem.code}.`
+          );
+          continue;
+        }
+        out.push(doc.schema);
+      }
+      return out;
+    },
+
+    async putSchema(principalId, schema) {
+      const problem = checkStoredSchema(schema, limits);
+      if (problem) throw new StoreRejectionError(problem.code, problem.message);
+      await requirePrincipal(principalId);
+      const id = `schema:${schema.name}`;
+      const { statusCode } = await data.item(id, principalId).read();
+      if (statusCode === 404) {
+        const count = await countEntries(principalId, "schema:");
+        if (count >= limits.maxSchemas) {
+          throw new StoreRejectionError(
+            "TOO_MANY_SCHEMAS",
+            `principal is at the ${limits.maxSchemas}-schema limit.`
+          );
+        }
+      }
+      const doc: SchemaDoc = { id, principalId, schema };
+      try {
+        await data.items.upsert(doc);
+      } catch (error) {
+        throw operationError("putSchema", error);
+      }
+    },
+
     async removeWidget(principalId, kind) {
       try {
         await data.item(`widget:${kind}`, principalId).delete();
@@ -353,6 +428,38 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
       } catch (error) {
         if (isServiceError(error) && String(error.code) === "404") return;
         throw operationError("removeTheme", error);
+      }
+    },
+
+    async removeSchema(principalId, name) {
+      // In-use guard: one single-partition query over the principal's own
+      // widgets — the same behavior every adapter must show identically.
+      const { resources } = await data.items
+        .query(
+          {
+            query:
+              "SELECT VALUE c.widget.kind FROM c WHERE c.principalId = @p " +
+              "AND STARTSWITH(c.id, 'widget:') AND c.widget.descriptor.dataSchemaRef = @ref",
+            parameters: [
+              { name: "@p", value: principalId },
+              { name: "@ref", value: name }
+            ]
+          },
+          { partitionKey: principalId }
+        )
+        .fetchAll();
+      const referencing = resources.filter((r): r is string => typeof r === "string");
+      if (referencing.length > 0) {
+        throw new StoreRejectionError(
+          "SCHEMA_IN_USE",
+          `schema '${name}' is referenced by: ${referencing.join(", ")}.`
+        );
+      }
+      try {
+        await data.item(`schema:${name}`, principalId).delete();
+      } catch (error) {
+        if (isServiceError(error) && String(error.code) === "404") return;
+        throw operationError("removeSchema", error);
       }
     },
 

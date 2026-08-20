@@ -132,5 +132,63 @@ export function describeStoreContract(
         code: "UNKNOWN_PRINCIPAL"
       });
     });
+
+    it("round-trips schemas through the writable port", async () => {
+      const { store } = await factory();
+      const p = await store.ensurePrincipal("contract:schemas");
+      await store.putSchema(p.id, {
+        name: "person",
+        label: "Person",
+        schema: { type: "object", required: ["name"], properties: { name: { type: "string" } } }
+      });
+      const listed = await store.schemas(p.id);
+      expect(listed.map((s) => s.name)).toContain("person");
+      await store.removeSchema(p.id, "person");
+      expect(await store.schemas(p.id)).toEqual([]);
+      // Invalid entries are refused with state untouched.
+      await expect(
+        store.putSchema(p.id, { name: "a/b", schema: {} })
+      ).rejects.toMatchObject({ code: "INVALID_IDENTIFIER" });
+      await expect(
+        store.putSchema(p.id, { name: "bad", schema: 42 as unknown as Record<string, unknown> })
+      ).rejects.toMatchObject({ code: "INVALID_SHAPE" });
+      expect(await store.schemas(p.id)).toEqual([]);
+    });
+
+    it("schema references live the full lifecycle at the door", async () => {
+      const { store } = await factory();
+      const p = await store.ensurePrincipal("contract:schema-refs");
+      // A ref to a schema that does not exist is refused.
+      const refWidget: StoredWidget = {
+        ...widget("person-card"),
+        descriptor: { ...widget("person-card").descriptor, dataSchemaRef: "person" }
+      };
+      await expect(store.putWidget(p.id, refWidget)).rejects.toMatchObject({
+        code: "UNKNOWN_SCHEMA"
+      });
+      // With the schema present, the same write is accepted.
+      await store.putSchema(p.id, { name: "person", schema: { type: "object" } });
+      await store.putWidget(p.id, refWidget);
+      // Carrying BOTH an inline schema and a ref is refused.
+      await expect(
+        store.putWidget(p.id, {
+          ...refWidget,
+          kind: "person-table",
+          descriptor: {
+            ...refWidget.descriptor,
+            dataSchema: { type: "object" }
+          }
+        })
+      ).rejects.toMatchObject({ code: "INVALID_SHAPE" });
+      // A referenced schema cannot be removed — the error names the widget.
+      await expect(store.removeSchema(p.id, "person")).rejects.toMatchObject({
+        code: "SCHEMA_IN_USE"
+      });
+      await expect(store.removeSchema(p.id, "person")).rejects.toThrow(/person-card/);
+      // Re-pointing the widget frees the schema.
+      await store.removeWidget(p.id, "person-card");
+      await store.removeSchema(p.id, "person");
+      expect(await store.schemas(p.id)).toEqual([]);
+    });
   });
 }

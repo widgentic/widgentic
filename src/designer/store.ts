@@ -12,7 +12,12 @@ import type { WidgetTheme } from "widgentic/theming";
 export interface WidgetDraft {
   kind: string;
   template: WidgetTemplate;
-  descriptor: WidgetDescriptorInput;
+  /**
+   * Mirrors the store's shape: `dataSchemaRef` names a shared schema in
+   * place of an inline `dataSchema` (never both). Export carries the ref
+   * as authored — resolution belongs to the server's composition.
+   */
+  descriptor: WidgetDescriptorInput & { dataSchemaRef?: string };
   /** Optional preview data overriding `descriptor.dataExample`. */
   sampleData?: unknown;
   /** Preview theme (also the theme-designer working copy). */

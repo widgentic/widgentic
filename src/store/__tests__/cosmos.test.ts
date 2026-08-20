@@ -124,7 +124,24 @@ class FakeContainer implements CosmosContainerLike {
         if (prefix !== undefined) rows = rows.filter((d) => d.id.startsWith(prefix));
         const keyId = spec.query.includes("@k") ? param(spec, "@k") : undefined;
         if (keyId !== undefined) rows = rows.filter((d) => d.keyId === keyId);
+        // The removeSchema in-use guard: filter by the widget's ref and
+        // project the kind, mirroring the adapter's real query.
+        const ref = spec.query.includes("@ref") ? param(spec, "@ref") : undefined;
+        if (ref !== undefined) {
+          rows = rows.filter(
+            (d) =>
+              (d as { widget?: { descriptor?: { dataSchemaRef?: string } } })
+                .widget?.descriptor?.dataSchemaRef === ref
+          );
+        }
         if (spec.query.includes("COUNT(1)")) return { resources: [rows.length] };
+        if (spec.query.includes("SELECT VALUE c.widget.kind")) {
+          return {
+            resources: rows.map(
+              (d) => (d as { widget?: { kind?: string } }).widget?.kind
+            )
+          };
+        }
         return { resources: rows.map((d) => ({ ...d })) };
       }
     }),

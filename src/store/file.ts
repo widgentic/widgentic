@@ -6,6 +6,7 @@
  *   <dir>/principals.json                  [{ id, label?, scopes, keyDigest }]
  *   <dir>/<principalId>/widgets/<kind>.json
  *   <dir>/<principalId>/themes/<name>.json
+ *   <dir>/<principalId>/schemas/<name>.json
  *
  * NOT transactional and not concurrency-safe: two writers can interleave.
  * That is acceptable for a reference implementation; the app's adapter
@@ -19,11 +20,12 @@ import { findByKey } from "./keys.js";
 import type {
   Principal,
   StoreLimits,
+  StoredSchema,
   StoredWidget,
   WidgetStore
 } from "./types.js";
 import { DEFAULT_LIMITS } from "./types.js";
-import { checkStoredTheme, checkStoredWidget } from "./validate.js";
+import { checkStoredSchema, checkStoredTheme, checkStoredWidget } from "./validate.js";
 
 interface PrincipalRow extends Principal {
   keyDigest: string;
@@ -130,6 +132,22 @@ export function createFileStore(
       return out.slice(0, limits.maxThemes);
     },
 
+    async schemas(principalId) {
+      const id = safeId(principalId);
+      if (id === undefined) return [];
+      const entries = await readDirJson(join(dir, id, "schemas"));
+      const out: StoredSchema[] = [];
+      for (const entry of entries) {
+        const problem = checkStoredSchema(entry, limits);
+        if (problem) {
+          report(`skipped a schema for '${id}': ${problem.code} — ${problem.message}`);
+          continue;
+        }
+        out.push(entry as StoredSchema);
+      }
+      return out.slice(0, limits.maxSchemas);
+    },
+
     /** Provisioning helper for the rig; the app owns its own write path. */
     async seedPrincipal(row) {
       await mkdir(dir, { recursive: true });
@@ -140,6 +158,7 @@ export function createFileStore(
       if (id !== undefined) {
         await mkdir(join(dir, id, "widgets"), { recursive: true });
         await mkdir(join(dir, id, "themes"), { recursive: true });
+        await mkdir(join(dir, id, "schemas"), { recursive: true });
       }
     }
   };

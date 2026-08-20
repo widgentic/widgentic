@@ -48,6 +48,18 @@ export async function composeCatalog(
   const stored = store === undefined ? [] : await store.widgets(principalId);
   const entries = [...(options.extraWidgets ?? []), ...stored];
 
+  // Shared schemas load once per compose, and only when some widget
+  // actually carries a ref — the join this feature adds is one read.
+  const needsSchemas = entries.some(
+    (entry) => (entry as StoredWidget)?.descriptor?.dataSchemaRef !== undefined
+  );
+  const schemaByName = new Map<string, Record<string, unknown>>();
+  if (needsSchemas && store !== undefined) {
+    for (const schema of await store.schemas(principalId)) {
+      schemaByName.set(schema.name, schema.schema);
+    }
+  }
+
   let registered = 0;
   for (const entry of entries) {
     if (registered >= limits.maxWidgets) {
@@ -63,8 +75,24 @@ export async function composeCatalog(
       );
       continue;
     }
+    // References resolve HERE and nowhere later: the registered
+    // descriptor carries the resolved dataSchema, never the ref —
+    // downstream (catalog, renderer, wire, agents) refs do not exist.
+    let descriptor = entry.descriptor;
+    const ref = descriptor.dataSchemaRef;
+    if (ref !== undefined) {
+      const resolved = schemaByName.get(ref);
+      if (resolved === undefined) {
+        diagnostics.push(
+          `skipped widget '${entry.kind}': UNKNOWN_SCHEMA — references missing schema '${ref}'.`
+        );
+        continue;
+      }
+      const { dataSchemaRef: _ref, ...rest } = descriptor;
+      descriptor = { ...rest, dataSchema: resolved };
+    }
     try {
-      registerTemplate(catalog, entry.kind, entry.template, entry.descriptor, {
+      registerTemplate(catalog, entry.kind, entry.template, descriptor, {
         maxNodes
       });
       registered++;

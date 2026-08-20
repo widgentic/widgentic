@@ -19,11 +19,30 @@ export interface Principal {
   scopes: Scope[];
 }
 
-/** A stored custom widget — the same shape the server registers. */
+/**
+ * A stored custom widget — the same shape the server registers, except
+ * that its descriptor MAY carry `dataSchemaRef` in place of an inline
+ * `dataSchema` (never both). The ref is a STORE-layer concept:
+ * composition resolves it into the registered descriptor's `dataSchema`,
+ * so downstream of compose the reference does not exist.
+ */
 export interface StoredWidget {
   kind: string;
   template: WidgetTemplate;
-  descriptor: WidgetDescriptorInput;
+  descriptor: WidgetDescriptorInput & { dataSchemaRef?: string };
+}
+
+/**
+ * A shared data schema: one definition (`person`) serving many widgets
+ * (person card, person table). Editing it propagates — widgets hold a
+ * reference, not a copy.
+ */
+export interface StoredSchema {
+  name: string;
+  label?: string;
+  description?: string;
+  /** The JSON-Schema subset object widgets validate data against. */
+  schema: Record<string, unknown>;
 }
 
 /**
@@ -34,6 +53,7 @@ export interface StoredWidget {
 export interface StoreLimits {
   maxWidgets: number;
   maxThemes: number;
+  maxSchemas: number;
   /** Serialized bytes of a single entry. */
   maxEntryBytes: number;
   /** Template nodes in a single stored template (structure, not output). */
@@ -43,6 +63,7 @@ export interface StoreLimits {
 export const DEFAULT_LIMITS: StoreLimits = {
   maxWidgets: 100,
   maxThemes: 50,
+  maxSchemas: 50,
   maxEntryBytes: 65_536,
   maxTemplateNodes: 2_000
 };
@@ -63,6 +84,7 @@ export interface WidgetStore {
   resolvePrincipal(apiKey: string): Promise<Principal | undefined>;
   widgets(principalId: string): Promise<StoredWidget[]>;
   themes(principalId: string): Promise<ThemeEntry[]>;
+  schemas(principalId: string): Promise<StoredSchema[]>;
 }
 
 /**
@@ -93,8 +115,15 @@ export interface CreatedKey {
 export interface WritableWidgetStore extends WidgetStore {
   putWidget(principalId: string, widget: StoredWidget): Promise<void>;
   putTheme(principalId: string, theme: ThemeEntry): Promise<void>;
+  putSchema(principalId: string, schema: StoredSchema): Promise<void>;
   removeWidget(principalId: string, kind: string): Promise<void>;
   removeTheme(principalId: string, name: string): Promise<void>;
+  /**
+   * Remove a schema. Refused with `SCHEMA_IN_USE` while stored widgets
+   * still reference it — the write-side guard that keeps dangling refs
+   * an out-of-band-only condition.
+   */
+  removeSchema(principalId: string, name: string): Promise<void>;
   /**
    * Map an external identity subject (e.g. an OIDC token's `sub`) to a
    * stable principal, creating it on first sight. Repeat calls with the

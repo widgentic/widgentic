@@ -10,6 +10,7 @@ import { h, injectDesignerStyles } from "./dom.js";
 import { applyDefinition, checkDefinition } from "./io.js";
 import type { WidgetDefinition } from "./io.js";
 import { mountPanels } from "./panels.js";
+import type { SchemaEntry } from "./schema-designer.js";
 import { createPreview } from "./preview.js";
 import type { WidgetDraft } from "./store.js";
 import { cloneDraft, createDraftStore, starterDraft } from "./store.js";
@@ -26,6 +27,12 @@ export interface DesignerOptions {
    * the standalone theme designer; the widget designer only selects.
    */
   themes?: ThemeEntry[];
+  /**
+   * Shared data schemas the draft may reference by name (the Data schema
+   * section's "use shared" mode). Schema authoring belongs to the
+   * standalone schema designer; the widget designer only selects.
+   */
+  schemas?: SchemaEntry[];
   /**
    * Designer chrome appearance. "auto" (default) follows the host's
    * `prefers-color-scheme`; the explicit values pin it. This is the
@@ -84,11 +91,12 @@ export function createDesigner(
   const panels = mountPanels(
     store,
     { left: leftColumn, right: rightSections },
-    options.themes ?? []
+    options.themes ?? [],
+    options.schemas ?? []
   );
 
   function refresh(draft: WidgetDraft): void {
-    const diagnostics = deriveDiagnostics(draft);
+    const diagnostics = deriveDiagnostics(draft, { schemas: options.schemas ?? [] });
     preview.update(draft, diagnostics);
     for (const listener of [...listeners]) listener(draft, diagnostics);
   }

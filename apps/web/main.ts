@@ -4,8 +4,13 @@
  * "Save to my catalog" PUTs through the session, and the entry is in the
  * caller's MCP catalog on the next tool call — no other step exists.
  */
-import { createDesigner, createThemeDesigner } from "widgentic/designer";
-import type { DesignerHandle, ThemeDesignerHandle } from "widgentic/designer";
+import { createDesigner, createSchemaDesigner, createThemeDesigner } from "widgentic/designer";
+import type {
+  DesignerHandle,
+  SchemaDesignerHandle,
+  SchemaEntry,
+  ThemeDesignerHandle
+} from "widgentic/designer";
 import { createThemeRegistry } from "widgentic/theming";
 import type { ThemeEntry } from "widgentic/theming";
 
@@ -13,6 +18,13 @@ interface StoredWidgetJson {
   kind: string;
   template: unknown;
   descriptor: unknown;
+}
+
+interface StoredSchemaJson {
+  name: string;
+  label?: string;
+  description?: string;
+  schema: Record<string, unknown>;
 }
 
 interface StoredKeyJson {
@@ -55,6 +67,7 @@ type ListMode = "new" | "viewing" | "editing";
 let widgetDesigner: DesignerHandle | undefined;
 let myThemes: ThemeEntry[] = [];
 let myWidgets: StoredWidgetJson[] = [];
+let mySchemas: StoredSchemaJson[] = [];
 let selectedKind: string | undefined;
 let widgetMode: ListMode = "new";
 
@@ -68,7 +81,13 @@ function mountWidgetDesigner(loadDefinition?: unknown, readOnly = false): void {
   const host = $("widget-designer");
   widgetDesigner?.dispose();
   host.replaceChildren();
-  widgetDesigner = createDesigner(host, { themes: designerThemes(), readOnly });
+  // The principal's shared schemas feed the Data schema section's
+  // "use shared" mode; refreshed by the tab-return remount contract.
+  widgetDesigner = createDesigner(host, {
+    themes: designerThemes(),
+    schemas: mySchemas as SchemaEntry[],
+    readOnly
+  });
   if (loadDefinition !== undefined) {
     const result = widgetDesigner.loadWidget(loadDefinition);
     if (!result.ok) status(`load failed: ${result.errors.join("; ")}`);
@@ -280,6 +299,116 @@ async function saveTheme(): Promise<void> {
   status(`saved theme ${entry.name} — usable as theme: "${entry.name}" now`);
 }
 
+/* ------------------------------ schemas ------------------------------ */
+
+let schemaDesigner: SchemaDesignerHandle | undefined;
+let selectedSchema: string | undefined;
+let schemaMode: ListMode = "new";
+
+function mountSchemaDesigner(loadEntry?: unknown, readOnly = false): void {
+  const host = $("schema-designer");
+  schemaDesigner?.dispose();
+  host.replaceChildren();
+  schemaDesigner = createSchemaDesigner(host, { readOnly });
+  if (loadEntry !== undefined) {
+    const result = schemaDesigner.loadSchema(loadEntry);
+    if (!result.ok) status(`load failed: ${result.errors.join("; ")}`);
+  }
+}
+
+function syncSchemaControls(): void {
+  $("schema-new").hidden = schemaMode === "editing";
+  $("schema-save").hidden = schemaMode !== "new";
+}
+
+function showSchema(schema: StoredSchemaJson, mode: "viewing" | "editing"): void {
+  selectedSchema = schema.name;
+  schemaMode = mode;
+  mountSchemaDesigner(schema, mode === "viewing");
+  renderSchemaList();
+  syncSchemaControls();
+}
+
+function renderSchemaList(): void {
+  const list = $("schema-list");
+  list.replaceChildren();
+  if (mySchemas.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "muted";
+    empty.textContent = "Nothing yet — define a schema and save it.";
+    list.append(empty);
+    return;
+  }
+  for (const schema of mySchemas) {
+    const row = document.createElement("div");
+    row.className = "row" + (schema.name === selectedSchema ? " selected" : "");
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = schema.label ?? schema.name;
+    name.title = "View";
+    name.addEventListener("click", () => showSchema(schema, "viewing"));
+    const editing = schema.name === selectedSchema && schemaMode === "editing";
+    const buttons: HTMLButtonElement[] = [];
+    if (editing) {
+      const save = document.createElement("button");
+      save.textContent = "Save";
+      save.className = "primary";
+      save.addEventListener("click", () => {
+        void saveSchema().catch((error: Error) => status(error.message));
+      });
+      const cancel = document.createElement("button");
+      cancel.textContent = "Cancel";
+      cancel.addEventListener("click", () => showSchema(schema, "viewing"));
+      buttons.push(save, cancel);
+    } else {
+      const edit = document.createElement("button");
+      edit.textContent = "Edit";
+      edit.addEventListener("click", () => showSchema(schema, "editing"));
+      const remove = document.createElement("button");
+      remove.textContent = "Delete";
+      remove.className = "danger";
+      remove.addEventListener("click", () => {
+        void (async () => {
+          // SCHEMA_IN_USE from the store surfaces here with the
+          // referencing widgets named — never a silent failure.
+          await api(`/api/schemas/${encodeURIComponent(schema.name)}`, { method: "DELETE" });
+          if (selectedSchema === schema.name) {
+            selectedSchema = undefined;
+            schemaMode = "new";
+            mountSchemaDesigner();
+            syncSchemaControls();
+          }
+          await refreshSchemas();
+          status(`deleted ${schema.name}`);
+        })().catch((error: Error) => status(error.message));
+      });
+      buttons.push(edit, remove);
+    }
+    row.append(name, ...buttons);
+    list.append(row);
+  }
+}
+
+async function refreshSchemas(): Promise<void> {
+  mySchemas = (await api<{ schemas: StoredSchemaJson[] }>("/api/schemas")).schemas;
+  renderSchemaList();
+}
+
+async function saveSchema(): Promise<void> {
+  if (schemaDesigner === undefined) return;
+  const entry = schemaDesigner.getSchema();
+  await api(`/api/schemas/${encodeURIComponent(entry.name)}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(entry)
+  });
+  selectedSchema = entry.name;
+  await refreshSchemas();
+  const saved = mySchemas.find((s) => s.name === entry.name);
+  if (saved !== undefined) showSchema(saved, "viewing");
+  status(`saved schema ${entry.name} — widgets can reference it now`);
+}
+
 /* -------------------------------- keys ------------------------------- */
 
 async function refreshKeys(): Promise<void> {
@@ -345,7 +474,7 @@ async function createKey(): Promise<void> {
 
 /* -------------------------------- tabs ------------------------------- */
 
-const SECTIONS = ["widgets", "themes", "keys"] as const;
+const SECTIONS = ["widgets", "themes", "schemas", "keys"] as const;
 
 function showTab(name: (typeof SECTIONS)[number]): void {
   for (const section of SECTIONS) {
@@ -385,12 +514,14 @@ async function boot(): Promise<void> {
     return;
   }
 
-  await Promise.all([refreshWidgets(), refreshThemes(), refreshKeys()]);
+  await Promise.all([refreshWidgets(), refreshThemes(), refreshSchemas(), refreshKeys()]);
   mountWidgetDesigner();
   mountThemeDesigner();
+  mountSchemaDesigner();
 
   $("tab-widgets").addEventListener("click", () => showTab("widgets"));
   $("tab-themes").addEventListener("click", () => showTab("themes"));
+  $("tab-schemas").addEventListener("click", () => showTab("schemas"));
   $("tab-keys").addEventListener("click", () => showTab("keys"));
 
   $("widget-new").addEventListener("click", () => {
@@ -412,6 +543,16 @@ async function boot(): Promise<void> {
   });
   $("theme-save").addEventListener("click", () => {
     void saveTheme().catch((error: Error) => status(error.message));
+  });
+  $("schema-new").addEventListener("click", () => {
+    selectedSchema = undefined;
+    schemaMode = "new";
+    mountSchemaDesigner();
+    renderSchemaList();
+    syncSchemaControls();
+  });
+  $("schema-save").addEventListener("click", () => {
+    void saveSchema().catch((error: Error) => status(error.message));
   });
   $("key-create").addEventListener("click", () => {
     void createKey().catch((error: Error) => status(error.message));

@@ -12,6 +12,7 @@ import type {
   Principal,
   StoreLimits,
   StoredKey,
+  StoredSchema,
   StoredWidget,
   WritableWidgetStore
 } from "./types.js";
@@ -20,7 +21,7 @@ import {
   principalIdForSubject,
   StoreRejectionError
 } from "./types.js";
-import { checkStoredTheme, checkStoredWidget } from "./validate.js";
+import { checkStoredSchema, checkStoredTheme, checkStoredWidget } from "./validate.js";
 
 /** A principal plus its material, as callers seed it. */
 export interface MemorySeedPrincipal {
@@ -29,6 +30,7 @@ export interface MemorySeedPrincipal {
   apiKey?: string;
   widgets?: StoredWidget[];
   themes?: ThemeEntry[];
+  schemas?: StoredSchema[];
 }
 
 interface KeyRecord extends StoredKey {
@@ -42,6 +44,7 @@ interface Record_ {
   keys: KeyRecord[];
   widgets: Map<string, StoredWidget>;
   themes: Map<string, ThemeEntry>;
+  schemas: Map<string, StoredSchema>;
 }
 
 export interface MemoryStore extends WritableWidgetStore {
@@ -85,13 +88,26 @@ export function createMemoryStore(
       principal: entry.principal,
       keys: entry.apiKey === undefined ? [] : [makeKeyRecord("seed", entry.apiKey)],
       widgets: new Map(),
-      themes: new Map()
+      themes: new Map(),
+      schemas: new Map()
     };
     records.set(entry.principal.id, created);
+    // Schemas seed FIRST so seeded widgets may reference them.
+    for (const schema of entry.schemas ?? []) {
+      const problem = checkStoredSchema(schema, limits);
+      if (problem) {
+        throw new StoreRejectionError(problem.code, `${schema.name}: ${problem.message}`);
+      }
+      created.schemas.set(schema.name, clone(schema));
+    }
     for (const widget of entry.widgets ?? []) {
       const problem = checkStoredWidget(widget, limits);
       if (problem) {
         throw new StoreRejectionError(problem.code, `${widget.kind}: ${problem.message}`);
+      }
+      const ref = widget.descriptor.dataSchemaRef;
+      if (ref !== undefined && !created.schemas.has(ref)) {
+        throw new StoreRejectionError("UNKNOWN_SCHEMA", `${widget.kind}: references missing schema '${ref}'.`);
       }
       created.widgets.set(widget.kind, clone(widget));
     }
@@ -123,6 +139,9 @@ export function createMemoryStore(
     async themes(principalId) {
       return [...(record(principalId)?.themes.values() ?? [])].map(clone);
     },
+    async schemas(principalId) {
+      return [...(record(principalId)?.schemas.values() ?? [])].map(clone);
+    },
     async putWidget(principalId, widget) {
       const target = record(principalId);
       if (target === undefined) {
@@ -137,6 +156,15 @@ export function createMemoryStore(
         throw new StoreRejectionError(
           "TOO_MANY_WIDGETS",
           `principal is at the ${limits.maxWidgets}-widget limit.`
+        );
+      }
+      // A ref must name a schema the principal actually stores — refusing
+      // here keeps dangling refs an out-of-band-only condition.
+      const ref = widget.descriptor.dataSchemaRef;
+      if (ref !== undefined && !target.schemas.has(ref)) {
+        throw new StoreRejectionError(
+          "UNKNOWN_SCHEMA",
+          `widget references missing schema '${ref}'.`
         );
       }
       target.widgets.set(widget.kind, clone(widget));
@@ -156,11 +184,43 @@ export function createMemoryStore(
       }
       target.themes.set(theme.name, clone(theme));
     },
+    async putSchema(principalId, schema) {
+      const target = record(principalId);
+      if (target === undefined) {
+        throw new StoreRejectionError("UNKNOWN_PRINCIPAL", principalId);
+      }
+      const problem = checkStoredSchema(schema, limits);
+      if (problem) throw new StoreRejectionError(problem.code, problem.message);
+      if (
+        !target.schemas.has(schema.name) &&
+        target.schemas.size >= limits.maxSchemas
+      ) {
+        throw new StoreRejectionError(
+          "TOO_MANY_SCHEMAS",
+          `principal is at the ${limits.maxSchemas}-schema limit.`
+        );
+      }
+      target.schemas.set(schema.name, clone(schema));
+    },
     async removeWidget(principalId, kind) {
       record(principalId)?.widgets.delete(kind);
     },
     async removeTheme(principalId, name) {
       record(principalId)?.themes.delete(name);
+    },
+    async removeSchema(principalId, name) {
+      const target = record(principalId);
+      if (target === undefined) return;
+      const referencing = [...target.widgets.values()]
+        .filter((w) => w.descriptor.dataSchemaRef === name)
+        .map((w) => w.kind);
+      if (referencing.length > 0) {
+        throw new StoreRejectionError(
+          "SCHEMA_IN_USE",
+          `schema '${name}' is referenced by: ${referencing.join(", ")}.`
+        );
+      }
+      target.schemas.delete(name);
     },
     async ensurePrincipal(subject, label) {
       if (typeof subject !== "string" || subject === "") {
@@ -179,7 +239,8 @@ export function createMemoryStore(
         subject,
         keys: [],
         widgets: new Map(),
-        themes: new Map()
+        themes: new Map(),
+        schemas: new Map()
       });
       return clone(principal);
     },
@@ -216,7 +277,8 @@ export function createMemoryStore(
         principal: r.principal,
         keys: r.keys.map((k) => ({ ...publicKey(k), digest: k.digest })),
         widgets: [...r.widgets.values()],
-        themes: [...r.themes.values()]
+        themes: [...r.themes.values()],
+        schemas: [...r.schemas.values()]
       }));
     }
   };

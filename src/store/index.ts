@@ -10,6 +10,7 @@ export type {
   Principal,
   Scope,
   StoredKey,
+  StoredSchema,
   StoredWidget,
   StoreLimits,
   WidgetStore,
@@ -22,7 +23,12 @@ export {
   StoreRejectionError
 } from "./types.js";
 export { hashKey, verifyKey, generateKey, findByKey, KEY_PREFIX } from "./keys.js";
-export { checkStoredWidget, checkStoredTheme, SAFE_IDENTIFIER } from "./validate.js";
+export {
+  checkStoredWidget,
+  checkStoredTheme,
+  checkStoredSchema,
+  SAFE_IDENTIFIER
+} from "./validate.js";
 export type { EntryProblem } from "./validate.js";
 export { createMemoryStore } from "./memory.js";
 export type { MemoryStore, MemorySeedPrincipal } from "./memory.js";

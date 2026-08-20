@@ -8,7 +8,7 @@ import { createCatalog } from "widgentic/catalog";
 import { countTemplateNodes, validateTemplate } from "widgentic/templates";
 import { createThemeRegistry, validateTheme } from "widgentic/theming";
 import type { ThemeEntry } from "widgentic/theming";
-import type { StoreLimits, StoredWidget } from "./types.js";
+import type { StoreLimits, StoredSchema, StoredWidget } from "./types.js";
 import { DEFAULT_LIMITS } from "./types.js";
 
 /** Kind names the built-ins own; a stored widget may never shadow them. */
@@ -35,6 +35,8 @@ export interface EntryProblem {
     | "RESERVED_THEME"
     | "INVALID_TEMPLATE"
     | "INVALID_THEME"
+    | "UNKNOWN_SCHEMA"
+    | "SCHEMA_IN_USE"
     | "TOO_LARGE"
     | "TOO_MANY_NODES";
   message: string;
@@ -91,6 +93,24 @@ export function checkStoredWidget(
       code: "INVALID_SHAPE",
       message: "'descriptor.description' must be a string."
     };
+  }
+  // Shared-schema references: a ref REPLACES the inline schema. Both at
+  // once would leave two sources of truth disagreeing silently.
+  const ref = entry.descriptor.dataSchemaRef;
+  if (ref !== undefined) {
+    if (typeof ref !== "string" || !SAFE_IDENTIFIER.test(ref)) {
+      return {
+        code: "INVALID_SHAPE",
+        message: "'descriptor.dataSchemaRef' must be a valid schema name."
+      };
+    }
+    if (entry.descriptor.dataSchema !== undefined) {
+      return {
+        code: "INVALID_SHAPE",
+        message:
+          "A descriptor carries 'dataSchema' OR 'dataSchemaRef', never both."
+      };
+    }
   }
   const template = validateTemplate(entry.template);
   if (!template.ok) {
@@ -156,4 +176,39 @@ export function checkStoredTheme(
   return undefined;
 }
 
-export type { StoredWidget, ThemeEntry };
+/**
+ * Check a shared-schema entry. `undefined` means acceptable. Deliberately
+ * shallow on the schema body: the JSON-Schema subset is lenient downstream
+ * (unknown keywords ignored), and a stricter gate here would make the
+ * store the only place rejecting what the renderer tolerates.
+ */
+export function checkStoredSchema(
+  entry: unknown,
+  limits: StoreLimits = DEFAULT_LIMITS
+): EntryProblem | undefined {
+  if (!isPlainObject(entry)) {
+    return { code: "INVALID_SHAPE", message: "Schema entry must be an object." };
+  }
+  if (typeof entry.name !== "string" || entry.name.trim() === "") {
+    return { code: "INVALID_SHAPE", message: "'name' must be a non-empty string." };
+  }
+  if (!SAFE_IDENTIFIER.test(entry.name)) {
+    return {
+      code: "INVALID_IDENTIFIER",
+      message: `'${entry.name}' is not a valid schema name: use letters, digits, '.', '_' or '-'.`
+    };
+  }
+  if (!isPlainObject(entry.schema)) {
+    return { code: "INVALID_SHAPE", message: "'schema' must be a plain object." };
+  }
+  const bytes = serializedBytes(entry);
+  if (bytes > limits.maxEntryBytes) {
+    return {
+      code: "TOO_LARGE",
+      message: `entry is ${bytes} bytes, over the ${limits.maxEntryBytes} limit.`
+    };
+  }
+  return undefined;
+}
+
+export type { StoredSchema, StoredWidget, ThemeEntry };

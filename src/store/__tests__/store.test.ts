@@ -124,6 +124,7 @@ describe("memory store", () => {
     const store = createMemoryStore(twoPrincipals(), {
       maxWidgets: 2,
       maxThemes: 1,
+      maxSchemas: 50,
       maxEntryBytes: 65_536,
       maxTemplateNodes: 2_000
     });
@@ -140,6 +141,7 @@ describe("memory store", () => {
     const store = createMemoryStore(twoPrincipals(), {
       maxWidgets: 100,
       maxThemes: 50,
+      maxSchemas: 50,
       maxEntryBytes: 300,
       maxTemplateNodes: 5
     });
@@ -269,6 +271,9 @@ describe("composition", () => {
       },
       async themes() {
         return [brandTheme, { name: "bad", tokens: { sneaky: "red" } } as ThemeEntry];
+      },
+      async schemas() {
+        return [];
       }
     };
     const catalog = await composeCatalog(rogue, "alice");
@@ -297,6 +302,9 @@ describe("composition", () => {
           { name: "dark", tokens: { bg: "#ff0000" } } as ThemeEntry,
           brandTheme
         ];
+      },
+      async schemas() {
+        return [];
       }
     };
     const themes = await composeThemes(rogue, "alice");
@@ -343,6 +351,9 @@ describe("composition", () => {
       },
       async themes() {
         return [] as ThemeEntry[];
+      },
+      async schemas() {
+        return [];
       }
     };
     const catalog = await composeCatalog(rogue, "alice");
@@ -379,6 +390,9 @@ describe("composition", () => {
       },
       async themes() {
         return [] as ThemeEntry[];
+      },
+      async schemas() {
+        return [];
       }
     };
     const catalog = await composeCatalog(rogue, "alice", { limits: tinyLimits });
@@ -405,6 +419,9 @@ describe("composition", () => {
       },
       async themes() {
         return [];
+      },
+      async schemas() {
+        return [];
       }
     };
     const { value: catalog, diagnostics } = await composeCatalog(rogue, "alice");
@@ -421,5 +438,130 @@ describe("composition", () => {
   it("composes with no store at all", async () => {
     const { value: catalog } = await composeCatalog(undefined, "anyone");
     expect(catalog.kinds().sort()).toEqual(["card", "custom", "table", "tree"]);
+  });
+});
+
+describe("shared data schemas", () => {
+  const personSchema = {
+    name: "person",
+    label: "Person",
+    schema: {
+      type: "object",
+      required: ["name"],
+      properties: { name: { type: "string" }, role: { type: "string" } }
+    }
+  };
+  const personCard: StoredWidget = {
+    kind: "person-card",
+    template: { tag: "div", children: [{ bind: "name" }] },
+    descriptor: {
+      description: "A person as a card",
+      dataShape: "{ name, role? }",
+      dataSchemaRef: "person"
+    }
+  };
+
+  function seededWithSchema(): MemorySeedPrincipal[] {
+    return [
+      {
+        principal: { id: "alice", scopes: ["read"] },
+        schemas: [personSchema],
+        widgets: [personCard]
+      }
+    ];
+  }
+
+  it("resolves the ref at composition — and only there", async () => {
+    const store = createMemoryStore(seededWithSchema());
+    const { value: catalog, diagnostics } = await composeCatalog(store, "alice");
+    expect(diagnostics).toEqual([]);
+    const descriptor = catalog.describe("person-card");
+    // The registered descriptor carries the RESOLVED schema, never a ref.
+    expect(descriptor?.dataSchema).toEqual(personSchema.schema);
+    expect(
+      (descriptor as unknown as { dataSchemaRef?: string }).dataSchemaRef
+    ).toBeUndefined();
+    // Resolution feeds real validation: schema'd kinds fail fast.
+    const rendered = catalog.render({ kind: "person-card", data: { role: "x" } });
+    expect(rendered.ok).toBe(false);
+    if (!rendered.ok) expect(rendered.error.path).toContain("name");
+  });
+
+  it("a schema edit propagates on the next composition", async () => {
+    const store = createMemoryStore(seededWithSchema());
+    await store.putSchema("alice", {
+      ...personSchema,
+      schema: {
+        type: "object",
+        required: ["name", "email"],
+        properties: { name: { type: "string" }, email: { type: "string" } }
+      }
+    });
+    const { value: catalog } = await composeCatalog(store, "alice");
+    // person-card was never touched, yet validates against the NEW schema.
+    const rendered = catalog.render({ kind: "person-card", data: { name: "Ada" } });
+    expect(rendered.ok).toBe(false);
+    if (!rendered.ok) expect(rendered.error.path).toContain("email");
+  });
+
+  it("a dangling ref skips that widget with a diagnostic, not the rest", async () => {
+    // Out-of-band state: a rogue store hands back a ref with no schema.
+    const rogue = {
+      async resolvePrincipal() {
+        return undefined;
+      },
+      async widgets() {
+        return [personCard, reportWidget];
+      },
+      async themes() {
+        return [] as ThemeEntry[];
+      },
+      async schemas() {
+        return []; // the schema vanished out of band
+      }
+    };
+    const { value: catalog, diagnostics } = await composeCatalog(rogue, "alice");
+    expect(catalog.has("person-card")).toBe(false);
+    expect(catalog.has("report")).toBe(true);
+    expect(diagnostics.join(" ")).toContain("UNKNOWN_SCHEMA");
+    expect(diagnostics.join(" ")).toContain("person");
+  });
+
+  it("schemas load only when some widget carries a ref", async () => {
+    let schemaReads = 0;
+    const counting = {
+      async resolvePrincipal() {
+        return undefined;
+      },
+      async widgets() {
+        return [reportWidget];
+      },
+      async themes() {
+        return [] as ThemeEntry[];
+      },
+      async schemas() {
+        schemaReads++;
+        return [];
+      }
+    };
+    await composeCatalog(counting, "alice");
+    expect(schemaReads).toBe(0);
+  });
+
+  it("file store serves <dir>/<principal>/schemas/*.json", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "wg-store-"));
+    const store = createFileStore(dir);
+    await store.seedPrincipal({ id: "alice", scopes: ["read"], keyDigest: hashKey(KEY_A) });
+    await writeFile(
+      join(dir, "alice", "schemas", "person.json"),
+      JSON.stringify(personSchema)
+    );
+    expect((await store.schemas("alice")).map((s) => s.name)).toEqual(["person"]);
+    // Invalid files are skipped with a diagnostic, like widgets and themes.
+    const diagnostics: string[] = [];
+    await writeFile(join(dir, "alice", "schemas", "bad.json"), JSON.stringify({ name: "bad" }));
+    const reporting = createFileStore(dir, { onDiagnostic: (m) => diagnostics.push(m) });
+    expect((await reporting.schemas("alice")).map((s) => s.name)).toEqual(["person"]);
+    expect(diagnostics.join(" ")).toContain("INVALID_SHAPE");
   });
 });

@@ -16,9 +16,10 @@ import { createRecordEditor } from "./record-editor.js";
 import { createSchemaForm } from "./schema-form.js";
 import { createStylesEditor } from "./styles-editor.js";
 import type { DraftStore, WidgetDraft } from "./store.js";
+import type { SchemaEntry } from "./schema-designer.js";
 import { mountTemplatePanel } from "./template-panel.js";
 import { mountThemePanel } from "./theme-panel.js";
-import { deriveDiagnostics } from "./validate.js";
+import { deriveDiagnostics, effectiveDataSchema } from "./validate.js";
 
 /** Tabbed container: first tab visible, buttons switch panes. */
 function tabs(entries: { label: string; element: HTMLElement }[]): HTMLElement {
@@ -107,7 +108,8 @@ function jsonField(
 export function mountPanels(
   store: DraftStore,
   columns: PanelColumns,
-  themes: ThemeEntry[] = []
+  themes: ThemeEntry[] = [],
+  schemas: SchemaEntry[] = []
 ): { dispose(): void } {
   const refreshers: Refresher[] = [];
   const disposers: (() => void)[] = [];
@@ -186,7 +188,9 @@ export function mountPanels(
     ])
   ]);
 
-  // --- Data schema (left, definition): Builder + JSON tabs ---------------
+  // --- Data schema (left, definition): inline editing OR a shared ref ----
+  // Two modes, mirroring the store's contract: an inline dataSchema, or a
+  // dataSchemaRef into the host-supplied shared schemas — never both.
   const schemaBuilder = createSchemaBuilder(store.get().descriptor.dataSchema, (schema) =>
     store.update((d) => {
       if (schema === undefined) {
@@ -197,32 +201,122 @@ export function mountPanels(
     })
   );
   refreshers.push((draft) => schemaBuilder.setValue(draft.descriptor.dataSchema));
+  const inlineEditors = tabs([
+    { label: "Builder", element: schemaBuilder.element },
+    {
+      label: "JSON",
+      element: jsonField(
+        "dataSchema (JSON-Schema subset: type/properties/required/items/enum/pattern)",
+        (d) => d.descriptor.dataSchema,
+        (d, v) => {
+          if (!isPlainObject(v)) return d;
+          return { ...d, descriptor: { ...d.descriptor, dataSchema: v } };
+        },
+        (d) => {
+          const { dataSchema: _s, ...rest } = d.descriptor;
+          return { ...d, descriptor: rest };
+        },
+        store,
+        refreshers
+      )
+    }
+  ]);
+
+  const modeSelect = h("select", { class: "wgd-select wgd-schema-mode" }) as HTMLSelectElement;
+  modeSelect.append(h("option", { value: "inline" }, ["define inline"]));
+  const sharedOption = h("option", { value: "shared" }, ["use shared"]) as HTMLOptionElement;
+  if (schemas.length === 0) sharedOption.disabled = true;
+  modeSelect.append(sharedOption);
+
+  const refSelect = h("select", { class: "wgd-select wgd-schema-ref" }) as HTMLSelectElement;
+  for (const entry of schemas) {
+    refSelect.append(h("option", { value: entry.name }, [entry.label ?? entry.name]));
+  }
+  refSelect.addEventListener("change", () => {
+    store.update((d) => ({
+      ...d,
+      descriptor: { ...d.descriptor, dataSchemaRef: refSelect.value }
+    }));
+  });
+
+  // The shared schema shows read-only: editing it from inside a widget
+  // draft would be edit-at-a-distance — that belongs to the schema section.
+  const sharedView = h("textarea", {
+    class: "wgd-textarea wgd-schema-shared",
+    rows: "10",
+    readonly: "",
+    spellcheck: "false"
+  }) as HTMLTextAreaElement;
+  const schemaRefDiag = diagnosticLine(undefined);
+  const sharedWrap = h("div", undefined, [
+    h("div", { class: "wgd-row" }, [
+      h("span", { class: "wgd-field-label" }, ["Shared schema"]),
+      refSelect
+    ]),
+    sharedView,
+    h("span", { class: "wgd-field-label" }, [
+      "Read-only here — edit shared schemas in the Data schemas section."
+    ])
+  ]);
+
+  modeSelect.addEventListener("change", () => {
+    if (modeSelect.value === "shared") {
+      const name =
+        store.get().descriptor.dataSchemaRef ?? schemas[0]?.name ?? "";
+      store.update((d) => {
+        const { dataSchema: _s, ...rest } = d.descriptor;
+        return { ...d, descriptor: { ...rest, dataSchemaRef: name } };
+      });
+    } else {
+      // Back to inline: seed with the resolved shared schema (a copy), so
+      // "customize from here" is one switch away.
+      const resolved = effectiveDataSchema(store.get(), schemas);
+      store.update((d) => {
+        const { dataSchemaRef: _r, ...rest } = d.descriptor;
+        return {
+          ...d,
+          descriptor: {
+            ...rest,
+            dataSchema: (resolved ?? { type: "object" }) as Record<string, unknown>
+          }
+        };
+      });
+    }
+  });
+
+  function refreshSchemaMode(draft: WidgetDraft): void {
+    const ref = draft.descriptor.dataSchemaRef;
+    const shared = typeof ref === "string";
+    modeSelect.value = shared ? "shared" : "inline";
+    inlineEditors.hidden = shared;
+    sharedWrap.hidden = !shared;
+    if (shared) {
+      if (refSelect.value !== ref) refSelect.value = ref;
+      const resolved = schemas.find((entry) => entry.name === ref)?.schema;
+      sharedView.value =
+        resolved === undefined ? "" : JSON.stringify(resolved, null, 2);
+      repaintHighlight(sharedView); // programmatic writes fire no input event
+    }
+  }
+  refreshers.push(refreshSchemaMode);
+  refreshSchemaMode(store.get());
+
   const schemaPanel = section(
     "Data schema",
     [
-      tabs([
-        { label: "Builder", element: schemaBuilder.element },
-        {
-          label: "JSON",
-          element: jsonField(
-            "dataSchema (JSON-Schema subset: type/properties/required/items/enum/pattern)",
-            (d) => d.descriptor.dataSchema,
-            (d, v) => {
-              if (!isPlainObject(v)) return d;
-              return { ...d, descriptor: { ...d.descriptor, dataSchema: v } };
-            },
-            (d) => {
-              const { dataSchema: _s, ...rest } = d.descriptor;
-              return { ...d, descriptor: rest };
-            },
-            store,
-            refreshers
-          )
-        }
-      ])
+      h("div", { class: "wgd-row" }, [
+        h("span", { class: "wgd-field-label" }, ["Source"]),
+        modeSelect
+      ]),
+      schemaRefDiag,
+      inlineEditors,
+      sharedWrap
     ],
     false
   );
+  // The highlight layer wraps the textarea in place, so attach after the
+  // section assembly gives it a parent.
+  attachJsonHighlight(sharedView);
 
   /**
    * Adaptive data editor: schema-driven form when a dataSchema exists,
@@ -240,7 +334,7 @@ export function mountPanels(
       | undefined;
 
     function rebuild(draft: WidgetDraft): void {
-      const schema = draft.descriptor.dataSchema;
+      const schema = effectiveDataSchema(draft, schemas);
       const key = schema === undefined ? "" : JSON.stringify(schema);
       if (editor !== undefined && key === schemaKey) {
         editor.setValue(read(draft));
@@ -403,7 +497,7 @@ export function mountPanels(
   // Diagnostics refresh: derive once per change here (cheap, pure) — and
   // once immediately, so the tree/JSON projections render before any edit.
   function applyDiagnostics(draft: WidgetDraft): void {
-    const diagnostics = deriveDiagnostics(draft);
+    const diagnostics = deriveDiagnostics(draft, { schemas });
     kindDiag.hidden = diagnostics.kind === undefined;
     kindDiag.textContent = diagnostics.kind ?? "";
     exampleDiag.hidden = diagnostics.example === undefined;
@@ -414,6 +508,8 @@ export function mountPanels(
     sampleDiag.textContent = diagnostics.sample
       ? `sample vs dataSchema: ${diagnostics.sample.code} at ${diagnostics.sample.path} — ${diagnostics.sample.message}`
       : "";
+    schemaRefDiag.hidden = diagnostics.schemaRef === undefined;
+    schemaRefDiag.textContent = diagnostics.schemaRef ?? "";
     themePanel.setDiagnostic(
       diagnostics.theme
         ? `${diagnostics.theme.code}: ${diagnostics.theme.message}`

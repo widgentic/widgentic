@@ -40,8 +40,32 @@ export interface DesignerDiagnostics {
   /** Entries the renderer's safety filters would skip. */
   styles: StyleIssue[];
   theme?: ThemeError;
+  /** Shared-schema reference problems (unknown ref, or ref + inline). */
+  schemaRef?: string;
   /** True when the draft can be registered and previewed. */
   previewable: boolean;
+}
+
+/** Host-supplied shared schemas the draft may reference by name. */
+export interface DeriveOptions {
+  schemas?: { name: string; schema: Record<string, unknown> }[];
+}
+
+/**
+ * The schema validation actually runs against: the inline one, or the
+ * referenced shared one resolved from the supplied list — the same join
+ * the server's composition performs.
+ */
+export function effectiveDataSchema(
+  draft: WidgetDraft,
+  schemas: { name: string; schema: Record<string, unknown> }[] = []
+): Record<string, unknown> | undefined {
+  const ref = draft.descriptor?.dataSchemaRef;
+  if (typeof ref === "string") {
+    return schemas.find((entry) => entry.name === ref)?.schema;
+  }
+  const inline = draft.descriptor?.dataSchema;
+  return isPlainObject(inline) ? inline : undefined;
 }
 
 const BASE_KINDS = new Set(createCatalog().kinds());
@@ -89,7 +113,10 @@ function auditStyles(styles: WidgetStyles | undefined): StyleIssue[] {
 }
 
 /** Run every validator; total — never throws on any draft shape. */
-export function deriveDiagnostics(draft: WidgetDraft): DesignerDiagnostics {
+export function deriveDiagnostics(
+  draft: WidgetDraft,
+  options: DeriveOptions = {}
+): DesignerDiagnostics {
   const diagnostics: DesignerDiagnostics = { styles: [], previewable: false };
 
   if (typeof draft.kind !== "string" || draft.kind.trim().length === 0) {
@@ -109,7 +136,20 @@ export function deriveDiagnostics(draft: WidgetDraft): DesignerDiagnostics {
     diagnostics.template = issue;
   }
 
-  const schema = draft.descriptor?.dataSchema;
+  // Shared-schema refs resolve here exactly as the server's composition
+  // resolves them, so diagnostics match what the store will enforce.
+  const ref = draft.descriptor?.dataSchemaRef;
+  if (typeof ref === "string") {
+    if (draft.descriptor?.dataSchema !== undefined) {
+      diagnostics.schemaRef =
+        "A descriptor carries 'dataSchema' OR 'dataSchemaRef', never both.";
+    } else if (
+      (options.schemas ?? []).every((entry) => entry.name !== ref)
+    ) {
+      diagnostics.schemaRef = `References unknown schema '${ref}' — it is not among the supplied shared schemas.`;
+    }
+  }
+  const schema = effectiveDataSchema(draft, options.schemas ?? []);
   if (isPlainObject(schema)) {
     if (draft.descriptor.dataExample !== undefined) {
       const error = validateDataAgainstSchema(schema, draft.descriptor.dataExample);

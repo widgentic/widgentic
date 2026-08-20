@@ -200,3 +200,113 @@ describe("key lifecycle over HTTP", () => {
     expect(await store.resolvePrincipal(key)).toBeDefined(); // still alive
   });
 });
+
+describe("shared data schemas through the API", () => {
+  const PERSON = JSON.stringify({
+    label: "Person",
+    schema: {
+      type: "object",
+      required: ["name"],
+      properties: { name: { type: "string" } }
+    }
+  });
+
+  it("schema CRUD is session-only, like widgets and themes", async () => {
+    // No session → 401.
+    const anon = await fetch(`${base}/api/schemas/person`, { method: "PUT", body: PERSON });
+    expect(anon.status).toBe(401);
+    // An MCP key is not a session.
+    const keyed = await fetch(`${base}/api/schemas`, {
+      headers: { "x-api-key": "wgk_whatever" }
+    });
+    expect(keyed.status).toBe(401);
+    // A session writes and lists.
+    const put = await fetch(`${base}/api/schemas/person`, asAlice({ method: "PUT", body: PERSON }));
+    expect(put.status).toBe(200);
+    const listed = (await (
+      await fetch(`${base}/api/schemas`, asAlice())
+    ).json()) as { schemas: { name: string }[] };
+    expect(listed.schemas.map((s) => s.name)).toContain("person");
+  });
+
+  it("a widget can reference the schema; deletion is refused naming it", async () => {
+    const put = await fetch(
+      `${base}/api/widgets/person-card`,
+      asAlice({
+        method: "PUT",
+        body: JSON.stringify({
+          template: { tag: "div", children: [{ bind: "name" }] },
+          descriptor: {
+            description: "person as a card",
+            dataShape: "{ name }",
+            dataSchemaRef: "person"
+          }
+        })
+      })
+    );
+    expect(put.status).toBe(200);
+    // Delete while referenced → 409 SCHEMA_IN_USE, naming person-card.
+    const del = await fetch(`${base}/api/schemas/person`, asAlice({ method: "DELETE" }));
+    expect(del.status).toBe(409);
+    const body = (await del.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe("SCHEMA_IN_USE");
+    expect(body.error.message).toContain("person-card");
+    // The schema is still there.
+    const listed = (await (
+      await fetch(`${base}/api/schemas`, asAlice())
+    ).json()) as { schemas: { name: string }[] };
+    expect(listed.schemas.map((s) => s.name)).toContain("person");
+  });
+
+  it("a ref to a missing schema is refused at save time", async () => {
+    const put = await fetch(
+      `${base}/api/widgets/ghost-card`,
+      asAlice({
+        method: "PUT",
+        body: JSON.stringify({
+          template: { tag: "div", children: ["x"] },
+          descriptor: { description: "d", dataShape: "s", dataSchemaRef: "ghost" }
+        })
+      })
+    );
+    expect(put.status).toBe(422);
+    expect(((await put.json()) as { error: { code: string } }).error.code).toBe(
+      "UNKNOWN_SCHEMA"
+    );
+  });
+
+  it("a schema edit propagates through composition without touching the widget", async () => {
+    const { composeCatalog } = await import("widgentic/store");
+    const { principalIdForSubject } = await import("widgentic/store");
+    const alice = principalIdForSubject("alice");
+    // Baseline: person requires only 'name'.
+    let composed = await composeCatalog(store, alice);
+    let rendered = composed.value.render({ kind: "person-card", data: { name: "Ada" } });
+    expect(rendered.ok).toBe(true);
+    // Edit the SCHEMA (not the widget) to require 'email' too.
+    const put = await fetch(
+      `${base}/api/schemas/person`,
+      asAlice({
+        method: "PUT",
+        body: JSON.stringify({
+          schema: {
+            type: "object",
+            required: ["name", "email"],
+            properties: { name: { type: "string" }, email: { type: "string" } }
+          }
+        })
+      })
+    );
+    expect(put.status).toBe(200);
+    composed = await composeCatalog(store, alice);
+    rendered = composed.value.render({ kind: "person-card", data: { name: "Ada" } });
+    expect(rendered.ok).toBe(false);
+    if (!rendered.ok) expect(rendered.error.path).toContain("email");
+    // The registered descriptor carries the resolved schema, never the ref.
+    const descriptor = composed.value.describe("person-card");
+    expect(descriptor?.dataSchema).toMatchObject({ required: ["name", "email"] });
+    expect(
+      (descriptor as unknown as { dataSchemaRef?: string })?.dataSchemaRef
+    ).toBeUndefined();
+  });
+});
