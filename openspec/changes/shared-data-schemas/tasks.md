@@ -32,4 +32,4 @@
 - [x] 4.2 Live browser sweep on the rig (:3002 dev-login): create schema → reference from two widgets → edit schema → both re-validate; deletion refusal shows the widget names; read-only flows
 - [x] 4.3 End-to-end through MCP: saved ref-carrying widget renders through `mcp:http` with the resolved schema (dotted-path validation errors prove resolution)
 - [x] 4.4 Docs: README (schemas section, designer surface), TESTING (new routes/flows if runbook-worthy)
-- [ ] 4.5 Deploy vNN per the redeploy contract; verify live; commit and push
+- [x] 4.5 Deploy vNN per the redeploy contract; verify live; commit and push
