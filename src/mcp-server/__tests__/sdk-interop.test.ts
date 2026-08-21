@@ -163,6 +163,7 @@ describe("SDK interoperability (in-memory transport, library assembly)", () => {
     const names = tools.tools.map((tool) => tool.name).sort();
     expect(names).toEqual([
       "get_authoring_guide",
+      "list_schemas",
       "list_theme_tokens",
       "list_themes",
       "list_widgets",
@@ -218,5 +219,72 @@ describe("SDK interoperability (in-memory transport, library assembly)", () => {
     expect(result.isError).toBeFalsy();
     const listing = JSON.parse(textOf(result)) as { themes: { name: string }[] };
     expect(listing.themes.map((t) => t.name).sort()).toEqual(["dark", "light"]);
+  });
+});
+
+describe("list_schemas over the protocol", () => {
+  const person = {
+    name: "person",
+    label: "Person",
+    schema: { type: "object", required: ["name"], properties: { name: { type: "string" } } }
+  };
+
+  async function connectWith(schemas?: () => Promise<(typeof person)[]>) {
+    const server = createWidgenticServer(schemas === undefined ? {} : { schemas });
+    const client = new Client({ name: "widgentic-test-client", version: "0.0.0" });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+    return client;
+  }
+
+  it("serves the supplied source's entries", async () => {
+    const client = await connectWith(async () => [person]);
+    const result = (await client.callTool({
+      name: "list_schemas",
+      arguments: {}
+    })) as DeliveredResult;
+    expect(result.isError).toBeFalsy();
+    const listing = JSON.parse(textOf(result)) as {
+      schemas: { name: string; schema: unknown }[];
+      rules: string;
+    };
+    expect(listing.schemas.map((s) => s.name)).toEqual(["person"]);
+    expect(listing.schemas[0]?.schema).toEqual(person.schema);
+    // The name-over-copy steering rides the RESULT too, not only the wire.
+    expect(listing.rules).toContain("dataSchemaRef");
+  });
+
+  it("an absent source lists nothing — anonymous callers, storeless hosts", async () => {
+    const client = await connectWith();
+    const result = (await client.callTool({
+      name: "list_schemas",
+      arguments: {}
+    })) as DeliveredResult;
+    expect(result.isError).toBeFalsy();
+    expect((JSON.parse(textOf(result)) as { schemas: unknown[] }).schemas).toEqual([]);
+  });
+
+  it("the wire description steers to references by name", async () => {
+    const client = await connectWith(async () => [person]);
+    const tools = await client.listTools();
+    const tool = tools.tools.find((t) => t.name === "list_schemas");
+    expect(tool?.description).toContain("dataSchemaRef");
+    expect(tool?.description).toContain("NAME");
+  });
+
+  it("renders never read the schema source — it is lazy by contract", async () => {
+    let reads = 0;
+    const client = await connectWith(async () => {
+      reads++;
+      return [person];
+    });
+    await client.callTool({
+      name: "render_widget",
+      arguments: { widget: "card", data: { title: "T" } }
+    });
+    await client.callTool({ name: "list_widgets", arguments: {} });
+    expect(reads).toBe(0);
+    await client.callTool({ name: "list_schemas", arguments: {} });
+    expect(reads).toBe(1);
   });
 });

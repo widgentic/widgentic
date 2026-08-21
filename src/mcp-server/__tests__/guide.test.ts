@@ -209,3 +209,19 @@ describe("guide facts are derived, never restated", () => {
     expect(guide.rules.styles.propertyNames).toBeTruthy();
   });
 });
+
+describe("guide teaches shared-schema references", () => {
+  it("documents dataSchemaRef and steers to list_schemas over inline copies", () => {
+    const guide = buildAuthoringGuide() as {
+      widget: { shape: { descriptor: Record<string, string> } };
+      rules: { template: { dataModeling: string } };
+      workflow: { related: string };
+    };
+    const ref = guide.widget.shape.descriptor.dataSchemaRef ?? "";
+    expect(ref).toContain("list_schemas");
+    expect(ref).toContain("IN PLACE of");
+    expect(guide.rules.template.dataModeling).toContain("dataSchemaRef");
+    expect(guide.rules.template.dataModeling).toContain("do NOT reconstruct");
+    expect(guide.workflow.related).toContain("list_schemas");
+  });
+});

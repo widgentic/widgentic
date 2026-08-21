@@ -176,6 +176,40 @@ export function handleListThemes(registry: ThemeRegistry): McpToolResult {
 }
 
 /**
+ * `list_schemas`: the principal's saved shared schemas, so an agent asked
+ * for a widget "using schema xyz" can bind its real properties and set
+ * `descriptor.dataSchemaRef` instead of reconstructing the schema inline.
+ * Takes an async SOURCE, not a list: the read happens when the tool is
+ * called — renders never pay for it.
+ */
+export async function handleListSchemas(
+  source: (() => Promise<StoredSchemaEntry[]>) | undefined
+): Promise<McpToolResult> {
+  const schemas = source === undefined ? [] : await source();
+  const listing = {
+    schemas,
+    rules:
+      "Reference a listed schema from a widget draft by NAME: set " +
+      "descriptor.dataSchemaRef to it and omit descriptor.dataSchema " +
+      "(never both). Bind the schema's declared properties and make " +
+      "dataExample satisfy it. Copying the schema inline forks it — the " +
+      "copy goes stale the moment the user edits the shared one (see " +
+      "get_authoring_guide)."
+  };
+  return {
+    content: [{ type: "text", text: JSON.stringify(listing, null, 2) }]
+  };
+}
+
+/** The stored-schema entry shape `list_schemas` serves (store-owned). */
+export interface StoredSchemaEntry {
+  name: string;
+  label?: string;
+  description?: string;
+  schema: Record<string, unknown>;
+}
+
+/**
  * `render_widget`: validate `{ widget, data, hints?, meta? }` against the
  * catalog and the contract, render, and return the HTML plus the widgentic
  * payload block. Total — any input shape produces a result, never a throw.

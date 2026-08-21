@@ -52,6 +52,24 @@ export const GET_AUTHORING_GUIDE_TOOL: McpToolDefinition = {
   }
 };
 
+export const LIST_SCHEMAS_TOOL: McpToolDefinition = {
+  name: "list_schemas",
+  description:
+    "List the user's saved shared data schemas — name, label, description, " +
+    "and the schema object itself. Call this when the user asks for a " +
+    "widget built on one of their schemas ('use my person schema'): bind " +
+    "the schema's actual properties and set the widget's " +
+    "descriptor.dataSchemaRef to the schema's NAME instead of copying the " +
+    "schema inline — an inline copy forks the moment the user edits the " +
+    "shared one. Served per API key, like list_widgets; anonymous keys " +
+    "see an empty list.",
+  inputSchema: {
+    type: "object",
+    properties: {},
+    additionalProperties: false
+  }
+};
+
 export const LIST_THEMES_TOOL: McpToolDefinition = {
   name: "list_themes",
   description:

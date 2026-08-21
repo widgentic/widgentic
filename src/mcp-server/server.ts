@@ -25,6 +25,7 @@ import {
   RENDER_WIDGET_TOOL,
   LIST_THEME_TOKENS_TOOL,
   LIST_THEMES_TOOL,
+  LIST_SCHEMAS_TOOL,
   GET_AUTHORING_GUIDE_TOOL,
   WIDGENTIC_UI_URI_PREFIX,
   WIDGENTIC_APP_TEMPLATE_URI
@@ -33,8 +34,10 @@ import {
   handleListWidgets,
   handleRenderWidget,
   handleListThemeTokens,
-  handleListThemes
+  handleListThemes,
+  handleListSchemas
 } from "./handlers.js";
+import type { StoredSchemaEntry } from "./handlers.js";
 import { inlineRenderResultImages } from "./inline-images.js";
 import { buildAppTemplate } from "./app-template.js";
 import { handleGetAuthoringGuide } from "./guide.js";
@@ -50,6 +53,12 @@ export interface WidgenticServerOptions {
    */
   catalog?: WidgetCatalog;
   themes?: ThemeRegistry;
+  /**
+   * Lazy source for the principal's saved shared schemas — read only when
+   * `list_schemas` is CALLED, so renders never pay for it. Omitted: the
+   * tool serves an empty list (anonymous callers, storeless deployments).
+   */
+  schemas?: () => Promise<StoredSchemaEntry[]>;
 }
 
 export function createWidgenticServer(
@@ -95,6 +104,12 @@ export function createWidgenticServer(
     LIST_THEMES_TOOL.name,
     { description: LIST_THEMES_TOOL.description },
     () => handleListThemes(themes) as CallToolResult
+  );
+
+  server.registerTool(
+    LIST_SCHEMAS_TOOL.name,
+    { description: LIST_SCHEMAS_TOOL.description },
+    async () => (await handleListSchemas(options.schemas)) as CallToolResult
   );
 
   server.registerTool(

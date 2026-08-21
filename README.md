@@ -22,7 +22,7 @@ All capabilities are specified under `openspec/specs/` and implemented with zero
 | `reactive-rendering` | `widgentic/reactive` | `mountWidget` handles with in-place DOM patching (identity-preserving updates) |
 | `template-widgets` | `widgentic/templates` | Serializable JSON template DSL (`bind`/`each`/`when`) — the widget-designer runtime, safe for untrusted authors |
 | `widget-theming` | `widgentic/theming` | `--wg-*` token registry (colors, status, scale steps), author-defined `x-*` custom variables, named-theme registry with `extends`, a generated base stylesheet that **defines every registry token at `:root`** so custom widget styles can use bare `var(--wg-*)` safely, themes as validated JSON |
-| `mcp-server` | `widgentic/mcp-server` | The Widgentic MCP server: five tools — `list_widgets`, `list_themes`, `list_theme_tokens` and `get_authoring_guide` (discovery) + `render_widget` (validate → render → HTML + payload) — as SDK-free definitions/handlers, plus the full server assembly behind `widgentic/mcp-server/sdk` (MCP SDK as optional peers) |
+| `mcp-server` | `widgentic/mcp-server` | The Widgentic MCP server: six tools — `list_widgets`, `list_schemas`, `list_themes`, `list_theme_tokens` and `get_authoring_guide` (discovery) + `render_widget` (validate → render → HTML + payload) — as SDK-free definitions/handlers, plus the full server assembly behind `widgentic/mcp-server/sdk` (MCP SDK as optional peers) |
 | `widget-store` | `widgentic/store` | Per-principal widgets, themes, and shared data schemas: a persistence-agnostic port (`resolvePrincipal`/`widgets`/`themes`/`schemas`), memory + file reference implementations, hashed constant-time keys, structural limits, and request-scoped `composeCatalog`/`composeThemes` — widgets may reference a shared schema by name (`dataSchemaRef`), resolved at composition so one `person` schema serves every person widget |
 | `widget-designer` | `widgentic/designer` | Three embeddable designers (factories + opt-in custom elements, zero deps): the **widget** designer (template tree/JSON, full descriptor, styles and hints as tree-or-JSON, dataSchema, theme selection with a token reference) and the standalone **theme** designer (tokens, custom variables, named entries, previewing host-supplied widgets) and the standalone **schema** designer (shared data-schema entries) — all with live validation and an optional read-only mode |
 
@@ -97,10 +97,11 @@ widgentic is itself an MCP server: any MCP client can discover the available wid
 ```bash
 npm run mcp        # stdio server
 npm run mcp:http   # Streamable HTTP on :3001/mcp (for HTTP hosts and Apps testing)
-# tools: list_widgets, list_themes, list_theme_tokens, render_widget, get_authoring_guide
+# tools: list_widgets, list_schemas, list_themes, list_theme_tokens, render_widget, get_authoring_guide
 ```
 
 - `get_authoring_guide` — the complete authoring contract for agents drafting custom widget/theme JSON: entry shapes, template DSL forms and safety rules, identifier rules, style/schema constraints, tokens, and limits — derived from the live validators. Agents draft; users import, validate, and save in the designer at [widgentic.dev](https://widgentic.dev) (registration over MCP deliberately does not exist).
+- `list_schemas` — the user's saved shared data schemas (name, label, and the schema object), served per API key. Asked for a widget built on a saved schema, agents read the shape here and reference it by name (`descriptor.dataSchemaRef`) instead of copying it inline — the copy forks the moment the user edits the shared one.
 - `list_theme_tokens` — the theming vocabulary: every token with its type, documented use and light default, plus ready-made presets and the value rules. Call it before building a theme.
 - `list_themes` — the server's registered themes (`name`, `label`, `tokens`); pass any name as `render_widget`'s `theme` instead of composing tokens.
 - `list_widgets` — returns every registered kind's descriptor: purpose, expected `data` shape, an example to imitate, and supported hints.

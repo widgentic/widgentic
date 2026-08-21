@@ -33,3 +33,12 @@
 - [x] 4.3 End-to-end through MCP: saved ref-carrying widget renders through `mcp:http` with the resolved schema (dotted-path validation errors prove resolution)
 - [x] 4.4 Docs: README (schemas section, designer surface), TESTING (new routes/flows if runbook-worthy)
 - [x] 4.5 Deploy vNN per the redeploy contract; verify live; commit and push
+
+## 5. Agent discovery: list_schemas + guide (user follow-up)
+
+- [x] 5.1 Delta spec: ADDED "Schema listing tool"; MODIFIED "Authoring guide tool" (dataSchemaRef in the entry shape, reference-over-reconstruction steering via list_schemas)
+- [x] 5.2 `definitions.ts`: `LIST_SCHEMAS_TOOL` with the name-over-copy steering in its description; export from the base entry
+- [x] 5.3 `handlers.ts` + `server.ts`: `handleListSchemas` (SDK-free, async source); assembly takes a lazy `schemas` provider so renders never pay the read; `apps/mcp-server/http.ts` wires `store.schemas(principal.id)` per request
+- [x] 5.4 `guide.ts`: widget entry documents `dataSchemaRef` (ref XOR inline); shared-schema rule in dataModeling steering to list_schemas
+- [x] 5.5 Tests: 6-tool listing; list_schemas round-trip over the protocol (entries + empty for anonymous); wire description carries the steering; lazy-provider test (render reads nothing); guide facts updated; stdio banner lists all six
+- [ ] 5.6 Full gate; deploy v27; verify live tools/list + anonymous empty listing; docs (README tool list); commit and push

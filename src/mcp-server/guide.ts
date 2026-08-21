@@ -44,7 +44,8 @@ export function buildAuthoringGuide(): Record<string, unknown> {
         "designer. Do not look for or request a registration tool.",
       related:
         "Call list_widgets to see what already exists (avoid kind " +
-        "collisions), list_themes for registered themes, and " +
+        "collisions), list_schemas for the user's saved shared data " +
+        "schemas, list_themes for registered themes, and " +
         "list_theme_tokens for token semantics and presets."
     },
     widget: {
@@ -58,6 +59,13 @@ export function buildAuthoringGuide(): Record<string, unknown> {
           dataShape: "REQUIRED string — a compact sketch of the expected data, e.g. '{ title, lines: [{ item, amount }] }'.",
           dataExample:
             "RECOMMENDED — an example the widget renders well; shown to agents and used as the designer's preview data.",
+          dataSchemaRef:
+            "OPTIONAL string — the NAME of one of the user's saved shared " +
+            "schemas (discover with list_schemas), used IN PLACE of an " +
+            "inline dataSchema: carrying both is refused. Use this when " +
+            "the user names a saved schema ('use my person schema') — the " +
+            "server resolves it at render time, so one shared schema " +
+            "serves every widget that references it and edits propagate.",
           hints: "OPTIONAL record documenting supported hint keys.",
           styles:
             "OPTIONAL nested record: selector → { cssProperty: value } " +
@@ -129,7 +137,11 @@ export function buildAuthoringGuide(): Record<string, unknown> {
           "is NOT covered by dataSchema validation: avoid it, or reserve " +
           "it for genuinely out-of-band display like a caller-supplied " +
           "heading. If the widget needs a title, declare `title` as an " +
-          "optional schema property instead."
+          "optional schema property instead. When the user names a SAVED " +
+          "schema, set descriptor.dataSchemaRef to its name (shape from " +
+          "list_schemas) and bind those properties — do NOT reconstruct " +
+          "the schema inline: the copy forks the moment the user edits " +
+          "the shared one."
       },
       styles: {
         shape:

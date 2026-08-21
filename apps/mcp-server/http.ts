@@ -142,7 +142,16 @@ const httpServer = createHttpServer(async (req: IncomingMessage, res: ServerResp
       composed = { catalog: catalogResult.value, themes: themeResult.value };
     }
 
-    const server = createWidgenticServer(composed ?? {});
+    // The schema source is LAZY: list_schemas reads it when called, so
+    // renders never pay the extra store query.
+    const storeRef = store;
+    const principalRef = principal;
+    const server = createWidgenticServer({
+      ...(composed ?? {}),
+      ...(storeRef === undefined
+        ? {}
+        : { schemas: () => storeRef.schemas(principalRef.id) })
+    });
     // Stateless mode: no sessionIdGenerator (omitted — exactOptionalPropertyTypes
     // forbids an explicit undefined against the SDK's optional property).
     const transport = new StreamableHTTPServerTransport({
