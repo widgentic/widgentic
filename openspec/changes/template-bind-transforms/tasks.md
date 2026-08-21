@@ -26,3 +26,10 @@
 - [x] 4.2 Full gate; strict validation
 - [x] 4.3 Rig: author a person card with status→class map and mailto/tel links; render through mcp:http; iterate with the user's live person widgets
 - [x] 4.4 Docs: README's DSL row stays accurate (bind/each/when; attr forms live in the guide, which is the agent-facing doc); deployed v30 per the contract; live guide verified (ATTR MAP / ATTR PREFIX / exclusivity on production); committed and pushed
+
+## 5. Nullable type arrays in the schema builder (live finding)
+
+- [x] 5.1 Delta: the builder reads/writes `[<type>, "null"]` as primary type + nullable toggle; constraints follow the primary type
+- [x] 5.2 schema-builder.ts: derive primary/nullable from type arrays; nullable checkbox (disabled on `any`); writes emit the array while set; schema-form/template-panel type readers skip "null" when picking the primary
+- [x] 5.3 Tests: the agent's real `email` field (`["string","null"]` + pattern) shows string+nullable+pattern; toggle round-trips; type change under nullable keeps the array form
+- [x] 5.4 Gate; deploy; verify on the rig with the user's person schema

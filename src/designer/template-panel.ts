@@ -23,7 +23,11 @@ function schemaType(schema: unknown): string | undefined {
   if (!isPlainObject(schema)) return undefined;
   const type = schema.type;
   if (typeof type === "string") return type;
-  if (Array.isArray(type) && typeof type[0] === "string") return type[0];
+  if (Array.isArray(type)) {
+    // Nullable arrays pick the PRIMARY type regardless of order.
+    const primary = type.find((t) => typeof t === "string" && t !== "null");
+    if (typeof primary === "string") return primary;
+  }
   return undefined;
 }
 

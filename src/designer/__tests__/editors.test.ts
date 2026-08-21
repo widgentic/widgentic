@@ -109,9 +109,9 @@ describe("schema builder", () => {
       type: "object",
       properties: { field: { type: "string" } }
     });
-    // mark required
+    // mark required (the nullable toggle is also a checkbox — be precise)
     const requiredBox = builder.element.querySelector(
-      'input[type="checkbox"]'
+      'label[title="required"] input[type="checkbox"]'
     ) as HTMLInputElement;
     requiredBox.checked = true;
     requiredBox.dispatchEvent(new Event("change", { bubbles: true }));
@@ -775,5 +775,69 @@ describe("attr transforms in the tree", () => {
     expect((getTemplate() as { attrs: { class: unknown } }).attrs.class).toEqual({
       bind: "status"
     });
+  });
+});
+
+describe("nullable type arrays in the schema builder", () => {
+  /** The agent's real email field — the shape that collapsed to `any`. */
+  const emailField = {
+    type: "object",
+    properties: {
+      email: {
+        type: ["string", "null"],
+        pattern: "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
+      }
+    }
+  };
+
+  it("shows the primary type, the nullable toggle, and the pattern", () => {
+    const changes: unknown[] = [];
+    const builder = createSchemaBuilder(emailField, (s) => changes.push(s));
+    document.body.append(builder.element);
+    // The property's type select reads string, not any…
+    const selects = [...builder.element.querySelectorAll(".wgd-sb-type")] as HTMLSelectElement[];
+    const propSelect = selects[1] as HTMLSelectElement; // [0] is the root object
+    expect(propSelect.value).toBe("string");
+    // …the nullable toggle is set…
+    const nullBoxes = [...builder.element.querySelectorAll(".wgd-sb-null input")] as HTMLInputElement[];
+    expect((nullBoxes[1] as HTMLInputElement).checked).toBe(true);
+    // …and the pattern constraint is visible with its value.
+    const pattern = [...builder.element.querySelectorAll(".wgd-sb-constraint")].find(
+      (i) => (i as HTMLInputElement).placeholder.startsWith("pattern")
+    ) as HTMLInputElement;
+    expect(pattern).toBeDefined();
+    expect(pattern.value).toBe("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
+  });
+
+  it("the toggle round-trips between string and the array form, keeping the pattern", () => {
+    const changes: Record<string, unknown>[] = [];
+    const builder = createSchemaBuilder(emailField, (s) => changes.push(s as Record<string, unknown>));
+    document.body.append(builder.element);
+    const nullBox = [...builder.element.querySelectorAll(".wgd-sb-null input")][1] as HTMLInputElement;
+    nullBox.checked = false;
+    nullBox.dispatchEvent(new Event("change", { bubbles: true }));
+    let email = (changes.at(-1)?.properties as Record<string, Record<string, unknown>>).email!;
+    expect(email.type).toBe("string");
+    expect(email.pattern).toBe("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
+    // Toggle back on: the array form returns.
+    const nullBox2 = [...builder.element.querySelectorAll(".wgd-sb-null input")][1] as HTMLInputElement;
+    nullBox2.checked = true;
+    nullBox2.dispatchEvent(new Event("change", { bubbles: true }));
+    email = (changes.at(-1)?.properties as Record<string, Record<string, unknown>>).email!;
+    expect(email.type).toEqual(["string", "null"]);
+  });
+
+  it("a type change under the toggle keeps the array form", () => {
+    const changes: Record<string, unknown>[] = [];
+    const builder = createSchemaBuilder(
+      { type: "object", properties: { count: { type: ["string", "null"] } } },
+      (s) => changes.push(s as Record<string, unknown>)
+    );
+    document.body.append(builder.element);
+    const propSelect = [...builder.element.querySelectorAll(".wgd-sb-type")][1] as HTMLSelectElement;
+    propSelect.value = "number";
+    propSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    const count = (changes.at(-1)?.properties as Record<string, Record<string, unknown>>).count!;
+    expect(count.type).toEqual(["number", "null"]);
   });
 });

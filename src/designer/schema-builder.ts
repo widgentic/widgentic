@@ -62,13 +62,38 @@ export function createSchemaBuilder(
 
     const typeSelect = h("select", { class: "wgd-select wgd-sb-type" }) as HTMLSelectElement;
     for (const t of TYPES) typeSelect.append(h("option", { value: t }, [t]));
-    const currentType = typeof node.type === "string" ? node.type : "any";
+    // Nullable type arrays ([<type>, "null"], either order) present as the
+    // PRIMARY type + a nullable toggle — never collapsing to "any", which
+    // silently hid pattern/enum for agent-authored nullable fields.
+    const rawType = node.type;
+    const typeList = Array.isArray(rawType)
+      ? rawType.filter((t): t is string => typeof t === "string")
+      : undefined;
+    const nullable = typeList?.includes("null") ?? false;
+    const currentType =
+      typeof rawType === "string"
+        ? rawType
+        : (typeList?.find((t) => t !== "null") ?? (nullable ? "null" : "any"));
     typeSelect.value = TYPES.includes(currentType as (typeof TYPES)[number])
       ? currentType
       : "any";
     fitSelect(typeSelect);
+    const nullBox = h("input", {
+      type: "checkbox",
+      title: "Also allows null"
+    }) as HTMLInputElement;
+    nullBox.checked = nullable;
+    nullBox.disabled = typeSelect.value === "any" || typeSelect.value === "null";
+    /** The `type` value the current controls describe. */
+    function typeValue(selected: string, allowNull: boolean): unknown {
+      if (selected === "any") return undefined;
+      return allowNull && selected !== "null" ? [selected, "null"] : selected;
+    }
+    nullBox.addEventListener("change", () => {
+      apply(withKey(node, "type", typeValue(typeSelect.value, nullBox.checked)));
+    });
     typeSelect.addEventListener("change", () => {
-      let next = withKey(node, "type", typeSelect.value === "any" ? undefined : typeSelect.value);
+      let next = withKey(node, "type", typeValue(typeSelect.value, nullBox.checked));
       if (typeSelect.value !== "object") {
         next = withKey(withKey(next, "properties", undefined), "required", undefined);
       }
@@ -77,8 +102,18 @@ export function createSchemaBuilder(
       if (!ENUM_TYPES.has(typeSelect.value)) next = withKey(next, "enum", undefined);
       apply(next);
     });
-    // Header row: [name?] [type] [required?] [remove?]
-    rows.push(h("div", { class: "wgd-sb-row" }, [...lead, typeSelect, ...trail]));
+    // Header row: [name?] [type] [nullable] [required?] [remove?]
+    rows.push(
+      h("div", { class: "wgd-sb-row" }, [
+        ...lead,
+        typeSelect,
+        h("label", { class: "wgd-sb-req wgd-sb-null", title: "Also allows null" }, [
+          nullBox,
+          "null"
+        ]),
+        ...trail
+      ])
+    );
 
     // Constraints row — only the ones this type can actually use.
     const constraints: (Node | string)[] = [];
