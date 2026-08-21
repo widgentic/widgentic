@@ -146,7 +146,29 @@ function interpretNode(
         if (typeof raw === "string") {
           value = raw;
         } else if (isPlainObject(raw) && typeof raw.bind === "string") {
-          value = formatValue(resolvePath(raw.bind, scope, meta));
+          const resolved = resolvePath(raw.bind, scope, meta);
+          if (isPlainObject(raw.map)) {
+            // The resolved value SELECTS a key; every emitted character
+            // is an author-written literal. A miss falls to `default`,
+            // or empty — an unanticipated status degrades, never breaks.
+            const key = formatValue(resolved);
+            const hit = Object.prototype.hasOwnProperty.call(raw.map, key)
+              ? raw.map[key]
+              : undefined;
+            value =
+              typeof hit === "string"
+                ? hit
+                : typeof raw.default === "string"
+                  ? raw.default
+                  : "";
+          } else if (typeof raw.prefix === "string") {
+            // The prefix is never emitted alone: no dead mailto: hrefs.
+            // The composed value still faces the URL guard below.
+            const text = formatValue(resolved);
+            value = text === "" ? "" : raw.prefix + text;
+          } else {
+            value = formatValue(resolved);
+          }
         }
         if (value === undefined) continue;
         const lower = name.toLowerCase();

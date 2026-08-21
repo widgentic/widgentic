@@ -168,3 +168,80 @@ describe("bounded interpretation", () => {
     ).toBe(4);
   });
 });
+
+describe("attr transforms", () => {
+  it("map: the bound value selects an authored literal", () => {
+    const render = compileTemplate({
+      tag: "span",
+      attrs: {
+        class: {
+          bind: "status",
+          map: {
+            "do-not-contact": "wg-status wg-status-danger",
+            active: "wg-status wg-status-success"
+          },
+          default: "wg-status"
+        }
+      }
+    });
+    const hit = render({ kind: "x", data: { status: "do-not-contact" } });
+    expect((hit as { attrs?: { class?: string } }).attrs?.class).toBe(
+      "wg-status wg-status-danger"
+    );
+    const miss = render({ kind: "x", data: { status: "unanticipated" } });
+    expect((miss as { attrs?: { class?: string } }).attrs?.class).toBe("wg-status");
+    const absent = render({ kind: "x", data: {} });
+    expect((absent as { attrs?: { class?: string } }).attrs?.class).toBe("wg-status");
+  });
+
+  it("map without default emits empty on a miss — degraded, never broken", () => {
+    const render = compileTemplate({
+      tag: "span",
+      attrs: { class: { bind: "status", map: { active: "wg-status-success" } } }
+    });
+    const miss = render({ kind: "x", data: { status: "nope" } });
+    expect((miss as { attrs?: { class?: string } }).attrs?.class).toBe("");
+  });
+
+  it("map is a selection, not a sink: data cannot contribute output characters", () => {
+    const render = compileTemplate({
+      tag: "span",
+      attrs: { class: { bind: "status", map: { safe: "wg-ok" }, default: "wg-none" } }
+    });
+    const hostile = render({
+      kind: "x",
+      data: { status: '"><script>alert(1)</script>' }
+    });
+    expect((hostile as { attrs?: { class?: string } }).attrs?.class).toBe("wg-none");
+    // Prototype names select nothing either.
+    const proto = render({ kind: "x", data: { status: "constructor" } });
+    expect((proto as { attrs?: { class?: string } }).attrs?.class).toBe("wg-none");
+  });
+
+  it("prefix builds scheme hrefs and is never emitted alone", () => {
+    const render = compileTemplate({
+      tag: "a",
+      attrs: { href: { bind: "email", prefix: "mailto:" } },
+      children: [{ bind: "email" }]
+    });
+    const full = render({ kind: "x", data: { email: "ada@example.org" } });
+    expect((full as { attrs?: { href?: string } }).attrs?.href).toBe(
+      "mailto:ada@example.org"
+    );
+    for (const data of [{}, { email: "" }]) {
+      const empty = render({ kind: "x", data });
+      expect((empty as { attrs?: { href?: string } }).attrs?.href).toBe("");
+    }
+  });
+
+  it("tel prefixes work the same way", () => {
+    const render = compileTemplate({
+      tag: "a",
+      attrs: { href: { bind: "phone", prefix: "tel:" } }
+    });
+    const out = render({ kind: "x", data: { phone: "+1 250-555-0163" } });
+    expect((out as { attrs?: { href?: string } }).attrs?.href).toBe(
+      "tel:+1 250-555-0163"
+    );
+  });
+});

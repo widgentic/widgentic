@@ -301,6 +301,11 @@ export function injectDesignerStyles(doc: Document): void {
 .wgd-attr-row > .wgd-icon { visibility: hidden; }
 .wgd-attr-row:hover > .wgd-icon, .wgd-attr-row:focus-within > .wgd-icon { visibility: visible; }
 .wgd-attr-name { font-family: ui-monospace, monospace; color: var(--wgd-hl-key); flex: 0 1 auto; min-width: 5ch; }
+.wgd-attr-prefix { flex: 0 1 auto; min-width: 6ch; max-width: 10ch; font-family: ui-monospace, monospace; color: var(--wgd-hl-str); }
+.wgd-attr { display: flex; flex-direction: column; gap: 1px; }
+/* Transform block under a bind attr: one more dotted level in. */
+.wgd-attr-map { margin-left: 24px; padding-left: 8px; border-left: 2px dotted var(--wgd-border); display: flex; flex-direction: column; gap: 1px; }
+.wgd-attr-map-default { flex: 1 1 auto; min-width: 8ch; }
 .wgd-attr-mode { flex: 0 0 auto; color: var(--wgd-muted); font-size: 11px; }
 .wgd-children { margin-left: 14px; padding-left: 8px; border-left: 2px solid var(--wgd-accent-line); gap: 1px; }
 .wgd-slot { display: flex; flex-direction: column; gap: 1px; }

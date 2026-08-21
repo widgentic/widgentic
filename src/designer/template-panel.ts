@@ -9,6 +9,7 @@
 import type { DataSchema } from "widgentic/catalog";
 import type { WidgetTemplate } from "widgentic/templates";
 import { diagnosticLine, fitSelect, h, menuButton } from "./dom.js";
+import { createRecordEditor } from "./record-editor.js";
 import { attachJsonHighlight, repaintHighlight } from "./highlight.js";
 import type { DraftStore, WidgetDraft } from "./store.js";
 import type { DesignerDiagnostics } from "./validate.js";
@@ -539,6 +540,36 @@ export function mountTemplatePanel(
       const attrs = isPlainObject(node.attrs) ? node.attrs : {};
       const attrRows = Object.entries(attrs).map(([name, value]) => {
         const isBind = isPlainObject(value) && typeof value.bind === "string";
+        // The bind's transform fields, when present. Every write goes
+        // through rebuild() so editing one field never drops the others.
+        const bindValue = isBind
+          ? (value as {
+              bind: string;
+              prefix?: string;
+              map?: Record<string, string>;
+              default?: string;
+            })
+          : undefined;
+        const rebuild = (fields: {
+          bind: string;
+          prefix?: string | undefined;
+          map?: Record<string, string> | undefined;
+          default?: string | undefined;
+        }): Record<string, unknown> => {
+          const out: Record<string, unknown> = { bind: fields.bind };
+          if (fields.map !== undefined) {
+            out.map = fields.map;
+            if (fields.default !== undefined && fields.default !== "") {
+              out.default = fields.default;
+            }
+          } else if (fields.prefix !== undefined && fields.prefix !== "") {
+            out.prefix = fields.prefix;
+          }
+          return out;
+        };
+        const setAttr = (nextValue: unknown): void => {
+          commitAt(path, { ...node, attrs: { ...attrs, [name]: nextValue } });
+        };
         const nameInput = changeInput(
           name,
           (nextName) => {
@@ -555,30 +586,90 @@ export function mountTemplatePanel(
         mode.value = isBind ? "bind" : "literal";
         fitSelect(mode);
         const valueInput = changeInput(
-          isBind ? String((value as { bind: string }).bind) : String(value),
+          isBind ? bindValue!.bind : String(value),
           (next) => {
-            const nextValue = mode.value === "bind" ? { bind: next } : next;
-            commitAt(path, { ...node, attrs: { ...attrs, [name]: nextValue } });
+            setAttr(
+              mode.value === "bind"
+                ? rebuild({ ...(bindValue ?? { bind: "." }), bind: next })
+                : next
+            );
           },
           "wgd-input wgd-attr-value"
         );
         mode.addEventListener("change", () => {
           const current = valueInput.value;
-          const nextValue = mode.value === "bind" ? { bind: current } : current;
-          commitAt(path, { ...node, attrs: { ...attrs, [name]: nextValue } });
+          setAttr(mode.value === "bind" ? { bind: current } : current);
         });
         const removeAttr = h("button", { class: "wgd-icon", type: "button", title: "Remove attribute" }, ["✕"]);
         removeAttr.addEventListener("click", () => {
           const { [name]: _gone, ...rest } = attrs;
           commitAt(path, { ...node, attrs: rest });
         });
-        // Name, mode and value share one row (no wrapping).
-        return h("div", { class: "wgd-attr-row" }, [
-          nameInput,
-          mode,
-          valueInput,
-          removeAttr
-        ]);
+
+        const row: (Node | string)[] = [nameInput, mode, valueInput];
+        const hasMap = bindValue?.map !== undefined;
+        const hasPrefix =
+          bindValue?.prefix !== undefined && bindValue.prefix !== "";
+        if (isBind && !hasMap) {
+          // Literal prefix (mailto:/tel: links). Hidden while a map is
+          // active — one transform per value, mirroring the validator.
+          const prefixInput = changeInput(
+            bindValue?.prefix ?? "",
+            (next) => setAttr(rebuild({ ...bindValue!, map: undefined, prefix: next })),
+            "wgd-input wgd-attr-prefix"
+          );
+          prefixInput.placeholder = "prefix";
+          prefixInput.title = "Literal prefix, e.g. mailto: — emitted only when the bound value is non-empty";
+          row.push(prefixInput);
+        }
+        if (isBind && !hasMap && !hasPrefix) {
+          const addMap = h(
+            "button",
+            { class: "wgd-icon", type: "button", title: "Map values to authored literals (e.g. status → class)" },
+            ["map"]
+          );
+          addMap.addEventListener("click", () =>
+            setAttr(rebuild({ ...bindValue!, prefix: undefined, map: {} }))
+          );
+          row.push(h("span", { class: "wgd-node-icons" }, [addMap, removeAttr]));
+        } else {
+          row.push(removeAttr);
+        }
+
+        const parts: (Node | string)[] = [h("div", { class: "wgd-attr-row" }, row)];
+        if (isBind && hasMap) {
+          // The map block: data value → authored literal rows, plus the
+          // miss default. Emptying the record drops the transform.
+          const mapEditor = createRecordEditor(
+            bindValue!.map,
+            { key: "data value", value: "authored literal", add: "+ mapping" },
+            (nextMap) => {
+              setAttr(
+                nextMap === undefined
+                  ? { bind: bindValue!.bind }
+                  : rebuild({ ...bindValue!, map: nextMap })
+              );
+            }
+          );
+          const defaultInput = changeInput(
+            bindValue!.default ?? "",
+            (next) => setAttr(rebuild({ ...bindValue!, default: next })),
+            "wgd-input wgd-attr-map-default"
+          );
+          defaultInput.placeholder = "default (on miss)";
+          parts.push(
+            h("div", { class: "wgd-attr-map" }, [
+              mapEditor.element,
+              h("div", { class: "wgd-rec-row" }, [
+                h("span", { class: "wgd-st-colon" }, ["↳"]),
+                defaultInput
+              ])
+            ])
+          );
+        }
+        return parts.length === 1
+          ? (parts[0] as HTMLElement)
+          : h("div", { class: "wgd-attr" }, parts);
       });
       const childNodes = Array.isArray(node.children) ? (node.children as unknown[]) : [];
       // One add menu per element covers attributes and every child form —

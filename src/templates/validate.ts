@@ -123,10 +123,49 @@ function check(node: unknown, path: string, depth: number): TemplateError | unde
         if (isPlainObject(value) && typeof value.bind === "string") {
           const pathError = checkPathSyntax(value.bind, attrPath);
           if (pathError) return pathError;
+          // One transform per value: map selects an authored literal,
+          // prefix glues one in front — combining them has no use case
+          // and every combination would need teaching forever.
+          const hasMap = value.map !== undefined;
+          const hasPrefix = value.prefix !== undefined;
+          if (hasMap && hasPrefix) {
+            return nodeError(
+              `Attribute '${name}' carries both 'map' and 'prefix' — one transform per value.`,
+              attrPath
+            );
+          }
+          if (hasMap) {
+            if (
+              !isPlainObject(value.map) ||
+              Object.values(value.map).some((entry) => typeof entry !== "string")
+            ) {
+              return nodeError(
+                `Attribute '${name}': 'map' must be an object of string values.`,
+                attrPath
+              );
+            }
+            if (value.default !== undefined && typeof value.default !== "string") {
+              return nodeError(
+                `Attribute '${name}': 'default' must be a string.`,
+                attrPath
+              );
+            }
+          } else if (value.default !== undefined) {
+            return nodeError(
+              `Attribute '${name}': 'default' requires 'map'.`,
+              attrPath
+            );
+          }
+          if (hasPrefix && typeof value.prefix !== "string") {
+            return nodeError(
+              `Attribute '${name}': 'prefix' must be a string.`,
+              attrPath
+            );
+          }
           continue;
         }
         return nodeError(
-          `Attribute '${name}' must be a string or { bind } object.`,
+          `Attribute '${name}' must be a string, { bind }, { bind, map, default? } or { bind, prefix } value.`,
           attrPath
         );
       }

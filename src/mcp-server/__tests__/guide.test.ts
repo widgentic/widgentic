@@ -240,3 +240,103 @@ describe("guide teaches shared-schema references", () => {
     expect(guide.sharedSchema.workflow).toContain("THEN draft widgets");
   });
 });
+
+describe("a guide-only agent using the attr transforms", () => {
+  /**
+   * Built following ONLY the guide's ATTR MAP / ATTR PREFIX form lines —
+   * the person-card shape the transforms exist for: semantic status
+   * coloring and mailto/tel links.
+   */
+  const contactCard = {
+    kind: "contact-card",
+    template: {
+      tag: "div",
+      attrs: { class: "wg-card" },
+      children: [
+        { tag: "h3", attrs: { class: "wg-card-title" }, children: [{ bind: "name" }] },
+        {
+          tag: "span",
+          attrs: {
+            class: {
+              bind: "status",
+              map: {
+                active: "wg-status wg-status-success",
+                "do-not-contact": "wg-status wg-status-danger"
+              },
+              default: "wg-status"
+            }
+          },
+          children: [{ bind: "status" }]
+        },
+        {
+          tag: "a",
+          attrs: { href: { bind: "email", prefix: "mailto:" } },
+          children: [{ bind: "email" }]
+        },
+        {
+          tag: "a",
+          attrs: { href: { bind: "phone", prefix: "tel:" } },
+          children: [{ bind: "phone" }]
+        }
+      ]
+    },
+    descriptor: {
+      description: "A contact with semantic status and actionable links.",
+      dataShape: "{ name, status, email, phone }",
+      dataExample: {
+        name: "Marcus Oyelaran",
+        status: "do-not-contact",
+        email: "m.oyelaran@example.org",
+        phone: "+1 250-555-0163"
+      },
+      dataSchema: {
+        type: "object",
+        required: ["name"],
+        properties: {
+          name: { type: "string" },
+          status: { type: "string" },
+          email: { type: "string" },
+          phone: { type: "string" }
+        }
+      }
+    }
+  };
+
+  it("passes store validation and the designer import unchanged", async () => {
+    expect(checkStoredWidget(contactCard)).toBeUndefined();
+    const { createDesigner } = await import("../../designer/index.js");
+    const host = document.createElement("div");
+    document.body.append(host);
+    const designer = createDesigner(host);
+    expect(designer.loadWidget(contactCard).ok).toBe(true);
+    designer.dispose();
+  });
+
+  it("renders with the selected class and working links", async () => {
+    const { registerTemplate } = await import("../../templates/index.js");
+    const { renderToHtml } = await import("../../catalog/index.js");
+    const catalog = createCatalog();
+    registerTemplate(catalog, contactCard.kind, contactCard.template, contactCard.descriptor);
+    const rendered = catalog.render({
+      kind: contactCard.kind,
+      data: contactCard.descriptor.dataExample
+    });
+    expect(rendered.ok).toBe(true);
+    if (!rendered.ok) return;
+    const html = renderToHtml(rendered.node);
+    expect(html).toContain('class="wg-status wg-status-danger"');
+    expect(html).toContain('href="mailto:m.oyelaran@example.org"');
+    expect(html).toContain('href="tel:+1 250-555-0163"');
+  });
+
+  it("the guide's form lines actually teach the transforms", () => {
+    const guide = buildAuthoringGuide() as {
+      rules: { template: { forms: string[] } };
+    };
+    const forms = guide.rules.template.forms.join("\n");
+    expect(forms).toContain("ATTR MAP");
+    expect(forms).toContain("ATTR PREFIX");
+    expect(forms).toContain("never both");
+    expect(forms).toContain("mailto:");
+  });
+});

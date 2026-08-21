@@ -90,3 +90,38 @@ describe("validateTemplate", () => {
     if (!result.ok) expect(result.error.code).toBe("TEMPLATE_TOO_DEEP");
   });
 });
+
+describe("attr transform validation", () => {
+  function attr(value: unknown) {
+    return validateTemplate({ tag: "span", attrs: { class: value } });
+  }
+
+  it("accepts the documented transform forms", () => {
+    expect(attr({ bind: "s", map: { a: "x" } }).ok).toBe(true);
+    expect(attr({ bind: "s", map: { a: "x" }, default: "d" }).ok).toBe(true);
+    expect(attr({ bind: "s", prefix: "mailto:" }).ok).toBe(true);
+  });
+
+  it("locates malformed transforms with dotted paths", () => {
+    for (const bad of [
+      { bind: "s", map: "nope" },
+      { bind: "s", map: { a: 1 } },
+      { bind: "s", prefix: 42 },
+      { bind: "s", map: { a: "x" }, prefix: "y" },
+      { bind: "s", default: "d" } // default requires map
+    ]) {
+      const result = attr(bad);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe("INVALID_TEMPLATE_NODE");
+        expect(result.error.path).toBe("attrs.class");
+      }
+    }
+  });
+
+  it("a transform without bind is outside the forms", () => {
+    const result = attr({ map: { a: "x" } });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.message).toContain("{ bind, map, default? }");
+  });
+});

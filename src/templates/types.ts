@@ -6,8 +6,19 @@
  * discriminated by their unique key (`bind` / `each` / `when`).
  */
 
-/** Attribute value: literal string or a data binding. */
-export type TemplateAttrValue = string | { bind: string };
+/**
+ * Attribute value: literal string, a data binding, or a bind carrying one
+ * attr-level transform. `map` lets a bound value SELECT an author-written
+ * literal (data chooses, it never contributes characters — the safe route
+ * to status→class styling); `prefix` glues an author literal in front of
+ * the bound value (`mailto:`/`tel:` links), emitted only when the value
+ * is non-empty. One transform per value — never both.
+ */
+export type TemplateAttrValue =
+  | string
+  | { bind: string }
+  | { bind: string; map: Record<string, string>; default?: string }
+  | { bind: string; prefix: string };
 
 /** Renders the value at `bind` as text. */
 export interface TemplateBind {

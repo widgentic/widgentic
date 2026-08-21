@@ -130,7 +130,9 @@ export function buildAuthoringGuide(): Record<string, unknown> {
           "BIND — { \"bind\": \"path.to.value\" } renders the value as text; '.' binds the scope itself",
           "EACH — { \"each\": \"path.to.array\", \"template\": <node>, \"empty\"?: <node> } repeats template with each item as scope",
           "WHEN — { \"when\": \"path\", \"template\": <node>, \"else\"?: <node> } renders template when the value is truthy",
-          "ELEMENT — { \"tag\": \"div\", \"attrs\"?: { \"class\": \"x\", \"src\": { \"bind\": \"path\" } }, \"children\"?: [<node>...] }"
+          "ELEMENT — { \"tag\": \"div\", \"attrs\"?: { \"class\": \"x\", \"src\": { \"bind\": \"path\" } }, \"children\"?: [<node>...] }",
+          "ATTR MAP — { \"bind\": \"status\", \"map\": { \"do-not-contact\": \"wg-status wg-status-danger\", \"active\": \"wg-status wg-status-success\" }, \"default\": \"wg-status\" } — the bound value SELECTS one of your literals (semantic classes from data values); a miss emits default, or empty without one",
+          "ATTR PREFIX — { \"bind\": \"email\", \"prefix\": \"mailto:\" } — emits prefix+value only when the value is non-empty (mailto:/tel: links; both schemes are allowed on href). One transform per attr value: map OR prefix, never both"
         ],
         safety: {
           eventHandlers:

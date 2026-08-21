@@ -91,3 +91,31 @@ describe("untrusted-author safety", () => {
     expect(output).toBe("&lt;img onerror=x src=y&gt;");
   });
 });
+
+describe("transforms face the URL guard", () => {
+  it("mailto composition is kept; an authored javascript: prefix is dropped", () => {
+    const good = compileTemplate({
+      tag: "a",
+      attrs: { href: { bind: "email", prefix: "mailto:" } }
+    })({ kind: "x", data: { email: "ada@example.org" } });
+    expect((good as { attrs?: { href?: string } }).attrs?.href).toBe(
+      "mailto:ada@example.org"
+    );
+
+    const evil = compileTemplate({
+      tag: "a",
+      attrs: { href: { bind: "target", prefix: "javascript:" } }
+    })({ kind: "x", data: { target: "alert(1)" } });
+    expect((evil as { attrs?: { href?: string } }).attrs?.href).toBeUndefined();
+  });
+
+  it("a mapped url value is the author's literal, guard included", () => {
+    const out = compileTemplate({
+      tag: "a",
+      attrs: { href: { bind: "kind", map: { docs: "https://example.org/docs" } } }
+    })({ kind: "x", data: { kind: "docs" } });
+    expect((out as { attrs?: { href?: string } }).attrs?.href).toBe(
+      "https://example.org/docs"
+    );
+  });
+});

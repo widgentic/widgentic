@@ -652,3 +652,128 @@ describe("panel integration", () => {
     expect(container.querySelector(".wgd-schemaform")).not.toBeNull();
   });
 });
+
+describe("attr transforms in the tree", () => {
+  function designerWith(template: unknown): {
+    container: HTMLElement;
+    getTemplate(): unknown;
+  } {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const designer = createDesigner(container);
+    designer.loadWidget({
+      kind: "probe",
+      template,
+      descriptor: { description: "d", dataShape: "s" }
+    });
+    return { container, getTemplate: () => designer.getDraft().template };
+  }
+
+  const withBindAttr = {
+    tag: "a",
+    attrs: { href: { bind: "email" } },
+    children: [{ bind: "email" }]
+  };
+
+  it("authors a prefix from the row, preserving it across path edits", () => {
+    const { container, getTemplate } = designerWith(withBindAttr);
+    const prefix = container.querySelector(".wgd-attr-prefix") as HTMLInputElement;
+    change(prefix, "mailto:");
+    expect((getTemplate() as { attrs: { href: unknown } }).attrs.href).toEqual({
+      bind: "email",
+      prefix: "mailto:"
+    });
+    // Editing the bind path keeps the prefix — rebuild() never drops fields.
+    const pathInput = container.querySelector(".wgd-attr-value") as HTMLInputElement;
+    change(pathInput, "contact");
+    expect((getTemplate() as { attrs: { href: unknown } }).attrs.href).toEqual({
+      bind: "contact",
+      prefix: "mailto:"
+    });
+    // Clearing the prefix drops the field entirely.
+    change(container.querySelector(".wgd-attr-prefix") as HTMLInputElement, "");
+    expect((getTemplate() as { attrs: { href: unknown } }).attrs.href).toEqual({
+      bind: "contact"
+    });
+  });
+
+  it("authors a value→literal map with a default", () => {
+    const { container, getTemplate } = designerWith({
+      tag: "span",
+      attrs: { class: { bind: "status" } },
+      children: []
+    });
+    const addMap = [...container.querySelectorAll(".wgd-attr-row button")].find(
+      (b) => b.textContent === "map"
+    ) as HTMLButtonElement;
+    addMap.click();
+    // The map block appears; the prefix input hides (one transform per value).
+    expect(container.querySelector(".wgd-attr-map")).not.toBeNull();
+    expect(container.querySelector(".wgd-attr-prefix")).toBeNull();
+    // Add a mapping row and rename it.
+    const addRow = [...container.querySelectorAll(".wgd-attr-map button")].find(
+      (b) => b.textContent === "+ mapping"
+    ) as HTMLButtonElement;
+    addRow.click();
+    change(
+      container.querySelector(".wgd-attr-map .wgd-rec-key") as HTMLInputElement,
+      "do-not-contact"
+    );
+    change(
+      container.querySelector(".wgd-attr-map .wgd-rec-value") as HTMLInputElement,
+      "wg-status-danger"
+    );
+    change(
+      container.querySelector(".wgd-attr-map-default") as HTMLInputElement,
+      "wg-status"
+    );
+    expect((getTemplate() as { attrs: { class: unknown } }).attrs.class).toEqual({
+      bind: "status",
+      map: { "do-not-contact": "wg-status-danger" },
+      default: "wg-status"
+    });
+  });
+
+  it("loads transform-carrying templates into the controls, round-tripping", () => {
+    const template = {
+      tag: "div",
+      attrs: {
+        class: {
+          bind: "status",
+          map: { active: "wg-status-success" },
+          default: "wg-status"
+        }
+      },
+      children: [{ tag: "a", attrs: { href: { bind: "phone", prefix: "tel:" } }, children: [] }]
+    };
+    const { container, getTemplate } = designerWith(template);
+    // The map rows and default show the loaded values…
+    expect(
+      (container.querySelector(".wgd-attr-map .wgd-rec-key") as HTMLInputElement).value
+    ).toBe("active");
+    expect(
+      (container.querySelector(".wgd-attr-map-default") as HTMLInputElement).value
+    ).toBe("wg-status");
+    // …the nested anchor's prefix input shows tel:…
+    expect(
+      (container.querySelector(".wgd-attr-prefix") as HTMLInputElement).value
+    ).toBe("tel:");
+    // …and the draft is untouched by loading alone.
+    expect(getTemplate()).toEqual(template);
+  });
+
+  it("emptying the map drops the transform back to a plain bind", () => {
+    const { container, getTemplate } = designerWith({
+      tag: "span",
+      attrs: { class: { bind: "status", map: { a: "x" } } },
+      children: []
+    });
+    const removeRow = [...container.querySelectorAll(".wgd-attr-map .wgd-icon")].find(
+      (b) => b.getAttribute("title") === "Remove entry"
+    ) as HTMLButtonElement;
+    removeRow.click();
+    expect((getTemplate() as { attrs: { class: unknown } }).attrs.class).toEqual({
+      bind: "status"
+    });
+  });
+});
