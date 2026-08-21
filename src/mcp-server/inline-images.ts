@@ -19,7 +19,12 @@ import { WIDGENTIC_APP_MIME_TYPE } from "./definitions.js";
 const REDIRECT_LIMIT = 3;
 const TIMEOUT_MS = 4000;
 const MAX_BYTES = 1024 * 1024;
-const MAX_IMAGES_PER_RENDER = 8;
+// 24: sized for per-row table avatars (a 10-20 row contact table is a
+// normal render), not just card heroes. Overflow keeps original URLs —
+// deterministic first-N in document order — which sandboxed frames show
+// as alt text. Fetches run in parallel under the per-image 1 MiB / 4 s
+// guards, so the cap bounds memory, not wall-clock.
+const MAX_IMAGES_PER_RENDER = 24;
 const CACHE_TTL_MS = 5 * 60_000;
 const CACHE_MAX = 50;
 

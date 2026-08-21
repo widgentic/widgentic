@@ -188,6 +188,23 @@ describe("inlineImagesInHtml", () => {
     expect(out).toContain('alt="avatar"'); // rest of the tag untouched
   });
 
+  it("inlines up to 24 images, first-N in document order, rest untouched", async () => {
+    const calls: string[] = [];
+    const html = Array.from(
+      { length: 30 },
+      (_, i) => `<img src="https://cdn.example/${i}.png" alt="a${i}">`
+    ).join("");
+    const out = await inlineImagesInHtml(html, deps(pngFetch(calls)));
+    expect(calls).toHaveLength(24);
+    // a 10-avatar contact table sits well inside the cap
+    for (let i = 0; i < 24; i++) {
+      expect(out).not.toContain(`https://cdn.example/${i}.png`);
+    }
+    for (let i = 24; i < 30; i++) {
+      expect(out).toContain(`https://cdn.example/${i}.png`);
+    }
+  });
+
   it("unescapes serializer-escaped URLs before fetching", async () => {
     const calls: string[] = [];
     const html = '<img src="https://cdn.example/a.png?w=64&amp;h=64" alt="x">';
