@@ -4,7 +4,8 @@
  * "Save to my catalog" PUTs through the session, and the entry is in the
  * caller's MCP catalog on the next tool call — no other step exists.
  */
-import { createDesigner, createSchemaDesigner, createThemeDesigner } from "widgentic/designer";
+import { createDesigner, createSchemaDesigner, createThemeDesigner, seedThemeEntry, seedWidgetDraft } from "widgentic/designer";
+import type { WidgetDraft } from "widgentic/designer";
 import type {
   DesignerHandle,
   SchemaDesignerHandle,
@@ -96,6 +97,7 @@ function mountWidgetDesigner(loadDefinition?: unknown, readOnly = false): void {
 
 function syncWidgetControls(): void {
   $("widget-new").hidden = widgetMode === "editing";
+  $("widget-seed").hidden = widgetMode === "editing";
   // "Save to my catalog" belongs to a NEW draft only — a stored entry
   // saves through its own row, so the top control would be ambiguous.
   $("widget-save").hidden = widgetMode !== "new";
@@ -144,6 +146,16 @@ function renderWidgetList(): void {
       const edit = document.createElement("button");
       edit.textContent = "Edit";
       edit.addEventListener("click", () => showWidget(widget, "editing"));
+      const base = document.createElement("button");
+      base.textContent = "Use as base";
+      base.title = "Start a new widget as a copy of this one";
+      base.addEventListener("click", () => {
+        // StoredWidgetJson is the store's validated shape; loadWidget
+        // re-validates the seed on mount either way.
+        startWidgetFrom(
+          seedWidgetDraft(widget as unknown as WidgetDraft, myWidgets.map((w) => w.kind))
+        );
+      });
       const remove = document.createElement("button");
       remove.textContent = "Delete";
       remove.className = "danger";
@@ -160,7 +172,7 @@ function renderWidgetList(): void {
           status(`deleted ${widget.kind}`);
         })().catch((error: Error) => status(error.message));
       });
-      buttons.push(edit, remove);
+      buttons.push(edit, base, remove);
     }
     row.append(name, ...buttons);
     list.append(row);
@@ -188,6 +200,15 @@ async function saveWidget(): Promise<void> {
   status(`saved ${draft.kind} — it is in your MCP catalog now`);
 }
 
+/** Open the widget designer in NEW mode with a seeded draft. */
+function startWidgetFrom(seed: unknown): void {
+  selectedKind = undefined;
+  widgetMode = "new";
+  mountWidgetDesigner(seed);
+  renderWidgetList();
+  syncWidgetControls();
+}
+
 /* ------------------------------- themes ------------------------------ */
 
 let themeDesigner: ThemeDesignerHandle | undefined;
@@ -209,6 +230,7 @@ function mountThemeDesigner(loadEntry?: unknown, readOnly = false): void {
 
 function syncThemeControls(): void {
   $("theme-new").hidden = themeMode === "editing";
+  $("theme-seed").hidden = themeMode === "editing";
   $("theme-save").hidden = themeMode !== "new";
 }
 
@@ -255,6 +277,12 @@ function renderThemeList(): void {
       const edit = document.createElement("button");
       edit.textContent = "Edit";
       edit.addEventListener("click", () => showTheme(theme, "editing"));
+      const base = document.createElement("button");
+      base.textContent = "Use as base";
+      base.title = "Start a new theme as a copy of this one";
+      base.addEventListener("click", () => {
+        startThemeFrom(seedThemeEntry(theme, myThemes.map((t) => t.name)));
+      });
       const remove = document.createElement("button");
       remove.textContent = "Delete";
       remove.className = "danger";
@@ -271,7 +299,7 @@ function renderThemeList(): void {
           status(`deleted ${theme.name}`);
         })().catch((error: Error) => status(error.message));
       });
-      buttons.push(edit, remove);
+      buttons.push(edit, base, remove);
     }
     row.append(name, ...buttons);
     list.append(row);
@@ -297,6 +325,15 @@ async function saveTheme(): Promise<void> {
   const saved = myThemes.find((t) => t.name === entry.name);
   if (saved !== undefined) showTheme(saved, "viewing");
   status(`saved theme ${entry.name} — usable as theme: "${entry.name}" now`);
+}
+
+/** Open the theme designer in NEW mode with a seeded entry. */
+function startThemeFrom(seed: unknown): void {
+  selectedTheme = undefined;
+  themeMode = "new";
+  mountThemeDesigner(seed);
+  renderThemeList();
+  syncThemeControls();
 }
 
 /* ------------------------------ schemas ------------------------------ */
@@ -534,6 +571,13 @@ async function boot(): Promise<void> {
   $("widget-save").addEventListener("click", () => {
     void saveWidget().catch((error: Error) => status(error.message));
   });
+  $("widget-seed").addEventListener("change", () => {
+    const select = $("widget-seed") as HTMLSelectElement;
+    const from = select.value;
+    select.value = "";
+    if (from !== "card" && from !== "table" && from !== "tree") return;
+    startWidgetFrom(seedWidgetDraft(from, myWidgets.map((w) => w.kind)));
+  });
   $("theme-new").addEventListener("click", () => {
     selectedTheme = undefined;
     themeMode = "new";
@@ -543,6 +587,13 @@ async function boot(): Promise<void> {
   });
   $("theme-save").addEventListener("click", () => {
     void saveTheme().catch((error: Error) => status(error.message));
+  });
+  $("theme-seed").addEventListener("change", () => {
+    const select = $("theme-seed") as HTMLSelectElement;
+    const from = select.value;
+    select.value = "";
+    if (from !== "light" && from !== "dark") return;
+    startThemeFrom(seedThemeEntry(from, myThemes.map((t) => t.name)));
   });
   $("schema-new").addEventListener("click", () => {
     selectedSchema = undefined;

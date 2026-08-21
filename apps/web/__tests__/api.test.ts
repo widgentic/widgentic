@@ -11,6 +11,8 @@ import { createMemoryStore } from "widgentic/store";
 import type { MemoryStore } from "widgentic/store";
 import { handleApiRequest } from "../api.js";
 import type { SessionClaims } from "../auth.js";
+import { seedThemeEntry, seedWidgetDraft } from "../../../src/designer/seed.js";
+import type { WidgetDraft } from "../../../src/designer/store.js";
 
 let server: Server;
 let base: string;
@@ -151,6 +153,59 @@ describe("widgets and themes", () => {
     expect(list.themes.map((t) => t.name)).toContain("midnight");
     const del = await fetch(`${base}/api/themes/midnight`, asAlice({ method: "DELETE" }));
     expect(del.status).toBe(200);
+  });
+});
+
+describe("use-as-base: a seeded save creates a second entry", () => {
+  it("widget seed saves under its own kind; the source is untouched", async () => {
+    await fetch(`${base}/api/widgets/base-card`, asAlice({ method: "PUT", body: WIDGET_BODY }));
+    const listed = (await (await fetch(`${base}/api/widgets`, asAlice())).json()) as {
+      widgets: { kind: string; template: unknown; descriptor: unknown }[];
+    };
+    const source = listed.widgets.find((w) => w.kind === "base-card")!;
+    const seeded = seedWidgetDraft(
+      source as unknown as WidgetDraft,
+      listed.widgets.map((w) => w.kind)
+    );
+    expect(seeded.kind).toBe("base-card-copy");
+    const put = await fetch(`${base}/api/widgets/${seeded.kind}`, asAlice({
+      method: "PUT",
+      body: JSON.stringify({ template: seeded.template, descriptor: seeded.descriptor })
+    }));
+    expect(put.status).toBe(200);
+    const after = (await (await fetch(`${base}/api/widgets`, asAlice())).json()) as {
+      widgets: { kind: string; descriptor: { description: string } }[];
+    };
+    const kinds = after.widgets.map((w) => w.kind);
+    expect(kinds).toContain("base-card");
+    expect(kinds).toContain("base-card-copy");
+    // the copy carries the source's content
+    const copy = after.widgets.find((w) => w.kind === "base-card-copy")!;
+    const original = after.widgets.find((w) => w.kind === "base-card")!;
+    expect(copy.descriptor.description).toBe(original.descriptor.description);
+  });
+
+  it("a theme seeded from dark saves under a non-reserved name", async () => {
+    const seeded = seedThemeEntry("dark");
+    expect(seeded.name).toBe("my-dark");
+    const put = await fetch(`${base}/api/themes/${seeded.name}`, asAlice({
+      method: "PUT",
+      body: JSON.stringify(seeded)
+    }));
+    expect(put.status).toBe(200);
+    const listed = (await (await fetch(`${base}/api/themes`, asAlice())).json()) as {
+      themes: { name: string }[];
+    };
+    expect(listed.themes.map((t) => t.name)).toContain("my-dark");
+  });
+
+  it("built-in starters save as new widgets that render", async () => {
+    const seeded = seedWidgetDraft("table", []);
+    const put = await fetch(`${base}/api/widgets/${seeded.kind}`, asAlice({
+      method: "PUT",
+      body: JSON.stringify({ template: seeded.template, descriptor: seeded.descriptor })
+    }));
+    expect(put.status).toBe(200);
   });
 });
 
