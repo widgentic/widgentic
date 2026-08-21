@@ -32,3 +32,8 @@
 - [x] 5.2 `format.ts` `linkOrText`: prefix form; `hints.ts`: string link values validated on the composed href; descriptors: recipe docs (`{ email: 'mailto:', phone: 'tel:' }`)
 - [x] 5.3 Tests: clean display + composed href for mailto/tel, empty value no-link, hostile compose refused, analyzer prefix scenarios
 - [x] 5.4 Gate; deploy v34; verify live; commit, push, memory
+
+## 6. Image inline cap (live finding: 10-avatar table broke rows 9-10)
+
+- [x] 6.1 Delta: cap 8 → 24, first-N-in-document-order overflow pinned; raise `MAX_IMAGES_PER_RENDER`; tests pin the new cap and deterministic overflow
+- [x] 6.2 Gate; deploy v36; verify live; commit, push, memory
