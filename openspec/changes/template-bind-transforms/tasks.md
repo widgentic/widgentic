@@ -25,4 +25,4 @@
 - [x] 4.1 ORDERING: archive `shared-data-schemas` FIRST (this change's designer/guide deltas build on its pending text)
 - [x] 4.2 Full gate; strict validation
 - [x] 4.3 Rig: author a person card with status→class map and mailto/tel links; render through mcp:http; iterate with the user's live person widgets
-- [x] 4.4 Docs: README's DSL row stays accurate (bind/each/when; attr forms live in the guide, which is the agent-facing doc); deploy vNN per the contract; verify live template + guide; commit and push
+- [x] 4.4 Docs: README's DSL row stays accurate (bind/each/when; attr forms live in the guide, which is the agent-facing doc); deployed v30 per the contract; live guide verified (ATTR MAP / ATTR PREFIX / exclusivity on production); committed and pushed
