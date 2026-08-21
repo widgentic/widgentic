@@ -241,3 +241,54 @@ describe("app template native mounting", () => {
     expect(root().innerHTML).toBe(renderToHtml(tree));
   });
 });
+
+describe("app template link handling", () => {
+  const linkTree = {
+    tag: "div",
+    attrs: { class: "wg-card" },
+    children: [
+      { tag: "a", attrs: { href: "https://example.org", class: "wg-link" }, children: ["site"] },
+      { tag: "a", attrs: { href: "/relative" }, children: ["rel"] }
+    ]
+  };
+
+  it("clicks never navigate the frame — the host opens the URL", () => {
+    const { sent, dispatch, root } = bootTemplate();
+    dispatch(toolResult({ tree: linkTree }));
+    const anchor = root().querySelector('a[href="https://example.org"]') as HTMLElement;
+    const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+    anchor.dispatchEvent(event);
+    // The frame is the widget: default ALWAYS prevented…
+    expect(event.defaultPrevented).toBe(true);
+    // …and the host is asked to open the URL.
+    const open = sent.find((m) => m.method === "ui/open-link") as
+      | { params?: { url?: string }; id?: unknown }
+      | undefined;
+    expect(open?.params).toEqual({ url: "https://example.org" });
+    expect(open?.id).toBeDefined(); // a request, not a notification
+  });
+
+  it("non-http(s)/mailto/tel hrefs are prevented without a host request", () => {
+    const { sent, dispatch, root } = bootTemplate();
+    dispatch(toolResult({ tree: linkTree }));
+    const before = sent.filter((m) => m.method === "ui/open-link").length;
+    const anchor = root().querySelector('a[href="/relative"]') as HTMLElement;
+    const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+    anchor.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    expect(sent.filter((m) => m.method === "ui/open-link").length).toBe(before);
+  });
+
+  it("a denied open-link leaves the widget rendered", () => {
+    const { sent, dispatch, root } = bootTemplate();
+    dispatch(toolResult({ tree: linkTree }));
+    (root().querySelector('a[href="https://example.org"]') as HTMLElement).dispatchEvent(
+      new MouseEvent("click", { bubbles: true, cancelable: true })
+    );
+    const open = sent.find((m) => m.method === "ui/open-link") as { id: unknown };
+    // Host denies: the rejection is swallowed and the widget stays.
+    dispatch({ jsonrpc: "2.0", id: open.id, error: { code: -1, message: "blocked" } });
+    expect(root().querySelector(".wg-card")).not.toBeNull();
+    expect(root().textContent).toContain("site");
+  });
+});

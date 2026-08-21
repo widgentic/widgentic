@@ -185,6 +185,22 @@ window.addEventListener("message", (event) => {
     applyHostContext(message.params);
   }
 });
+// Links NEVER navigate the sandboxed frame — the frame IS the widget, and
+// an in-frame navigation to an external origin is blocked by the host's
+// sandbox, replacing the widget with an error page (observed live on
+// claude.ai). ui/open-link asks the HOST to open the URL in the default
+// browser instead; a host that denies leaves the widget intact.
+document.addEventListener("click", function (event) {
+  const target = event.target;
+  const anchor = target && target.closest ? target.closest("a[href]") : null;
+  if (!anchor) return;
+  event.preventDefault();
+  const url = anchor.getAttribute("href") || "";
+  if (!/^(https?:|mailto:|tel:)/i.test(url)) return;
+  request("ui/open-link", { url: url }).catch(function () {
+    // Denied or unsupported: nothing to do — the widget stays on screen.
+  });
+}, true);
 let lastWidth = 0, lastHeight = 0;
 function notifySize() {
   const height = Math.ceil(document.documentElement.getBoundingClientRect().height);

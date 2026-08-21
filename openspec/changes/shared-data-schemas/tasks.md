@@ -50,3 +50,10 @@
 - [x] 6.3 `guide.ts`: `sharedSchema` section — entry shape, import path (Data schemas section at widgentic.dev), workflow mention
 - [x] 6.4 Tests: the agent's actual `person` entry imports verbatim; invalid imports leave the entry untouched; section order; export operable read-only; guide facts
 - [x] 6.5 Gate; rig check pasting the real example; deploy v28; verify live guide; commit and push
+
+## 7. App-template links (live finding: clicking a link killed the widget)
+
+- [x] 7.1 Delta: MODIFIED "App template loader" — anchors never navigate the frame; ui/open-link to the host; intact on denial
+- [x] 7.2 app-template.ts: capture-phase click interception, preventDefault always, ui/open-link for http(s)/mailto/tel
+- [x] 7.3 Tests: click posts ui/open-link with the href and prevents default; non-http hrefs prevented without a request; widget survives a rejected request
+- [ ] 7.4 Gate; deploy v29; verify the live ui:// template carries the handler; remind: hosts cache templates per conversation — fresh chat to retest
