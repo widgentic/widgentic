@@ -150,6 +150,32 @@ ${tokenDefaultsBlock}
   height: auto;
   border-radius: ${v("radius")};
 }
+.wg-table-caption {
+  caption-side: top;
+  text-align: left;
+  padding-bottom: ${v("spacing")};
+}
+.wg-table-title {
+  display: block;
+  color: ${v("accent")};
+  font-size: ${v("font-size-lg")};
+  font-weight: ${v("font-weight-bold")};
+}
+.wg-table-subtitle {
+  display: block;
+  color: ${v("muted")};
+  font-size: ${v("font-size-sm")};
+}
+.wg-tree-title {
+  color: ${v("accent")};
+  font-size: ${v("font-size-lg")};
+  font-weight: ${v("font-weight-bold")};
+  margin-bottom: ${v("spacing")};
+}
+.wg-link {
+  color: ${v("accent")};
+  text-decoration: underline;
+}
 .wg-group {
   display: flex;
   flex-direction: column;

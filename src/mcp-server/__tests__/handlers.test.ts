@@ -883,3 +883,21 @@ describe("group renders through render_widget", () => {
     expect(RENDER_WIDGET_TOOL.description).toContain("instead of calling repeatedly");
   });
 });
+
+describe("table fieldFormat preserves typed payload values", () => {
+  it("the render shows the formatted cell while the payload keeps the number", () => {
+    const result = handleRenderWidget(createCatalog(), {
+      widget: "table",
+      data: [{ total: 11471334.78 }],
+      hints: { fieldFormat: { total: "${value}" } },
+      meta: { title: "Holdings" }
+    });
+    expect(result.isError).toBeUndefined();
+    expect(String(result.structuredContent?.html)).toContain("$11471334.78");
+    expect(String(result.structuredContent?.html)).toContain("Holdings");
+    const extracted = extractWidgetPayload(result);
+    expect(extracted.found && extracted.ok).toBe(true);
+    if (!(extracted.found && extracted.ok)) return;
+    expect((extracted.payload.data as { total: number }[])[0]?.total).toBe(11471334.78);
+  });
+});

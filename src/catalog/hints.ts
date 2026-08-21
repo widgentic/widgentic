@@ -6,7 +6,7 @@
  * finds out. Diagnostics are advice for the model-facing channel; they
  * never fail or alter a render, and renderers never call this.
  */
-import { isSafeImageSrc } from "../contract/urls.js";
+import { isLinkableUrl, isSafeImageSrc } from "../contract/urls.js";
 import type { WidgetDescriptor, WidgetDescriptorInput } from "./descriptors.js";
 import { isPlainObject } from "./widgets/format.js";
 
@@ -14,7 +14,8 @@ export type HintDiagnosticCode =
   | "UNKNOWN_HINT"
   | "NO_MATCH"
   | "INVALID_VALUE"
-  | "UNSAFE_IMAGE_SOURCE";
+  | "UNSAFE_IMAGE_SOURCE"
+  | "UNSAFE_LINK_TARGET";
 
 export interface HintDiagnostic {
   /** Dotted hint path, e.g. `"columns"` or `"images.avatar"`. */
@@ -188,13 +189,13 @@ export function analyzeHints(
         });
         continue;
       }
-      const fields = cardFields(data);
+      const fields = kind === "table" ? tableColumns(data) : cardFields(data);
       for (const [field, pattern] of Object.entries(value)) {
         if (!fields.has(field)) {
           diagnostics.push({
             hint: `fieldFormat.${field}`,
             code: "NO_MATCH",
-            message: `'${field}' matches no field in data`
+            message: `'${field}' matches no ${kind === "table" ? "column" : "field"} in data`
           });
         } else if (typeof pattern !== "string") {
           diagnostics.push({
@@ -240,6 +241,44 @@ export function analyzeHints(
             hint: `images.${field}`,
             code: "UNSAFE_IMAGE_SOURCE",
             message: `the value of '${field}' is not a safe image source (https or data:image/*)`
+          });
+        }
+      }
+    } else if (key === "links") {
+      if (!isPlainObject(value)) {
+        diagnostics.push({
+          hint: "links",
+          code: "INVALID_VALUE",
+          message: "'links' must be a Record<key, boolean>"
+        });
+        continue;
+      }
+      const keys = kind === "table" ? tableColumns(data) : cardFields(data);
+      for (const [field, flag] of Object.entries(value)) {
+        if (typeof flag !== "boolean") {
+          diagnostics.push({
+            hint: `links.${field}`,
+            code: "INVALID_VALUE",
+            message: `the value for '${field}' must be a boolean`
+          });
+          continue;
+        }
+        if (!keys.has(field)) {
+          diagnostics.push({
+            hint: `links.${field}`,
+            code: "NO_MATCH",
+            message: `'${field}' matches no ${kind === "table" ? "column" : "field"} in data`
+          });
+          continue;
+        }
+        if (flag === false) continue;
+        const target = fieldValue(kind, data, field);
+        if (typeof target !== "string" || !isLinkableUrl(target)) {
+          diagnostics.push({
+            hint: `links.${field}`,
+            code: "UNSAFE_LINK_TARGET",
+            message:
+              `the value of '${field}' is not a linkable URL (http, https, mailto, or tel) — it renders as text`
           });
         }
       }

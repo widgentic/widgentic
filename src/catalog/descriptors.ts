@@ -71,7 +71,13 @@ export const BUILTIN_DESCRIPTORS: Record<
         "a shape forces image treatment (use for extensionless URLs), " +
         "true forces the default shape, false keeps the URL as text. " +
         "Unsafe sources always render as text; image treatment wins over " +
-        "fieldFormat for the same key."
+        "fieldFormat for the same key.",
+      links:
+        "Record<fieldKey, boolean> — a true-keyed field whose value is an " +
+        "http(s)/mailto/tel URL renders as a clickable link (text stays " +
+        "the formatted value). Other schemes and non-strings stay plain " +
+        "text; image treatment wins over links for the same key. Links " +
+        "are never automatic — opt in per field."
     }
   },
   table: {
@@ -80,13 +86,27 @@ export const BUILTIN_DESCRIPTORS: Record<
       "An array of records (plain objects). Columns are the union of record keys " +
       "in first-seen order; missing cells render empty; non-array data becomes a " +
       "single row. Cell values that are image URLs render as avatars (see " +
-      "hints.images).",
+      "hints.images). meta.title/meta.subtitle render as the table's caption. " +
+      "Send cell values typed (e.g. total: 11471334.78, not '11,471,334.78') " +
+      "and use hints.fieldFormat for display formatting — the payload keeps " +
+      "the typed value while the render gets its unit.",
     dataExample: [
       { name: "Ada", role: "eng", avatar: "https://picsum.photos/id/64/64/64.jpg" },
       { name: "Lin", role: "ops", avatar: "https://picsum.photos/id/65/64/64.jpg" }
     ],
     hints: {
       columns: "string[] — overrides column selection and order",
+      fieldFormat:
+        "Record<columnKey, pattern> — formats matching cell values by " +
+        "substituting {value} in the pattern (e.g. { total: '${value}' }); " +
+        "a pattern without {value} is prefixed to the value. Output is " +
+        "escaped like any text; image treatment wins for the same column.",
+      links:
+        "Record<columnKey, boolean> — a true-keyed column renders its " +
+        "http(s)/mailto/tel string cells as clickable links (text stays " +
+        "the formatted value). Other schemes and non-strings stay plain " +
+        "text; image treatment wins over links for the same column. Links " +
+        "are never automatic — opt in per column.",
       images:
         "Record<columnKey, 'avatar' | 'thumb' | 'hero' | true | false> — " +
         "cell values that are https image URLs (image extension) or " +
@@ -100,7 +120,8 @@ export const BUILTIN_DESCRIPTORS: Record<
     description: "Collapsible hierarchy of labeled nodes.",
     dataShape:
       "Nested `{ label, children[] }` nodes — a single root object or an array of " +
-      "them. Nodes without a usable `label` get a JSON fallback label.",
+      "them. Nodes without a usable `label` get a JSON fallback label. " +
+      "meta.title renders as a title line above the tree.",
     dataExample: {
       label: "root",
       children: [{ label: "leaf", children: [] }]

@@ -17,11 +17,19 @@ export function renderTree(payload: WidgetPayload): WidgetNode {
   const expandDepth =
     typeof depthHint === "number" && depthHint >= 0 ? depthHint : Infinity;
   const roots = Array.isArray(payload.data) ? payload.data : [payload.data];
-  return el(
+  const list = el(
     "ul",
     { class: "wg-tree" },
     roots.map((node) => renderNode(node, 0, expandDepth))
   );
+  // Title chrome from meta — tree data has no title slot, so meta is the
+  // only source; absence means no title line.
+  const title = payload.meta?.title;
+  if (title === undefined) return list;
+  return el("div", { class: "wg-tree-titled" }, [
+    el("div", { class: "wg-tree-title" }, [formatValue(title)]),
+    list
+  ]);
 }
 
 function nodeLabel(node: unknown): string {

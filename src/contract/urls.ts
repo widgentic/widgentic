@@ -27,6 +27,18 @@ export function isSafeUrl(value: string): boolean {
   return scheme !== undefined && ALLOWED_SCHEMES.has(scheme.toLowerCase());
 }
 
+/**
+ * True only for an EXPLICITLY-schemed allowed URL — unlike {@link isSafeUrl},
+ * relative references do not qualify: as anchor targets they are dead
+ * clicks inside the app frame and junk navigation on served pages.
+ */
+export function isLinkableUrl(value: string): boolean {
+  const match = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(cleanUrl(value));
+  if (match === null) return false;
+  const scheme = match[1];
+  return scheme !== undefined && ALLOWED_SCHEMES.has(scheme.toLowerCase());
+}
+
 /** `data:image/<subtype>;base64,<payload>` — the only `data:` form images accept. */
 const DATA_IMAGE = /^data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=]*$/i;
 

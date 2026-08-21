@@ -1,7 +1,7 @@
 import type { WidgetPayload } from "../../contract/types.js";
 import type { WidgetNode } from "../node.js";
 import { el } from "../node.js";
-import { formatValue, isPlainObject } from "./format.js";
+import { applyPattern, formatValue, isPlainObject, linkOrText } from "./format.js";
 import { imageNode, resolveImage } from "./images.js";
 
 /**
@@ -12,13 +12,6 @@ import { imageNode, resolveImage } from "./images.js";
  * render as a single value line. `meta.title`/`meta.subtitle` fill in when
  * `data` does not provide them. Total: never throws.
  */
-/** Apply a `fieldFormat` pattern: substitute `{value}`, or append when absent. */
-function applyPattern(pattern: string, value: string): string {
-  return pattern.includes("{value}")
-    ? pattern.split("{value}").join(value)
-    : pattern + value;
-}
-
 export function renderCard(payload: WidgetPayload): WidgetNode {
   const { data, meta } = payload;
   const fieldFormat = isPlainObject(payload.hints?.fieldFormat)
@@ -73,8 +66,9 @@ export function renderCard(payload: WidgetPayload): WidgetNode {
           } else {
             const raw = formatValue(fieldValue);
             const pattern = fieldFormat?.[key];
-            display =
+            const text =
               typeof pattern === "string" ? applyPattern(pattern, raw) : raw;
+            display = linkOrText(key, fieldValue, payload.hints, text);
           }
           return el("div", { class: "wg-card-field" }, [
             el("dt", { class: "wg-card-field-key" }, [key]),
