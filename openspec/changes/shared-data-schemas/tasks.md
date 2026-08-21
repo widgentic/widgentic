@@ -41,4 +41,4 @@
 - [x] 5.3 `handlers.ts` + `server.ts`: `handleListSchemas` (SDK-free, async source); assembly takes a lazy `schemas` provider so renders never pay the read; `apps/mcp-server/http.ts` wires `store.schemas(principal.id)` per request
 - [x] 5.4 `guide.ts`: widget entry documents `dataSchemaRef` (ref XOR inline); shared-schema rule in dataModeling steering to list_schemas
 - [x] 5.5 Tests: 6-tool listing; list_schemas round-trip over the protocol (entries + empty for anonymous); wire description carries the steering; lazy-provider test (render reads nothing); guide facts updated; stdio banner lists all six
-- [ ] 5.6 Full gate; deploy v27; verify live tools/list + anonymous empty listing; docs (README tool list); commit and push
+- [x] 5.6 Full gate; deploy v27; verify live tools/list + anonymous empty listing; docs (README tool list); commit and push
