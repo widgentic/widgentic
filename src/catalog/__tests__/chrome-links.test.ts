@@ -167,7 +167,7 @@ describe("hint analysis for the new surfaces", () => {
     const diagnostics = analyzeHints(
       "table",
       [{ site: "yes-col", bad: "javascript:alert(1)" }],
-      { links: { site: "yes", missing: true, bad: true } },
+      { links: { site: 7, missing: true, bad: true } },
       BUILTIN_DESCRIPTORS.table
     );
     expect(diagnostics).toEqual([
@@ -195,5 +195,78 @@ describe("hint analysis for the new surfaces", () => {
       BUILTIN_DESCRIPTORS.card
     );
     expect(diagnostics).toEqual([]);
+  });
+});
+
+describe("prefix links: clean display, composed href", () => {
+  it("composes mailto/tel hrefs while the display stays the raw value", () => {
+    const out = html({
+      kind: "table",
+      data: [{ email: "a@b.c", phone: "+15551234" }],
+      hints: { links: { email: "mailto:", phone: "tel:" } }
+    });
+    expect(out).toContain(
+      '<a class="wg-link" href="mailto:a@b.c" rel="noopener noreferrer">a@b.c</a>'
+    );
+    expect(out).toContain(
+      '<a class="wg-link" href="tel:+15551234" rel="noopener noreferrer">+15551234</a>'
+    );
+  });
+
+  it("card fields compose the same way and fieldFormat still shapes the text", () => {
+    const out = html({
+      kind: "card",
+      data: { fields: { phone: "5551234" } },
+      hints: { links: { phone: "tel:" }, fieldFormat: { phone: "call {value}" } }
+    });
+    expect(out).toContain('href="tel:5551234"');
+    expect(out).toContain(">call 5551234</a>");
+  });
+
+  it("empty values, non-strings, and hostile compositions never link", () => {
+    const out = html({
+      kind: "table",
+      data: [{ email: "", num: 42, sneak: "javascript:alert(1)" }],
+      hints: { links: { email: "mailto:", num: "tel:", sneak: "" } }
+    });
+    expect(out).not.toContain("<a ");
+  });
+
+  it("a prefix that does not form an allowed scheme stays text", () => {
+    const out = html({
+      kind: "table",
+      data: [{ id: "12345" }],
+      hints: { links: { id: "x-thing:" } }
+    });
+    expect(out).not.toContain("<a ");
+    expect(out).toContain("12345");
+  });
+
+  it("analyzer: valid prefix silent, bad composition flagged, non-string value invalid", () => {
+    const good = analyzeHints(
+      "table",
+      [{ email: "a@b.c" }],
+      { links: { email: "mailto:" } },
+      BUILTIN_DESCRIPTORS.table
+    );
+    expect(good).toEqual([]);
+    const bad = analyzeHints(
+      "table",
+      [{ note: "hello" }],
+      { links: { note: "x-" } },
+      BUILTIN_DESCRIPTORS.table
+    );
+    expect(bad).toEqual([
+      expect.objectContaining({ hint: "links.note", code: "UNSAFE_LINK_TARGET" })
+    ]);
+    const invalid = analyzeHints(
+      "table",
+      [{ a: 1 }],
+      { links: { a: 7 } },
+      BUILTIN_DESCRIPTORS.table
+    );
+    expect(invalid).toEqual([
+      expect.objectContaining({ hint: "links.a", code: "INVALID_VALUE" })
+    ]);
   });
 });

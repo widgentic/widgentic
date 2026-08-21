@@ -73,11 +73,13 @@ export const BUILTIN_DESCRIPTORS: Record<
         "Unsafe sources always render as text; image treatment wins over " +
         "fieldFormat for the same key.",
       links:
-        "Record<fieldKey, boolean> — a true-keyed field whose value is an " +
-        "http(s)/mailto/tel URL renders as a clickable link (text stays " +
-        "the formatted value). Other schemes and non-strings stay plain " +
-        "text; image treatment wins over links for the same key. Links " +
-        "are never automatic — opt in per field."
+        "Record<fieldKey, boolean | prefix> — true links a field whose " +
+        "value already IS an http(s)/mailto/tel URL; a prefix string " +
+        "composes the href while the display stays the clean value " +
+        "(e.g. { email: 'mailto:', phone: 'tel:' } shows a@b.c but links " +
+        "mailto:a@b.c). Unsafe compositions and non-strings stay plain " +
+        "text; image treatment wins for the same key. Links are never " +
+        "automatic — opt in per field."
     }
   },
   table: {
@@ -102,11 +104,13 @@ export const BUILTIN_DESCRIPTORS: Record<
         "a pattern without {value} is prefixed to the value. Output is " +
         "escaped like any text; image treatment wins for the same column.",
       links:
-        "Record<columnKey, boolean> — a true-keyed column renders its " +
-        "http(s)/mailto/tel string cells as clickable links (text stays " +
-        "the formatted value). Other schemes and non-strings stay plain " +
-        "text; image treatment wins over links for the same column. Links " +
-        "are never automatic — opt in per column.",
+        "Record<columnKey, boolean | prefix> — true links cells whose " +
+        "value already IS an http(s)/mailto/tel URL; a prefix string " +
+        "composes the href while the display stays the clean value " +
+        "(e.g. { email: 'mailto:', phone: 'tel:' } shows a@b.c but links " +
+        "mailto:a@b.c). Unsafe compositions and non-strings stay plain " +
+        "text; image treatment wins for the same column. Links are never " +
+        "automatic — opt in per column.",
       images:
         "Record<columnKey, 'avatar' | 'thumb' | 'hero' | true | false> — " +
         "cell values that are https image URLs (image extension) or " +

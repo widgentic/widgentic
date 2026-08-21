@@ -255,11 +255,12 @@ export function analyzeHints(
       }
       const keys = kind === "table" ? tableColumns(data) : cardFields(data);
       for (const [field, flag] of Object.entries(value)) {
-        if (typeof flag !== "boolean") {
+        if (typeof flag !== "boolean" && typeof flag !== "string") {
           diagnostics.push({
             hint: `links.${field}`,
             code: "INVALID_VALUE",
-            message: `the value for '${field}' must be a boolean`
+            message:
+              `the value for '${field}' must be true, false, or a scheme prefix string (e.g. 'mailto:')`
           });
           continue;
         }
@@ -273,12 +274,22 @@ export function analyzeHints(
         }
         if (flag === false) continue;
         const target = fieldValue(kind, data, field);
-        if (typeof target !== "string" || !isLinkableUrl(target)) {
+        // The renderer links `true` values as-is and composes prefix + value;
+        // either way the checked URL is what the href would actually be.
+        const href =
+          typeof target === "string" && target !== ""
+            ? flag === true
+              ? target
+              : flag + target
+            : undefined;
+        if (href === undefined || !isLinkableUrl(href)) {
           diagnostics.push({
             hint: `links.${field}`,
             code: "UNSAFE_LINK_TARGET",
             message:
-              `the value of '${field}' is not a linkable URL (http, https, mailto, or tel) — it renders as text`
+              flag === true
+                ? `the value of '${field}' is not a linkable URL (http, https, mailto, or tel) — it renders as text`
+                : `'${String(flag)}' + the value of '${field}' does not compose to a linkable URL (http, https, mailto, or tel) — it renders as text`
           });
         }
       }

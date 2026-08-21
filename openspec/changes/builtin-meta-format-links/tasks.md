@@ -25,3 +25,10 @@
 - [x] 4.2 Rig: table with caption + currency fieldFormat + linked website/mailto columns through mcp:http; click a link inside the basic-host frame (ui/open-link path); group of two tables with captions
 - [x] 4.3 Deploy v33 per the redeploy contract; verify live; README table/card bullets if touched
 - [x] 4.4 Commit, push, memory update
+
+## 5. Prefix links (live finding: clean display text for email/phone columns)
+
+- [x] 5.1 Delta: `links` values become `boolean | string` — a string is an author prefix composed with the raw value into the href; display stays the formatted value; composed href faces the guard; empty/non-string values never link
+- [x] 5.2 `format.ts` `linkOrText`: prefix form; `hints.ts`: string link values validated on the composed href; descriptors: recipe docs (`{ email: 'mailto:', phone: 'tel:' }`)
+- [x] 5.3 Tests: clean display + composed href for mailto/tel, empty value no-link, hostile compose refused, analyzer prefix scenarios
+- [x] 5.4 Gate; deploy v34; verify live; commit, push, memory

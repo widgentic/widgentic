@@ -3,7 +3,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Card data handling
-The `card` renderer SHALL use `data.title`, `data.subtitle`, and `data.fields` when present; for other plain objects it SHALL render each entry as a field key/value pair; for primitives and `null` it SHALL render the stringified value. When `data` provides no title/subtitle, `meta.title`/`meta.subtitle` SHALL be used instead. `hints.fieldFormat: Record<string, string>` SHALL format matching field values by substituting `{value}` in the pattern (a pattern without the placeholder appends the value); unmatched keys and non-string patterns are ignored, and formatted output is escaped like any text. `hints.links: Record<string, boolean>` SHALL render a `true`-keyed field's string value as an anchor when the value's scheme passes the URL guard (http, https, mailto, tel); values failing the guard, non-string values, and un-hinted values render as plain text, and image treatment wins over a link hint for the same key. The anchor's text is the formatted value (`fieldFormat` still applies); its `href` is the raw value.
+The `card` renderer SHALL use `data.title`, `data.subtitle`, and `data.fields` when present; for other plain objects it SHALL render each entry as a field key/value pair; for primitives and `null` it SHALL render the stringified value. When `data` provides no title/subtitle, `meta.title`/`meta.subtitle` SHALL be used instead. `hints.fieldFormat: Record<string, string>` SHALL format matching field values by substituting `{value}` in the pattern (a pattern without the placeholder appends the value); unmatched keys and non-string patterns are ignored, and formatted output is escaped like any text. `hints.links: Record<string, boolean | string>` SHALL render linked fields: `true` links a string value that is itself an explicitly-schemed safe URL (http, https, mailto, tel); a string value acts as an author-supplied prefix composed with the raw value to build the `href` (e.g. `{ email: "mailto:" }`), emitted only when the value is a non-empty string and the COMPOSED href passes the same guard. In both forms the anchor's text is the formatted value (`fieldFormat` still applies) — the display never shows the composed scheme. Values failing the guard, non-string values, and un-hinted values render as plain text, and image treatment wins over a link hint for the same key.
 
 #### Scenario: Arbitrary object renders as fields
 - **WHEN** `card` renders `data: { name: "Ada", role: "eng" }`
@@ -34,7 +34,7 @@ The `card` renderer SHALL use `data.title`, `data.subtitle`, and `data.fields` w
 - **THEN** the output SHALL contain the value as plain text with no anchor
 
 ### Requirement: Table data handling
-The `table` renderer SHALL detect columns as the union of record keys in first-seen order, render one row per record with empty cells for missing keys, and honor `hints.columns: string[]` as an override of column selection and order. Non-array `data` SHALL be treated as a single-record array. `meta.title`/`meta.subtitle` SHALL render as the table's caption chrome; without them no caption appears. `hints.fieldFormat: Record<string, string>` SHALL format matching cell values by column with the card's exact pattern semantics (substitute `{value}`, append when absent, escape like any text, ignore unmatched keys and non-string patterns); image treatment wins over `fieldFormat` for the same column. `hints.links: Record<string, boolean>` SHALL render a `true`-keyed column's string cells as anchors when the value's scheme passes the URL guard (http, https, mailto, tel); values failing the guard, non-string values, and un-hinted values render as plain text, image treatment wins over a link hint for the same column, and the anchor's text is the formatted value while its `href` is the raw value.
+The `table` renderer SHALL detect columns as the union of record keys in first-seen order, render one row per record with empty cells for missing keys, and honor `hints.columns: string[]` as an override of column selection and order. Non-array `data` SHALL be treated as a single-record array. `meta.title`/`meta.subtitle` SHALL render as the table's caption chrome; without them no caption appears. `hints.fieldFormat: Record<string, string>` SHALL format matching cell values by column with the card's exact pattern semantics (substitute `{value}`, append when absent, escape like any text, ignore unmatched keys and non-string patterns); image treatment wins over `fieldFormat` for the same column. `hints.links: Record<string, boolean | string>` SHALL render linked cells: `true` links string cells that are themselves explicitly-schemed safe URLs (http, https, mailto, tel); a string value acts as an author-supplied prefix composed with the raw cell value to build the `href` (e.g. `{ email: "mailto:", phone: "tel:" }`), emitted only when the cell is a non-empty string and the COMPOSED href passes the same guard. In both forms the anchor's text is the formatted value — the display never shows the composed scheme. Values failing the guard, non-string values, and un-hinted values render as plain text, and image treatment wins over a link hint for the same column.
 
 #### Scenario: Column union preserves first-seen order
 - **WHEN** `table` renders `data: [{ a: 1, b: 2 }, { a: 3, c: 4 }]`
@@ -54,6 +54,15 @@ The `table` renderer SHALL detect columns as the union of record keys in first-s
 - **WHEN** `table` renders `data: [{ total: 11471334.78 }]` with `hints: { fieldFormat: { total: "${value}" } }`
 - **THEN** the rendered cell SHALL contain `$11471334.78`
 - **AND** the extracted payload SHALL still carry the typed number
+
+#### Scenario: A prefix link keeps the display clean
+- **WHEN** `table` renders `data: [{ email: "a@b.c", phone: "+15551234" }]` with `hints: { links: { email: "mailto:", phone: "tel:" } }`
+- **THEN** the cells SHALL contain anchors `href="mailto:a@b.c"` and `href="tel:+15551234"`
+- **AND** the anchor text SHALL be `a@b.c` and `+15551234` — never the composed scheme
+
+#### Scenario: Prefix links never emit bare or unsafe hrefs
+- **WHEN** a prefix link targets an empty string, a non-string, or composes to a disallowed scheme
+- **THEN** the cell SHALL render as plain text with no anchor
 
 #### Scenario: Link cells render anchors for safe schemes only
 - **WHEN** `table` renders `data: [{ site: "https://example.com" }, { site: "javascript:alert(1)" }]` with `hints: { links: { site: true } }`
@@ -81,7 +90,7 @@ The `tree` renderer SHALL render nested `{ label, children[] }` nodes, using a J
 - **THEN** the output SHALL contain a title line `"Regions"` above the root nodes
 
 ### Requirement: Hint-coherence analysis
-The catalog SHALL export a pure `analyzeHints(kind, data, hints, descriptor)` that inspects a render request without rendering it and returns an array of never-fatal diagnostics `{ hint, code, message, suggestion? }` with codes `UNKNOWN_HINT`, `NO_MATCH`, `INVALID_VALUE`, `UNSAFE_IMAGE_SOURCE`, and `UNSAFE_LINK_TARGET`. It SHALL report: top-level hint keys not advertised in the descriptor's `hints` (adding a `suggestion` when an advertised key is within Levenshtein distance 2); `columns`, `fieldFormat`, `images`, and `links` entries whose key matches no column or field in the supplied `data` (`fieldFormat` validated against columns when `kind` is `"table"`, fields otherwise); `images` values outside `"avatar" | "thumb" | "hero" | true | false`; `links` values that are not booleans; values targeted by an image hint that fail `isSafeImageSrc`; values targeted by a `true` link hint that are not strings passing the URL scheme guard; non-number `expandDepth`; and for `kind: "group"`, `layout`/`gap` values outside their preset vocabularies, non-number or out-of-range `columns`, and `columns` supplied without `layout: "grid"`. Analysis SHALL never throw, never mutate inputs, and never affect rendering; renderers SHALL remain unaware of it. An empty or absent `hints` SHALL produce no diagnostics.
+The catalog SHALL export a pure `analyzeHints(kind, data, hints, descriptor)` that inspects a render request without rendering it and returns an array of never-fatal diagnostics `{ hint, code, message, suggestion? }` with codes `UNKNOWN_HINT`, `NO_MATCH`, `INVALID_VALUE`, `UNSAFE_IMAGE_SOURCE`, and `UNSAFE_LINK_TARGET`. It SHALL report: top-level hint keys not advertised in the descriptor's `hints` (adding a `suggestion` when an advertised key is within Levenshtein distance 2); `columns`, `fieldFormat`, `images`, and `links` entries whose key matches no column or field in the supplied `data` (`fieldFormat` validated against columns when `kind` is `"table"`, fields otherwise); `images` values outside `"avatar" | "thumb" | "hero" | true | false`; `links` values that are neither booleans nor strings; values targeted by an image hint that fail `isSafeImageSrc`; values targeted by a `true` link hint that are not strings passing the URL scheme guard, and prefix link hints whose target is not a non-empty string or whose composed href fails the guard; non-number `expandDepth`; and for `kind: "group"`, `layout`/`gap` values outside their preset vocabularies, non-number or out-of-range `columns`, and `columns` supplied without `layout: "grid"`. Analysis SHALL never throw, never mutate inputs, and never affect rendering; renderers SHALL remain unaware of it. An empty or absent `hints` SHALL produce no diagnostics.
 
 #### Scenario: Unknown hint gets a spelling suggestion
 - **WHEN** `analyzeHints("table", [{ a: 1 }], { colums: ["a"] }, tableDescriptor)` is called
@@ -109,8 +118,12 @@ The catalog SHALL export a pure `analyzeHints(kind, data, hints, descriptor)` th
 - **AND** the same hint aimed at `total` SHALL produce no diagnostic
 
 #### Scenario: Link hints are checked end to end
-- **WHEN** `links: { site: "yes" }` targets an existing column, `links: { missing: true }` matches nothing, and `links: { bad: true }` targets a `javascript:` value
+- **WHEN** `links: { site: 7 }` targets an existing column, `links: { missing: true }` matches nothing, and `links: { bad: true }` targets a `javascript:` value
 - **THEN** they SHALL yield `INVALID_VALUE`, `NO_MATCH`, and `UNSAFE_LINK_TARGET` respectively
+
+#### Scenario: Prefix link hints are checked on the composed href
+- **WHEN** `links: { email: "mailto:" }` targets a non-empty string field, and `links: { note: "x-" }` composes to a disallowed scheme
+- **THEN** the first SHALL produce no diagnostic and the second SHALL yield `UNSAFE_LINK_TARGET`
 
 #### Scenario: Group hint vocabularies are enforced
 - **WHEN** `analyzeHints("group", { items: [] }, { layout: "mosaic", gap: "huge", columns: 2 }, groupDescriptor)` is called

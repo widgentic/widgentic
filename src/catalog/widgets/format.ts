@@ -52,12 +52,18 @@ export function linkOrText(
 ): WidgetNode {
   const links =
     isPlainObject(hints) && isPlainObject(hints.links) ? hints.links : undefined;
-  if (links?.[key] !== true || typeof raw !== "string" || !isLinkableUrl(raw)) {
-    return display;
-  }
+  const hint = links?.[key];
+  if (typeof raw !== "string" || raw === "") return display;
+  // true: the value IS the URL. String: an author-supplied prefix composed
+  // with the value (e.g. "mailto:") — the display stays the clean value,
+  // and the COMPOSED href faces the guard, so a hostile value can never
+  // smuggle a scheme past an author prefix.
+  const href =
+    hint === true ? raw : typeof hint === "string" ? hint + raw : undefined;
+  if (href === undefined || !isLinkableUrl(href)) return display;
   return el(
     "a",
-    { class: "wg-link", href: raw, rel: "noopener noreferrer" },
+    { class: "wg-link", href, rel: "noopener noreferrer" },
     [display]
   );
 }
