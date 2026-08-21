@@ -147,7 +147,7 @@ function renderWidgetList(): void {
       edit.textContent = "Edit";
       edit.addEventListener("click", () => showWidget(widget, "editing"));
       const base = document.createElement("button");
-      base.textContent = "Use as base";
+      base.textContent = "Copy";
       base.title = "Start a new widget as a copy of this one";
       base.addEventListener("click", () => {
         // StoredWidgetJson is the store's validated shape; loadWidget
@@ -278,7 +278,7 @@ function renderThemeList(): void {
       edit.textContent = "Edit";
       edit.addEventListener("click", () => showTheme(theme, "editing"));
       const base = document.createElement("button");
-      base.textContent = "Use as base";
+      base.textContent = "Copy";
       base.title = "Start a new theme as a copy of this one";
       base.addEventListener("click", () => {
         startThemeFrom(seedThemeEntry(theme, myThemes.map((t) => t.name)));
