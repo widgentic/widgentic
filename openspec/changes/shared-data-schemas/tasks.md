@@ -56,4 +56,4 @@
 - [x] 7.1 Delta: MODIFIED "App template loader" — anchors never navigate the frame; ui/open-link to the host; intact on denial
 - [x] 7.2 app-template.ts: capture-phase click interception, preventDefault always, ui/open-link for http(s)/mailto/tel
 - [x] 7.3 Tests: click posts ui/open-link with the href and prevents default; non-http hrefs prevented without a request; widget survives a rejected request
-- [ ] 7.4 Gate; deploy v29; verify the live ui:// template carries the handler; remind: hosts cache templates per conversation — fresh chat to retest
+- [x] 7.4 Gate; deploy v29; verify the live ui:// template carries the handler; remind: hosts cache templates per conversation — fresh chat to retest
