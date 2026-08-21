@@ -24,7 +24,7 @@ The package SHALL export from a `./mcp-server` entry: tool definitions as plain 
 - **THEN** it SHALL include `description`, `dataShape`, and a `dataExample` an agent can imitate
 
 ### Requirement: Widget rendering tool
-`handleRenderWidget(catalog, input)` SHALL accept `{ widget, data, hints?, meta?, format?, theme? }`, validate the widget id against the catalog, the assembled payload against the contract, and `data` against the kind's `dataSchema` when present, render on success, and return content per the selected `format` — by default the rendered HTML as a text block **and** the validated payload as a widgentic resource block (extractable by `extractWidgetPayload`).
+`handleRenderWidget(catalog, input)` SHALL accept `{ widget, data, hints?, meta?, format?, theme? }`, validate the widget id against the catalog, the assembled payload against the contract, and `data` against the kind's `dataSchema` when present, render on success, and return content per the selected `format` — by default the rendered HTML as a text block **and** the validated payload as a widgentic resource block (extractable by `extractWidgetPayload`). The tool description SHALL steer callers who need several widgets in one response toward a single `group` render instead of repeated calls.
 
 #### Scenario: Valid request renders dual-format
 - **WHEN** `handleRenderWidget(catalog, { widget: "table", data: [{ a: 1 }] })` runs
@@ -44,6 +44,11 @@ The package SHALL export from a `./mcp-server` entry: tool definitions as plain 
 #### Scenario: Schema violations surface as structured errors
 - **WHEN** the demo `invoice` kind declares a `dataSchema` requiring `lines` and the input omits it
 - **THEN** the result SHALL be `isError: true` with `code: "MISSING_FIELD"` and `path: "data.lines"`
+
+#### Scenario: A group of mixed kinds renders in one call
+- **WHEN** `handleRenderWidget` is called with `widget: "group"` and items of kinds `card` and a stored custom template kind
+- **THEN** the result SHALL contain both items' markup in one response
+- **AND** the tool description SHALL mention the group steering
 
 ### Requirement: Structured data marshalling
 When `data` arrives as a string that encodes a JSON object or array (a client-side marshalling artifact), `handleRenderWidget` SHALL parse it before payload assembly, so the rendered output and the embedded payload carry the structured value. Multiply-encoded strings (a JSON string encoding a JSON string encoding a structured value) SHALL be unwrapped the same way, to a bounded depth. Unwrapping SHALL commit only when it reaches an object or array; strings that do not (including quoted plain text and stringified primitives) SHALL pass through unchanged and verbatim as literal string data. When the target kind's `dataSchema` declares string-typed `data` (and neither object nor array), string `data` SHALL bypass unwrapping entirely, making literal JSON-shaped text expressible.
@@ -219,7 +224,7 @@ The server SHALL expose `list_themes` (no input): a discovery tool returning eve
 - **THEN** both results SHALL use the same `ui://widgentic/page/<kind>` URI
 
 ### Requirement: Structured content for app templates
-Every successful `render_widget` result SHALL carry `structuredContent: { html, css, payload, tree }` — the rendered fragment, the generated theme/kind CSS, the validated payload, and the render tree (`WidgetNode`, JSON-serializable) the fragment was serialized from — so a host-mounted app template can render any call's result via the MCP Apps `ui/notifications/tool-result` flow, regardless of the requested `format`. `tree` and `html` SHALL be projections of the same render (never divergent). Per the Apps convention, `structuredContent` is presentation data, not model context. When hint diagnostics exist for the render, `structuredContent` SHALL additionally carry them as a `diagnostics` array; the key SHALL be absent when there are none.
+Every successful `render_widget` result SHALL carry `structuredContent: { html, css, payload, tree }` — the rendered fragment, the generated theme/kind CSS, the validated payload, and the render tree (`WidgetNode`, JSON-serializable) the fragment was serialized from — so a host-mounted app template can render any call's result via the MCP Apps `ui/notifications/tool-result` flow, regardless of the requested `format`. `tree` and `html` SHALL be projections of the same render (never divergent). For `group` renders, `css` SHALL union the registered styles of the group and every distinct item kind, each kind's block exactly once. Per the Apps convention, `structuredContent` is presentation data, not model context. When hint diagnostics exist for the render, `structuredContent` SHALL additionally carry them as a `diagnostics` array; the key SHALL be absent when there are none.
 
 #### Scenario: Structured content on default renders
 - **WHEN** `render_widget` runs with no `format` and a valid payload
@@ -237,6 +242,10 @@ Every successful `render_widget` result SHALL carry `structuredContent: { html, 
 #### Scenario: Tree and html are the same render
 - **WHEN** any successful render is inspected
 - **THEN** serializing `structuredContent.tree` with `renderToHtml` SHALL reproduce `structuredContent.html` exactly
+
+#### Scenario: Group renders union item styles
+- **WHEN** a `group` render includes items of two custom kinds with registered styles
+- **THEN** `structuredContent.css` SHALL contain both kinds' style rules exactly once each
 
 ### Requirement: Formal Apps declaration at the wiring layer
 The server assembly SHALL declare the tool↔UI linkage per the MCP Apps specification using the official `@modelcontextprotocol/ext-apps` server helpers: `render_widget` registered with `_meta.ui.resourceUri: "ui://widgentic/app.html"`, and the app template registered as a resource with mime type `"text/html;profile=mcp-app"`. The assembly SHALL detect the client's Apps capability (`extensions["io.modelcontextprotocol/ui"]`) after initialization and note the outcome on stderr. SDK and host-flavor specifics SHALL live only behind the `widgentic/mcp-server/sdk` entry; the base `widgentic/mcp-server` entry remains SDK-free (per the server-assembly requirement).
