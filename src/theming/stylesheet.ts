@@ -160,6 +160,7 @@ ${tokenDefaultsBlock}
   color: ${v("accent")};
   font-size: ${v("font-size-lg")};
   font-weight: ${v("font-weight-bold")};
+  margin-bottom: ${v("spacing-sm")};
 }
 .wg-table-subtitle {
   display: block;
