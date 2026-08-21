@@ -14,10 +14,11 @@ producing silent failures.
 
 `dataSchemaRef` is a **store-layer** concept on the stored descriptor.
 `composeCatalog` resolves it into the registered descriptor's
-`dataSchema`; the catalog type, renderer, wire format, `list_widgets`
-output, and the authoring guide never learn that references exist. This
-keeps the blast radius to one capability's composition step and means
-agents keep consuming fully-resolved descriptors.
+`dataSchema`; the catalog type, renderer, wire format, and `list_widgets`
+output never learn that references exist — agents consume fully-resolved
+descriptors when RENDERING. The authoring side is the deliberate
+exception (added with `list_schemas`): agents DRAFTING a widget are
+taught the ref, because that is the artifact the user imports.
 
 ## D3. Fail at the door, skip on out-of-band drift
 
@@ -48,15 +49,20 @@ stricter gate here would make the store the only place that rejects
 what the renderer happily tolerates. No reserved names either — there
 are no built-in schemas to shadow.
 
-## D5. The schema designer is the third sibling, minus io
+## D5. The schema designer is the third sibling — io included (revised)
 
 `createSchemaDesigner` mirrors the theme designer's shape: identity
 fields + the existing schema builder + a parse-gated JSON pane,
-`readOnly`/`setReadOnly`, an opt-in element. It ships **without**
-Import/Export sections in this change: agents don't draft standalone
-schemas (they inline schemas in widget imports, unchanged), and the app
-flow needs only load/get. If a paste-a-schema flow proves wanted, it is
-an additive follow-up, not a redesign.
+`readOnly`/`setReadOnly`, an opt-in element. The first cut shipped
+without Import/Export on the assumption that agents don't draft
+standalone schemas — **live testing falsified that within a day**: once
+`list_schemas` and the guide's `dataSchemaRef` teaching landed, an agent
+handed the user a complete `{ name, label, description, schema }` entry
+with nowhere to paste it. The designer therefore carries the same two
+io sections as its siblings (import first; import re-validates via
+`checkSchemaEntry` and never clobbers on failure; export is view-only
+chrome, operable in read-only), and the guide documents the entry shape
+so agents keep producing exactly what Import accepts.
 
 In the widget designer, shared mode displays the schema **read-only**
 — editing a shared schema from inside a widget draft would be

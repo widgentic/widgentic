@@ -216,9 +216,66 @@ export function createSchemaDesigner(
     jsonWrap
   ]);
 
-  panels.append(identity, definition);
-  // The JSON layer wraps the textarea in place, so attach after assembly.
+  // --- Import / Export: the agent hand-off -------------------------------
+  // Live testing surfaced this within a day of list_schemas shipping: an
+  // agent drafts the complete entry JSON from the guide, and Import is
+  // where the user pastes it. Same two-section shape as the siblings.
+  const importError = diagnosticLine(undefined);
+  const importArea = h("textarea", {
+    class: "wgd-textarea wgd-schema-import",
+    rows: "6",
+    spellcheck: "false"
+  }) as HTMLTextAreaElement;
+  const importButton = h("button", { class: "wgd-button", type: "button" }, [
+    "Import"
+  ]);
+  importButton.addEventListener("click", () => {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(importArea.value);
+    } catch (error) {
+      importError.hidden = false;
+      importError.textContent = `Invalid JSON: ${String((error as Error).message)}`;
+      return;
+    }
+    const result = loadSchema(parsed);
+    importError.hidden = result.ok;
+    importError.textContent = result.ok ? "" : result.errors.join("\n");
+  });
+  const importSection = section("Import", [
+    h("span", { class: "wgd-field-label" }, [
+      "Import schema entry JSON ({ name, label?, description?, schema })"
+    ]),
+    importArea,
+    importError,
+    h("div", { class: "wgd-row" }, [importButton])
+  ]);
+
+  const output = h("textarea", {
+    class: "wgd-textarea",
+    rows: "8",
+    readonly: "",
+    spellcheck: "false"
+  }) as HTMLTextAreaElement;
+  const exportButton = h("button", { class: "wgd-button wgd-add", type: "button" }, [
+    "Export schema entry"
+  ]);
+  exportButton.addEventListener("click", () => {
+    output.value = JSON.stringify(getEntry(), null, 2);
+    repaintHighlight(output);
+  });
+  const exportSection = section("Export", [
+    h("div", { class: "wgd-toolbar" }, [exportButton]),
+    output
+  ]);
+  // Export copies out what is on screen — read-only leaves it operable.
+  exportSection.classList.add("wgd-view-only");
+
+  panels.append(identity, definition, importSection, exportSection);
+  // The JSON layer wraps the textareas in place, so attach after assembly.
   attachJsonHighlight(jsonArea);
+  attachJsonHighlight(importArea);
+  attachJsonHighlight(output);
 
   function loadSchema(input: unknown): SchemaLoadResult {
     const errors = checkSchemaEntry(input);
@@ -232,10 +289,14 @@ export function createSchemaDesigner(
     return { ok: true };
   }
 
-  /** Same mechanism as the other designers: inert the section bodies. */
+  /** Same mechanism as the other designers: inert the section bodies —
+   * except the view-only Export, which restricts nothing. */
   function setReadOnly(readOnly: boolean): void {
     root.classList.toggle("wgd-readonly", readOnly);
-    for (const body of panels.querySelectorAll(".wgd-section-body")) {
+    const bodies = [...panels.querySelectorAll(".wgd-section-body")].filter(
+      (body) => !body.parentElement?.classList.contains("wgd-view-only")
+    );
+    for (const body of bodies) {
       if (readOnly) body.setAttribute("inert", "");
       else body.removeAttribute("inert");
     }

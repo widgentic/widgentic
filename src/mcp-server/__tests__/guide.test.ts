@@ -224,4 +224,19 @@ describe("guide teaches shared-schema references", () => {
     expect(guide.rules.template.dataModeling).toContain("do NOT reconstruct");
     expect(guide.workflow.related).toContain("list_schemas");
   });
+
+  it("documents the schema entry shape and its import path", () => {
+    const guide = buildAuthoringGuide() as {
+      sharedSchema: {
+        shape: { description: string; name: string };
+        workflow: string;
+      };
+    };
+    // The exact hand-off the live test exposed: the agent drafts this
+    // entry; the user needs to know where it goes.
+    expect(guide.sharedSchema.shape.description).toContain("{ name, label?");
+    expect(guide.sharedSchema.shape.description).toContain("Data schemas section");
+    expect(guide.sharedSchema.workflow).toContain("Import");
+    expect(guide.sharedSchema.workflow).toContain("THEN draft widgets");
+  });
 });

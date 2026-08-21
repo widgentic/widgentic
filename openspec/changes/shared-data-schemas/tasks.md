@@ -42,3 +42,11 @@
 - [x] 5.4 `guide.ts`: widget entry documents `dataSchemaRef` (ref XOR inline); shared-schema rule in dataModeling steering to list_schemas
 - [x] 5.5 Tests: 6-tool listing; list_schemas round-trip over the protocol (entries + empty for anonymous); wire description carries the steering; lazy-provider test (render reads nothing); guide facts updated; stdio banner lists all six
 - [x] 5.6 Full gate; deploy v27; verify live tools/list + anonymous empty listing; docs (README tool list); commit and push
+
+## 6. Schema designer io (live-test finding: agent-drafted entry had nowhere to go)
+
+- [x] 6.1 Deltas amended: schema designer gains Import/Export (import first, re-validated, export read-only-operable); the guide documents the schema entry shape + its import path; design D5 revised
+- [x] 6.2 `schema-designer.ts`: Import section (textarea + button + errors via `checkSchemaEntry`/`loadSchema`) and Export section (`wgd-view-only`), matching the widget designer's io shape
+- [x] 6.3 `guide.ts`: `sharedSchema` section — entry shape, import path (Data schemas section at widgentic.dev), workflow mention
+- [x] 6.4 Tests: the agent's actual `person` entry imports verbatim; invalid imports leave the entry untouched; section order; export operable read-only; guide facts
+- [ ] 6.5 Gate; rig check pasting the real example; deploy v28; verify live guide; commit and push

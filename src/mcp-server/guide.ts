@@ -34,7 +34,7 @@ export function buildAuthoringGuide(): Record<string, unknown> {
         "You (the agent) draft the JSON; your user publishes it. Produce a " +
         "widget or theme following this guide, hand the JSON to your user, " +
         "and direct them to https://widgentic.dev — sign in, open the " +
-        "widget or theme designer, use Import, review the live preview, " +
+        "widget, theme, or Data schemas designer, use Import, review, " +
         "and save. The entry appears in their own MCP catalog on the next " +
         "tool call with their API key.",
       boundary:
@@ -75,6 +75,25 @@ export function buildAuthoringGuide(): Record<string, unknown> {
       },
       reservedKinds: createCatalog().kinds(),
       identifierPattern: SAFE_IDENTIFIER.source
+    },
+    sharedSchema: {
+      shape: {
+        description:
+          "A shared data schema is one JSON object: { name, label?, " +
+          "description?, schema } — defined once, referenced by many " +
+          "widgets via descriptor.dataSchemaRef. The user imports it in " +
+          "the Data schemas section at widgentic.dev.",
+        name: `String identifier matching ${SAFE_IDENTIFIER.source}.`,
+        label: "OPTIONAL human-readable display name.",
+        schema:
+          "The schema object itself, in the same subset as " +
+          "descriptor.dataSchema (see rules.dataSchema)."
+      },
+      workflow:
+        "Draft the entry, hand it to your user for Import in the Data " +
+        "schemas section, THEN draft widgets referencing it by name — the " +
+        "reference validates against the saved schema when the user saves " +
+        "the widget."
     },
     theme: {
       shape: {

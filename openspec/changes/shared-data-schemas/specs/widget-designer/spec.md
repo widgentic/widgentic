@@ -3,7 +3,7 @@
 ## ADDED Requirements
 
 ### Requirement: Standalone schema designer
-The schema designer SHALL edit a stored-schema entry — identity (`name`, optional `label`/`description`) plus a `schema` object in the documented JSON-Schema subset — with the schema editable both through the structured builder and a parse-gated JSON pane (projections of one value; invalid JSON keeps the last valid schema with the error shown; only the selected view visible at a time). It SHALL validate on every change — the identifier charset for `name`, a plain object for `schema` — surfacing structured errors inline. `loadSchema(entry)` SHALL treat its input as untrusted, re-validating before it replaces the working entry and never replacing it on failure; `getSchema()` SHALL return the exact entry shape the store persists.
+The schema designer SHALL edit a stored-schema entry — identity (`name`, optional `label`/`description`) plus a `schema` object in the documented JSON-Schema subset — with the schema editable both through the structured builder and a parse-gated JSON pane (projections of one value; invalid JSON keeps the last valid schema with the error shown; only the selected view visible at a time). It SHALL validate on every change — the identifier charset for `name`, a plain object for `schema` — surfacing structured errors inline. It SHALL present Import and Export as two independent sections, import first (the shape the other designers share): import accepts the store's entry JSON — the exact JSON an agent drafts from the authoring guide — re-validating before it replaces the working entry and rejecting with structured errors that leave it untouched; export produces the current entry as JSON, and stays operable in read-only mode (export copies out what is on screen). `loadSchema(entry)` SHALL treat its input as untrusted, re-validating before it replaces the working entry and never replacing it on failure; `getSchema()` SHALL return the exact entry shape the store persists.
 
 #### Scenario: Edits project between builder and JSON
 - **WHEN** a property is added in the builder
@@ -17,6 +17,16 @@ The schema designer SHALL edit a stored-schema entry — identity (`name`, optio
 #### Scenario: The entry round-trips in the store's shape
 - **WHEN** a valid entry is loaded and immediately read back with `getSchema()`
 - **THEN** the result SHALL deep-equal the loaded entry
+
+#### Scenario: An agent-drafted entry imports through the designer
+- **WHEN** a schema entry JSON drafted from the authoring guide is pasted into the Import section
+- **THEN** it SHALL load as the working entry, ready to save
+- **AND** invalid JSON or an invalid entry SHALL show the errors and leave the working entry untouched
+
+#### Scenario: Import and export are independent sections, import first
+- **WHEN** the schema designer mounts
+- **THEN** it SHALL render an Import section before an Export section
+- **AND** Export SHALL remain operable when mounted read-only
 
 ## MODIFIED Requirements
 
