@@ -1,0 +1,83 @@
+# template-widgets — attr transforms: select a literal, prefix a scheme
+
+## MODIFIED Requirements
+
+### Requirement: Template node forms and interpretation
+A `TemplateNode` SHALL be one of: a string literal (rendered as text); `{ bind: <path> }` (resolved value rendered as text); `{ tag, attrs?, children? }` where attr values are strings, `{ bind: <path> }`, or one attr-level transform of the bind — `{ bind, map: Record<string, string>, default?: string }` (the resolved value, as a string, SELECTS a key: a hit emits that key's author-written literal, a miss emits `default` or empty text; data never contributes output characters, it only chooses among authored options) or `{ bind, prefix: string }` (emitted as the author-literal prefix concatenated with the resolved value when that value is a non-empty string, and as empty text otherwise — an absent email yields no dead `mailto:` href). `map` and `prefix` SHALL be mutually exclusive on one attr value; `{ each: <path>, template, empty? }` (template rendered once per array element with the element as scope); `{ when: <path>, template, else? }` (template rendered when the path resolves truthy, else the `else` template or nothing). Directives SHALL NOT appear in the output tree.
+
+#### Scenario: Bind renders data as text
+- **WHEN** template `{ tag: "span", children: [{ bind: "customer.name" }] }` renders payload data `{ customer: { name: "Ada" } }`
+- **THEN** the output SHALL be a `span` element containing the text `"Ada"`
+
+#### Scenario: Each repeats over arrays with item scope
+- **WHEN** template `{ each: "lines", template: { tag: "li", children: [{ bind: "amount" }] } }` renders data `{ lines: [{ amount: 1 }, { amount: 2 }] }`
+- **THEN** the output SHALL contain two `li` elements with texts `"1"` and `"2"`
+
+#### Scenario: When selects between branches
+- **WHEN** a `{ when: "paid", template: A, else: B }` node renders with `paid: true` and again with `paid: false`
+- **THEN** the first render SHALL contain A's output and not B's, and the second the reverse
+
+#### Scenario: Bound attribute values resolve
+- **WHEN** template `{ tag: "a", attrs: { title: { bind: "label" } } }` renders data `{ label: "Docs" }`
+- **THEN** the output element SHALL have `title="Docs"`
+
+#### Scenario: A bound value selects an authored class
+- **WHEN** template `{ tag: "span", attrs: { class: { bind: "status", map: { "do-not-contact": "wg-status wg-status-danger", "active": "wg-status wg-status-success" }, default: "wg-status" } } }` renders data `{ status: "do-not-contact" }`
+- **THEN** the output element's `class` SHALL be `"wg-status wg-status-danger"`
+- **AND** with `{ status: "unknown-value" }` it SHALL be `"wg-status"`
+- **AND** with the `default` omitted and a miss, the attribute value SHALL be empty
+
+#### Scenario: A prefix builds a scheme href from a bound value
+- **WHEN** template `{ tag: "a", attrs: { href: { bind: "email", prefix: "mailto:" } } }` renders data `{ email: "ada@example.org" }`
+- **THEN** the output element SHALL have `href="mailto:ada@example.org"`
+- **AND** with `{ email: "" }` or missing `email` the emitted value SHALL be empty — the prefix alone is never emitted
+
+### Requirement: Template validation
+`validateTemplate(input)` SHALL return `{ ok: true, template } | { ok: false, error: TemplateError }` where `TemplateError` has `code` (`"INVALID_TEMPLATE_NODE" | "INVALID_PATH" | "FORBIDDEN_ATTRIBUTE" | "TEMPLATE_TOO_DEEP"`), `message`, and a dotted `path` locating the offending node within the template. Validation SHALL reject non-node shapes, non-string paths, attr values outside the documented forms (string, `{ bind }`, `{ bind, map, default? }`, `{ bind, prefix }`), and nesting deeper than 64 levels. For the transforms it SHALL reject, with dotted paths: a `map` that is not a plain object of string values, a non-string `default` or `prefix`, `map` or `prefix` without `bind`, and `map` and `prefix` together on one value.
+
+#### Scenario: Valid template passes
+- **WHEN** a template using all five node forms is validated
+- **THEN** the result SHALL be `{ ok: true, template }`
+
+#### Scenario: Malformed node is located
+- **WHEN** `validateTemplate({ tag: "div", children: [{ bind: 42 }] })` is called
+- **THEN** the result SHALL be `{ ok: false, error }` with `error.code: "INVALID_TEMPLATE_NODE"`
+- **AND** `error.path` SHALL point at `children.0`
+
+#### Scenario: Excessive nesting is rejected
+- **WHEN** a template nested deeper than 64 levels is validated
+- **THEN** the result SHALL be `{ ok: false, error }` with `error.code: "TEMPLATE_TOO_DEEP"`
+
+#### Scenario: Malformed transforms are located
+- **WHEN** attr values carrying `map: "nope"`, `map: { a: 1 }`, a numeric `prefix`, or both `map` and `prefix` are validated
+- **THEN** each SHALL fail with `INVALID_TEMPLATE_NODE` and a dotted `path` locating the attr
+
+### Requirement: Untrusted-author safety
+Event-handler attribute names (matching `on*`, case-insensitive) SHALL fail validation with `FORBIDDEN_ATTRIBUTE` and SHALL be skipped by the interpreter even when validation was bypassed. URL-bearing attributes (`href`, `src`, `action`, `formaction`, `xlink:href`) whose resolved value carries a scheme other than `http`, `https`, `mailto`, `tel`, or a relative reference SHALL be dropped at render time — with one image-context exception: the `src` attribute of an `img` element SHALL additionally accept base64-form `data:image/*;base64,` URIs, exactly as the shared `isSafeImageSrc` guard defines them. `data:` remains dropped for every other URL-bearing attribute. Bindings SHALL only ever produce text and attribute strings — never markup. The transforms keep that posture: a `map` emits only author-written literals (data selects, it cannot append), and a `prefix`-composed value runs the same URL guard as any bound value, so a hostile bound value cannot smuggle a scheme past an innocent prefix.
+
+#### Scenario: Event handler rejected and skipped
+- **WHEN** `validateTemplate({ tag: "button", attrs: { onclick: "x()" } })` is called
+- **THEN** the result SHALL have `error.code: "FORBIDDEN_ATTRIBUTE"`
+- **AND WHEN** the same template is compiled and rendered anyway
+- **THEN** the output element SHALL have no `onclick` attribute
+
+#### Scenario: javascript scheme is dropped
+- **WHEN** `{ tag: "a", attrs: { href: { bind: "url" } } }` renders data `{ url: "javascript:alert(1)" }`
+- **THEN** the output `a` element SHALL have no `href` attribute
+- **AND** an `https:` value SHALL be kept
+
+#### Scenario: data-image URI allowed on img src only
+- **WHEN** `{ tag: "img", attrs: { src: { bind: "pic" } } }` renders data `{ pic: "data:image/png;base64,iVBORw0KGgo=" }`
+- **THEN** the output `img` element SHALL keep the `src` attribute
+- **AND WHEN** `{ tag: "a", attrs: { href: { bind: "pic" } } }` renders the same data
+- **THEN** the output `a` element SHALL have no `href` attribute
+
+#### Scenario: Bound markup stays inert
+- **WHEN** a bind resolves to `"<img onerror=x src=y>"`
+- **THEN** serialized HTML SHALL contain the escaped text and no `img` element
+
+#### Scenario: Transformed values still face the URL guard
+- **WHEN** `{ tag: "a", attrs: { href: { bind: "email", prefix: "mailto:" } } }` renders `{ email: "ada@example.org" }`
+- **THEN** the `href` SHALL be kept (mailto is allowlisted)
+- **AND WHEN** a template author writes `prefix: "javascript:"` in the same position
+- **THEN** the composed value SHALL be dropped by the scheme guard exactly as a bound `javascript:` value is
