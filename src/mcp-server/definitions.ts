@@ -102,7 +102,8 @@ export const RENDER_WIDGET_TOOL: McpToolDefinition = {
     "Validate and render a widget. Returns the rendered HTML plus an " +
     "embedded widgentic payload block that widgentic-aware hosts can mount " +
     "natively. On invalid input, returns a structured error describing what " +
-    "to correct.",
+    "to correct. To show several widgets at once, render ONE 'group' " +
+    "(items of mixed kinds, layout hints) instead of calling repeatedly.",
   inputSchema: {
     type: "object",
     properties: {

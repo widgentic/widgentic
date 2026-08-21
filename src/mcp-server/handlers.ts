@@ -52,9 +52,8 @@ const PAGE_BODY_CSS =
 function composePage(
   fragment: string,
   theme: WidgetTheme | undefined,
-  kindStyles: WidgetStyles | undefined
+  styleCss: string
 ): string {
-  const styleCss = kindStyles ? widgetStylesToCss(kindStyles) : "";
   const parts = [
     baseStylesheet,
     PAGE_BODY_CSS,
@@ -296,8 +295,10 @@ export function handleRenderWidget(
   if (!rendered.ok) {
     // Translate payload vocabulary to tool-input vocabulary ('widget', not
     // 'kind') and make unknown-widget errors self-sufficient — recovery
-    // should not require a second round trip to list_widgets.
-    if (rendered.error.code === "UNKNOWN_KIND") {
+    // should not require a second round trip to list_widgets. Only the
+    // TOP-LEVEL kind error translates: a group item's unknown kind keeps
+    // its `data.items[<i>].kind` path.
+    if (rendered.error.code === "UNKNOWN_KIND" && rendered.error.path === "kind") {
       return errorResult({
         code: "UNKNOWN_KIND",
         path: "widget",
@@ -322,7 +323,21 @@ export function handleRenderWidget(
   }
 
   const html = renderToHtml(rendered.node);
-  const kindStyles = catalog.describe(widget)?.styles;
+  // Styles channel: the rendered kind's registered styles — and for a
+  // group, the union with every distinct item kind's, first-appearance
+  // order, each kind's block exactly once (custom items keep their look).
+  const styleKinds: string[] = [widget];
+  if (widget === "group" && isPlainObject(payload.data) && Array.isArray(payload.data.items)) {
+    for (const item of payload.data.items) {
+      if (
+        isPlainObject(item) &&
+        typeof item.kind === "string" &&
+        !styleKinds.includes(item.kind)
+      ) {
+        styleKinds.push(item.kind);
+      }
+    }
+  }
   const widgetBlock: McpContentBlock = {
     type: "resource",
     resource: {
@@ -335,7 +350,13 @@ export function handleRenderWidget(
   // Presentation channel for the declared MCP Apps template: hosts push the
   // whole result into the mounted iframe via ui/notifications/tool-result,
   // and per the Apps convention structuredContent is not model context.
-  const styleCss = kindStyles ? widgetStylesToCss(kindStyles) : "";
+  const styleCss = styleKinds
+    .map((kind) => {
+      const styles = catalog.describe(kind)?.styles;
+      return styles ? widgetStylesToCss(styles) : "";
+    })
+    .filter((part) => part.length > 0)
+    .join("\n");
   // The doubled selector matches the app template's dark-override
   // specificity (:root[data-theme="dark"]), so an explicit render theme
   // wins on dark hosts too — same specificity, later style element.
@@ -359,6 +380,24 @@ export function handleRenderWidget(
     payload.hints,
     catalog.describe(widget)
   );
+  // Group items carry their own hints; each is analyzed against its own
+  // kind's descriptor, re-pathed so the caller knows which item missed.
+  if (widget === "group" && isPlainObject(payload.data) && Array.isArray(payload.data.items)) {
+    payload.data.items.forEach((item, index) => {
+      if (!isPlainObject(item) || typeof item.kind !== "string") return;
+      for (const diagnostic of analyzeHints(
+        item.kind,
+        item.data,
+        item.hints,
+        catalog.describe(item.kind)
+      )) {
+        diagnostics.push({
+          ...diagnostic,
+          hint: `data.items[${index}].hints.${diagnostic.hint}`
+        });
+      }
+    });
+  }
   if (diagnostics.length > 0) structuredContent.diagnostics = diagnostics;
   const hintNotes =
     diagnostics.length > 0
@@ -381,7 +420,7 @@ export function handleRenderWidget(
       return {
         structuredContent,
         content: [
-          { type: "text", text: composePage(html, theme, kindStyles) },
+          { type: "text", text: composePage(html, theme, styleCss) },
           widgetBlock
         ]
       };
@@ -402,7 +441,7 @@ export function handleRenderWidget(
             resource: {
               uri: `${WIDGENTIC_UI_URI_PREFIX}${widget}`,
               mimeType: WIDGENTIC_APP_MIME_TYPE,
-              text: composePage(html, theme, kindStyles)
+              text: composePage(html, theme, styleCss)
             }
           },
           widgetBlock

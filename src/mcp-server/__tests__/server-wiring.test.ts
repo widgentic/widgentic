@@ -77,7 +77,7 @@ describe("library assembly defaults", () => {
       arguments: {}
     })) as DeliveredResult;
     const kinds = (JSON.parse(textOf(result)) as { kind: string }[]).map((d) => d.kind);
-    expect(kinds.sort()).toEqual(["card", "custom", "table", "tree"]);
+    expect(kinds.sort()).toEqual(["card", "custom", "group", "table", "tree"]);
   });
 
   it("the base mcp-server entry stays SDK-free", async () => {

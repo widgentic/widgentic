@@ -9,6 +9,7 @@ import { renderCard } from "./widgets/card.js";
 import { renderTable } from "./widgets/table.js";
 import { renderTree } from "./widgets/tree.js";
 import { renderCustom } from "./widgets/custom.js";
+import { checkGroupEnvelope, renderGroupContainer } from "./widgets/group.js";
 
 /**
  * Thrown when a widget kind is registered twice on the same catalog.
@@ -99,6 +100,39 @@ export function createCatalog(): WidgetCatalog {
         );
         if (schemaError) return { ok: false, error: schemaError };
       }
+      // `group` recurses through this same entry so registered and
+      // composed kinds participate and per-item failures keep their
+      // structured codes, re-pathed under `data.items[<i>]`. Renderers
+      // stay pure `(payload) => WidgetNode`; composition is dispatch work.
+      if (validated.payload.kind === "group") {
+        const envelope = checkGroupEnvelope(validated.payload.data);
+        if (!envelope.ok) return envelope;
+        const children: WidgetNode[] = [];
+        for (let i = 0; i < envelope.items.length; i++) {
+          const item = envelope.items[i]!;
+          const sub = catalog.render({
+            kind: item.kind,
+            data: item.data,
+            ...(item.hints !== undefined ? { hints: item.hints } : {}),
+            ...(item.meta !== undefined ? { meta: item.meta } : {})
+          });
+          if (!sub.ok) {
+            const subPath = sub.error.path;
+            return {
+              ok: false,
+              error: {
+                ...sub.error,
+                path: `data.items[${i}]${subPath ? `.${subPath}` : ""}`
+              }
+            };
+          }
+          children.push(sub.node);
+        }
+        return {
+          ok: true,
+          node: renderGroupContainer(validated.payload.hints, children)
+        };
+      }
       const renderer = renderers.get(validated.payload.kind);
       if (renderer === undefined) {
         // Unreachable while knownKinds is non-empty; kept for totality.
@@ -137,6 +171,18 @@ export function createCatalog(): WidgetCatalog {
   catalog.register("table", renderTable, BUILTIN_DESCRIPTORS.table);
   catalog.register("tree", renderTree, BUILTIN_DESCRIPTORS.tree);
   catalog.register("custom", renderCustom, BUILTIN_DESCRIPTORS.custom);
+  // `render()` intercepts 'group' before renderer lookup, so this renderer
+  // only serves direct `resolve()` callers (e.g. designer previews); it
+  // delegates back through the dispatch so items render for them too.
+  catalog.register(
+    "group",
+    (payload) => {
+      const result = catalog.render(payload);
+      if (result.ok) return result.node;
+      throw new Error(result.error.message);
+    },
+    BUILTIN_DESCRIPTORS.group
+  );
 
   return catalog;
 }

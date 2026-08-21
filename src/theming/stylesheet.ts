@@ -150,6 +150,32 @@ ${tokenDefaultsBlock}
   height: auto;
   border-radius: ${v("radius")};
 }
+.wg-group {
+  display: flex;
+  flex-direction: column;
+}
+.wg-group-row {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+.wg-group-row > * {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.wg-group-grid {
+  display: grid;
+}
+.wg-group-grid > * {
+  min-width: 0;
+}
+.wg-cols-1 { grid-template-columns: 1fr; }
+.wg-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.wg-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.wg-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.wg-gap-none { gap: 0; }
+.wg-gap-sm { gap: ${v("spacing-sm")}; }
+.wg-gap-md { gap: ${v("spacing")}; }
+.wg-gap-lg { gap: ${v("spacing-lg")}; }
 `.trim();
 
 const STYLE_MARKER = "data-widgentic";

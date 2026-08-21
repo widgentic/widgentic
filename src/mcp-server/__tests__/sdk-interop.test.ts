@@ -43,6 +43,7 @@ describe("SDK interoperability (in-memory transport, library assembly)", () => {
     expect(descriptors.map((d) => d.kind).sort()).toEqual([
       "card",
       "custom",
+      "group",
       "table",
       "tree"
     ]);

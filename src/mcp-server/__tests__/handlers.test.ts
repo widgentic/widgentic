@@ -175,7 +175,7 @@ describe("handleRenderWidget", () => {
     const error = JSON.parse(textOf(result));
     expect(error.code).toBe("UNKNOWN_KIND");
     expect(error.path).toBe("widget");
-    expect(error.message).toContain("card, custom, table, tree");
+    expect(error.message).toContain("card, custom, group, table, tree");
   });
 
   it("returns MISSING_FIELD with paths for missing inputs", () => {
@@ -771,3 +771,115 @@ describe("list_theme_tokens documents custom variables", () => {
   });
 });
 
+
+describe("group renders through render_widget", () => {
+  /** Two template kinds with registered styles — the stored-custom shape. */
+  function catalogWithStyledKinds(): WidgetCatalog {
+    const catalog = createCatalog();
+    registerTemplate(
+      catalog,
+      "person-card",
+      { tag: "div", attrs: { class: "wg-person" }, children: [{ bind: "name" }] },
+      {
+        description: "Person",
+        dataShape: "{ name }",
+        styles: { ".wg-person": { color: "var(--wg-accent, #2563eb)" } }
+      }
+    );
+    registerTemplate(
+      catalog,
+      "badge",
+      { tag: "span", attrs: { class: "wg-badge" }, children: [{ bind: "label" }] },
+      {
+        description: "Badge",
+        dataShape: "{ label }",
+        styles: { ".wg-badge": { "font-weight": "700" } }
+      }
+    );
+    return catalog;
+  }
+
+  it("mixed built-in and custom kinds render in one result", () => {
+    const result = handleRenderWidget(catalogWithStyledKinds(), {
+      widget: "group",
+      data: {
+        items: [
+          { kind: "card", data: { title: "Ada" } },
+          { kind: "person-card", data: { name: "Lin" } }
+        ]
+      }
+    });
+    expect(result.isError).toBeUndefined();
+    const html = String(result.structuredContent?.html);
+    expect(html).toContain("wg-group");
+    expect(html).toContain("wg-card");
+    expect(html).toContain("wg-person");
+    const extracted = extractWidgetPayload(result);
+    expect(extracted.found && extracted.ok && extracted.payload.kind).toBe("group");
+  });
+
+  it("css unions each item kind's styles exactly once", () => {
+    const result = handleRenderWidget(catalogWithStyledKinds(), {
+      widget: "group",
+      data: {
+        items: [
+          { kind: "person-card", data: { name: "A" } },
+          { kind: "badge", data: { label: "ok" } },
+          { kind: "person-card", data: { name: "B" } }
+        ]
+      }
+    });
+    const css = String(result.structuredContent?.css);
+    expect(css.split(".wg-person {").length - 1).toBe(1);
+    expect(css.split(".wg-badge {").length - 1).toBe(1);
+    // page format carries the same union
+    const page = handleRenderWidget(catalogWithStyledKinds(), {
+      widget: "group",
+      format: "page",
+      data: {
+        items: [
+          { kind: "person-card", data: { name: "A" } },
+          { kind: "badge", data: { label: "ok" } }
+        ]
+      }
+    });
+    const doc = textOf(page);
+    expect(doc).toContain(".wg-person {");
+    expect(doc).toContain(".wg-badge {");
+  });
+
+  it("item hint diagnostics are re-pathed under their item", () => {
+    const result = handleRenderWidget(createCatalog(), {
+      widget: "group",
+      data: {
+        items: [
+          { kind: "card", data: { title: "A" } },
+          { kind: "table", data: [{ a: 1 }], hints: { colums: ["a"] } }
+        ]
+      },
+      hints: { layout: "mosaic" }
+    });
+    expect(result.isError).toBeUndefined();
+    const diagnostics = result.structuredContent?.diagnostics as {
+      hint: string;
+    }[];
+    const hints = diagnostics.map((d) => d.hint);
+    expect(hints).toContain("layout");
+    expect(hints).toContain("data.items[1].hints.colums");
+    expect(textOf(result)).toContain("Hint notes:");
+  });
+
+  it("item errors surface with their indexed path", () => {
+    const result = handleRenderWidget(createCatalog(), {
+      widget: "group",
+      data: { items: [{ kind: "card", data: {} }, { kind: "ghost", data: {} }] }
+    });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain("data.items[1].kind");
+  });
+
+  it("the tool description steers toward one group render", () => {
+    expect(RENDER_WIDGET_TOOL.description).toContain("'group'");
+    expect(RENDER_WIDGET_TOOL.description).toContain("instead of calling repeatedly");
+  });
+});

@@ -39,7 +39,7 @@ export type WidgetDescriptorInput = Omit<WidgetDescriptor, "kind">;
  * `dataExample` is asserted by tests to render successfully.
  */
 export const BUILTIN_DESCRIPTORS: Record<
-  "card" | "table" | "tree" | "custom",
+  "card" | "table" | "tree" | "custom" | "group",
   WidgetDescriptorInput
 > = {
   card: {
@@ -121,5 +121,29 @@ export const BUILTIN_DESCRIPTORS: Record<
       "their units: '24.4 °C').",
     dataShape: "Any JSON value, rendered verbatim (value-exact, not byte-exact).",
     dataExample: { anything: ["goes", 42] }
+  },
+  group: {
+    description:
+      "Several widgets in one response — mixed kinds in a single layout " +
+      "container. Use ONE group render instead of repeated render calls " +
+      "when showing multiple widgets together.",
+    dataShape:
+      "{ items: [{ kind, data, hints?, meta? }, ...] } — each item is a " +
+      "full sub-widget rendered exactly as a top-level call would be " +
+      "(any listed kind except 'group'; groups do not nest). At most 20 " +
+      "items per group.",
+    dataExample: {
+      items: [
+        { kind: "card", data: { title: "Ada", fields: { role: "eng" } } },
+        { kind: "card", data: { title: "Lin", fields: { role: "ops" } } }
+      ]
+    },
+    hints: {
+      layout:
+        "'stack' | 'row' | 'grid' — how items sit together (default: " +
+        "stack). 'row' wraps; 'grid' uses equal columns.",
+      gap: "'none' | 'sm' | 'md' | 'lg' — spacing between items (default: md).",
+      columns: "number 1-4 — column count for layout: 'grid' (default: 2)."
+    }
   }
 };

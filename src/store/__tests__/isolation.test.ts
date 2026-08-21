@@ -182,6 +182,6 @@ describe("per-principal isolation over the protocol", () => {
     const kinds = await kindsOf(client);
     // The assembly assumes nothing: compiled-in extras are a host choice
     // (see examples/mcp-server), never a library default.
-    expect(kinds.sort()).toEqual(["card", "custom", "table", "tree"]);
+    expect(kinds.sort()).toEqual(["card", "custom", "group", "table", "tree"]);
   });
 });
