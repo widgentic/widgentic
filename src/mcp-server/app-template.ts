@@ -352,12 +352,12 @@ function mountPreviewTree(tree) {
 function applyPreview() {
   previewQueued = false;
   if (resultRendered || previewArgs === undefined) return;
+  root.setAttribute("data-wgd-preview", "true");
   const args = previewArgs;
   const widget = typeof args.widget === "string" ? args.widget : undefined;
-  if (widget === undefined) return; // nothing nameable yet
+  if (widget === undefined) return; // nothing nameable yet — height is reserved
   const tree = previewFor(widget, coerceData(args.data), args.hints, args.meta);
   mountPreviewTree(tree !== undefined ? tree : skeletonTree(widget));
-  root.setAttribute("data-wgd-preview", "true");
 }
 function onToolInput(params) {
   // Input after a result is a NEW call on a reused frame (basic-host
@@ -495,9 +495,17 @@ body {
   font-family: var(--wg-font-family);
   margin: 8px;
 }
+#wg-root {
+  /* Soften the preview->result handoff instead of a hard snap. */
+  transition: opacity 0.25s ease;
+}
 #wg-root[data-wgd-preview] {
   opacity: 0.78;
   animation: wg-preview-pulse 1.4s ease-in-out infinite;
+  /* The frame sizes itself from content; an empty/near-empty streaming
+     start collapses the iframe and every arrival jolts it. Reserve
+     breathing room while previewing. */
+  min-height: 96px;
 }
 @keyframes wg-preview-pulse {
   0%, 100% { opacity: 0.78; }
@@ -509,6 +517,10 @@ body {
   padding: calc(var(--wg-spacing, 8px) * 2);
   color: var(--wg-muted, #6b7280);
   font-family: var(--wg-font-family, system-ui);
+  /* Approximate a card's footprint so skeleton -> real content is a
+     small step, not a layout jump. */
+  min-height: 72px;
+  box-sizing: border-box;
 }
 .wg-app-error {
   color: var(--color-text-danger, #b91c1c);
