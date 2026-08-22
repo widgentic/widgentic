@@ -210,9 +210,24 @@ describe("account linking, end to end", () => {
 
     const identities = (await (
       await fetch(`${base}/api/identities`, { headers: { cookie: owner } })
-    ).json()) as { current: string; currentIsPrimary: boolean; linked: string[] };
+    ).json()) as {
+      current: string;
+      currentIsPrimary: boolean;
+      primary: { subject: string };
+      linked: { subject: string; label?: string }[];
+    };
     expect(identities.currentIsPrimary).toBe(true);
-    expect(identities.linked).toContain("sub-link-second");
+    expect(identities.primary.subject).toBe("sub-link-owner");
+    expect(identities.linked.map((l) => l.subject)).toContain("sub-link-second");
+    // the OIDC display name rode the link as the identity label
+    expect(identities.linked.find((l) => l.subject === "sub-link-second")?.label).toBe("Second");
+
+    // the linked side sees the whole account too, primary included
+    const fromLinked = (await (
+      await fetch(`${base}/api/identities`, { headers: { cookie: second } })
+    ).json()) as { currentIsPrimary: boolean; primary: { subject: string } };
+    expect(fromLinked.currentIsPrimary).toBe(false);
+    expect(fromLinked.primary.subject).toBe("sub-link-owner");
   });
 
   it("a link callback with a changed or missing session creates no link", async () => {

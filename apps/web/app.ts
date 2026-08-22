@@ -132,7 +132,11 @@ export function createWebAppHandler(deps: WebAppDeps) {
         }
         try {
           const principal = await deps.store.ensurePrincipal(session.subject, session.label);
-          await deps.store.linkSubject(principal.id, result.link.newSubject);
+          await deps.store.linkSubject(
+            principal.id,
+            result.link.newSubject,
+            result.link.label
+          );
           res.writeHead(302, { Location: "/?linked=1" }).end();
         } catch (error) {
           const code =

@@ -176,8 +176,13 @@ export async function handleApiRequest(
         const linked = await deps.store.listLinkedSubjects(principal.id);
         send(res, 200, {
           current: session.subject,
-          // The primary identity is the one the account id derives from.
+          // The primary identity is the one the account id derives from;
+          // the store exposes its canonical subject from ANY session.
           currentIsPrimary: principalIdForSubject(session.subject) === principal.id,
+          primary: {
+            subject: principal.subject ?? session.subject,
+            ...(principal.label === undefined ? {} : { label: principal.label })
+          },
           linked
         });
         return true;

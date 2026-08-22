@@ -198,13 +198,17 @@ export function describeStoreContract(
       const p = await store.ensurePrincipal("contract:link-owner");
       await store.putWidget(p.id, widget("linked-card"));
       const created = await store.createKey(p.id, "shared");
-      await store.linkSubject(p.id, "contract:link-other");
+      await store.linkSubject(p.id, "contract:link-other", "Other Account");
       const viaLink = await store.ensurePrincipal("contract:link-other");
       expect(viaLink.id).toBe(p.id);
+      // any session sees the CANONICAL subject
+      expect(viaLink.subject).toBe("contract:link-owner");
       expect((await store.widgets(viaLink.id)).map((w) => w.kind)).toContain("linked-card");
       const resolved = await store.resolvePrincipal(created.key);
       expect(resolved?.id).toBe(p.id);
-      expect(await store.listLinkedSubjects(p.id)).toEqual(["contract:link-other"]);
+      expect(await store.listLinkedSubjects(p.id)).toEqual([
+        { subject: "contract:link-other", label: "Other Account" }
+      ]);
     });
 
     it("linking refuses to swallow an account with data", async () => {
@@ -233,7 +237,7 @@ export function describeStoreContract(
       await store.linkSubject(p.id, "contract:absorb-me");
       expect((await store.ensurePrincipal("contract:absorb-me")).id).toBe(p.id);
       await store.linkSubject(p.id, "contract:absorb-me");
-      expect(await store.listLinkedSubjects(p.id)).toEqual(["contract:absorb-me"]);
+      expect(await store.listLinkedSubjects(p.id)).toEqual([{ subject: "contract:absorb-me" }]);
     });
 
     it("unlink detaches, the primary stays", async () => {
@@ -256,7 +260,9 @@ export function describeStoreContract(
       await context.store.linkSubject(p.id, "contract:persist-linked");
       const reopened = context.reopen();
       expect((await reopened.ensurePrincipal("contract:persist-linked")).id).toBe(p.id);
-      expect(await reopened.listLinkedSubjects(p.id)).toEqual(["contract:persist-linked"]);
+      expect(await reopened.listLinkedSubjects(p.id)).toEqual([
+        { subject: "contract:persist-linked" }
+      ]);
     });
   });
 }

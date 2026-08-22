@@ -174,7 +174,7 @@ export interface Auth {
    */
   mintSession(claims: SessionClaims): string;
   /** Exposed for tests: full ID-token validation. */
-  validateIdToken(idToken: string): Promise<{ sub: string; name?: string }>;
+  validateIdToken(idToken: string): Promise<{ sub: string; name?: string; email?: string }>;
 }
 
 export function createAuth(options: AuthOptions): Auth {
@@ -207,7 +207,9 @@ export function createAuth(options: AuthOptions): Auth {
     return body.keys;
   }
 
-  async function validateIdToken(idToken: string): Promise<{ sub: string; name?: string }> {
+  async function validateIdToken(
+    idToken: string
+  ): Promise<{ sub: string; name?: string; email?: string }> {
     if (typeof idToken !== "string") throw new AuthError("malformed token");
     const parts = idToken.split(".");
     if (parts.length !== 3) throw new AuthError("malformed token");
@@ -221,6 +223,8 @@ export function createAuth(options: AuthOptions): Auth {
       nbf?: number;
       sub?: string;
       name?: string;
+      email?: string;
+      preferred_username?: string;
     };
     try {
       header = JSON.parse(fromB64url(rawHeader).toString("utf8")) as typeof header;
@@ -252,9 +256,17 @@ export function createAuth(options: AuthOptions): Auth {
       if (jwk === undefined) continue;
       const key = createPublicKey({ key: jwk as never, format: "jwk" });
       if (cryptoVerify("RSA-SHA256", signed, key, signature)) {
+        const email =
+          typeof payload.email === "string"
+            ? payload.email
+            : typeof payload.preferred_username === "string" &&
+                payload.preferred_username.includes("@")
+              ? payload.preferred_username
+              : undefined;
         return {
           sub: payload.sub,
-          ...(typeof payload.name === "string" ? { name: payload.name } : {})
+          ...(typeof payload.name === "string" ? { name: payload.name } : {}),
+          ...(email === undefined ? {} : { email })
         };
       }
       throw new AuthError("bad signature");
@@ -343,11 +355,14 @@ export function createAuth(options: AuthOptions): Auth {
 
       const claims = await validateIdToken(tokens.id_token);
       if (typeof flow.link === "string" && flow.link !== "") {
+        // Identity display favors the ACCOUNT identifier (email) over the
+        // person's display name — the UI answers "which account is this".
+        const identityLabel = claims.email ?? claims.name;
         return {
           link: {
             forSubject: flow.link,
             newSubject: claims.sub,
-            ...(claims.name === undefined ? {} : { label: claims.name })
+            ...(identityLabel === undefined ? {} : { label: identityLabel })
           }
         };
       }
@@ -440,12 +455,13 @@ export function createAuth(options: AuthOptions): Auth {
       const label =
         typeof user.name === "string" && user.name !== "" ? user.name : user.login;
       if (typeof flow.link === "string" && flow.link !== "") {
+        const identityLabel = user.login ?? label;
         return {
           link: {
             forSubject: flow.link,
             // The numeric id is the stable identity; logins can be renamed.
             newSubject: `github:${user.id}`,
-            ...(label === undefined ? {} : { label })
+            ...(identityLabel === undefined ? {} : { label: identityLabel })
           }
         };
       }

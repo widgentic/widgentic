@@ -3,7 +3,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Accounts through two strictly validated sign-in methods
-The app SHALL authenticate people by email through Entra External ID (OIDC code flow; the app validates issuer, audience, signature, and expiry on the ID token) and by GitHub through the app's own OAuth code flow (state-bound, code exchanged server-side, identity read from GitHub's user API) — GitHub cannot federate into External ID, which supports only OIDC-compliant custom providers. Both methods SHALL produce the app's own sealed session and SHALL map to a stable principal id through the same subject derivation, with GitHub subjects namespaced (`github:<id>`) so the two identity sources can never collide. The app SHALL never store passwords or provider access tokens. An unauthenticated request to any authoring route SHALL be refused, not silently downgraded. A signed-in person SHALL be able to LINK the other sign-in method to their account: the link flow reuses the provider's full validation (state-bound, server-side exchange) while carrying a session-bound link intent, and on success the new subject resolves to the CURRENT principal instead of provisioning a new one. The app SHALL show the signed-in identity and its linked identities, refuse link conflicts with the store's `SUBJECT_IN_USE` message, and allow unlinking any linked identity through a session-authorized route — never the primary.
+The app SHALL authenticate people by email through Entra External ID (OIDC code flow; the app validates issuer, audience, signature, and expiry on the ID token) and by GitHub through the app's own OAuth code flow (state-bound, code exchanged server-side, identity read from GitHub's user API) — GitHub cannot federate into External ID, which supports only OIDC-compliant custom providers. Both methods SHALL produce the app's own sealed session and SHALL map to a stable principal id through the same subject derivation, with GitHub subjects namespaced (`github:<id>`) so the two identity sources can never collide. The app SHALL never store passwords or provider access tokens. An unauthenticated request to any authoring route SHALL be refused, not silently downgraded. A signed-in person SHALL be able to LINK the other sign-in method to their account: the link flow reuses the provider's full validation (state-bound, server-side exchange) while carrying a session-bound link intent, and on success the new subject resolves to the CURRENT principal instead of provisioning a new one. The app SHALL show the account's FULL identity set — primary and linked — from whichever identity is signed in, displaying each identity by a human-friendly label (the GitHub login, the email address, or the provider's display name; raw subjects are secondary), refuse link conflicts with the store's `SUBJECT_IN_USE` message, and allow unlinking any linked identity through a session-authorized route — never the primary.
 
 #### Scenario: First sign-in provisions a principal
 - **WHEN** a person signs in for the first time by either method
@@ -35,6 +35,15 @@ The app SHALL authenticate people by email through Entra External ID (OIDC code 
 #### Scenario: Link intent cannot be forged across sessions
 - **WHEN** a link callback arrives without a live session or with a state not bound to it
 - **THEN** no link SHALL be created
+
+#### Scenario: Both sides see the whole account
+- **WHEN** the linked identity signs in and opens the Identities section
+- **THEN** the primary identity SHALL be visible and marked as primary
+- **AND** no link button SHALL be offered for a provider already attached
+
+#### Scenario: Identities read as accounts, not identifiers
+- **WHEN** a GitHub identity and an email identity are attached
+- **THEN** each SHALL display its login or email address rather than the raw subject
 
 #### Scenario: Unlink through the Identities section
 - **WHEN** a linked identity is unlinked

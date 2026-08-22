@@ -17,6 +17,14 @@ export interface Principal {
   id: string;
   label?: string;
   scopes: Scope[];
+  /**
+   * The CANONICAL identity subject — the one the id derives from.
+   * Present on principals returned by `ensurePrincipal` (any linked
+   * subject resolves to the same canonical value), so account UIs can
+   * show the full identity set from either session. Key-based
+   * resolution omits it: keys never need identity material.
+   */
+  subject?: string;
 }
 
 /**
@@ -104,6 +112,12 @@ export interface StoredKey {
   digestPreview: string;
 }
 
+/** A linked identity: the subject plus its human-facing display label. */
+export interface LinkedIdentity {
+  subject: string;
+  label?: string;
+}
+
 /** `createKey`'s result: the only moment the raw key exists outside a digest. */
 export interface CreatedKey {
   /** The raw key. Shown once; the store keeps only its digest. */
@@ -138,7 +152,7 @@ export interface WritableWidgetStore extends WidgetStore {
    * unrevoked keys); a subject whose own principal is empty is absorbed.
    * Idempotent for a subject already linked here.
    */
-  linkSubject(principalId: string, subject: string): Promise<void>;
+  linkSubject(principalId: string, subject: string, label?: string): Promise<void>;
   /**
    * Detach a linked subject (it later provisions a fresh principal).
    * The canonical subject — the one the principal id derives from — is
@@ -146,8 +160,8 @@ export interface WritableWidgetStore extends WidgetStore {
    * not linked here is a no-op.
    */
   unlinkSubject(principalId: string, subject: string): Promise<void>;
-  /** The principal's linked subjects (canonical subject excluded). */
-  listLinkedSubjects(principalId: string): Promise<string[]>;
+  /** The principal's linked identities (canonical subject excluded). */
+  listLinkedSubjects(principalId: string): Promise<LinkedIdentity[]>;
   /** Mint a named key. The raw key is returned here and never again. */
   createKey(principalId: string, name: string): Promise<CreatedKey>;
   /** The principal's keys — metadata only, never raw material. */

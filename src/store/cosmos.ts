@@ -116,7 +116,7 @@ interface ProfileDoc {
   label?: string;
   scopes: Scope[];
   /** Enumeration convenience on the CANONICAL profile; aliases are truth. */
-  linkedSubjects?: string[];
+  linkedSubjects?: { subject: string; label?: string }[];
   /**
    * Present on an ALIAS profile: this partition's subject is linked to the
    * named canonical principal. Resolution follows exactly one hop (aliases
@@ -488,7 +488,8 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
         return {
           id: doc.principalId,
           ...(doc.label === undefined ? {} : { label: doc.label }),
-          scopes: doc.scopes
+          scopes: doc.scopes,
+          subject: doc.subject
         };
       }
       const profile: ProfileDoc = {
@@ -507,7 +508,8 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
           return {
             id: again.principalId,
             ...(again.label === undefined ? {} : { label: again.label }),
-            scopes: again.scopes
+            scopes: again.scopes,
+            subject: again.subject
           };
         }
         throw operationError("ensurePrincipal", error);
@@ -583,7 +585,7 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
       }
     },
 
-    async linkSubject(principalId, subject) {
+    async linkSubject(principalId, subject, label) {
       if (typeof subject !== "string" || subject === "") {
         throw new StoreRejectionError("INVALID_SUBJECT", "subject must be a non-empty string.");
       }
@@ -596,7 +598,7 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
       const at = await readProfile(aliasId);
       if (at !== undefined) {
         if (at.linkTo === principalId) {
-          await addLinkedSubject(canonical, subject); // heal the list
+          await addLinkedSubject(canonical, subject, label); // heal the list
           return;
         }
         if (at.linkTo !== undefined) {
@@ -623,12 +625,13 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
         id: "profile",
         principalId: aliasId,
         subject,
+        ...(label === undefined ? {} : { label }),
         scopes: [],
         linkTo: principalId
       };
       try {
         await data.items.upsert(alias);
-        await addLinkedSubject(canonical, subject);
+        await addLinkedSubject(canonical, subject, label);
       } catch (error) {
         throw operationError("linkSubject", error);
       }
@@ -650,7 +653,9 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
         if (at !== undefined && at.linkTo === principalId) {
           await data.item("profile", aliasId).delete();
         }
-        const linked = (canonical.linkedSubjects ?? []).filter((entry) => entry !== subject);
+        const linked = (canonical.linkedSubjects ?? []).filter(
+          (entry) => entry.subject !== subject
+        );
         await data
           .item("profile", principalId)
           .replace({ ...canonical, linkedSubjects: linked });
@@ -663,7 +668,9 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
       if (canonical === undefined || canonical.linkTo !== undefined) {
         throw new StoreRejectionError("UNKNOWN_PRINCIPAL", principalId);
       }
-      return [...(canonical.linkedSubjects ?? [])].sort();
+      return [...(canonical.linkedSubjects ?? [])].sort((a, b) =>
+        a.subject.localeCompare(b.subject)
+      );
     }
   };
 
@@ -678,12 +685,17 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
     }
   }
 
-  async function addLinkedSubject(canonical: ProfileDoc, subject: string): Promise<void> {
+  async function addLinkedSubject(
+    canonical: ProfileDoc,
+    subject: string,
+    label?: string
+  ): Promise<void> {
     const linked = canonical.linkedSubjects ?? [];
-    if (linked.includes(subject)) return;
+    if (linked.some((entry) => entry.subject === subject)) return;
+    const entry = { subject, ...(label === undefined ? {} : { label }) };
     await data
       .item("profile", canonical.principalId)
-      .replace({ ...canonical, linkedSubjects: [...linked, subject] });
+      .replace({ ...canonical, linkedSubjects: [...linked, entry] });
   }
 
   return store;

@@ -68,7 +68,7 @@ export function createMemoryStore(
   const records = new Map<string, Record_>();
   // Alias resolution: derived-id-of-linked-subject -> canonical principal
   // id. Resolution truth for links; enumeration derives from it.
-  const aliases = new Map<string, { subject: string; to: string }>();
+  const aliases = new Map<string, { subject: string; to: string; label?: string }>();
 
   function record(principalId: string): Record_ | undefined {
     return records.get(principalId);
@@ -233,14 +233,25 @@ export function createMemoryStore(
       const alias = aliases.get(id);
       if (alias !== undefined) {
         const canonical = records.get(alias.to);
-        if (canonical !== undefined) return clone(canonical.principal);
+        if (canonical !== undefined) {
+          return clone({
+            ...canonical.principal,
+            ...(canonical.subject === undefined ? {} : { subject: canonical.subject })
+          });
+        }
       }
       const existing = records.get(id);
-      if (existing !== undefined) return clone(existing.principal);
+      if (existing !== undefined) {
+        return clone({
+          ...existing.principal,
+          ...(existing.subject === undefined ? {} : { subject: existing.subject })
+        });
+      }
       const principal: Principal = {
         id,
         ...(label === undefined ? {} : { label }),
-        scopes: ["read", "write"]
+        scopes: ["read", "write"],
+        subject
       };
       records.set(id, {
         principal,
@@ -252,7 +263,7 @@ export function createMemoryStore(
       });
       return clone(principal);
     },
-    async linkSubject(principalId, subject) {
+    async linkSubject(principalId, subject, label) {
       if (typeof subject !== "string" || subject === "") {
         throw new StoreRejectionError("INVALID_SUBJECT", "subject must be a non-empty string.");
       }
@@ -286,7 +297,11 @@ export function createMemoryStore(
         }
         records.delete(aliasId); // absorb the empty principal
       }
-      aliases.set(aliasId, { subject, to: principalId });
+      aliases.set(aliasId, {
+        subject,
+        to: principalId,
+        ...(label === undefined ? {} : { label })
+      });
     },
     async unlinkSubject(principalId, subject) {
       const target = record(principalId);
@@ -309,8 +324,11 @@ export function createMemoryStore(
       }
       return [...aliases.values()]
         .filter((alias) => alias.to === principalId)
-        .map((alias) => alias.subject)
-        .sort();
+        .map((alias) => ({
+          subject: alias.subject,
+          ...(alias.label === undefined ? {} : { label: alias.label })
+        }))
+        .sort((a, b) => a.subject.localeCompare(b.subject));
     },
     async createKey(principalId, name) {
       const target = record(principalId);

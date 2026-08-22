@@ -565,17 +565,30 @@ function providerOf(subject: string): "github" | "email" {
 }
 
 async function refreshIdentities(): Promise<void> {
-  const info = await api<{ current: string; currentIsPrimary: boolean; linked: string[] }>(
-    "/api/identities"
-  );
+  const info = await api<{
+    current: string;
+    currentIsPrimary: boolean;
+    primary: { subject: string; label?: string };
+    linked: { subject: string; label?: string }[];
+  }>("/api/identities");
   const list = $("identity-list");
   list.replaceChildren();
-  const row = (subject: string, tags: string[], unlinkable: boolean) => {
+
+  const display = (subject: string, label?: string) =>
+    label ?? (subject.startsWith("github:") ? subject : subject.slice(0, 12) + "…");
+
+  const row = (
+    subject: string,
+    label: string | undefined,
+    tags: string[],
+    unlinkable: boolean
+  ) => {
     const el = document.createElement("div");
     el.className = "row";
     const name = document.createElement("span");
     name.className = "name";
-    name.textContent = `${providerOf(subject) === "github" ? "GitHub" : "Email"} — ${subject}`;
+    name.textContent = `${providerOf(subject) === "github" ? "GitHub" : "Email"} — ${display(subject, label)}`;
+    name.title = subject; // the raw subject stays one hover away
     const badge = document.createElement("span");
     badge.className = "muted";
     badge.textContent = tags.join(" · ");
@@ -591,7 +604,9 @@ async function refreshIdentities(): Promise<void> {
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ subject })
           });
-          status(`unlinked ${subject} — signing in with it later starts a fresh account`);
+          status(
+            `unlinked ${display(subject, label)} — signing in with it later starts a fresh account`
+          );
           await refreshIdentities();
         })().catch((error: Error) => status(error.message));
       });
@@ -599,11 +614,23 @@ async function refreshIdentities(): Promise<void> {
     }
     list.append(el);
   };
+
+  // The full set renders from EITHER side: primary first, then links.
   row(
-    info.current,
-    ["signed in", ...(info.currentIsPrimary ? ["primary"] : ["linked"])],
+    info.primary.subject,
+    info.primary.label,
+    ["primary", ...(info.currentIsPrimary ? ["signed in"] : [])],
     false
   );
+  for (const identity of info.linked) {
+    row(
+      identity.subject,
+      identity.label,
+      identity.subject === info.current ? ["linked", "signed in"] : ["linked"],
+      // Manage links from the primary session; unlinking yourself is a footgun.
+      info.currentIsPrimary
+    );
+  }
   if (!info.currentIsPrimary) {
     const note = document.createElement("p");
     note.className = "muted";
@@ -611,13 +638,11 @@ async function refreshIdentities(): Promise<void> {
       "You are signed in with a linked identity. Manage links from the primary identity's session.";
     list.append(note);
   }
-  for (const subject of info.linked) {
-    if (subject === info.current) continue;
-    row(subject, ["linked"], true);
-  }
 
-  // Offer linking whichever provider is not attached yet.
-  const attached = new Set([info.current, ...info.linked].map(providerOf));
+  // Offer linking whichever provider is not attached anywhere on the account.
+  const attached = new Set(
+    [info.primary.subject, info.current, ...info.linked.map((l) => l.subject)].map(providerOf)
+  );
   const actions = $("identity-actions");
   actions.replaceChildren();
   for (const provider of ["github", "email"] as const) {
