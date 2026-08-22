@@ -20,7 +20,7 @@ A `group` preview renders the layout container from the group's own hints (same 
 
 ## D5. Dormant where unsupported, verified where possible
 
-Hosts that never send `tool-input-partial` exercise none of this — the handler simply never fires, pinned by a no-change scenario. basic-host (the reference) may not emit partials; the rig check therefore drives the template DIRECTLY in jsdom/browser by posting synthetic notification sequences, and the real-host verification is the user's live iteration on claude.ai (which streams tool input on Apps surfaces). If the live host turns out not to emit partials, the feature stays dormant plumbing at zero cost — worth stating rather than assuming.
+Hosts that never send `tool-input-partial` exercise none of this — the handler simply never fires, pinned by a no-change scenario. basic-host (the reference) may not emit partials; the rig check therefore drives the template DIRECTLY in jsdom/browser by posting synthetic notification sequences, and the real-host verification is the user's live iteration on claude.ai (which streams tool input on Apps surfaces). PROBE RESULT (v44 badge, claude.ai, 2026-08-22): the host DOES emit partials, threshold-gated by input size — a 10-row table got none (`tool-input:1 · tool-result:1`), while a group of 10 cards got ELEVEN (`tool-input-partial:11`), essentially per-item granularity. The preview therefore shines exactly where it matters (large groups/tables) and is a free no-op on small renders — the stateless-snapshot design needs no change for the threshold behavior.
 
 ## Risks
 
