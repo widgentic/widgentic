@@ -135,9 +135,26 @@ function render(sc) {
   mountedRoot = undefined;
   if (typeof sc.html === "string") root.innerHTML = sc.html;
 }
+// PROBE (temporary, streaming-input-preview investigation): count every
+// notification method from frame birth and show it in a corner badge —
+// per-render frames on claude.ai make devtools listeners too late.
+const probeCounts = {};
+const probeBadge = document.createElement("div");
+probeBadge.style.cssText =
+  "position:fixed;right:4px;bottom:4px;z-index:9999;font:10px monospace;" +
+  "opacity:.6;background:rgba(0,0,0,.5);color:#fff;padding:2px 6px;border-radius:4px;";
+document.body.appendChild(probeBadge);
+function probeNote(method) {
+  if (typeof method !== "string" || method.indexOf("ui/") !== 0) return;
+  probeCounts[method] = (probeCounts[method] || 0) + 1;
+  probeBadge.textContent = Object.keys(probeCounts)
+    .map((key) => key.replace("ui/notifications/", "") + ":" + probeCounts[key])
+    .join(" \\u00b7 ");
+}
 window.addEventListener("message", (event) => {
   const message = event.data;
   if (!message || message.jsonrpc !== "2.0") return;
+  probeNote(message.method);
   if (message.id !== undefined && pending.has(message.id)) {
     const entry = pending.get(message.id);
     pending.delete(message.id);
