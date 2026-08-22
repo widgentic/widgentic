@@ -144,11 +144,16 @@ function renderWidgetList(): void {
       buttons.push(save, cancel);
     } else {
       const edit = document.createElement("button");
-      edit.textContent = "Edit";
+      edit.textContent = "\u270e";
+      edit.className = "icon";
+      edit.title = "Edit";
+      edit.setAttribute("aria-label", "Edit");
       edit.addEventListener("click", () => showWidget(widget, "editing"));
       const base = document.createElement("button");
-      base.textContent = "Copy";
-      base.title = "Start a new widget as a copy of this one";
+      base.textContent = "\u29c9";
+      base.className = "icon";
+      base.title = "Copy — start a new widget as a copy of this one";
+      base.setAttribute("aria-label", "Copy");
       base.addEventListener("click", () => {
         // StoredWidgetJson is the store's validated shape; loadWidget
         // re-validates the seed on mount either way.
@@ -157,8 +162,10 @@ function renderWidgetList(): void {
         );
       });
       const remove = document.createElement("button");
-      remove.textContent = "Delete";
-      remove.className = "danger";
+      remove.textContent = "\u2715";
+      remove.className = "danger icon";
+      remove.title = "Delete";
+      remove.setAttribute("aria-label", "Delete");
       remove.addEventListener("click", () => {
         void (async () => {
           await api(`/api/widgets/${encodeURIComponent(widget.kind)}`, { method: "DELETE" });
@@ -275,17 +282,24 @@ function renderThemeList(): void {
       buttons.push(save, cancel);
     } else {
       const edit = document.createElement("button");
-      edit.textContent = "Edit";
+      edit.textContent = "\u270e";
+      edit.className = "icon";
+      edit.title = "Edit";
+      edit.setAttribute("aria-label", "Edit");
       edit.addEventListener("click", () => showTheme(theme, "editing"));
       const base = document.createElement("button");
-      base.textContent = "Copy";
-      base.title = "Start a new theme as a copy of this one";
+      base.textContent = "\u29c9";
+      base.className = "icon";
+      base.title = "Copy — start a new theme as a copy of this one";
+      base.setAttribute("aria-label", "Copy");
       base.addEventListener("click", () => {
         startThemeFrom(seedThemeEntry(theme, myThemes.map((t) => t.name)));
       });
       const remove = document.createElement("button");
-      remove.textContent = "Delete";
-      remove.className = "danger";
+      remove.textContent = "\u2715";
+      remove.className = "danger icon";
+      remove.title = "Delete";
+      remove.setAttribute("aria-label", "Delete");
       remove.addEventListener("click", () => {
         void (async () => {
           await api(`/api/themes/${encodeURIComponent(theme.name)}`, { method: "DELETE" });
@@ -399,11 +413,16 @@ function renderSchemaList(): void {
       buttons.push(save, cancel);
     } else {
       const edit = document.createElement("button");
-      edit.textContent = "Edit";
+      edit.textContent = "\u270e";
+      edit.className = "icon";
+      edit.title = "Edit";
+      edit.setAttribute("aria-label", "Edit");
       edit.addEventListener("click", () => showSchema(schema, "editing"));
       const remove = document.createElement("button");
-      remove.textContent = "Delete";
-      remove.className = "danger";
+      remove.textContent = "\u2715";
+      remove.className = "danger icon";
+      remove.title = "Delete";
+      remove.setAttribute("aria-label", "Delete");
       remove.addEventListener("click", () => {
         void (async () => {
           // SCHEMA_IN_USE from the store surfaces here with the
