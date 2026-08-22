@@ -227,17 +227,20 @@ describe("app template native mounting", () => {
     expect(buildAppTemplate()).not.toMatch(/https?:\/\//);
   });
 
-  it("remounts cleanly after a tool-input placeholder", () => {
+  it("remounts cleanly across calls on a reused frame", async () => {
     const { dispatch, root } = bootTemplate();
     const tree = treeOf({ kind: "card", data: { a: 1 } });
     dispatch(toolResult({ tree, css: "" }));
+    // A new call's input on the SAME frame starts a fresh preview cycle.
     dispatch({
       jsonrpc: "2.0",
       method: "ui/notifications/tool-input",
       params: { arguments: { widget: "card" } }
     });
-    expect(root().textContent).toContain("Rendering");
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(root().getAttribute("data-wgd-preview")).toBe("true");
     dispatch(toolResult({ tree, css: "" }));
+    expect(root().getAttribute("data-wgd-preview")).toBeNull();
     expect(root().innerHTML).toBe(renderToHtml(tree));
   });
 });
@@ -291,4 +294,208 @@ describe("app template link handling", () => {
     expect(root().querySelector(".wg-card")).not.toBeNull();
     expect(root().textContent).toContain("site");
   });
+});
+
+function toolInputPartial(args: Record<string, unknown>) {
+  return {
+    jsonrpc: "2.0",
+    method: "ui/notifications/tool-input-partial",
+    params: { arguments: args }
+  };
+}
+
+const settle = () => new Promise((resolve) => setTimeout(resolve, 30));
+
+describe("streaming input preview", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("growing table rows patch in place, marked in progress", async () => {
+    const t = bootTemplate();
+    t.dispatch(toolInputPartial({ widget: "table", data: [{ name: "Ada", role: "eng" }] }));
+    await settle();
+    expect(t.root().getAttribute("data-wgd-preview")).toBe("true");
+    expect(t.root().querySelectorAll(".wg-table-row")).toHaveLength(1);
+    const firstRow = t.root().querySelector(".wg-table-row");
+
+    t.dispatch(
+      toolInputPartial({
+        widget: "table",
+        data: [{ name: "Ada", role: "eng" }, { name: "Lin", role: "ops" }]
+      })
+    );
+    await settle();
+    expect(t.root().querySelectorAll(".wg-table-row")).toHaveLength(2);
+    // in-place patch: the first row keeps its node identity
+    expect(t.root().querySelector(".wg-table-row")).toBe(firstRow);
+  });
+
+  it("group items appear progressively; custom items get skeletons", async () => {
+    const t = bootTemplate();
+    t.dispatch(
+      toolInputPartial({
+        widget: "group",
+        data: { items: [{ kind: "card", data: { title: "A" } }] },
+        hints: { layout: "grid", columns: 2, gap: "lg" }
+      })
+    );
+    await settle();
+    expect(t.root().querySelector(".wg-group.wg-group-grid.wg-gap-lg.wg-cols-2")).toBeTruthy();
+    expect(t.root().querySelectorAll(".wg-card")).toHaveLength(1);
+
+    t.dispatch(
+      toolInputPartial({
+        widget: "group",
+        data: {
+          items: [
+            { kind: "card", data: { title: "A" } },
+            { kind: "invoice", data: {} }
+          ]
+        },
+        hints: { layout: "grid", columns: 2, gap: "lg" }
+      })
+    );
+    await settle();
+    expect(t.root().querySelectorAll(".wg-card")).toHaveLength(1);
+    const skeleton = t.root().querySelector(".wg-preview-skeleton");
+    expect(skeleton?.textContent).toContain("invoice");
+  });
+
+  it("a custom top-level kind previews as a labeled skeleton", async () => {
+    const t = bootTemplate();
+    t.dispatch(toolInputPartial({ widget: "x-post", data: { author: {} } }));
+    await settle();
+    expect(t.root().querySelector(".wg-preview-skeleton")?.textContent).toContain("x-post");
+    expect(t.root().getAttribute("data-wgd-preview")).toBe("true");
+  });
+
+  it("the result replaces the preview; new input then previews the next call", async () => {
+    const t = bootTemplate();
+    t.dispatch(toolInputPartial({ widget: "table", data: [{ a: 1 }] }));
+    await settle();
+    expect(t.root().getAttribute("data-wgd-preview")).toBe("true");
+
+    const payload = { kind: "table", data: [{ a: 1 }, { a: 2 }] };
+    const tree = treeOf(payload);
+    t.dispatch(toolResult({ tree, html: renderToHtml(tree) }));
+    expect(t.root().getAttribute("data-wgd-preview")).toBeNull();
+    expect(t.root().querySelectorAll(".wg-table-row")).toHaveLength(2);
+
+    // frame reuse: the NEXT call's partial starts a new preview cycle
+    t.dispatch(toolInputPartial({ widget: "card", data: { title: "next" } }));
+    await settle();
+    expect(t.root().getAttribute("data-wgd-preview")).toBe("true");
+    expect(t.root().querySelector(".wg-card-title")?.textContent).toBe("next");
+  });
+
+  it("cancellation restores the placeholder and previews can start again", async () => {
+    const t = bootTemplate();
+    t.dispatch(toolInputPartial({ widget: "card", data: { title: "A" } }));
+    await settle();
+    t.dispatch({ jsonrpc: "2.0", method: "ui/notifications/tool-cancelled", params: {} });
+    expect(t.root().textContent).toBe("");
+    expect(t.root().getAttribute("data-wgd-preview")).toBeNull();
+
+    t.dispatch(toolInputPartial({ widget: "card", data: { title: "B" } }));
+    await settle();
+    expect(t.root().querySelector(".wg-card-title")?.textContent).toBe("B");
+  });
+
+  it("string-marshalled data peels once it parses", async () => {
+    const t = bootTemplate();
+    t.dispatch(
+      toolInputPartial({ widget: "table", data: JSON.stringify([{ name: "Ada" }]) })
+    );
+    await settle();
+    expect(t.root().querySelector(".wg-table-cell")?.textContent).toBe("Ada");
+  });
+
+  it("hosts sending no input notifications behave exactly as before", () => {
+    const t = bootTemplate();
+    const payload = { kind: "card", data: { title: "T" } };
+    const tree = treeOf(payload);
+    t.dispatch(toolResult({ tree, html: renderToHtml(tree) }));
+    expect(t.root().getAttribute("data-wgd-preview")).toBeNull();
+    expect(t.root().querySelector(".wg-card-title")?.textContent).toBe("T");
+  });
+});
+
+describe("preview drift pins against the real renderers", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  const cases: { name: string; payload: Record<string, unknown> }[] = [
+    {
+      name: "card",
+      payload: {
+        kind: "card",
+        data: { title: "Essence", subtitle: "beauty", fields: { price: 9.99, stock: 99 } },
+        hints: { fieldFormat: { price: "${value}" } }
+      }
+    },
+    {
+      name: "table",
+      payload: {
+        kind: "table",
+        data: [{ name: "Ada", role: "eng" }, { name: "Lin", role: "ops" }],
+        meta: { title: "People", subtitle: "synthetic" }
+      }
+    },
+    {
+      name: "tree",
+      payload: {
+        kind: "tree",
+        data: { label: "root", children: [{ label: "leaf", children: [] }] }
+      }
+    },
+    {
+      name: "group",
+      payload: {
+        kind: "group",
+        data: {
+          items: [
+            { kind: "card", data: { title: "A" } },
+            { kind: "table", data: [{ n: 1 }] }
+          ]
+        },
+        hints: { layout: "grid", columns: 2, gap: "lg" }
+      }
+    }
+  ];
+
+  for (const testCase of cases) {
+    it(`${testCase.name}: same classes and text as the catalog renderer`, async () => {
+      const rendered = catalog.render(testCase.payload);
+      if (!rendered.ok) throw new Error("drift fixture failed to render");
+      const real = document.createElement("div");
+      real.innerHTML = renderToHtml(rendered.node);
+
+      const t = bootTemplate();
+      t.dispatch(
+        toolInputPartial({
+          widget: testCase.payload.kind as string,
+          data: testCase.payload.data,
+          hints: testCase.payload.hints,
+          meta: testCase.payload.meta
+        })
+      );
+      await settle();
+
+      // identical visible text…
+      expect(t.root().textContent).toBe(real.textContent);
+      // …and every structural wg-* class the renderer emits is present
+      const realClasses = new Set<string>();
+      real.querySelectorAll("[class]").forEach((el) =>
+        el.className.split(/\s+/).forEach((cls) => cls && realClasses.add(cls))
+      );
+      for (const cls of realClasses) {
+        expect(
+          t.root().querySelector(`.${cls}`),
+          `missing preview class ${cls} for ${testCase.name}`
+        ).toBeTruthy();
+      }
+    });
+  }
 });

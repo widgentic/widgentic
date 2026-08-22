@@ -67,6 +67,6 @@ The repository SHALL provide the app template (`ui://widgentic/app.html`): a sel
 - **WHEN** the `tool-result` arrives after previews
 - **THEN** the authoritative render SHALL replace the preview through the patcher and the in-progress treatment SHALL be gone
 
-#### Scenario: Hosts without partial input see no change
-- **WHEN** a host sends only `tool-input` and `tool-result` (or neither partial event)
+#### Scenario: Hosts without input notifications see no change
+- **WHEN** a host sends no input notifications before the result
 - **THEN** the template SHALL behave exactly as before for every existing scenario
