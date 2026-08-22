@@ -560,8 +560,10 @@ function currentDefinition(): unknown {
 /* ---------------------------- identities ----------------------------- */
 
 /** github:<id> vs everything else (OIDC subs carry no prefix). */
-function providerOf(subject: string): "github" | "email" {
-  return subject.startsWith("github:") ? "github" : "email";
+function providerOf(subject: unknown): "github" | "email" {
+  return typeof subject === "string" && subject.startsWith("github:")
+    ? "github"
+    : "email";
 }
 
 async function refreshIdentities(): Promise<void> {
@@ -674,13 +676,19 @@ async function boot(): Promise<void> {
     return;
   }
 
-  await Promise.all([
+  // One section failing must not blank the app: settle all, report failures.
+  const sections = await Promise.allSettled([
     refreshWidgets(),
     refreshThemes(),
     refreshSchemas(),
     refreshKeys(),
     refreshIdentities()
   ]);
+  for (const settled of sections) {
+    if (settled.status === "rejected") {
+      status(`a section failed to load: ${String(settled.reason)}`);
+    }
+  }
 
   // Link-flow feedback rides the redirect query.
   const params = new URLSearchParams(location.search);

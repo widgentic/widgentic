@@ -287,6 +287,36 @@ describe("cosmos adapter identity model", () => {
   });
 });
 
+describe("v41 linkedSubjects migration", () => {
+  it("plain-string entries written by v41 normalize to labeled identities", async () => {
+    const { client, data } = fakeCosmos();
+    const store = createCosmosStore({ client, log: () => {} });
+    const p = await store.ensurePrincipal("v41:owner");
+    // Simulate the v41 on-disk generation: subject STRINGS in the list.
+    const { resource } = await data.item("profile", p.id).read();
+    await data
+      .item("profile", p.id)
+      .replace({ ...(resource as Record<string, unknown>), linkedSubjects: ["v41:linked"] });
+
+    const listed = await store.listLinkedSubjects(p.id);
+    expect(listed).toEqual([{ subject: "v41:linked" }]);
+
+    // unlink handles the old shape too
+    await store.unlinkSubject(p.id, "v41:linked");
+    expect(await store.listLinkedSubjects(p.id)).toEqual([]);
+
+    // and a new link over a remaining old-shape list mixes cleanly
+    await data
+      .item("profile", p.id)
+      .replace({ ...(resource as Record<string, unknown>), linkedSubjects: ["v41:other"] });
+    await store.linkSubject(p.id, "v42:new", "Friendly");
+    expect(await store.listLinkedSubjects(p.id)).toEqual([
+      { subject: "v41:other" },
+      { subject: "v42:new", label: "Friendly" }
+    ]);
+  });
+});
+
 /* --------------------------- emulator gate --------------------------- */
 
 const EMULATOR = process.env.WIDGENTIC_COSMOS_TEST_ENDPOINT;

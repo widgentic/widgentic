@@ -115,14 +115,27 @@ interface ProfileDoc {
   subject: string;
   label?: string;
   scopes: Scope[];
-  /** Enumeration convenience on the CANONICAL profile; aliases are truth. */
-  linkedSubjects?: { subject: string; label?: string }[];
+  /**
+   * Enumeration convenience on the CANONICAL profile; aliases are truth.
+   * v41 wrote plain subject strings; v42+ writes { subject, label? } —
+   * every reader normalizes through `normalizeLinked`.
+   */
+  linkedSubjects?: ({ subject: string; label?: string } | string)[];
   /**
    * Present on an ALIAS profile: this partition's subject is linked to the
    * named canonical principal. Resolution follows exactly one hop (aliases
    * are only ever created pointing at canonical profiles).
    */
   linkTo?: string;
+}
+
+/** Accept both linkedSubjects generations (v41 strings, v42 objects). */
+function normalizeLinked(
+  entries: ({ subject: string; label?: string } | string)[] | undefined
+): { subject: string; label?: string }[] {
+  return (entries ?? []).map((entry) =>
+    typeof entry === "string" ? { subject: entry } : entry
+  );
 }
 
 interface WidgetDoc {
@@ -653,7 +666,7 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
         if (at !== undefined && at.linkTo === principalId) {
           await data.item("profile", aliasId).delete();
         }
-        const linked = (canonical.linkedSubjects ?? []).filter(
+        const linked = normalizeLinked(canonical.linkedSubjects).filter(
           (entry) => entry.subject !== subject
         );
         await data
@@ -668,7 +681,7 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
       if (canonical === undefined || canonical.linkTo !== undefined) {
         throw new StoreRejectionError("UNKNOWN_PRINCIPAL", principalId);
       }
-      return [...(canonical.linkedSubjects ?? [])].sort((a, b) =>
+      return normalizeLinked(canonical.linkedSubjects).sort((a, b) =>
         a.subject.localeCompare(b.subject)
       );
     }
@@ -690,7 +703,7 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
     subject: string,
     label?: string
   ): Promise<void> {
-    const linked = canonical.linkedSubjects ?? [];
+    const linked = normalizeLinked(canonical.linkedSubjects);
     if (linked.some((entry) => entry.subject === subject)) return;
     const entry = { subject, ...(label === undefined ? {} : { label }) };
     await data
