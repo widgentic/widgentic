@@ -70,9 +70,16 @@ export interface SessionClaims {
 }
 
 export interface AuthCallbackResult {
-  session: SessionClaims;
-  /** Value for a Set-Cookie header establishing the session. */
-  setCookie: string;
+  /** Present for a SIGN-IN flow. */
+  session?: SessionClaims;
+  /** Value for a Set-Cookie header establishing the session (sign-in only). */
+  setCookie?: string;
+  /**
+   * Present for a LINK flow: the caller must verify the LIVE session still
+   * belongs to `forSubject`, then attach `newSubject` to that account.
+   * No session is minted — linking never switches identity.
+   */
+  link?: { forSubject: string; newSubject: string; label?: string };
 }
 
 interface OidcMetadata {
@@ -141,12 +148,16 @@ export class AuthError extends Error {
 }
 
 export interface Auth {
-  /** Build the redirect to the issuer plus the flow cookie to set. */
-  beginLogin(): { location: string; setCookie: string };
+  /**
+   * Build the redirect to the issuer plus the flow cookie to set. With
+   * `linkFor` (a signed-in subject) the flow carries a sealed link intent:
+   * the callback yields a `link` result instead of minting a session.
+   */
+  beginLogin(linkFor?: string): { location: string; setCookie: string };
   /** Redeem the callback; throws AuthError on any validation failure. */
   handleCallback(callbackUrl: URL, cookieHeader: string | undefined): Promise<AuthCallbackResult>;
-  /** GitHub: build the authorize redirect. Throws when not configured. */
-  beginGitHubLogin(): { location: string; setCookie: string };
+  /** GitHub: build the authorize redirect. Throws when not configured. `linkFor` as on beginLogin. */
+  beginGitHubLogin(linkFor?: string): { location: string; setCookie: string };
   /** GitHub: redeem the callback; throws AuthError on any failure. */
   handleGitHubCallback(
     callbackUrl: URL,
@@ -263,11 +274,14 @@ export function createAuth(options: AuthOptions): Auth {
   }
 
   return {
-    beginLogin() {
+    beginLogin(linkFor) {
       const state = randomBytes(16).toString("hex");
       const verifier = randomBytes(32).toString("base64url");
       const challenge = b64url(sha256(verifier));
-      const flow = sealToken({ state, verifier, exp: now() + 600 }, sessionSecret);
+      const flow = sealToken(
+        { state, verifier, exp: now() + 600, ...(linkFor === undefined ? {} : { link: linkFor }) },
+        sessionSecret
+      );
       const query = new URLSearchParams({
         client_id: options.clientId,
         response_type: "code",
@@ -297,7 +311,7 @@ export function createAuth(options: AuthOptions): Auth {
       const flowRaw = readCookie(cookieHeader, FLOW_COOKIE);
       if (flowRaw === undefined) throw new AuthError("missing flow cookie");
       const flow = openToken(flowRaw, sessionSecret) as
-        | { state: string; verifier: string; exp: number; provider?: string }
+        | { state: string; verifier: string; exp: number; provider?: string; link?: string }
         | undefined;
       if (flow === undefined || flow.exp <= now()) throw new AuthError("stale flow");
       if (flow.provider !== undefined) throw new AuthError("wrong flow");
@@ -328,6 +342,15 @@ export function createAuth(options: AuthOptions): Auth {
       if (typeof tokens.id_token !== "string") throw new AuthError("no id_token");
 
       const claims = await validateIdToken(tokens.id_token);
+      if (typeof flow.link === "string" && flow.link !== "") {
+        return {
+          link: {
+            forSubject: flow.link,
+            newSubject: claims.sub,
+            ...(claims.name === undefined ? {} : { label: claims.name })
+          }
+        };
+      }
       const session: SessionClaims = {
         subject: claims.sub,
         ...(claims.name === undefined ? {} : { label: claims.name })
@@ -335,11 +358,19 @@ export function createAuth(options: AuthOptions): Auth {
       return { session, setCookie: sessionCookieValue(session) };
     },
 
-    beginGitHubLogin() {
+    beginGitHubLogin(linkFor) {
       const github = options.github;
       if (github === undefined) throw new AuthError("github sign-in not configured");
       const state = randomBytes(16).toString("hex");
-      const flow = sealToken({ state, provider: "github", exp: now() + 600 }, sessionSecret);
+      const flow = sealToken(
+        {
+          state,
+          provider: "github",
+          exp: now() + 600,
+          ...(linkFor === undefined ? {} : { link: linkFor })
+        },
+        sessionSecret
+      );
       const query = new URLSearchParams({
         client_id: github.clientId,
         redirect_uri: github.redirectUri,
@@ -362,7 +393,7 @@ export function createAuth(options: AuthOptions): Auth {
       const flowRaw = readCookie(cookieHeader, FLOW_COOKIE);
       if (flowRaw === undefined) throw new AuthError("missing flow cookie");
       const flow = openToken(flowRaw, sessionSecret) as
-        | { state: string; provider?: string; exp: number }
+        | { state: string; provider?: string; exp: number; link?: string }
         | undefined;
       if (flow === undefined || flow.exp <= now()) throw new AuthError("stale flow");
       if (flow.provider !== "github") throw new AuthError("wrong flow");
@@ -408,6 +439,16 @@ export function createAuth(options: AuthOptions): Auth {
 
       const label =
         typeof user.name === "string" && user.name !== "" ? user.name : user.login;
+      if (typeof flow.link === "string" && flow.link !== "") {
+        return {
+          link: {
+            forSubject: flow.link,
+            // The numeric id is the stable identity; logins can be renamed.
+            newSubject: `github:${user.id}`,
+            ...(label === undefined ? {} : { label })
+          }
+        };
+      }
       const session: SessionClaims = {
         // The numeric id is the stable identity; logins can be renamed.
         subject: `github:${user.id}`,

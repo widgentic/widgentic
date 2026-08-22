@@ -557,6 +557,85 @@ function currentDefinition(): unknown {
 
 /* -------------------------------- boot ------------------------------- */
 
+/* ---------------------------- identities ----------------------------- */
+
+/** github:<id> vs everything else (OIDC subs carry no prefix). */
+function providerOf(subject: string): "github" | "email" {
+  return subject.startsWith("github:") ? "github" : "email";
+}
+
+async function refreshIdentities(): Promise<void> {
+  const info = await api<{ current: string; currentIsPrimary: boolean; linked: string[] }>(
+    "/api/identities"
+  );
+  const list = $("identity-list");
+  list.replaceChildren();
+  const row = (subject: string, tags: string[], unlinkable: boolean) => {
+    const el = document.createElement("div");
+    el.className = "row";
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = `${providerOf(subject) === "github" ? "GitHub" : "Email"} — ${subject}`;
+    const badge = document.createElement("span");
+    badge.className = "muted";
+    badge.textContent = tags.join(" · ");
+    el.append(name, badge);
+    if (unlinkable) {
+      const unlink = document.createElement("button");
+      unlink.textContent = "Unlink";
+      unlink.className = "danger";
+      unlink.addEventListener("click", () => {
+        void (async () => {
+          await api("/api/identities", {
+            method: "DELETE",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ subject })
+          });
+          status(`unlinked ${subject} — signing in with it later starts a fresh account`);
+          await refreshIdentities();
+        })().catch((error: Error) => status(error.message));
+      });
+      el.append(unlink);
+    }
+    list.append(el);
+  };
+  row(
+    info.current,
+    ["signed in", ...(info.currentIsPrimary ? ["primary"] : ["linked"])],
+    false
+  );
+  if (!info.currentIsPrimary) {
+    const note = document.createElement("p");
+    note.className = "muted";
+    note.textContent =
+      "You are signed in with a linked identity. Manage links from the primary identity's session.";
+    list.append(note);
+  }
+  for (const subject of info.linked) {
+    if (subject === info.current) continue;
+    row(subject, ["linked"], true);
+  }
+
+  // Offer linking whichever provider is not attached yet.
+  const attached = new Set([info.current, ...info.linked].map(providerOf));
+  const actions = $("identity-actions");
+  actions.replaceChildren();
+  for (const provider of ["github", "email"] as const) {
+    if (attached.has(provider)) continue;
+    const link = document.createElement("a");
+    link.href = provider === "github" ? "/auth/link/github" : "/auth/link/email";
+    const button = document.createElement("button");
+    button.textContent = provider === "github" ? "Link GitHub" : "Link email";
+    link.append(button);
+    actions.append(link);
+  }
+  const note = document.createElement("span");
+  note.className = "muted";
+  note.textContent =
+    "Linked identities share this account: same widgets, themes, schemas, and keys.";
+  actions.append(note);
+}
+
 async function boot(): Promise<void> {
   try {
     const me = await api<{ principal: { id: string; label?: string } }>("/api/me");
@@ -570,7 +649,30 @@ async function boot(): Promise<void> {
     return;
   }
 
-  await Promise.all([refreshWidgets(), refreshThemes(), refreshSchemas(), refreshKeys()]);
+  await Promise.all([
+    refreshWidgets(),
+    refreshThemes(),
+    refreshSchemas(),
+    refreshKeys(),
+    refreshIdentities()
+  ]);
+
+  // Link-flow feedback rides the redirect query.
+  const params = new URLSearchParams(location.search);
+  if (params.has("linked")) {
+    status("identity linked — both sign-in methods now open this account");
+    showTab("keys");
+    history.replaceState(null, "", "/");
+  } else if (params.has("link_error")) {
+    const code = params.get("link_error");
+    status(
+      code === "SUBJECT_IN_USE"
+        ? "link refused: that identity already owns an account with content — empty it first"
+        : `link failed: ${code}`
+    );
+    showTab("keys");
+    history.replaceState(null, "", "/");
+  }
   mountWidgetDesigner();
   mountThemeDesigner();
   mountSchemaDesigner();

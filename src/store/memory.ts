@@ -66,6 +66,9 @@ export function createMemoryStore(
   limits: StoreLimits = DEFAULT_LIMITS
 ): MemoryStore {
   const records = new Map<string, Record_>();
+  // Alias resolution: derived-id-of-linked-subject -> canonical principal
+  // id. Resolution truth for links; enumeration derives from it.
+  const aliases = new Map<string, { subject: string; to: string }>();
 
   function record(principalId: string): Record_ | undefined {
     return records.get(principalId);
@@ -227,6 +230,11 @@ export function createMemoryStore(
         throw new StoreRejectionError("INVALID_SUBJECT", "subject must be a non-empty string.");
       }
       const id = principalIdForSubject(subject);
+      const alias = aliases.get(id);
+      if (alias !== undefined) {
+        const canonical = records.get(alias.to);
+        if (canonical !== undefined) return clone(canonical.principal);
+      }
       const existing = records.get(id);
       if (existing !== undefined) return clone(existing.principal);
       const principal: Principal = {
@@ -243,6 +251,66 @@ export function createMemoryStore(
         schemas: new Map()
       });
       return clone(principal);
+    },
+    async linkSubject(principalId, subject) {
+      if (typeof subject !== "string" || subject === "") {
+        throw new StoreRejectionError("INVALID_SUBJECT", "subject must be a non-empty string.");
+      }
+      const target = record(principalId);
+      if (target === undefined) {
+        throw new StoreRejectionError("UNKNOWN_PRINCIPAL", principalId);
+      }
+      if (subject === target.subject) return; // canonical already resolves here
+      const aliasId = principalIdForSubject(subject);
+      const alias = aliases.get(aliasId);
+      if (alias !== undefined) {
+        if (alias.to === principalId) return; // idempotent
+        // A subject deliberately linked elsewhere is never stolen.
+        throw new StoreRejectionError(
+          "SUBJECT_IN_USE",
+          `subject already resolves to another account.`
+        );
+      }
+      const owned = records.get(aliasId);
+      if (owned !== undefined) {
+        const hasData =
+          owned.widgets.size > 0 ||
+          owned.themes.size > 0 ||
+          owned.schemas.size > 0 ||
+          owned.keys.some((key) => key.revokedAt === undefined);
+        if (hasData) {
+          throw new StoreRejectionError(
+            "SUBJECT_IN_USE",
+            `subject already owns an account with content — remove its widgets, themes, schemas, and keys first.`
+          );
+        }
+        records.delete(aliasId); // absorb the empty principal
+      }
+      aliases.set(aliasId, { subject, to: principalId });
+    },
+    async unlinkSubject(principalId, subject) {
+      const target = record(principalId);
+      if (target === undefined) {
+        throw new StoreRejectionError("UNKNOWN_PRINCIPAL", principalId);
+      }
+      if (subject === target.subject) {
+        throw new StoreRejectionError(
+          "CANNOT_UNLINK_PRIMARY",
+          "the account's primary identity cannot be unlinked."
+        );
+      }
+      const aliasId = principalIdForSubject(subject);
+      const alias = aliases.get(aliasId);
+      if (alias !== undefined && alias.to === principalId) aliases.delete(aliasId);
+    },
+    async listLinkedSubjects(principalId) {
+      if (record(principalId) === undefined) {
+        throw new StoreRejectionError("UNKNOWN_PRINCIPAL", principalId);
+      }
+      return [...aliases.values()]
+        .filter((alias) => alias.to === principalId)
+        .map((alias) => alias.subject)
+        .sort();
     },
     async createKey(principalId, name) {
       const target = record(principalId);

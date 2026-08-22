@@ -7,8 +7,9 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { WritableWidgetStore } from "widgentic/store";
 import { handleApiRequest } from "./api.js";
-import type { Auth } from "./auth.js";
+import type { Auth, AuthCallbackResult } from "./auth.js";
 import { AuthError } from "./auth.js";
+import { StoreRejectionError } from "widgentic/store";
 
 export interface StaticAsset {
   body: string | Buffer;
@@ -85,6 +86,26 @@ export function createWebAppHandler(deps: WebAppDeps) {
       return;
     }
 
+    // Link the OTHER method to the signed-in account: same provider flows,
+    // with a session-bound intent sealed into the flow cookie.
+    if (url.pathname === "/auth/link/github" || url.pathname === "/auth/link/email") {
+      const session = deps.auth.readSession(req.headers.cookie);
+      if (session === undefined) {
+        res.writeHead(302, { Location: "/" }).end();
+        return;
+      }
+      try {
+        const begin =
+          url.pathname === "/auth/link/github"
+            ? deps.auth.beginGitHubLogin(session.subject)
+            : deps.auth.beginLogin(session.subject);
+        res.writeHead(302, { Location: begin.location, "Set-Cookie": begin.setCookie }).end();
+      } catch {
+        res.writeHead(404, { "Content-Type": "text/plain" }).end("That sign-in method is not configured.");
+      }
+      return;
+    }
+
     if (url.pathname === "/auth/github") {
       try {
         const begin = deps.auth.beginGitHubLogin();
@@ -95,10 +116,38 @@ export function createWebAppHandler(deps: WebAppDeps) {
       return;
     }
 
+    /**
+     * Complete a callback result: a link intent attaches the new subject
+     * to the LIVE session's account (re-verified here — the sealed intent
+     * alone is not enough, the session must still be the same identity);
+     * a sign-in result mints the session as before. Linking never sets a
+     * cookie: identity does not switch.
+     */
+    async function completeCallback(result: AuthCallbackResult): Promise<void> {
+      if (result.link !== undefined) {
+        const session = deps.auth.readSession(req.headers.cookie);
+        if (session === undefined || session.subject !== result.link.forSubject) {
+          res.writeHead(401, { "Content-Type": "text/plain" }).end("Link refused: session changed.");
+          return;
+        }
+        try {
+          const principal = await deps.store.ensurePrincipal(session.subject, session.label);
+          await deps.store.linkSubject(principal.id, result.link.newSubject);
+          res.writeHead(302, { Location: "/?linked=1" }).end();
+        } catch (error) {
+          const code =
+            error instanceof StoreRejectionError ? error.code : "LINK_FAILED";
+          res.writeHead(302, { Location: `/?link_error=${encodeURIComponent(code)}` }).end();
+        }
+        return;
+      }
+      res.writeHead(302, { Location: "/", "Set-Cookie": result.setCookie ?? "" }).end();
+    }
+
     if (url.pathname === "/auth/github/callback") {
       try {
         const result = await deps.auth.handleGitHubCallback(url, req.headers.cookie);
-        res.writeHead(302, { Location: "/", "Set-Cookie": result.setCookie }).end();
+        await completeCallback(result);
       } catch (error) {
         log(`github callback refused: ${error instanceof AuthError ? error.reason : "error"}`);
         res.writeHead(401, { "Content-Type": "text/plain" }).end("Sign-in failed.");
@@ -109,7 +158,7 @@ export function createWebAppHandler(deps: WebAppDeps) {
     if (url.pathname === "/auth/callback") {
       try {
         const result = await deps.auth.handleCallback(url, req.headers.cookie);
-        res.writeHead(302, { Location: "/", "Set-Cookie": result.setCookie }).end();
+        await completeCallback(result);
       } catch (error) {
         // Refusals are terse on the wire and specific in the log.
         log(`auth callback refused: ${error instanceof AuthError ? error.reason : "error"}`);

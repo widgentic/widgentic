@@ -163,3 +163,150 @@ describe("design-it-is-publish, end to end", () => {
     expect((await fetch(`${base}/nope`)).status).toBe(404);
   });
 });
+
+describe("account linking, end to end", () => {
+  /** Begin a link flow as the given session; returns flow cookie + state. */
+  async function beginLink(sessionCookie: string): Promise<{ flow: string; state: string }> {
+    const begin = await fetch(`${base}/auth/link/email`, {
+      redirect: "manual",
+      headers: { cookie: sessionCookie }
+    });
+    expect(begin.status).toBe(302);
+    const flow = (begin.headers.get("set-cookie") ?? "").split(";")[0] as string;
+    const state = new URL(begin.headers.get("location") as string).searchParams.get(
+      "state"
+    ) as string;
+    return { flow, state };
+  }
+
+  it("links a second identity into the same account, shared both ways", async () => {
+    const owner = await signIn("sub-link-owner", "Owner");
+    await fetch(`${base}/api/widgets/link-proof`, {
+      method: "PUT",
+      headers: { cookie: owner, "content-type": "application/json" },
+      body: JSON.stringify({
+        template: { tag: "div", children: [{ bind: "t" }] },
+        descriptor: { description: "d", dataShape: "{ t }" }
+      })
+    });
+
+    const { flow, state } = await beginLink(owner);
+    nextSubject = { sub: "sub-link-second", name: "Second" };
+    const callback = await fetch(`${base}/auth/callback?code=e2e-code&state=${state}`, {
+      redirect: "manual",
+      headers: { cookie: `${flow}; ${owner}` }
+    });
+    expect(callback.status).toBe(302);
+    expect(callback.headers.get("location")).toBe("/?linked=1");
+    // linking never mints a session
+    expect(callback.headers.get("set-cookie")).toBeNull();
+
+    // the linked identity lands in the same principal with the same widgets
+    const second = await signIn("sub-link-second", "Second");
+    const widgets = (await (
+      await fetch(`${base}/api/widgets`, { headers: { cookie: second } })
+    ).json()) as { widgets: { kind: string }[] };
+    expect(widgets.widgets.map((w) => w.kind)).toContain("link-proof");
+
+    const identities = (await (
+      await fetch(`${base}/api/identities`, { headers: { cookie: owner } })
+    ).json()) as { current: string; currentIsPrimary: boolean; linked: string[] };
+    expect(identities.currentIsPrimary).toBe(true);
+    expect(identities.linked).toContain("sub-link-second");
+  });
+
+  it("a link callback with a changed or missing session creates no link", async () => {
+    const owner = await signIn("sub-forge-owner", "Owner");
+    const mallory = await signIn("sub-forge-mallory", "Mallory");
+
+    // owner's sealed intent + mallory's session: refused
+    const first = await beginLink(owner);
+    nextSubject = { sub: "sub-forge-new", name: "New" };
+    const swapped = await fetch(`${base}/auth/callback?code=e2e-code&state=${first.state}`, {
+      redirect: "manual",
+      headers: { cookie: `${first.flow}; ${mallory}` }
+    });
+    expect(swapped.status).toBe(401);
+
+    // owner's sealed intent + no session at all: refused
+    const second = await beginLink(owner);
+    const bare = await fetch(`${base}/auth/callback?code=e2e-code&state=${second.state}`, {
+      redirect: "manual",
+      headers: { cookie: second.flow }
+    });
+    expect(bare.status).toBe(401);
+
+    // and the would-be subject never linked anywhere
+    const fresh = await signIn("sub-forge-new", "New");
+    const me = (await (
+      await fetch(`${base}/api/me`, { headers: { cookie: fresh } })
+    ).json()) as { principal: { id: string } };
+    const ownerMe = (await (
+      await fetch(`${base}/api/me`, { headers: { cookie: owner } })
+    ).json()) as { principal: { id: string } };
+    expect(me.principal.id).not.toBe(ownerMe.principal.id);
+  });
+
+  it("a conflict redirects with the refusal code and changes nothing", async () => {
+    const owner = await signIn("sub-conf-owner", "Owner");
+    const taken = await signIn("sub-conf-taken", "Taken");
+    await fetch(`${base}/api/widgets/mine`, {
+      method: "PUT",
+      headers: { cookie: taken, "content-type": "application/json" },
+      body: JSON.stringify({
+        template: { tag: "div", children: [{ bind: "t" }] },
+        descriptor: { description: "d", dataShape: "{ t }" }
+      })
+    });
+
+    const { flow, state } = await beginLink(owner);
+    nextSubject = { sub: "sub-conf-taken", name: "Taken" };
+    const callback = await fetch(`${base}/auth/callback?code=e2e-code&state=${state}`, {
+      redirect: "manual",
+      headers: { cookie: `${flow}; ${owner}` }
+    });
+    expect(callback.status).toBe(302);
+    expect(callback.headers.get("location")).toBe("/?link_error=SUBJECT_IN_USE");
+    // the taken account is untouched
+    const widgets = (await (
+      await fetch(`${base}/api/widgets`, { headers: { cookie: taken } })
+    ).json()) as { widgets: { kind: string }[] };
+    expect(widgets.widgets.map((w) => w.kind)).toEqual(["mine"]);
+  });
+
+  it("unlink detaches; the primary refuses", async () => {
+    const owner = await signIn("sub-unlink-owner", "Owner");
+    const { flow, state } = await beginLink(owner);
+    nextSubject = { sub: "sub-unlink-second", name: "Second" };
+    await fetch(`${base}/auth/callback?code=e2e-code&state=${state}`, {
+      redirect: "manual",
+      headers: { cookie: `${flow}; ${owner}` }
+    });
+
+    const unlink = await fetch(`${base}/api/identities`, {
+      method: "DELETE",
+      headers: { cookie: owner, "content-type": "application/json" },
+      body: JSON.stringify({ subject: "sub-unlink-second" })
+    });
+    expect(unlink.status).toBe(200);
+
+    const fresh = await signIn("sub-unlink-second", "Second");
+    const me = (await (
+      await fetch(`${base}/api/me`, { headers: { cookie: fresh } })
+    ).json()) as { principal: { id: string } };
+    const ownerMe = (await (
+      await fetch(`${base}/api/me`, { headers: { cookie: owner } })
+    ).json()) as { principal: { id: string } };
+    expect(me.principal.id).not.toBe(ownerMe.principal.id);
+
+    const primary = await fetch(`${base}/api/identities`, {
+      method: "DELETE",
+      headers: { cookie: owner, "content-type": "application/json" },
+      body: JSON.stringify({ subject: "sub-unlink-owner" })
+    });
+    expect(primary.status).toBe(422);
+    expect(
+      ((await primary.json()) as { error: { code: string } }).error.code
+    ).toBe("CANNOT_UNLINK_PRIMARY");
+  });
+});

@@ -14,7 +14,7 @@
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ThemeEntry } from "widgentic/theming";
-import { StoreRejectionError } from "widgentic/store";
+import { StoreRejectionError, principalIdForSubject } from "widgentic/store";
 import type { StoredSchema, StoredWidget, WritableWidgetStore } from "widgentic/store";
 import type { SessionClaims } from "./auth.js";
 
@@ -167,6 +167,30 @@ export async function handleApiRequest(
         // referencing widgets — never a silent failure.
         await deps.store.removeSchema(principal.id, id);
         send(res, 200, { removed: id });
+        return true;
+      }
+    }
+
+    if (resource === "identities") {
+      if (method === "GET" && id === "") {
+        const linked = await deps.store.listLinkedSubjects(principal.id);
+        send(res, 200, {
+          current: session.subject,
+          // The primary identity is the one the account id derives from.
+          currentIsPrimary: principalIdForSubject(session.subject) === principal.id,
+          linked
+        });
+        return true;
+      }
+      if (method === "DELETE" && id === "") {
+        const body = (await readBody(req)) as { subject?: unknown } | undefined;
+        const subject = typeof body?.subject === "string" ? body.subject : "";
+        if (subject === "") {
+          sendError(res, 400, "INVALID_SUBJECT", "Pass the linked subject to unlink.");
+          return true;
+        }
+        await deps.store.unlinkSubject(principal.id, subject);
+        send(res, 200, { unlinked: subject });
         return true;
       }
     }

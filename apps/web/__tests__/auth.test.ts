@@ -116,12 +116,12 @@ describe("login flow and sessions", () => {
 
     const callback = new URL(`${REDIRECT}?code=fake-code&state=${state}`);
     const result = await a.handleCallback(callback, begin.setCookie.split(";")[0]);
-    expect(result.session.subject).toBe("subject-1");
-    expect(result.setCookie).toContain("HttpOnly");
-    expect(result.setCookie).toContain("Secure");
-    expect(result.setCookie).toContain("SameSite=Lax");
+    expect(result.session!.subject).toBe("subject-1");
+    expect(result.setCookie!).toContain("HttpOnly");
+    expect(result.setCookie!).toContain("Secure");
+    expect(result.setCookie!).toContain("SameSite=Lax");
 
-    const read = a.readSession(result.setCookie.split(";")[0]);
+    const read = a.readSession(result.setCookie!.split(";")[0]);
     expect(read?.subject).toBe("subject-1");
   });
 
@@ -143,7 +143,7 @@ describe("login flow and sessions", () => {
       new URL(`${REDIRECT}?code=c&state=${state}`),
       begin.setCookie.split(";")[0]
     );
-    const cookie = setCookie.split(";")[0] as string;
+    const cookie = setCookie!.split(";")[0] as string;
     expect(a.readSession(cookie)?.subject).toBe("subject-1");
 
     // Flip a character in the sealed payload: signature check fails.

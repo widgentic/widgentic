@@ -115,6 +115,14 @@ interface ProfileDoc {
   subject: string;
   label?: string;
   scopes: Scope[];
+  /** Enumeration convenience on the CANONICAL profile; aliases are truth. */
+  linkedSubjects?: string[];
+  /**
+   * Present on an ALIAS profile: this partition's subject is linked to the
+   * named canonical principal. Resolution follows exactly one hop (aliases
+   * are only ever created pointing at canonical profiles).
+   */
+  linkTo?: string;
 }
 
 interface WidgetDoc {
@@ -221,7 +229,7 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
     };
   }
 
-  return {
+  const store: WritableWidgetStore = {
     async resolvePrincipal(apiKey) {
       if (typeof apiKey !== "string" || apiKey === "") return undefined;
       const digest = hashKey(apiKey);
@@ -470,7 +478,13 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
       const id = principalIdForSubject(subject);
       const { resource } = await data.item("profile", id).read();
       if (resource !== undefined) {
-        const doc = resource as ProfileDoc;
+        let doc = resource as ProfileDoc;
+        if (doc.linkTo !== undefined) {
+          // Linked subject: one hop to the canonical profile (aliases only
+          // ever point at canonical profiles — no chains by construction).
+          const { resource: canonical } = await data.item("profile", doc.linkTo).read();
+          if (canonical !== undefined) doc = canonical as ProfileDoc;
+        }
         return {
           id: doc.principalId,
           ...(doc.label === undefined ? {} : { label: doc.label }),
@@ -567,6 +581,110 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
       } catch (error) {
         throw operationError("revokeKey", error);
       }
+    },
+
+    async linkSubject(principalId, subject) {
+      if (typeof subject !== "string" || subject === "") {
+        throw new StoreRejectionError("INVALID_SUBJECT", "subject must be a non-empty string.");
+      }
+      const canonical = await readProfile(principalId);
+      if (canonical === undefined || canonical.linkTo !== undefined) {
+        throw new StoreRejectionError("UNKNOWN_PRINCIPAL", principalId);
+      }
+      if (subject === canonical.subject) return; // canonical already resolves here
+      const aliasId = principalIdForSubject(subject);
+      const at = await readProfile(aliasId);
+      if (at !== undefined) {
+        if (at.linkTo === principalId) {
+          await addLinkedSubject(canonical, subject); // heal the list
+          return;
+        }
+        if (at.linkTo !== undefined) {
+          // A subject deliberately linked elsewhere is never stolen.
+          throw new StoreRejectionError("SUBJECT_IN_USE", "subject already resolves to another account.");
+        }
+        // The subject owns its own principal: absorb only when empty —
+        // emptiness INCLUDES unrevoked keys, or absorbing would silently
+        // re-point a working key's catalog.
+        const [w, t, sc, keys] = await Promise.all([
+          store.widgets(aliasId),
+          store.themes(aliasId),
+          store.schemas(aliasId),
+          store.listKeys(aliasId)
+        ]);
+        if (w.length > 0 || t.length > 0 || sc.length > 0 || keys.some((k) => k.revokedAt === undefined)) {
+          throw new StoreRejectionError(
+            "SUBJECT_IN_USE",
+            "subject already owns an account with content — remove its widgets, themes, schemas, and keys first."
+          );
+        }
+      }
+      const alias: ProfileDoc = {
+        id: "profile",
+        principalId: aliasId,
+        subject,
+        scopes: [],
+        linkTo: principalId
+      };
+      try {
+        await data.items.upsert(alias);
+        await addLinkedSubject(canonical, subject);
+      } catch (error) {
+        throw operationError("linkSubject", error);
+      }
+    },
+    async unlinkSubject(principalId, subject) {
+      const canonical = await readProfile(principalId);
+      if (canonical === undefined || canonical.linkTo !== undefined) {
+        throw new StoreRejectionError("UNKNOWN_PRINCIPAL", principalId);
+      }
+      if (subject === canonical.subject) {
+        throw new StoreRejectionError(
+          "CANNOT_UNLINK_PRIMARY",
+          "the account's primary identity cannot be unlinked."
+        );
+      }
+      const aliasId = principalIdForSubject(subject);
+      const at = await readProfile(aliasId);
+      try {
+        if (at !== undefined && at.linkTo === principalId) {
+          await data.item("profile", aliasId).delete();
+        }
+        const linked = (canonical.linkedSubjects ?? []).filter((entry) => entry !== subject);
+        await data
+          .item("profile", principalId)
+          .replace({ ...canonical, linkedSubjects: linked });
+      } catch (error) {
+        throw operationError("unlinkSubject", error);
+      }
+    },
+    async listLinkedSubjects(principalId) {
+      const canonical = await readProfile(principalId);
+      if (canonical === undefined || canonical.linkTo !== undefined) {
+        throw new StoreRejectionError("UNKNOWN_PRINCIPAL", principalId);
+      }
+      return [...(canonical.linkedSubjects ?? [])].sort();
     }
   };
+
+  /** Point-read a profile doc; undefined when absent. */
+  async function readProfile(principalId: string): Promise<ProfileDoc | undefined> {
+    try {
+      const { resource } = await data.item("profile", principalId).read();
+      return resource as ProfileDoc | undefined;
+    } catch (error) {
+      if (isServiceError(error) && String(error.code) === "404") return undefined;
+      throw operationError("readProfile", error);
+    }
+  }
+
+  async function addLinkedSubject(canonical: ProfileDoc, subject: string): Promise<void> {
+    const linked = canonical.linkedSubjects ?? [];
+    if (linked.includes(subject)) return;
+    await data
+      .item("profile", canonical.principalId)
+      .replace({ ...canonical, linkedSubjects: [...linked, subject] });
+  }
+
+  return store;
 }

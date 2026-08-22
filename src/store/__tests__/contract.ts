@@ -19,6 +19,8 @@ export interface ContractContext {
   store: WritableWidgetStore;
   /** Limits the factory configured; the suite probes against them. */
   maxWidgets: number;
+  /** Reopen a NEW store over the same backing (restart simulation). */
+  reopen?: () => WritableWidgetStore;
 }
 
 function widget(kind: string): StoredWidget {
@@ -189,6 +191,72 @@ export function describeStoreContract(
       await store.removeWidget(p.id, "person-card");
       await store.removeSchema(p.id, "person");
       expect(await store.schemas(p.id)).toEqual([]);
+    });
+
+    it("a linked subject resolves to the same principal with the same material", async () => {
+      const { store } = await factory();
+      const p = await store.ensurePrincipal("contract:link-owner");
+      await store.putWidget(p.id, widget("linked-card"));
+      const created = await store.createKey(p.id, "shared");
+      await store.linkSubject(p.id, "contract:link-other");
+      const viaLink = await store.ensurePrincipal("contract:link-other");
+      expect(viaLink.id).toBe(p.id);
+      expect((await store.widgets(viaLink.id)).map((w) => w.kind)).toContain("linked-card");
+      const resolved = await store.resolvePrincipal(created.key);
+      expect(resolved?.id).toBe(p.id);
+      expect(await store.listLinkedSubjects(p.id)).toEqual(["contract:link-other"]);
+    });
+
+    it("linking refuses to swallow an account with data", async () => {
+      const { store } = await factory();
+      const p = await store.ensurePrincipal("contract:conflict-a");
+      const other = await store.ensurePrincipal("contract:conflict-b");
+      await store.putWidget(other.id, widget("keeper"));
+      await expect(store.linkSubject(p.id, "contract:conflict-b")).rejects.toMatchObject({
+        code: "SUBJECT_IN_USE"
+      });
+      expect((await store.widgets(other.id)).map((w) => w.kind)).toEqual(["keeper"]);
+      expect((await store.ensurePrincipal("contract:conflict-b")).id).toBe(other.id);
+      // an unrevoked key alone also counts as data
+      const q = await store.ensurePrincipal("contract:conflict-c");
+      await store.createKey(q.id, "live");
+      await expect(store.linkSubject(p.id, "contract:conflict-c")).rejects.toMatchObject({
+        code: "SUBJECT_IN_USE"
+      });
+    });
+
+    it("an empty principal is absorbed by linking, idempotently", async () => {
+      const { store } = await factory();
+      const p = await store.ensurePrincipal("contract:absorb-into");
+      const empty = await store.ensurePrincipal("contract:absorb-me");
+      expect(empty.id).not.toBe(p.id);
+      await store.linkSubject(p.id, "contract:absorb-me");
+      expect((await store.ensurePrincipal("contract:absorb-me")).id).toBe(p.id);
+      await store.linkSubject(p.id, "contract:absorb-me");
+      expect(await store.listLinkedSubjects(p.id)).toEqual(["contract:absorb-me"]);
+    });
+
+    it("unlink detaches, the primary stays", async () => {
+      const { store } = await factory();
+      const p = await store.ensurePrincipal("contract:unlink-owner");
+      await store.linkSubject(p.id, "contract:unlink-me");
+      await store.unlinkSubject(p.id, "contract:unlink-me");
+      const fresh = await store.ensurePrincipal("contract:unlink-me");
+      expect(fresh.id).not.toBe(p.id);
+      await expect(
+        store.unlinkSubject(p.id, "contract:unlink-owner")
+      ).rejects.toMatchObject({ code: "CANNOT_UNLINK_PRIMARY" });
+      expect(await store.listLinkedSubjects(p.id)).toEqual([]);
+    });
+
+    it("links survive a store reopen when the backing persists", async () => {
+      const context = await factory();
+      if (context.reopen === undefined) return; // memory has no restart notion
+      const p = await context.store.ensurePrincipal("contract:persist-owner");
+      await context.store.linkSubject(p.id, "contract:persist-linked");
+      const reopened = context.reopen();
+      expect((await reopened.ensurePrincipal("contract:persist-linked")).id).toBe(p.id);
+      expect(await reopened.listLinkedSubjects(p.id)).toEqual(["contract:persist-linked"]);
     });
   });
 }

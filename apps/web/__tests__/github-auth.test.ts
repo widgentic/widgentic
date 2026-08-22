@@ -94,9 +94,9 @@ describe("github sign-in", () => {
     expect(gh.userReads[0]?.auth).toBe("Bearer gho_test_token_value");
     expect(gh.userReads[0]?.userAgent).toBeTruthy();
     // …and nothing GitHub-issued leaks into the session cookie.
-    expect(result.setCookie).not.toContain("gho_test_token_value");
+    expect(result.setCookie!).not.toContain("gho_test_token_value");
 
-    const read = a.readSession(result.setCookie.split(";")[0]);
+    const read = a.readSession(result.setCookie!.split(";")[0]);
     expect(read?.subject).toBe("github:7654321");
   });
 

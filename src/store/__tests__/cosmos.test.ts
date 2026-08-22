@@ -179,10 +179,15 @@ function fakeCosmos() {
 
 const LIMITS = { ...DEFAULT_LIMITS, maxWidgets: 5 };
 
-describeStoreContract("cosmos (structural fake)", async () => ({
-  store: createCosmosStore({ client: fakeCosmos().client, limits: LIMITS, log: () => {} }),
-  maxWidgets: LIMITS.maxWidgets
-}));
+describeStoreContract("cosmos (structural fake)", async () => {
+  const { client } = fakeCosmos();
+  return {
+    store: createCosmosStore({ client, limits: LIMITS, log: () => {} }),
+    maxWidgets: LIMITS.maxWidgets,
+    // A second adapter over the SAME fake account = process restart.
+    reopen: () => createCosmosStore({ client, limits: LIMITS, log: () => {} })
+  };
+});
 
 /* --------------------------- query shapes ---------------------------- */
 
