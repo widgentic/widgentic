@@ -244,6 +244,19 @@ GitHub sign-in is the app's own OAuth flow (`githubClientId` /
 OAuth app's callback is `https://widgentic.dev/auth/github/callback`).
 Until those are set the app serves but refuses sign-in.
 
+**Account linking (v41–v43):** one person, both methods, one principal —
+linked subjects resolve through a one-hop alias profile (`linkTo`) so
+Cosmos stays point-read; the canonical profile carries `linkedSubjects`
+with display labels (GitHub login / email claim). The link flow is the
+provider's own flow carrying a sealed session-bound intent; the callback
+re-verifies the live session and never mints one. Conflicts refuse with
+`SUBJECT_IN_USE` (emptiness counts unrevoked keys); the canonical subject
+is `CANNOT_UNLINK_PRIMARY`. STANDING RULE (learned when v42 crashed
+production boot on v41-era data): any persisted-shape change ships with a
+normalization seam and an old-shape regression test — live Cosmos
+documents never migrate themselves. Links written before v42 are plain
+subject strings, normalized on read; they gain labels only on relink.
+
 Entra config lessons (learned live at v13):
 - **Issuer**: external-tenant tokens carry the TENANT-ID host in `iss`
   (`https://<tenant-id>.ciamlogin.com/<tenant-id>/v2.0`), not the
