@@ -202,6 +202,17 @@ params files masked:
 python3 -c "import json;d=json.load(open('FILE'));[d['parameters'][k].update(value='***') for k in ('apiKey','sessionSecret','githubClientSecret') if 'value' in d['parameters'].get(k,{})];print(json.dumps(d,indent=1))"
 ```
 
+**API-key rotation in store mode (learned 2026-08-22):** with a store
+configured, the WIDGENTIC_API_KEY env is NOT the gate — keys are Cosmos
+principal rows, and an unknown key is DEMOTED to the anonymous catalog
+(built-ins), never 401. Rotating the production key therefore means store
+surgery, not just a redeploy: resolve the bootstrap principal with the old
+key, `createKey` a replacement (raw value straight to the vault via
+`--file`, never stdout), `revokeKey` the old one, and verify the old key
+now lists built-ins only while the vault key lists the principal's customs
+(`invoice`, `x-post`). The vault's `widgentic-api-key` is the single
+source of truth; the env copy only matters for no-store deployments.
+
 **Identity decision record (2026-08-22):** the Entra External ID flow is a
 public client with PKCE — NO client secret exists on the app registration,
 and none may be added (redirect URIs live under *Mobile and desktop* for

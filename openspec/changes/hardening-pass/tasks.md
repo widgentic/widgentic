@@ -9,7 +9,7 @@ Tasks marked **[USER]** need the user's own credentials (GitHub UI, Entra portal
 - [ ] 1.3 **[USER]** Regenerate the GitHub OAuth client secret (GitHub → Settings → Developer settings → OAuth Apps → client `Ov23likZKNlJwQu8BAvo` → Generate a new client secret; keep the OLD one active until 1.7) and store it: `az keyvault secret set --vault-name widgentickv --name widgentic-github-client-secret --value '<new>' -o none` from your own terminal — never paste it into chat
 - [x] 1.4 Rewrite the deploy params as Key Vault references; commit the non-sensitive template as `infra/deploy.params.template.json`
 - [x] 1.5 TESTING.md: never-print-secrets rule + masked-verification snippet + the KV-based redeploy contract (supersedes rebuild-from-live for secrets)
-- [ ] 1.6 Deploy with the referenced params (can be the same deploy as section 4's v40); verify old API key → 401, new key (read inside the probe from the vault, not echoed) → tools/list OK
+- [x] 1.6 Deploy with the referenced params (v40, first KV-referenced deploy, Succeeded); rotation verified the store-mode way — the old key resolves ANONYMOUS (built-ins only; store mode demotes, it never 401s) after Cosmos key surgery (bootstrap principal: old key revoked, replacement minted straight into the vault), and the vault key lists the principal's customs
 - [ ] 1.7 **[USER]** Verify GitHub sign-in on widgentic.dev, then delete the OLD GitHub client secret in the same GitHub screen; note that all browser sessions were invalidated by the session-secret rotation
 
 ## 2. DNS-rebinding pinning
