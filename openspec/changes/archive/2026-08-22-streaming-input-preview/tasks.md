@@ -16,4 +16,4 @@
 - [x] 3.1 Full gate; strict validation
 - [x] 3.2 Rig: drive the served template in a browser with synthetic notification sequences (basic-host may not emit partials — the template is the unit under test); visual check of the shimmer treatment and the result handoff
 - [x] 3.3 Deploy v45 (the probe consumed v44; its badge is removed by this build) per the KV redeploy contract; live template carries the handlers; REAL streaming verified by the user on the Apps host in a fresh conversation
-- [ ] 3.4 Commit, push, memory update
+- [x] 3.4 Commit, push, memory update
