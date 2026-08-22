@@ -27,6 +27,6 @@ Tasks marked **[USER]** need the user's own credentials (GitHub UI, Entra portal
 ## 4. Identity review, docs, ship
 
 - [x] 4.1 TESTING.md: identity decision record (Entra stays public+PKCE; GitHub secret is a permanent KV rotation item; any future confidential Entra client uses MI-federated credentials, with the portal path) + rate-limit posture note
-- [ ] 4.2 **[USER]** Entra admin center → App registrations → client `5659817c-432c-4f3e-8ad4-87f29f80a0ee` → Certificates & secrets → confirm zero client secrets; report back
+- [x] 4.2 **[USER]** Entra admin center → App registrations → client `5659817c-432c-4f3e-8ad4-87f29f80a0ee` → Certificates & secrets → confirm zero client secrets; report back
 - [x] 4.3 Full gate; strict validation; deploy v40 per the (new, KV-based) redeploy contract; live verification (pinning is behavior-invisible — verify via the gate; resourceDomains via resources/read on production)
-- [ ] 4.4 Commit, push, memory update
+- [x] 4.4 Commit, push, memory update
