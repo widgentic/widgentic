@@ -289,3 +289,35 @@ describe("list_schemas over the protocol", () => {
     expect(reads).toBe(1);
   });
 });
+
+describe("resourceDomains declaration", () => {
+  async function connectWithDomains(resourceDomains?: string[]) {
+    const server = createWidgenticServer(
+      resourceDomains === undefined ? {} : { resourceDomains }
+    );
+    const client = new Client({ name: "t", version: "0" });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([
+      server.connect(serverTransport),
+      client.connect(clientTransport)
+    ]);
+    return client;
+  }
+
+  it("declared domains reach the app resource's csp metadata", async () => {
+    const client = await connectWithDomains(["CDN.Example.com ", "media.example.org"]);
+    const listed = await client.listResources();
+    const app = listed.resources.find((r) => r.uri.startsWith("ui://"));
+    expect(app?._meta?.ui).toMatchObject({
+      csp: { resourceDomains: ["cdn.example.com", "media.example.org"] }
+    });
+  });
+
+  it("no configured domains means no csp declaration", async () => {
+    const client = await connectWithDomains();
+    const listed = await client.listResources();
+    const app = listed.resources.find((r) => r.uri.startsWith("ui://"));
+    const ui = app?._meta?.ui as { csp?: unknown } | undefined;
+    expect(ui?.csp).toBeUndefined();
+  });
+});

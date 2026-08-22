@@ -55,6 +55,12 @@ if (COSMOS_ENDPOINT !== undefined) {
  * remote connectors). Unset (local development) leaves the endpoint open.
  */
 const API_KEY = process.env.WIDGENTIC_API_KEY;
+// Comma-separated hostnames the operator trusts the app frame to load
+// assets from (flows to _meta.ui.resourceDomains + the inliner skip).
+const RESOURCE_DOMAINS = (process.env.WIDGENTIC_RESOURCE_DOMAINS ?? "")
+  .split(",")
+  .map((domain) => domain.trim())
+  .filter((domain) => domain.length > 0);
 
 function requestKey(req: IncomingMessage): string | undefined {
   const header = req.headers["x-api-key"];
@@ -150,7 +156,8 @@ const httpServer = createHttpServer(async (req: IncomingMessage, res: ServerResp
       ...(composed ?? {}),
       ...(storeRef === undefined
         ? {}
-        : { schemas: () => storeRef.schemas(principalRef.id) })
+        : { schemas: () => storeRef.schemas(principalRef.id) }),
+      ...(RESOURCE_DOMAINS.length > 0 ? { resourceDomains: RESOURCE_DOMAINS } : {})
     });
     // Stateless mode: no sessionIdGenerator (omitted — exactOptionalPropertyTypes
     // forbids an explicit undefined against the SDK's optional property).

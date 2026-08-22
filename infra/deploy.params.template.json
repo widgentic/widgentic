@@ -1,0 +1,71 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "apiKey": {
+      "reference": {
+        "keyVault": {
+          "id": "/subscriptions/6980a233-6776-4431-9645-8a7025160557/resourceGroups/widgentic-rg/providers/Microsoft.KeyVault/vaults/widgentickv"
+        },
+        "secretName": "widgentic-api-key"
+      }
+    },
+    "image": {
+      "value": "widgenticacrh2g7h7xkd2kzs.azurecr.io/widgentic-mcp:vNN"
+    },
+    "webImage": {
+      "value": "widgenticacrh2g7h7xkd2kzs.azurecr.io/widgentic-mcp:vNN"
+    },
+    "mcpCosmosEnabled": {
+      "value": true
+    },
+    "authIssuer": {
+      "value": "https://df6adcd8-69d3-46df-b294-09cf7807c4b1.ciamlogin.com/df6adcd8-69d3-46df-b294-09cf7807c4b1/v2.0"
+    },
+    "authClientId": {
+      "value": "5659817c-432c-4f3e-8ad4-87f29f80a0ee"
+    },
+    "sessionSecret": {
+      "reference": {
+        "keyVault": {
+          "id": "/subscriptions/6980a233-6776-4431-9645-8a7025160557/resourceGroups/widgentic-rg/providers/Microsoft.KeyVault/vaults/widgentickv"
+        },
+        "secretName": "widgentic-session-secret"
+      }
+    },
+    "githubClientId": {
+      "value": "Ov23likZKNlJwQu8BAvo"
+    },
+    "githubClientSecret": {
+      "reference": {
+        "keyVault": {
+          "id": "/subscriptions/6980a233-6776-4431-9645-8a7025160557/resourceGroups/widgentic-rg/providers/Microsoft.KeyVault/vaults/widgentickv"
+        },
+        "secretName": "widgentic-github-client-secret"
+      }
+    },
+    "mcpCustomDomains": {
+      "value": [
+        {
+          "name": "mcp.widgentic.dev",
+          "bindingType": "SniEnabled",
+          "certificateId": "/subscriptions/6980a233-6776-4431-9645-8a7025160557/resourceGroups/widgentic-rg/providers/Microsoft.App/managedEnvironments/widgentic-env/managedCertificates/mc-widgentic-env-mcp-widgentic-de-0783"
+        }
+      ]
+    },
+    "webCustomDomains": {
+      "value": [
+        {
+          "name": "widgentic.dev",
+          "bindingType": "SniEnabled",
+          "certificateId": "/subscriptions/6980a233-6776-4431-9645-8a7025160557/resourceGroups/widgentic-rg/providers/Microsoft.App/managedEnvironments/widgentic-env/managedCertificates/mc-widgentic-env-widgentic-dev-6621"
+        },
+        {
+          "name": "www.widgentic.dev",
+          "bindingType": "SniEnabled",
+          "certificateId": "/subscriptions/6980a233-6776-4431-9645-8a7025160557/resourceGroups/widgentic-rg/providers/Microsoft.App/managedEnvironments/widgentic-env/managedCertificates/mc-widgentic-env-www-widgentic-de-4217"
+        }
+      ]
+    }
+  }
+}

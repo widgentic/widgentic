@@ -28,11 +28,37 @@ const MAX_IMAGES_PER_RENDER = 24;
 const CACHE_TTL_MS = 5 * 60_000;
 const CACHE_MAX = 50;
 
+/**
+ * Request init for the pinned transport: `address`/`family` name the exact
+ * validated socket target. The default transport MUST connect there; test
+ * fakes (which are plain fetch-shaped) may ignore them.
+ */
+export interface PinnedRequestInit extends RequestInit {
+  address: string;
+  family: 4 | 6;
+}
+
 /** Injectable dependencies so tests can run without network or DNS. */
 export interface InlineImageDeps {
-  fetchImpl?: typeof fetch;
+  fetchImpl?: (url: string, init: PinnedRequestInit) => Promise<Response>;
   /** Resolve a hostname to its addresses (defaults to node:dns lookup). */
   lookupImpl?: (hostname: string) => Promise<string[]>;
+  /**
+   * Deployment-declared resource domains (lowercased hostnames): sources
+   * on these hosts are left un-inlined — the frame is allowed to load
+   * them natively per the Apps declaration. Deployment config only.
+   */
+  skipHosts?: ReadonlySet<string>;
+}
+
+/** True when a raw http(s) URL's hostname is a declared resource domain. */
+function isDeclaredHost(rawUrl: string, skipHosts: ReadonlySet<string> | undefined): boolean {
+  if (skipHosts === undefined || skipHosts.size === 0) return false;
+  try {
+    return skipHosts.has(new URL(rawUrl).hostname.toLowerCase());
+  } catch {
+    return false;
+  }
 }
 
 /** True for loopback, private, link-local, CGNAT, and other non-public addresses. */
@@ -74,19 +100,80 @@ async function defaultLookup(hostname: string): Promise<string[]> {
   return results.map((r) => r.address);
 }
 
-/** Reject URLs whose host is (or resolves to) a non-public address. */
-async function assertPublicHost(
+/**
+ * Reject URLs whose host is (or resolves to) a non-public address; on
+ * success return the exact address the connection must be PINNED to.
+ * Handing the validated address to the transport (instead of letting it
+ * re-resolve the name) is what closes the DNS-rebinding window between
+ * check and connect.
+ */
+async function resolvePublicAddress(
   url: URL,
   lookupImpl: (hostname: string) => Promise<string[]>
-): Promise<boolean> {
+): Promise<{ address: string; family: 4 | 6 } | undefined> {
   const host = url.hostname.replace(/^\[|\]$/g, "");
-  if (isIpLiteral(host)) return !isPrivateAddress(host);
+  if (isIpLiteral(host)) {
+    return isPrivateAddress(host)
+      ? undefined
+      : { address: host, family: host.includes(":") ? 6 : 4 };
+  }
   try {
     const addresses = await lookupImpl(host);
-    return addresses.length > 0 && addresses.every((a) => !isPrivateAddress(a));
+    if (addresses.length === 0 || addresses.some((a) => isPrivateAddress(a))) {
+      return undefined;
+    }
+    const first = addresses[0] as string;
+    return { address: first, family: first.includes(":") ? 6 : 4 };
   } catch {
-    return false;
+    return undefined;
   }
+}
+
+/**
+ * Default transport: HTTPS via node:https with the socket target fixed to
+ * the validated address — the custom `lookup` never consults DNS, so a
+ * rebinding answer between validation and connection has nothing to bind
+ * to. TLS servername and the Host header stay the URL hostname, keeping
+ * certificate validation intact. Redirects are NOT followed here (the
+ * caller's hop loop re-validates and re-pins each one).
+ */
+async function pinnedHttpsFetch(url: string, init: PinnedRequestInit): Promise<Response> {
+  const { request } = await import("node:https");
+  const { Readable } = await import("node:stream");
+  return new Promise<Response>((resolve, reject) => {
+    const req = request(
+      url,
+      {
+        method: "GET",
+        headers: { accept: "image/*" },
+        family: init.family,
+        lookup: (_hostname, _options, callback) => {
+          (callback as (err: null, address: string, family: number) => void)(
+            null,
+            init.address,
+            init.family
+          );
+        },
+        timeout: TIMEOUT_MS
+      },
+      (res) => {
+        const status = res.statusCode ?? 0;
+        const headers = new Headers();
+        for (const name of ["content-type", "content-length", "location"]) {
+          const value = res.headers[name];
+          if (typeof value === "string") headers.set(name, value);
+        }
+        const bodyless = status < 200 || [204, 205, 304].includes(status);
+        const body = bodyless
+          ? (res.resume(), null)
+          : (Readable.toWeb(res) as unknown as BodyInit);
+        resolve(new Response(body, { status, headers }));
+      }
+    );
+    req.on("timeout", () => req.destroy(new Error("image fetch timed out")));
+    req.on("error", reject);
+    req.end();
+  });
 }
 
 const cache = new Map<string, { value: string; expires: number }>();
@@ -107,7 +194,7 @@ export async function fetchImageAsDataUri(
   const cached = cache.get(url);
   if (cached && cached.expires > Date.now()) return cached.value;
 
-  const fetchImpl = deps.fetchImpl ?? fetch;
+  const fetchImpl = deps.fetchImpl ?? pinnedHttpsFetch;
   const lookupImpl = deps.lookupImpl ?? defaultLookup;
 
   let current = url;
@@ -119,14 +206,17 @@ export async function fetchImageAsDataUri(
       return null;
     }
     if (parsed.protocol !== "https:") return null;
-    if (!(await assertPublicHost(parsed, lookupImpl))) return null;
+    const pinned = await resolvePublicAddress(parsed, lookupImpl);
+    if (pinned === undefined) return null;
 
     let response: Response;
     try {
       response = await fetchImpl(parsed.href, {
         redirect: "manual",
         signal: AbortSignal.timeout(TIMEOUT_MS),
-        headers: { accept: "image/*" }
+        headers: { accept: "image/*" },
+        address: pinned.address,
+        family: pinned.family
       });
     } catch {
       return null;
@@ -222,6 +312,7 @@ export async function inlineImagesInHtml(
   for (const tag of html.match(IMG_TAG) ?? []) {
     const src = SRC_ATTR.exec(tag)?.[1];
     if (src !== undefined && /^https?:\/\//i.test(unescapeAttr(src))) {
+      if (isDeclaredHost(unescapeAttr(src), deps.skipHosts)) continue;
       sources.add(src);
       if (sources.size >= MAX_IMAGES_PER_RENDER) break;
     }
@@ -338,6 +429,9 @@ export async function inlineRenderResultImages(
     }
   }
   if (tree !== undefined) collectTreeSources(tree, raw);
+  for (const url of raw) {
+    if (isDeclaredHost(url, deps.skipHosts)) raw.delete(url);
+  }
   if (raw.size === 0) return;
 
   // One fetch pass (bounded), then rewrite every projection from it.

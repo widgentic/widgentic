@@ -59,6 +59,14 @@ export interface WidgenticServerOptions {
    * tool serves an empty list (anonymous callers, storeless deployments).
    */
   schemas?: () => Promise<StoredSchemaEntry[]>;
+  /**
+   * Hostnames the OPERATOR trusts the app frame to load assets from:
+   * declared as `_meta.ui.resourceDomains` on the app resource, and image
+   * sources on these hosts skip server-side inlining. Deployment
+   * configuration only — stored widgets and render inputs can never
+   * extend it. Empty/absent keeps the inline-everything default.
+   */
+  resourceDomains?: string[];
 }
 
 export function createWidgenticServer(
@@ -83,6 +91,10 @@ export function createWidgenticServer(
   const inlineImages = !["0", "false"].includes(
     (process.env.WIDGENTIC_INLINE_IMAGES ?? "").toLowerCase()
   );
+  const resourceDomains = (options.resourceDomains ?? [])
+    .map((domain) => domain.trim().toLowerCase())
+    .filter((domain) => domain.length > 0);
+  const skipHosts = new Set(resourceDomains);
 
   const server = new McpServer({ name: "widgentic", version: "0.1.0" });
 
@@ -175,7 +187,7 @@ export function createWidgenticServer(
       // iframe-facing surfaces get image bytes inlined as data URIs
       // (SSRF-guarded; see src/mcp-server/inline-images.ts). Disable with
       // WIDGENTIC_INLINE_IMAGES=0.
-      if (inlineImages) await inlineRenderResultImages(result);
+      if (inlineImages) await inlineRenderResultImages(result, { skipHosts });
       return result;
     }
   );
@@ -189,7 +201,12 @@ export function createWidgenticServer(
     WIDGENTIC_APP_TEMPLATE_URI,
     {
       description:
-        "Widgentic app template — renders render_widget results inline."
+        "Widgentic app template — renders render_widget results inline.",
+      // Operator-declared CSP domains: hosts the frame may load assets
+      // from directly (images on them skip inlining). Absent when empty.
+      ...(resourceDomains.length > 0
+        ? { _meta: { ui: { csp: { resourceDomains } } } }
+        : {})
     },
     async (uri) => ({
       contents: [

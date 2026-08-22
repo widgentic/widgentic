@@ -22,6 +22,9 @@ param location string = resourceGroup().location
 param baseName string = 'widgentic'
 
 @description('API key required by the /mcp endpoint (x-api-key header).')
+// Hostnames the app frame may load assets from (ui resourceDomains).
+param mcpResourceDomains array = []
+
 @secure()
 param apiKey string
 
@@ -262,6 +265,7 @@ resource app 'Microsoft.App/containerApps@2025-01-01' = {
               // Stateless HTTP tools/call cannot renegotiate capabilities;
               // production hosts are Apps-capable (set via CLI pre-v11).
               { name: 'WIDGENTIC_ASSUME_UI', value: '1' }
+              { name: 'WIDGENTIC_RESOURCE_DOMAINS', value: join(mcpResourceDomains, ',') }
             ],
             mcpCosmosEnabled
               ? [

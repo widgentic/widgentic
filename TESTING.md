@@ -174,6 +174,52 @@ owns the apps' ingress AND secrets. On every `az deployment group create`:
   from a scratch file:
   `az containerapp secret show -n widgentic-web -g widgentic-rg --secret-name widgentic-session-secret --query value -o tsv`
 
+**Redeploy contract v3 (hardening pass, 2026-08-22) — Key Vault references:**
+the three secrets live in Key Vault `widgentickv` (`widgentic-api-key`,
+`widgentic-session-secret`, `widgentic-github-client-secret`) and the
+committed `infra/deploy.params.template.json` references them — the params
+file holds NO secret material and is safe to copy anywhere. To deploy:
+
+```bash
+cp infra/deploy.params.template.json /tmp/deploy.params.json
+sed -i 's/widgentic-mcp:vNN/widgentic-mcp:v41/' /tmp/deploy.params.json   # target tag
+az deployment group create -g widgentic-rg -f infra/main.bicep -p @/tmp/deploy.params.json
+```
+
+ARM resolves the references at deployment time; the deployer needs
+`Key Vault Secrets User` (or Officer) on the vault. This SUPERSEDES the
+recover-from-live dance for secrets — domains still come from the
+template (kept current in git). The old contract above remains the
+recipe if the vault is ever unavailable.
+
+**Never print secrets.** Secret values must not appear in terminal
+output, chat transcripts, or logs — the 2026-08 rotation happened because
+params files were printed for verification. Generate piped
+(`az keyvault secret set --value "$(openssl rand -hex 32)"`), and verify
+params files masked:
+
+```bash
+python3 -c "import json;d=json.load(open('FILE'));[d['parameters'][k].update(value='***') for k in ('apiKey','sessionSecret','githubClientSecret') if 'value' in d['parameters'].get(k,{})];print(json.dumps(d,indent=1))"
+```
+
+**Identity decision record (2026-08-22):** the Entra External ID flow is a
+public client with PKCE — NO client secret exists on the app registration,
+and none may be added (redirect URIs live under *Mobile and desktop* for
+exactly this reason). GitHub OAuth requires its client secret by protocol —
+it is a permanent Key Vault rotation item. If a confidential Entra client
+is ever introduced (Graph, OBO), use a FEDERATED CREDENTIAL bound to the
+container app's managed identity (App registrations → Certificates &
+secrets → Federated credentials → scenario "Managed identity") — never a
+stored client secret.
+
+**Rate-limit posture (2026-08-22):** API-key auth compares SHA-256 digests
+in constant time but is unthrottled — brute force costs one HTTPS
+round-trip per guess against a 256-bit keyspace (not practical; recorded
+so nobody rediscovers it as a finding). Auth routes are safe-by-shape
+(dev login is hard-disabled whenever an issuer is configured). If
+throttling is ever needed, Container Apps ingress IP restrictions are the
+first knob.
+
 ## The widgentic.dev app (production)
 
 `widgentic-web` in the same environment serves the authoring app

@@ -307,3 +307,120 @@ describe("inlineRenderResultImages", () => {
     expect(result.structuredContent.html).toContain("https://cdn.example/a.png");
   });
 });
+
+describe("DNS-rebinding pinning", () => {
+  it("hands the transport the exact validated address per hop", async () => {
+    const targets: { url: string; address: string | undefined }[] = [];
+    const transport = (async (url: string, init: { address?: string }) => {
+      targets.push({ url, address: init.address });
+      return new Response(PNG_BYTES, {
+        status: 200,
+        headers: { "content-type": "image/png" }
+      });
+    }) as unknown as typeof fetch;
+    // validation resolves to a public address; a REBINDING resolver would
+    // answer privately on the next query — but the transport never asks.
+    const out = await fetchImageAsDataUri("https://cdn.example/a.png", {
+      fetchImpl: transport,
+      lookupImpl: async () => ["93.184.216.34"]
+    });
+    expect(out).toContain("data:image/png");
+    expect(targets).toEqual([
+      { url: "https://cdn.example/a.png", address: "93.184.216.34" }
+    ]);
+  });
+
+  it("re-pins on every redirect hop with that hop's validated address", async () => {
+    const targets: string[] = [];
+    let call = 0;
+    const transport = (async (url: string, init: { address?: string }) => {
+      targets.push(`${url} -> ${init.address}`);
+      call++;
+      if (call === 1) {
+        return new Response(null, {
+          status: 302,
+          headers: { location: "https://mirror.example/b.png" }
+        });
+      }
+      return new Response(PNG_BYTES, {
+        status: 200,
+        headers: { "content-type": "image/png" }
+      });
+    }) as unknown as typeof fetch;
+    const lookups: string[] = [];
+    const out = await fetchImageAsDataUri("https://cdn.example/a.png", {
+      fetchImpl: transport,
+      lookupImpl: async (host) => {
+        lookups.push(host);
+        return host === "cdn.example" ? ["93.184.216.34"] : ["203.0.113.7"];
+      }
+    });
+    expect(out).toContain("data:image/png");
+    expect(lookups).toEqual(["cdn.example", "mirror.example"]);
+    expect(targets).toEqual([
+      "https://cdn.example/a.png -> 93.184.216.34",
+      "https://mirror.example/b.png -> 203.0.113.7"
+    ]);
+  });
+
+  it("a privately-resolving hop never reaches the transport at all", async () => {
+    const targets: string[] = [];
+    const transport = (async (url: string) => {
+      targets.push(url);
+      return new Response(null, {
+        status: 302,
+        headers: { location: "https://internal.example/x.png" }
+      });
+    }) as unknown as typeof fetch;
+    const out = await fetchImageAsDataUri("https://cdn.example/a.png", {
+      fetchImpl: transport,
+      lookupImpl: async (host) =>
+        host === "cdn.example" ? ["93.184.216.34"] : ["169.254.169.254"]
+    });
+    expect(out).toBeNull();
+    // only the first (validated) hop was ever contacted
+    expect(targets).toEqual(["https://cdn.example/a.png"]);
+  });
+});
+
+describe("declared resource domains skip inlining", () => {
+  it("a declared host stays a URL while an undeclared one inlines", async () => {
+    const calls: string[] = [];
+    const html =
+      '<img src="https://cdn.example/keep.png" alt="k">' +
+      '<img src="https://other.example/inline.png" alt="i">';
+    const out = await inlineImagesInHtml(html, {
+      ...deps(pngFetch(calls)),
+      skipHosts: new Set(["cdn.example"])
+    });
+    expect(calls).toEqual(["https://other.example/inline.png"]);
+    expect(out).toContain("https://cdn.example/keep.png");
+    expect(out).not.toContain("https://other.example/inline.png");
+    expect(out).toContain("data:image/png;base64,");
+  });
+
+  it("the result-level pass honors the skip across html and tree", async () => {
+    const calls: string[] = [];
+    const result = {
+      structuredContent: {
+        html: '<img src="https://cdn.example/keep.png" alt="k"><img src="https://other.example/i.png" alt="i">',
+        tree: {
+          tag: "div",
+          children: [
+            { tag: "img", attrs: { src: "https://cdn.example/keep.png" } },
+            { tag: "img", attrs: { src: "https://other.example/i.png" } }
+          ]
+        }
+      } as Record<string, unknown>,
+      content: []
+    };
+    await inlineRenderResultImages(result, {
+      ...deps(pngFetch(calls)),
+      skipHosts: new Set(["cdn.example"])
+    });
+    expect(calls).toEqual(["https://other.example/i.png"]);
+    const html = String(result.structuredContent.html);
+    expect(html).toContain("https://cdn.example/keep.png");
+    expect(html).toContain("data:image/png;base64,");
+  });
+});
