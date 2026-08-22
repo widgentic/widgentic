@@ -10,7 +10,7 @@ Tasks marked **[USER]** need the user's own credentials (GitHub UI, Entra portal
 - [x] 1.4 Rewrite the deploy params as Key Vault references; commit the non-sensitive template as `infra/deploy.params.template.json`
 - [x] 1.5 TESTING.md: never-print-secrets rule + masked-verification snippet + the KV-based redeploy contract (supersedes rebuild-from-live for secrets)
 - [x] 1.6 Deploy with the referenced params (v40, first KV-referenced deploy, Succeeded); rotation verified the store-mode way — the old key resolves ANONYMOUS (built-ins only; store mode demotes, it never 401s) after Cosmos key surgery (bootstrap principal: old key revoked, replacement minted straight into the vault), and the vault key lists the principal's customs
-- [ ] 1.7 **[USER]** Verify GitHub sign-in on widgentic.dev, then delete the OLD GitHub client secret in the same GitHub screen; note that all browser sessions were invalidated by the session-secret rotation
+- [x] 1.7 **[USER]** Verify GitHub sign-in on widgentic.dev, then delete the OLD GitHub client secret in the same GitHub screen; note that all browser sessions were invalidated by the session-secret rotation
 
 ## 2. DNS-rebinding pinning
 
@@ -28,5 +28,5 @@ Tasks marked **[USER]** need the user's own credentials (GitHub UI, Entra portal
 
 - [x] 4.1 TESTING.md: identity decision record (Entra stays public+PKCE; GitHub secret is a permanent KV rotation item; any future confidential Entra client uses MI-federated credentials, with the portal path) + rate-limit posture note
 - [ ] 4.2 **[USER]** Entra admin center → App registrations → client `5659817c-432c-4f3e-8ad4-87f29f80a0ee` → Certificates & secrets → confirm zero client secrets; report back
-- [ ] 4.3 Full gate; strict validation; deploy v40 per the (new, KV-based) redeploy contract; live verification (pinning is behavior-invisible — verify via the gate; resourceDomains via resources/read on production)
+- [x] 4.3 Full gate; strict validation; deploy v40 per the (new, KV-based) redeploy contract; live verification (pinning is behavior-invisible — verify via the gate; resourceDomains via resources/read on production)
 - [ ] 4.4 Commit, push, memory update
