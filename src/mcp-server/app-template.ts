@@ -469,10 +469,12 @@ function notifySize() {
 const probe = { lines: [] };
 const probePanel = document.createElement("div");
 probePanel.id = "wg-probe";
+// In-flow (not fixed): fixed elements never enter the size-changed
+// measurement, so on a small widget the panel outgrew the iframe and the
+// buttons left the viewport (observed live on claude.ai at v47).
 probePanel.style.cssText =
-  "position:fixed;right:4px;bottom:4px;z-index:9999;font:11px monospace;" +
-  "background:rgba(0,0,0,.8);color:#fff;padding:3px 6px;border-radius:4px;" +
-  "max-width:min(94vw,520px);";
+  "margin:8px 0 0;font:11px monospace;background:rgba(0,0,0,.8);color:#fff;" +
+  "padding:3px 6px;border-radius:4px;max-width:100%;box-sizing:border-box;";
 const probeBadge = document.createElement("div");
 probeBadge.style.cssText = "cursor:pointer;opacity:.85;";
 probeBadge.textContent = "probe: waiting for ui/initialize";
