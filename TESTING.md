@@ -160,7 +160,7 @@ per-principal mode the store decides. DNS lives in Cloudflare: CNAME `mcp` →
 the app FQDN (DNS only / grey cloud — required for the Azure-managed
 certificate) plus the `asuid.mcp` TXT validation record.
 
-**Currently deployed: `v47`** (carries the temporary widget-actions probe; v48 = probe removed) (both container apps share one image; check with `az containerapp list -g widgentic-rg --query "[].properties.template.containers[0].image"`).
+**Currently deployed: `v48`** (v47 carried the temporary widget-actions probe for one evening; v48 removed it) (both container apps share one image; check with `az containerapp list -g widgentic-rg --query "[].properties.template.containers[0].image"`).
 
 **Redeploy contract (learned at v11, extended at v14):** the Bicep template
 owns the apps' ingress AND secrets. On every `az deployment group create`:
