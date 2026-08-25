@@ -168,7 +168,6 @@ describe("SDK interoperability (in-memory transport, library assembly)", () => {
       "list_theme_tokens",
       "list_themes",
       "list_widgets",
-      "probe_app_call", // PROBE (temporary): the SDK lists app-only tools; hosts filter
       "render_widget"
     ]);
   });

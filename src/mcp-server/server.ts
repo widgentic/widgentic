@@ -192,41 +192,6 @@ export function createWidgenticServer(
     }
   );
 
-  // PROBE (temporary, widget-actions investigation): an app-only tool the
-  // template calls to (a) test host proxying of app-initiated tools/call
-  // and (b) report hostInfo/hostCapabilities and ui/message outcomes into
-  // the server log. visibility ["app"] also tests whether hosts hide it
-  // from the model's tool list.
-  registerAppTool(
-    server,
-    "probe_app_call",
-    {
-      description:
-        "Temporary widgentic probe: called by the app template, not by agents.",
-      _meta: {
-        ui: { resourceUri: WIDGENTIC_APP_TEMPLATE_URI, visibility: ["app" as const] }
-      },
-      inputSchema: {
-        via: z.string().optional(),
-        event: z.string().optional(),
-        outcome: z.unknown().optional(),
-        protocolVersion: z.string().optional(),
-        hostInfo: z.unknown().optional(),
-        hostCapabilities: z.unknown().optional()
-      }
-    },
-    async (args) => {
-      const receivedAt = new Date().toISOString();
-      console.error(
-        `widgentic probe: app tools/call received ${JSON.stringify({ receivedAt, ...args })}`
-      );
-      return {
-        content: [{ type: "text", text: JSON.stringify({ ok: true, receivedAt }) }],
-        structuredContent: { ok: true, receivedAt, echo: args }
-      } as CallToolResult;
-    }
-  );
-
   // The declared app template: Apps hosts fetch this once and mount it in a
   // sandboxed iframe; every render_widget result then streams into it via
   // ui/notifications/tool-result (structuredContent: { html, css, payload }).

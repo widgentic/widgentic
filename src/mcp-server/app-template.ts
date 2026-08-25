@@ -460,111 +460,6 @@ function notifySize() {
   send({ jsonrpc: "2.0", method: "ui/notifications/size-changed",
          params: { width, height } });
 }
-// PROBE (temporary, widget-actions investigation): show hostInfo /
-// hostCapabilities and exercise app-to-host requests (tools/call of an
-// app-only tool, tools/list, ui/message, ui/update-model-context). The
-// spec is silent on unsupported methods, so outcomes are classified
-// ok / error / timeout; each outcome is also reported to the server via
-// probe_app_call so it lands in the server log when tools/call works.
-const probe = { lines: [] };
-const probePanel = document.createElement("div");
-probePanel.id = "wg-probe";
-// In-flow (not fixed): fixed elements never enter the size-changed
-// measurement, so on a small widget the panel outgrew the iframe and the
-// buttons left the viewport (observed live on claude.ai at v47).
-probePanel.style.cssText =
-  "margin:8px 0 0;font:11px monospace;background:rgba(0,0,0,.8);color:#fff;" +
-  "padding:3px 6px;border-radius:4px;max-width:100%;box-sizing:border-box;";
-const probeBadge = document.createElement("div");
-probeBadge.style.cssText = "cursor:pointer;opacity:.85;";
-probeBadge.textContent = "probe: waiting for ui/initialize";
-const probeBody = document.createElement("div");
-probeBody.style.display = "none";
-const probeButtons = document.createElement("div");
-probeButtons.style.cssText = "display:flex;flex-wrap:wrap;gap:4px;margin:4px 0;";
-const probeOut = document.createElement("pre");
-probeOut.style.cssText =
-  "margin:0;white-space:pre-wrap;word-break:break-all;max-height:200px;overflow:auto;";
-probeBody.appendChild(probeButtons);
-probeBody.appendChild(probeOut);
-probePanel.appendChild(probeBadge);
-probePanel.appendChild(probeBody);
-document.body.appendChild(probePanel);
-probeBadge.addEventListener("click", function () {
-  probeBody.style.display = probeBody.style.display === "none" ? "block" : "none";
-});
-function probeShow(label, value) {
-  probe.lines.unshift(label + " => " + JSON.stringify(value));
-  probeOut.textContent = probe.lines.slice(0, 12).join("\\n");
-}
-function probeRequest(method, params) {
-  return new Promise(function (resolve) {
-    let settled = false;
-    const timer = setTimeout(function () {
-      if (settled) return;
-      settled = true;
-      resolve({ outcome: "timeout", after: "30s" });
-    }, 30000);
-    request(method, params).then(function (result) {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      resolve({ outcome: "ok", result: result });
-    }, function (error) {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      resolve({ outcome: "error", error: error });
-    });
-  });
-}
-function probeCall(args) {
-  const merged = { hostInfo: probe.hostInfo, protocolVersion: probe.protocolVersion };
-  for (const key in args) merged[key] = args[key];
-  return probeRequest("tools/call", { name: "probe_app_call", arguments: merged });
-}
-function probeButton(label, run) {
-  const button = document.createElement("button");
-  button.textContent = label;
-  button.style.cssText = "font:11px monospace;padding:2px 6px;cursor:pointer;";
-  button.addEventListener("click", function (event) {
-    event.stopPropagation();
-    button.disabled = true;
-    run().then(function (outcome) {
-      probeShow(label, outcome);
-      button.disabled = false;
-      if (label !== "tools/call") probeCall({ via: "report", event: label, outcome: outcome });
-    });
-  });
-  probeButtons.appendChild(button);
-}
-probeButton("tools/call", function () {
-  return probeCall({ via: "button", hostCapabilities: probe.hostCapabilities });
-});
-probeButton("tools/list", function () {
-  return probeRequest("tools/list", {}).then(function (outcome) {
-    if (outcome.result && Array.isArray(outcome.result.tools)) {
-      outcome.result = { tools: outcome.result.tools.map(function (t) { return t.name; }) };
-    }
-    return outcome;
-  });
-});
-probeButton("ui/message", function () {
-  return probeRequest("ui/message", {
-    role: "user",
-    content: [{ type: "text", text: "Widgentic probe: this message was sent by the widget via ui/message at " + new Date().toISOString() + "." }]
-  });
-});
-probeButton("ctx:structured", function () {
-  return probeRequest("ui/update-model-context", {
-    structuredContent: { widgenticProbe: { kind: "structuredContent", at: new Date().toISOString() } }
-  });
-});
-probeButton("ctx:text", function () {
-  return probeRequest("ui/update-model-context", {
-    content: [{ type: "text", text: "Widgentic probe context (text): the widget updated the model context at " + new Date().toISOString() + "." }]
-  });
-});
 request("ui/initialize", {
   appInfo: { name: "widgentic", version: "0.1.0" },
   appCapabilities: {},
@@ -572,18 +467,6 @@ request("ui/initialize", {
 }).then((result) => {
   applyHostContext(result && result.hostContext);
   send({ jsonrpc: "2.0", method: "ui/notifications/initialized" });
-  // PROBE: capture the handshake and auto-report it through tools/call —
-  // that call is itself the serverTools test (absent flag vs unsupported).
-  probe.hostInfo = result && result.hostInfo;
-  probe.hostCapabilities = result && result.hostCapabilities;
-  probe.protocolVersion = result && result.protocolVersion;
-  const caps = probe.hostCapabilities || {};
-  probeBadge.textContent = "probe: " + JSON.stringify(probe.hostInfo) + " " +
-    probe.protocolVersion + " caps=" + Object.keys(caps).join(",") + " (click)";
-  probeShow("init", { hostInfo: probe.hostInfo, protocolVersion: probe.protocolVersion, hostCapabilities: caps });
-  probeCall({ via: "auto", hostCapabilities: caps }).then(function (outcome) {
-    probeShow("auto tools/call", outcome);
-  });
   const observer = new ResizeObserver(notifySize);
   observer.observe(document.documentElement);
   observer.observe(document.body);
