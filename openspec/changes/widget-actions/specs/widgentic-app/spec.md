@@ -17,7 +17,7 @@ The app SHALL offer an Actions section beside Widgets, Themes and Schemas where 
 
 #### Scenario: Prompt actions carry a responsibility notice
 - **WHEN** a prompt action is saved
-- **THEN** the app SHALL have shown the notice and SHALL record acknowledgement with the save
+- **THEN** the app SHALL have shown the notice and the save SHALL proceed only after it is acknowledged (a declined notice saves nothing)
 
 ### Requirement: Authoring feedback is visible where the eye is
 Every asynchronous authoring operation (save, delete, key creation, secret writes, the action test call) SHALL mark the control that triggered it busy — disabled, with a visible in-progress indicator — until it settles, and SHALL announce a pending message. Notifications (results, validation refusals, errors) SHALL render in a banner directly under the app header — never in a corner — with a distinct error tone for failures, and SHALL be dismissible.

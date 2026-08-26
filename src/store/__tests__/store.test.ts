@@ -645,3 +645,33 @@ describe("action bindings through composition", () => {
     expect((await store.resolvePrincipal("wgk_seed"))?.scopes).toEqual(["read", "execute"]);
   });
 });
+
+describe("file store: actions and secrets directories", () => {
+  it("reads actions, lists secrets by name only, and resolves values only with a cipher", async () => {
+    const { createLocalCipher, generateLocalKek, encryptSecret } = await import("../../secrets/index.js");
+    const cipher = createLocalCipher(generateLocalKek());
+    const dir = await mkdtemp(join(tmpdir(), "wg-store-actions-"));
+    await mkdir(join(dir, "alice", "actions"), { recursive: true });
+    await mkdir(join(dir, "alice", "secrets"), { recursive: true });
+    const refresh = {
+      name: "refresh",
+      definition: { kind: "http", method: "GET", url: "https://api.example.com/w", input: { type: "object" }, output: { type: "object" } }
+    };
+    await writeFile(join(dir, "alice", "actions", "refresh.json"), JSON.stringify(refresh));
+    await writeFile(join(dir, "alice", "actions", "bad.json"), JSON.stringify({ name: "bad", definition: { kind: "sql" } }));
+    const record = await encryptSecret("sk-live-123", cipher);
+    await writeFile(join(dir, "alice", "secrets", "token.json"), JSON.stringify({ name: "token", createdAt: "2026-08-25T00:00:00.000Z", updatedAt: "2026-08-25T00:00:00.000Z", record }));
+    const diagnostics: string[] = [];
+    const withCipher = createFileStore(dir, { cipher, onDiagnostic: (m) => diagnostics.push(m) });
+    expect((await withCipher.actions("alice")).map((a) => a.name)).toEqual(["refresh"]);
+    expect(diagnostics.join(" ")).toContain("skipped an action");
+    const listed = await withCipher.listSecrets("alice");
+    expect(listed).toEqual([{ name: "token", createdAt: "2026-08-25T00:00:00.000Z", updatedAt: "2026-08-25T00:00:00.000Z" }]);
+    expect(JSON.stringify(listed)).not.toContain("sk-live-123");
+    expect(await withCipher.secretValue("alice", "token")).toBe("sk-live-123");
+    expect(await withCipher.secretValue("alice", "missing")).toBeUndefined();
+    const withoutCipher = createFileStore(dir, { onDiagnostic: () => undefined });
+    await expect(withoutCipher.secretValue("alice", "token")).rejects.toMatchObject({ code: "NO_CIPHER" });
+    expect(await withoutCipher.actions("nobody")).toEqual([]);
+  });
+});

@@ -680,7 +680,7 @@ async function saveAction(): Promise<void> {
     api(`/api/actions/${encodeURIComponent(entry.name)}`, {
       method: "PUT",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ...entry, acknowledged: entry.definition.kind === "prompt" })
+      body: JSON.stringify(entry)
     })
   );
   selectedAction = entry.name;

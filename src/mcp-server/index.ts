@@ -45,3 +45,5 @@ export {
   ACTION_TIMEOUT_MS
 } from "./guarded-fetch.js";
 export type { GuardedFetchDeps, GuardedJsonResult, PinnedFetch } from "./guarded-fetch.js";
+export { createExecutionLimiter } from "./rate-limit.js";
+export type { ExecutionLimiter } from "./rate-limit.js";

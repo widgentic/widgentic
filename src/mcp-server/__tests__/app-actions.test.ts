@@ -257,3 +257,39 @@ describe("group items in the frame", () => {
     expect(call.params.arguments).toMatchObject({ widget: "group", action: "children.0", at: "data.items.1", item: "weather", args: { city: "Bergen" } });
   });
 });
+
+describe("context updates and keyboard activation", () => {
+  it("truncates oversized context updates with a marker instead of dropping them", async () => {
+    const t = bootTemplate();
+    t.initialize({ serverTools: {} });
+    await tick();
+    t.dispatch(toolResult({ tree: tree(12), payload }));
+    click(t.root().querySelector("button") as HTMLElement);
+    const call = t.lastRequest("tools/call");
+    const bigPayload = { kind: "weather", data: { city: "Oslo", temp: 18, notes: "x".repeat(20_000) } };
+    t.dispatch({ jsonrpc: "2.0", id: call.id, result: { content: [], structuredContent: { tree: tree(18), payload: bigPayload } } });
+    await tick();
+    const context = t.lastRequest("ui/update-model-context");
+    const text = (context.params.content as { text: string }[])[0]?.text ?? "";
+    expect(text.length).toBeLessThanOrEqual(8192);
+    expect(text).toContain("[truncated]");
+    expect(context.params.structuredContent).toMatchObject({ kind: "weather", truncated: true });
+    expect(JSON.stringify(context.params.structuredContent).length).toBeLessThan(9000);
+  });
+
+  it("Enter and Space activate non-button hosts; native buttons are left to their own click", async () => {
+    const t = bootTemplate();
+    t.initialize({ serverTools: {} });
+    await tick();
+    const spanTree = { tag: "div", children: [{ tag: "span", attrs: { tabindex: "0", "data-wg-action": descriptor({ id: "children.0", kind: "prompt", text: "Hi" }) }, children: ["Hi"] }] };
+    t.dispatch(toolResult({ tree: spanTree, payload }));
+    const span = t.root().querySelector("span") as HTMLElement;
+    span.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    expect(t.count("ui/message")).toBe(1);
+    const message = t.lastRequest("ui/message");
+    t.dispatch({ jsonrpc: "2.0", id: message.id, result: {} });
+    await tick();
+    span.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true }));
+    expect(t.count("ui/message")).toBe(2);
+  });
+});

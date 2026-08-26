@@ -453,3 +453,50 @@ describe("actions, secrets and key scopes", () => {
     expect(notHttp.code).toBe("ACTION_NOT_HTTP");
   });
 });
+
+describe("secrets over the API with a cipher", () => {
+  it("writes are write-only, deletes respect SECRET_IN_USE, and the test call resolves the secret server-side", async () => {
+    const { createLocalCipher, generateLocalKek } = await import("../../../src/secrets/index.js");
+    const cipherStore = createMemoryStore([], undefined, { cipher: createLocalCipher(generateLocalKek()) });
+    const cipherServer = createServer((req, res) => {
+      void handleApiRequest(req, res, { store: cipherStore, readSession, secretsEnabled: true }).then((handled) => {
+        if (!handled) res.writeHead(404).end();
+      });
+    });
+    await new Promise<void>((resolve) => cipherServer.listen(0, resolve));
+    const address = cipherServer.address();
+    const cipherBase = `http://localhost:${typeof address === "object" && address !== null ? address.port : 0}`;
+    try {
+      let res = await fetch(`${cipherBase}/api/secrets/weather-token`, asAlice({ method: "PUT", body: JSON.stringify({ value: "sk-live-123" }) }));
+      expect(res.status).toBe(200);
+      const listing = (await (await fetch(`${cipherBase}/api/secrets`, asAlice())).json()) as { enabled: boolean; secrets: { name: string }[] };
+      expect(listing.enabled).toBe(true);
+      expect(listing.secrets.map((s) => s.name)).toEqual(["weather-token"]);
+      expect(JSON.stringify(listing)).not.toContain("sk-live-123");
+      // An action referencing the secret blocks deletion, naming itself.
+      res = await fetch(`${cipherBase}/api/actions/secured`, asAlice({
+        method: "PUT",
+        body: JSON.stringify({ definition: { kind: "http", method: "GET", url: "https://api.example.com/w", input: { type: "object" }, output: { type: "object" }, headers: { Authorization: { secret: "weather-token" } } } })
+      }));
+      expect(res.status).toBe(200);
+      res = await fetch(`${cipherBase}/api/secrets/weather-token`, asAlice({ method: "DELETE" }));
+      expect(res.status).toBe(409);
+      const error = (await res.json()) as { error: { code: string; message: string } };
+      expect(error.error.code).toBe("SECRET_IN_USE");
+      expect(error.error.message).toContain("secured");
+      // The test call resolves the secret server-side; a private target is still refused before any bytes.
+      const test = (await (await fetch(`${cipherBase}/api/actions/test`, asAlice({
+        method: "POST",
+        body: JSON.stringify({ definition: { kind: "http", method: "GET", url: "https://10.0.0.9/w", input: { type: "object" }, output: { type: "object" }, headers: { Authorization: { secret: "weather-token" } } }, args: {} })
+      }))).json()) as { ok: boolean; code?: string; message?: string };
+      expect(test.ok).toBe(false);
+      expect(test.code).toBe("ACTION_FETCH_FAILED");
+      expect(JSON.stringify(test)).not.toContain("sk-live-123");
+      await fetch(`${cipherBase}/api/actions/secured`, asAlice({ method: "DELETE" }));
+      res = await fetch(`${cipherBase}/api/secrets/weather-token`, asAlice({ method: "DELETE" }));
+      expect(res.status).toBe(200);
+    } finally {
+      cipherServer.close();
+    }
+  });
+});

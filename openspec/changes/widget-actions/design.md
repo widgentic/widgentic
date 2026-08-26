@@ -51,6 +51,12 @@ Protocol constraints from the spec: cross-server `tools/call` is blocked, so wid
 
 **D14 — Fetch policy: https only, no redirects, JSON only, 8 s, 256 KiB.** Redirects are refused rather than followed because POST bodies and secret headers must not travel to an unvalidated host; each connection is DNS-pinned to the validated address. Non-JSON responses fail fast (`INVALID_ACTION_OUTPUT`) — the output schema is the only contract the widget has.
 
+**D15 — Inline bindings nest under `definition`.** A binding is `{ ref } | { definition }` plus `input`/`output`. Spreading an inline definition at the binding level (the first draft) collided: an http definition's `input`/`output` are schemas while the binding's `input`/`output` are the mapping and the mode. Nesting keeps the spec's field names and makes `{ ref }` vs `{ definition }` a plain discriminator for validators, compilers and editors.
+
+**D16 — The model gets an `Action notes:` tail.** The model never sees the frame; live on claude.ai it read `disabled: "scope"` in the tree and guessed. Every `render_widget`/`execute_action` text output whose tree carries descriptors ends with a tail naming the kinds, whether the widget loads on first render, and the plain-language reason for any disabled http action; `list_widgets`' description demands a fresh call. Alternative rejected: leaving explanation to the authoring guide — agents don't read it mid-conversation.
+
+**D17 — Group items stay addressable.** Item descriptors are compiled against the item's template, so they name the item's kind (`widget`, stamped at registration) but not where the item sits; group composition stamps `at` (`data.items.<i>`) into every descriptor of the item's subtree, the frame passes `at`/`item`, and `execute_action` resolves on the item's kind, folds into that item and re-renders the whole group. Group items' `load` bindings ride `structuredContent.loads` and fire sequentially (each fold re-renders the group, so concurrent loads would race on the held payload). Groups cannot nest, so no outward prefixing is needed. Alternative rejected: forbidding bindings inside groups — an agent composed one spontaneously in the first live test.
+
 ## Risks / Trade-offs
 
 - [`execute_action` is visible to non-Apps clients and a model may call it] → its description says it is for widgets; without a frame there is no `payload` in the model's hands that the server would accept unvalidated, and the scope/rate limits apply regardless. Documented, not prevented.

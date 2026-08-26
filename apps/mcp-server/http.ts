@@ -11,6 +11,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { createWidgenticServer } from "widgentic/mcp-server/sdk";
+import { createExecutionLimiter } from "widgentic/mcp-server";
 import {
   ANONYMOUS_PRINCIPAL,
   composeCatalog,
@@ -49,28 +50,15 @@ if (KEK_ID !== undefined) {
 }
 
 /**
- * Per-principal token bucket for execute_action: `WIDGENTIC_EXECUTE_RATE`
- * executions per minute (default 60), per replica. A hostile client
- * looping on the tool is bounded here; the frame's disable-while-in-flight
- * is UX, not a control.
+ * Per-principal rate limit for execute_action: `WIDGENTIC_EXECUTE_RATE`
+ * executions per minute (default 60), per replica (see rate-limit.ts).
  */
 const EXECUTE_RATE = Math.max(1, Number(process.env.WIDGENTIC_EXECUTE_RATE ?? 60));
-const buckets = new Map<string, { tokens: number; refilledAt: number }>();
+const limiter = createExecutionLimiter(EXECUTE_RATE);
 function takeExecutionToken(principalId: string): boolean {
-  const now = Date.now();
-  const bucket = buckets.get(principalId) ?? { tokens: EXECUTE_RATE, refilledAt: now };
-  const refill = ((now - bucket.refilledAt) / 60_000) * EXECUTE_RATE;
-  bucket.tokens = Math.min(EXECUTE_RATE, bucket.tokens + refill);
-  bucket.refilledAt = now;
-  if (bucket.tokens < 1) {
-    buckets.set(principalId, bucket);
-    console.error("widgentic mcp: execute_action rate-limited for a principal (outcome only).");
-    return false;
-  }
-  bucket.tokens -= 1;
-  buckets.set(principalId, bucket);
-  if (buckets.size > 10_000) buckets.clear(); // bounded memory; a reset is benign
-  return true;
+  const allowed = limiter.take(principalId);
+  if (!allowed) console.error("widgentic mcp: execute_action rate-limited for a principal (outcome only).");
+  return allowed;
 }
 
 /**

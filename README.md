@@ -315,6 +315,8 @@ Widgets can carry **actions** — declared as data, never code. Two kinds:
 
 Bind an action to a button or link with `action` (mutually exclusive with `href`) — either a shared action by name (`{ "ref": "refresh" }`) or inline (`{ "definition": { … } }`) — plus an `input` mapping (field ← data path or `{ "const": … }`, resolved at render time in the element's scope with `$root`, `$parent`, `$index` available) and an `output` mode (`merge` default, `replace`, or `patch` at a path). A widget-level `load` (http GET only) runs once when the widget first renders. See `examples/mcp-server/widgets/weather.ts` for the reference pattern.
 
+Bound widgets keep working inside a `group` render (each item's descriptors name their own kind and position, so a refresh re-renders the whole group with that item updated), and every render's text ends with an `Action notes:` tail so the agent knows what the buttons do and why any are disabled — the agent never calls `execute_action` itself.
+
 Execution is gated three ways: the host must proxy app tool calls (`serverTools`), the key must carry the `execute` scope (opt-in at creation), and the definition must come from the principal's own store — a request can only name a binding, never supply a URL. After every http action the widget updates the model's context with its new payload, so the agent and the visual never disagree. Secrets are envelope-encrypted (per-secret AES-256-GCM data keys wrapped by a Key Vault key) and are written-only in the app.
 
 ### Testing without Claude
