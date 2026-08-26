@@ -12,6 +12,30 @@ import { renderCustom } from "./widgets/custom.js";
 import { checkGroupEnvelope, renderGroupContainer } from "./widgets/group.js";
 
 /**
+ * Group composition: an item's action descriptors were compiled against
+ * the ITEM's template, so they name the item's kind (`widget`) but not
+ * where the item sits in the group payload. Stamping `at` here (nested
+ * groups prefix outward) lets the server fold an action's result back
+ * into the right item and re-render the whole group.
+ */
+function stampActionLocation(node: WidgetNode, prefix: string): void {
+  if (typeof node === "string") return;
+  const raw = node.attrs?.["data-wg-action"];
+  if (typeof raw === "string") {
+    try {
+      const descriptor = JSON.parse(raw) as { at?: unknown };
+      if (typeof descriptor === "object" && descriptor !== null) {
+        descriptor.at = typeof descriptor.at === "string" ? `${prefix}.${descriptor.at}` : prefix;
+        node.attrs!["data-wg-action"] = JSON.stringify(descriptor);
+      }
+    } catch {
+      /* not a descriptor */
+    }
+  }
+  for (const child of node.children ?? []) stampActionLocation(child, prefix);
+}
+
+/**
  * Thrown when a widget kind is registered twice on the same catalog.
  * Double registration is a host programming error, surfaced loudly at
  * setup time — unlike render-time errors, which are structured results.
@@ -126,6 +150,7 @@ export function createCatalog(): WidgetCatalog {
               }
             };
           }
+          stampActionLocation(sub.node, `data.items.${i}`);
           children.push(sub.node);
         }
         return {

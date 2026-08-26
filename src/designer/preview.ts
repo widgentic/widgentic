@@ -18,6 +18,7 @@ import { applyTheme, injectBaseStyles } from "widgentic/theming";
 import { h } from "./dom.js";
 import type { WidgetDraft } from "./store.js";
 import type { DesignerDiagnostics } from "./validate.js";
+import type { StoredAction } from "widgentic/actions";
 
 /** Internal kind the draft renders under (stable across recompiles). */
 export const PREVIEW_KIND = "designer-preview";
@@ -44,6 +45,8 @@ export interface PreviewOptions {
    * built-ins. Definitions that fail template validation are skipped.
    */
   widgets?: PreviewWidget[];
+  /** Shared actions, so `{ ref }` bindings preview with their real kind. */
+  actions?: StoredAction[];
 }
 
 export interface PreviewController {
@@ -153,7 +156,10 @@ export function createPreview(options: PreviewOptions = {}): PreviewController {
     if (renderingDraft) {
       const validated = validateTemplate(draft.template);
       if (!validated.ok) return; // defensive: previewable implies ok
-      renderer = compileTemplate(validated.template);
+      const shared = options.actions ?? [];
+      renderer = compileTemplate(validated.template, {
+        actions: (ref) => shared.find((action) => action.name === ref)?.definition
+      });
     }
     // Styles follow whatever is on screen: the draft's own, or the
     // selected custom kind's (a built-in needs none).
@@ -172,9 +178,14 @@ export function createPreview(options: PreviewOptions = {}): PreviewController {
         : sampleFor(previewKind as string)
     };
     if (mount === undefined) {
+      // No onAction: the preview never executes anything; bound elements
+      // only wear the inert badge below.
       mount = mountWidget(payload, mountRoot, { catalog });
     } else {
       mount.update(payload);
+    }
+    for (const bound of mountRoot.querySelectorAll("[data-wg-action]")) {
+      bound.classList.add("wg-designer-action");
     }
   }
 

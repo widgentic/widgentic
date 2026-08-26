@@ -15,6 +15,11 @@
  *                               boot when unset — fine for one replica).
  *   WIDGENTIC_DEV_LOGIN=1       Local-dev sign-in harness; only honored
  *                               when NO issuer is configured.
+ *   WIDGENTIC_KEK_ID            Key Vault key identifier: secrets are
+ *                               envelope-encrypted with data keys the vault
+ *                               wraps (managed identity, wrap/unwrap role).
+ *   WIDGENTIC_LOCAL_KEK         64 hex chars — development cipher for rigs.
+ *                               Without either, the Secrets section is off.
  *
  * Without Cosmos configuration the store is in-memory (local dev): real
  * flows, disposable data.
@@ -26,12 +31,30 @@ import { dirname, join } from "node:path";
 import { build } from "esbuild";
 import { createMemoryStore } from "widgentic/store";
 import type { WritableWidgetStore } from "widgentic/store";
+import type { SecretCipher } from "widgentic/secrets";
 import { createWebAppHandler } from "./app.js";
 import type { StaticAsset } from "./app.js";
 import { createAuth } from "./auth.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT ?? 3002);
+
+// ---- secrets cipher --------------------------------------------------------
+const KEK_ID = process.env.WIDGENTIC_KEK_ID;
+const LOCAL_KEK = process.env.WIDGENTIC_LOCAL_KEK;
+let cipher: SecretCipher | undefined;
+if (KEK_ID !== undefined) {
+  const { createKeyVaultCipher } = await import("widgentic/secrets/keyvault");
+  const { DefaultAzureCredential } = await import("@azure/identity");
+  cipher = await createKeyVaultCipher({ keyId: KEK_ID, credential: new DefaultAzureCredential() });
+  console.error("widgentic web: secrets wrap through Key Vault");
+} else if (LOCAL_KEK !== undefined) {
+  const { createLocalCipher } = await import("widgentic/secrets");
+  cipher = createLocalCipher(LOCAL_KEK);
+  console.error("widgentic web: secrets use the LOCAL development cipher");
+} else {
+  console.error("widgentic web: no secret cipher configured — the Secrets section is disabled");
+}
 
 // ---- store ---------------------------------------------------------------
 const COSMOS_ENDPOINT = process.env.WIDGENTIC_COSMOS_ENDPOINT;
@@ -41,11 +64,12 @@ if (COSMOS_ENDPOINT !== undefined) {
   const { DefaultAzureCredential } = await import("@azure/identity");
   store = createCosmosStore({
     endpoint: COSMOS_ENDPOINT,
-    credential: new DefaultAzureCredential()
+    credential: new DefaultAzureCredential(),
+    ...(cipher === undefined ? {} : { cipher })
   });
   console.error(`widgentic web: Cosmos store at ${COSMOS_ENDPOINT}`);
 } else {
-  store = createMemoryStore();
+  store = createMemoryStore([], undefined, cipher === undefined ? {} : { cipher });
   console.error("widgentic web: in-memory store (local dev; data is disposable)");
 }
 
@@ -102,7 +126,7 @@ const assets: Record<string, StaticAsset> = {
   }
 };
 
-const handle = createWebAppHandler({ store, auth, assets, devLogin });
+const handle = createWebAppHandler({ store, auth, assets, devLogin, secretsEnabled: cipher !== undefined });
 
 createServer((req, res) => {
   void handle(req, res).catch(() => {

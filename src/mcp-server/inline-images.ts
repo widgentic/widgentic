@@ -15,6 +15,16 @@
  */
 import type { WidgetElementNode, WidgetNode } from "../catalog/index.js";
 import { WIDGENTIC_APP_MIME_TYPE } from "./definitions.js";
+import {
+  defaultLookup,
+  isPrivateAddress,
+  pinnedHttpsFetch,
+  resolvePublicAddress
+} from "./guarded-fetch.js";
+import type { PinnedRequestInit } from "./guarded-fetch.js";
+
+export { isPrivateAddress };
+export type { PinnedRequestInit };
 
 const REDIRECT_LIMIT = 3;
 const TIMEOUT_MS = 4000;
@@ -27,16 +37,6 @@ const MAX_BYTES = 1024 * 1024;
 const MAX_IMAGES_PER_RENDER = 24;
 const CACHE_TTL_MS = 5 * 60_000;
 const CACHE_MAX = 50;
-
-/**
- * Request init for the pinned transport: `address`/`family` name the exact
- * validated socket target. The default transport MUST connect there; test
- * fakes (which are plain fetch-shaped) may ignore them.
- */
-export interface PinnedRequestInit extends RequestInit {
-  address: string;
-  family: 4 | 6;
-}
 
 /** Injectable dependencies so tests can run without network or DNS. */
 export interface InlineImageDeps {
@@ -59,121 +59,6 @@ function isDeclaredHost(rawUrl: string, skipHosts: ReadonlySet<string> | undefin
   } catch {
     return false;
   }
-}
-
-/** True for loopback, private, link-local, CGNAT, and other non-public addresses. */
-export function isPrivateAddress(address: string): boolean {
-  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(address);
-  if (mapped?.[1] !== undefined) return isPrivateAddress(mapped[1]);
-
-  if (address.includes(":")) {
-    const lower = address.toLowerCase();
-    if (lower === "::" || lower === "::1") return true;
-    // fc00::/7 (unique local) and fe80::/10 (link local).
-    return /^f[cd]/.test(lower) || /^fe[89ab]/.test(lower);
-  }
-
-  const parts = address.split(".").map(Number);
-  if (parts.length !== 4 || parts.some((p) => !Number.isInteger(p) || p < 0 || p > 255)) {
-    return true; // unparsable — treat as unsafe
-  }
-  const [a, b] = parts as [number, number, number, number];
-  return (
-    a === 0 ||
-    a === 10 ||
-    a === 127 ||
-    (a === 100 && b >= 64 && b <= 127) || // CGNAT 100.64/10
-    (a === 169 && b === 254) || // link-local incl. cloud metadata
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168) ||
-    a >= 224 // multicast + reserved + broadcast
-  );
-}
-
-function isIpLiteral(hostname: string): boolean {
-  return /^\d+\.\d+\.\d+\.\d+$/.test(hostname) || hostname.includes(":");
-}
-
-async function defaultLookup(hostname: string): Promise<string[]> {
-  const { lookup } = await import("node:dns/promises");
-  const results = await lookup(hostname, { all: true, verbatim: true });
-  return results.map((r) => r.address);
-}
-
-/**
- * Reject URLs whose host is (or resolves to) a non-public address; on
- * success return the exact address the connection must be PINNED to.
- * Handing the validated address to the transport (instead of letting it
- * re-resolve the name) is what closes the DNS-rebinding window between
- * check and connect.
- */
-async function resolvePublicAddress(
-  url: URL,
-  lookupImpl: (hostname: string) => Promise<string[]>
-): Promise<{ address: string; family: 4 | 6 } | undefined> {
-  const host = url.hostname.replace(/^\[|\]$/g, "");
-  if (isIpLiteral(host)) {
-    return isPrivateAddress(host)
-      ? undefined
-      : { address: host, family: host.includes(":") ? 6 : 4 };
-  }
-  try {
-    const addresses = await lookupImpl(host);
-    if (addresses.length === 0 || addresses.some((a) => isPrivateAddress(a))) {
-      return undefined;
-    }
-    const first = addresses[0] as string;
-    return { address: first, family: first.includes(":") ? 6 : 4 };
-  } catch {
-    return undefined;
-  }
-}
-
-/**
- * Default transport: HTTPS via node:https with the socket target fixed to
- * the validated address — the custom `lookup` never consults DNS, so a
- * rebinding answer between validation and connection has nothing to bind
- * to. TLS servername and the Host header stay the URL hostname, keeping
- * certificate validation intact. Redirects are NOT followed here (the
- * caller's hop loop re-validates and re-pins each one).
- */
-async function pinnedHttpsFetch(url: string, init: PinnedRequestInit): Promise<Response> {
-  const { request } = await import("node:https");
-  const { Readable } = await import("node:stream");
-  return new Promise<Response>((resolve, reject) => {
-    const req = request(
-      url,
-      {
-        method: "GET",
-        headers: { accept: "image/*" },
-        family: init.family,
-        lookup: (_hostname, _options, callback) => {
-          (callback as (err: null, address: string, family: number) => void)(
-            null,
-            init.address,
-            init.family
-          );
-        },
-        timeout: TIMEOUT_MS
-      },
-      (res) => {
-        const status = res.statusCode ?? 0;
-        const headers = new Headers();
-        for (const name of ["content-type", "content-length", "location"]) {
-          const value = res.headers[name];
-          if (typeof value === "string") headers.set(name, value);
-        }
-        const bodyless = status < 200 || [204, 205, 304].includes(status);
-        const body = bodyless
-          ? (res.resume(), null)
-          : (Readable.toWeb(res) as unknown as BodyInit);
-        resolve(new Response(body, { status, headers }));
-      }
-    );
-    req.on("timeout", () => req.destroy(new Error("image fetch timed out")));
-    req.on("error", reject);
-    req.end();
-  });
 }
 
 const cache = new Map<string, { value: string; expires: number }>();
@@ -212,8 +97,10 @@ export async function fetchImageAsDataUri(
     let response: Response;
     try {
       response = await fetchImpl(parsed.href, {
+        method: "GET",
         redirect: "manual",
         signal: AbortSignal.timeout(TIMEOUT_MS),
+        timeoutMs: TIMEOUT_MS,
         headers: { accept: "image/*" },
         address: pinned.address,
         family: pinned.family

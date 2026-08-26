@@ -28,6 +28,8 @@ export interface WebAppDeps {
    * carry it.
    */
   devLogin?: boolean;
+  /** Whether the store holds a secret cipher (Secrets section enabled). */
+  secretsEnabled?: boolean;
   log?: (line: string) => void;
 }
 
@@ -179,7 +181,8 @@ export function createWebAppHandler(deps: WebAppDeps) {
     // ---- API -----------------------------------------------------------
     const handled = await handleApiRequest(req, res, {
       store: deps.store,
-      readSession: (cookie) => deps.auth.readSession(cookie)
+      readSession: (cookie) => deps.auth.readSession(cookie),
+      ...(deps.secretsEnabled === undefined ? {} : { secretsEnabled: deps.secretsEnabled })
     });
     if (handled) return;
 

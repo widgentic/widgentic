@@ -11,7 +11,8 @@ import {
 } from "widgentic/catalog";
 import type { WidgetStyles } from "widgentic/catalog";
 import type { WidgetContractError } from "widgentic/contract";
-import { validateTemplate } from "widgentic/templates";
+import { collectActionRefs, parsePath, validateTemplate } from "widgentic/templates";
+import { validateLoadBinding } from "widgentic/actions";
 import { validateTheme } from "widgentic/theming";
 import type { ThemeError } from "widgentic/theming";
 import type { WidgetDraft } from "./store.js";
@@ -42,6 +43,10 @@ export interface DesignerDiagnostics {
   theme?: ThemeError;
   /** Shared-schema reference problems (unknown ref, or ref + inline). */
   schemaRef?: string;
+  /** The widget-level `load` binding failed validation. */
+  load?: string;
+  /** Shared actions referenced by the template or `load` that are not among the supplied ones. */
+  actionRefs?: string;
   /** True when the draft can be registered and previewed. */
   previewable: boolean;
 }
@@ -49,6 +54,8 @@ export interface DesignerDiagnostics {
 /** Host-supplied shared schemas the draft may reference by name. */
 export interface DeriveOptions {
   schemas?: { name: string; schema: Record<string, unknown> }[];
+  /** Host-supplied shared actions the draft may bind by name. */
+  actions?: { name: string }[];
 }
 
 /**
@@ -162,6 +169,22 @@ export function deriveDiagnostics(
   }
 
   diagnostics.styles = auditStyles(draft.descriptor?.styles);
+
+  if (draft.load !== undefined) {
+    const problem = validateLoadBinding(draft.load, "load", {
+      isPath: (value) => parsePath(value) !== undefined
+    });
+    if (problem) diagnostics.load = `${problem.message} (at ${problem.path})`;
+  }
+  if (options.actions !== undefined) {
+    const known = new Set(options.actions.map((action) => action.name));
+    const unknown = collectActionRefs(draft.template, draft.load).filter((ref) => !known.has(ref));
+    if (unknown.length > 0) {
+      diagnostics.actionRefs = `References unknown shared action${unknown.length === 1 ? "" : "s"} ${unknown
+        .map((ref) => `'${ref}'`)
+        .join(", ")} — bound elements will render disabled.`;
+    }
+  }
 
   if (draft.theme !== undefined) {
     const theme = validateTheme(draft.theme);

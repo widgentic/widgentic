@@ -4,14 +4,24 @@
  * "Save to my catalog" PUTs through the session, and the entry is in the
  * caller's MCP catalog on the next tool call — no other step exists.
  */
-import { createDesigner, createSchemaDesigner, createThemeDesigner, seedThemeEntry, seedWidgetDraft } from "widgentic/designer";
+import {
+  createActionDesigner,
+  createDesigner,
+  createSchemaDesigner,
+  createThemeDesigner,
+  seedThemeEntry,
+  seedWidgetDraft
+} from "widgentic/designer";
 import type { WidgetDraft } from "widgentic/designer";
 import type {
+  ActionDesignerHandle,
+  ActionEntry,
   DesignerHandle,
   SchemaDesignerHandle,
   SchemaEntry,
   ThemeDesignerHandle
 } from "widgentic/designer";
+import type { HttpActionDefinition } from "widgentic/actions";
 import { createThemeRegistry } from "widgentic/theming";
 import type { ThemeEntry } from "widgentic/theming";
 
@@ -19,6 +29,13 @@ interface StoredWidgetJson {
   kind: string;
   template: unknown;
   descriptor: unknown;
+  load?: unknown;
+}
+
+interface SecretEntryJson {
+  name: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface StoredSchemaJson {
@@ -33,6 +50,7 @@ interface StoredKeyJson {
   name: string;
   createdAt: string;
   revokedAt?: string;
+  scopes: string[];
   digestPreview: string;
 }
 
@@ -69,6 +87,9 @@ let widgetDesigner: DesignerHandle | undefined;
 let myThemes: ThemeEntry[] = [];
 let myWidgets: StoredWidgetJson[] = [];
 let mySchemas: StoredSchemaJson[] = [];
+let myActions: ActionEntry[] = [];
+let mySecrets: SecretEntryJson[] = [];
+let secretsEnabled = false;
 let selectedKind: string | undefined;
 let widgetMode: ListMode = "new";
 
@@ -84,9 +105,13 @@ function mountWidgetDesigner(loadDefinition?: unknown, readOnly = false): void {
   host.replaceChildren();
   // The principal's shared schemas feed the Data schema section's
   // "use shared" mode; refreshed by the tab-return remount contract.
+  // Shared actions and secret names feed element bindings and the
+  // widget-level load; the widget designer binds, never authors them.
   widgetDesigner = createDesigner(host, {
     themes: designerThemes(),
     schemas: mySchemas as SchemaEntry[],
+    actions: myActions,
+    secretNames: mySecrets.map((s) => s.name),
     readOnly
   });
   if (loadDefinition !== undefined) {
@@ -197,7 +222,11 @@ async function saveWidget(): Promise<void> {
   await api(`/api/widgets/${encodeURIComponent(draft.kind)}`, {
     method: "PUT",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ template: draft.template, descriptor: draft.descriptor })
+    body: JSON.stringify({
+      template: draft.template,
+      descriptor: draft.descriptor,
+      ...(draft.load !== undefined ? { load: draft.load } : {})
+    })
   });
   selectedKind = draft.kind;
   await refreshWidgets();
@@ -465,6 +494,245 @@ async function saveSchema(): Promise<void> {
   status(`saved schema ${entry.name} — widgets can reference it now`);
 }
 
+/* ------------------------------ actions ------------------------------ */
+
+let actionDesigner: ActionDesignerHandle | undefined;
+let selectedAction: string | undefined;
+let actionMode: ListMode = "new";
+/** JSON of the http definition whose test call last passed; save requires a match. */
+let testedDefinition: string | undefined;
+
+/** The designer's Test control runs the PRODUCTION execute path server-side. */
+async function testCall(definition: HttpActionDefinition, args: Record<string, unknown>): Promise<unknown> {
+  const result = await api<{ ok: boolean; code?: string; message?: string; status?: number; body?: unknown }>(
+    "/api/actions/test",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ definition, args })
+    }
+  );
+  if (result.ok) {
+    testedDefinition = JSON.stringify(definition);
+    status("test call passed — the action can be saved");
+  } else {
+    testedDefinition = undefined;
+    status(`test call failed: ${result.code ?? ""} ${result.message ?? ""}`.trim());
+  }
+  return result;
+}
+
+function mountActionDesigner(loadEntry?: unknown, readOnly = false): void {
+  const host = $("action-designer");
+  actionDesigner?.dispose();
+  host.replaceChildren();
+  testedDefinition = undefined;
+  actionDesigner = createActionDesigner(host, {
+    readOnly,
+    schemas: mySchemas as SchemaEntry[],
+    secretNames: mySecrets.map((s) => s.name),
+    testCall
+  });
+  // Any change to an http definition invalidates the last passing test.
+  actionDesigner.subscribe((entry) => {
+    if (entry.definition.kind === "http" && testedDefinition !== JSON.stringify(entry.definition)) {
+      testedDefinition = undefined;
+    }
+  });
+  if (loadEntry !== undefined) {
+    const result = actionDesigner.loadAction(loadEntry);
+    if (!result.ok) status(`load failed: ${result.errors.join("; ")}`);
+  }
+}
+
+function syncActionControls(): void {
+  $("action-new").hidden = actionMode === "editing";
+  $("action-save").hidden = actionMode !== "new";
+}
+
+function showAction(action: ActionEntry, mode: "viewing" | "editing"): void {
+  selectedAction = action.name;
+  actionMode = mode;
+  mountActionDesigner(action, mode === "viewing");
+  renderActionList();
+  syncActionControls();
+}
+
+function renderActionList(): void {
+  const list = $("action-list");
+  list.replaceChildren();
+  if (myActions.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "muted";
+    empty.textContent = "Nothing yet — define an action and save it.";
+    list.append(empty);
+    return;
+  }
+  for (const action of myActions) {
+    const row = document.createElement("div");
+    row.className = "row" + (action.name === selectedAction ? " selected" : "");
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = `${action.label ?? action.name} · ${action.definition.kind}`;
+    name.title = "View";
+    name.addEventListener("click", () => showAction(action, "viewing"));
+    const editing = action.name === selectedAction && actionMode === "editing";
+    const buttons: HTMLButtonElement[] = [];
+    if (editing) {
+      const save = document.createElement("button");
+      save.textContent = "Save";
+      save.className = "primary";
+      save.addEventListener("click", () => {
+        void saveAction().catch((error: Error) => status(error.message));
+      });
+      const cancel = document.createElement("button");
+      cancel.textContent = "Cancel";
+      cancel.addEventListener("click", () => showAction(action, "viewing"));
+      buttons.push(save, cancel);
+    } else {
+      const edit = document.createElement("button");
+      edit.textContent = "\u270e";
+      edit.className = "icon";
+      edit.title = "Edit";
+      edit.setAttribute("aria-label", "Edit");
+      edit.addEventListener("click", () => showAction(action, "editing"));
+      const remove = document.createElement("button");
+      remove.textContent = "\u2715";
+      remove.className = "danger icon";
+      remove.title = "Delete";
+      remove.setAttribute("aria-label", "Delete");
+      remove.addEventListener("click", () => {
+        void (async () => {
+          // ACTION_IN_USE surfaces here naming the widgets — never silently.
+          await api(`/api/actions/${encodeURIComponent(action.name)}`, { method: "DELETE" });
+          if (selectedAction === action.name) {
+            selectedAction = undefined;
+            actionMode = "new";
+            mountActionDesigner();
+            syncActionControls();
+          }
+          await refreshActions();
+          status(`deleted ${action.name}`);
+        })().catch((error: Error) => status(error.message));
+      });
+      buttons.push(edit, remove);
+    }
+    row.append(name, ...buttons);
+    list.append(row);
+  }
+}
+
+async function refreshActions(): Promise<void> {
+  myActions = (await api<{ actions: ActionEntry[] }>("/api/actions")).actions;
+  renderActionList();
+}
+
+const PROMPT_NOTICE =
+  "Prompt actions place THIS message text into the user's composer for them to send. " +
+  "The content is your responsibility: keep it plain, honest and free of instructions " +
+  "that could mislead the user or their agent. Save the prompt action?";
+
+async function saveAction(): Promise<void> {
+  if (actionDesigner === undefined) return;
+  const entry = actionDesigner.getAction();
+  if (entry.definition.kind === "http") {
+    // Save is gated on a passing test call for THIS definition.
+    if (testedDefinition !== JSON.stringify(entry.definition)) {
+      status("run a passing test call first — http actions save only after their test call succeeds");
+      return;
+    }
+  } else if (!window.confirm(PROMPT_NOTICE)) {
+    status("save cancelled");
+    return;
+  }
+  await api(`/api/actions/${encodeURIComponent(entry.name)}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ...entry, acknowledged: entry.definition.kind === "prompt" })
+  });
+  selectedAction = entry.name;
+  await refreshActions();
+  const saved = myActions.find((a) => a.name === entry.name);
+  if (saved !== undefined) showAction(saved, "viewing");
+  status(`saved action ${entry.name} — widgets can bind it now`);
+}
+
+/* ------------------------------ secrets ------------------------------ */
+
+function renderSecretList(): void {
+  const list = $("secret-list");
+  list.replaceChildren();
+  const disabled = !secretsEnabled;
+  $<HTMLInputElement>("secret-name").disabled = disabled;
+  $<HTMLInputElement>("secret-value").disabled = disabled;
+  $<HTMLButtonElement>("secret-save").disabled = disabled;
+  if (disabled) {
+    $("secrets-note").textContent =
+      "Secrets are unavailable: this deployment has no secret cipher configured (WIDGENTIC_KEK_ID or WIDGENTIC_LOCAL_KEK).";
+    return;
+  }
+  if (mySecrets.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "muted";
+    empty.textContent = "No secrets yet.";
+    list.append(empty);
+    return;
+  }
+  for (const secret of mySecrets) {
+    const row = document.createElement("div");
+    row.className = "row";
+    const name = document.createElement("span");
+    name.className = "name";
+    // Write-only: names and timestamps, never a value, preview or length.
+    name.textContent = `${secret.name} · set ${new Date(secret.updatedAt).toLocaleString()}`;
+    const replace = document.createElement("button");
+    replace.textContent = "Replace";
+    replace.addEventListener("click", () => {
+      $<HTMLInputElement>("secret-name").value = secret.name;
+      $<HTMLInputElement>("secret-value").focus();
+    });
+    const remove = document.createElement("button");
+    remove.textContent = "\u2715";
+    remove.className = "danger icon";
+    remove.title = "Delete";
+    remove.setAttribute("aria-label", "Delete");
+    remove.addEventListener("click", () => {
+      void (async () => {
+        // SECRET_IN_USE surfaces here naming the referencing actions.
+        await api(`/api/secrets/${encodeURIComponent(secret.name)}`, { method: "DELETE" });
+        await refreshSecrets();
+        status(`deleted secret ${secret.name}`);
+      })().catch((error: Error) => status(error.message));
+    });
+    row.append(name, replace, remove);
+    list.append(row);
+  }
+}
+
+async function refreshSecrets(): Promise<void> {
+  const listing = await api<{ enabled: boolean; secrets: SecretEntryJson[] }>("/api/secrets");
+  secretsEnabled = listing.enabled;
+  mySecrets = listing.secrets;
+  renderSecretList();
+}
+
+async function saveSecret(): Promise<void> {
+  const nameInput = $<HTMLInputElement>("secret-name");
+  const valueInput = $<HTMLInputElement>("secret-value");
+  const name = nameInput.value.trim();
+  const value = valueInput.value;
+  await api(`/api/secrets/${encodeURIComponent(name)}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ value })
+  });
+  // The value leaves the page the moment it is stored.
+  valueInput.value = "";
+  nameInput.value = "";
+  await refreshSecrets();
+  status(`secret ${name} set — reference it as { "secret": "${name}" } in http actions`);
+}
+
 /* -------------------------------- keys ------------------------------- */
 
 async function refreshKeys(): Promise<void> {
@@ -478,6 +746,7 @@ async function refreshKeys(): Promise<void> {
       key.name,
       new Date(key.createdAt).toLocaleString(),
       `${key.digestPreview}…`,
+      (key.scopes ?? ["read"]).join(", "),
       revoked ? "revoked" : "active"
     ];
     for (const text of cells) {
@@ -507,12 +776,15 @@ async function refreshKeys(): Promise<void> {
 async function createKey(): Promise<void> {
   const input = $<HTMLInputElement>("key-name");
   const name = input.value.trim();
+  const execute = $<HTMLInputElement>("key-execute").checked;
+  // Scopes are fixed at creation: read always, execute only when ticked.
   const created = await api<{ key: string; notice: string }>("/api/keys", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ name })
+    body: JSON.stringify({ name, scopes: execute ? ["read", "execute"] : ["read"] })
   });
   input.value = "";
+  $<HTMLInputElement>("key-execute").checked = false;
   const reveal = $("key-reveal");
   reveal.replaceChildren();
   const note = document.createElement("p");
@@ -530,7 +802,7 @@ async function createKey(): Promise<void> {
 
 /* -------------------------------- tabs ------------------------------- */
 
-const SECTIONS = ["widgets", "themes", "schemas", "keys"] as const;
+const SECTIONS = ["widgets", "themes", "schemas", "actions", "secrets", "keys"] as const;
 
 function showTab(name: (typeof SECTIONS)[number]): void {
   for (const section of SECTIONS) {
@@ -547,12 +819,21 @@ function showTab(name: (typeof SECTIONS)[number]): void {
   if (name === "themes") {
     mountThemeDesigner(themeDesigner?.getTheme(), themeMode === "viewing");
   }
+  // Actions re-mount so newly saved schemas and secrets are offered.
+  if (name === "actions") {
+    mountActionDesigner(actionDesigner?.getAction(), actionMode === "viewing");
+  }
 }
 
 function currentDefinition(): unknown {
   if (widgetDesigner === undefined) return undefined;
   const draft = widgetDesigner.getDraft();
-  return { kind: draft.kind, template: draft.template, descriptor: draft.descriptor };
+  return {
+    kind: draft.kind,
+    template: draft.template,
+    descriptor: draft.descriptor,
+    ...(draft.load !== undefined ? { load: draft.load } : {})
+  };
 }
 
 /* -------------------------------- boot ------------------------------- */
@@ -681,6 +962,8 @@ async function boot(): Promise<void> {
     refreshWidgets(),
     refreshThemes(),
     refreshSchemas(),
+    refreshActions(),
+    refreshSecrets(),
     refreshKeys(),
     refreshIdentities()
   ]);
@@ -709,10 +992,13 @@ async function boot(): Promise<void> {
   mountWidgetDesigner();
   mountThemeDesigner();
   mountSchemaDesigner();
+  mountActionDesigner();
 
   $("tab-widgets").addEventListener("click", () => showTab("widgets"));
   $("tab-themes").addEventListener("click", () => showTab("themes"));
   $("tab-schemas").addEventListener("click", () => showTab("schemas"));
+  $("tab-actions").addEventListener("click", () => showTab("actions"));
+  $("tab-secrets").addEventListener("click", () => showTab("secrets"));
   $("tab-keys").addEventListener("click", () => showTab("keys"));
 
   $("widget-new").addEventListener("click", () => {
@@ -761,6 +1047,19 @@ async function boot(): Promise<void> {
   });
   $("key-create").addEventListener("click", () => {
     void createKey().catch((error: Error) => status(error.message));
+  });
+  $("action-new").addEventListener("click", () => {
+    selectedAction = undefined;
+    actionMode = "new";
+    mountActionDesigner();
+    renderActionList();
+    syncActionControls();
+  });
+  $("action-save").addEventListener("click", () => {
+    void saveAction().catch((error: Error) => status(error.message));
+  });
+  $("secret-save").addEventListener("click", () => {
+    void saveSecret().catch((error: Error) => status(error.message));
   });
 }
 

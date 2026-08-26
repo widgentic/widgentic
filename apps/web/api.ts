@@ -15,13 +15,19 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ThemeEntry } from "widgentic/theming";
 import { StoreRejectionError, principalIdForSubject } from "widgentic/store";
-import type { StoredSchema, StoredWidget, WritableWidgetStore } from "widgentic/store";
+import type { StoredAction, StoredSchema, StoredWidget, WritableWidgetStore } from "widgentic/store";
+import { testHttpAction } from "widgentic/mcp-server";
+import type { GuardedFetchDeps } from "widgentic/mcp-server";
 import type { SessionClaims } from "./auth.js";
 
 export interface ApiDeps {
   store: WritableWidgetStore;
   /** The session boundary; the API needs nothing else from auth. */
   readSession(cookieHeader: string | undefined): SessionClaims | undefined;
+  /** Whether the store was built with a secret cipher (the Secrets section is disabled otherwise). */
+  secretsEnabled?: boolean;
+  /** Injectable transport for the action test call (tests). */
+  fetchDeps?: GuardedFetchDeps;
 }
 
 function send(res: ServerResponse, status: number, body: unknown): void {
@@ -48,7 +54,9 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
 function rejectionStatus(code: string): number {
   if (code === "UNKNOWN_PRINCIPAL" || code === "UNKNOWN_KEY") return 404;
   if (code === "TOO_MANY_WIDGETS" || code === "TOO_MANY_THEMES" || code === "TOO_MANY_SCHEMAS") return 409;
-  if (code === "SCHEMA_IN_USE") return 409; // conflict: re-point the widgets first
+  if (code === "TOO_MANY_ACTIONS" || code === "TOO_MANY_SECRETS") return 409;
+  if (code === "SCHEMA_IN_USE" || code === "ACTION_IN_USE" || code === "SECRET_IN_USE") return 409; // conflict: re-point first
+  if (code === "NO_CIPHER") return 503; // the deployment cannot hold secrets
   if (code === "FORBIDDEN") return 403;
   if (code === "STORE_ERROR") return 502;
   return 422; // validation family: RESERVED_KIND, RESERVED_THEME, INVALID_TEMPLATE, ...
@@ -109,7 +117,8 @@ export async function handleApiRequest(
         const widget: StoredWidget = {
           kind: id,
           template: body.template as StoredWidget["template"],
-          descriptor: body.descriptor as StoredWidget["descriptor"]
+          descriptor: body.descriptor as StoredWidget["descriptor"],
+          ...(body.load !== undefined ? { load: body.load } : {})
         };
         await deps.store.putWidget(principal.id, widget);
         send(res, 200, { saved: id });
@@ -171,6 +180,67 @@ export async function handleApiRequest(
       }
     }
 
+    if (resource === "actions") {
+      if (method === "GET" && id === "") {
+        send(res, 200, { actions: await deps.store.actions(principal.id) });
+        return true;
+      }
+      // The designer's test call: the production execution path (secrets,
+      // SSRF guard, output validation), redacted — never a browser fetch.
+      if (method === "POST" && id === "test") {
+        const body = (await readBody(req)) as { definition?: unknown; args?: unknown } | undefined;
+        const result = await testHttpAction(body?.definition, body?.args ?? {}, {
+          secrets: (name) => deps.store.secretValue(principal.id, name),
+          fetchDeps: deps.fetchDeps
+        });
+        send(res, 200, result);
+        return true;
+      }
+      if (method === "PUT" && id !== "" && id !== "test") {
+        const body = (await readBody(req)) as Partial<StoredAction> | undefined;
+        if (body === undefined || typeof body !== "object") {
+          sendError(res, 400, "INVALID_BODY", "Expected an action JSON body.");
+          return true;
+        }
+        const entry = { ...body, name: id } as StoredAction;
+        await deps.store.putAction(principal.id, entry);
+        send(res, 200, { saved: id });
+        return true;
+      }
+      if (method === "DELETE" && id !== "") {
+        // ACTION_IN_USE surfaces through the rejection path, naming widgets.
+        await deps.store.removeAction(principal.id, id);
+        send(res, 200, { removed: id });
+        return true;
+      }
+    }
+
+    if (resource === "secrets") {
+      if (method === "GET" && id === "") {
+        send(res, 200, {
+          enabled: deps.secretsEnabled === true,
+          secrets: deps.secretsEnabled === true ? await deps.store.listSecrets(principal.id) : []
+        });
+        return true;
+      }
+      if (method === "PUT" && id !== "") {
+        const body = (await readBody(req)) as { value?: unknown } | undefined;
+        if (typeof body?.value !== "string") {
+          sendError(res, 400, "INVALID_BODY", "Expected { value: string }.");
+          return true;
+        }
+        // Write-only: the value goes in encrypted and never comes back out.
+        await deps.store.putSecret(principal.id, id, body.value);
+        send(res, 200, { saved: id });
+        return true;
+      }
+      if (method === "DELETE" && id !== "") {
+        await deps.store.removeSecret(principal.id, id);
+        send(res, 200, { removed: id });
+        return true;
+      }
+    }
+
     if (resource === "identities") {
       if (method === "GET" && id === "") {
         const linked = await deps.store.listLinkedSubjects(principal.id);
@@ -206,9 +276,15 @@ export async function handleApiRequest(
         return true;
       }
       if (method === "POST" && id === "") {
-        const body = (await readBody(req)) as { name?: unknown } | undefined;
+        const body = (await readBody(req)) as { name?: unknown; scopes?: unknown } | undefined;
         const name = typeof body?.name === "string" ? body.name : "";
-        const created = await deps.store.createKey(principal.id, name);
+        // Scopes are fixed at creation; `read` is always granted and only
+        // key-grantable scopes are accepted (the store enforces both).
+        const created = await deps.store.createKey(
+          principal.id,
+          name,
+          Array.isArray(body?.scopes) ? (body.scopes as StoredAction["name"][] as never) : undefined
+        );
         // The raw key exists in this response and nowhere else, ever.
         send(res, 201, {
           key: created.key,

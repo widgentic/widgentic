@@ -11,6 +11,7 @@ import { applyDefinition, checkDefinition } from "./io.js";
 import type { WidgetDefinition } from "./io.js";
 import { mountPanels } from "./panels.js";
 import type { SchemaEntry } from "./schema-designer.js";
+import type { StoredAction } from "widgentic/actions";
 import { createPreview } from "./preview.js";
 import type { WidgetDraft } from "./store.js";
 import { cloneDraft, createDraftStore, starterDraft } from "./store.js";
@@ -33,6 +34,14 @@ export interface DesignerOptions {
    * standalone schema designer; the widget designer only selects.
    */
   schemas?: SchemaEntry[];
+  /**
+   * Shared actions the draft may bind by name (element `action` bindings
+   * and the widget-level `load`). Action authoring belongs to the
+   * standalone action designer; the widget designer only binds.
+   */
+  actions?: StoredAction[];
+  /** Secret names offered when an inline http action needs a header or query secret. */
+  secretNames?: string[];
   /**
    * Designer chrome appearance. "auto" (default) follows the host's
    * `prefers-color-scheme`; the explicit values pin it. This is the
@@ -78,7 +87,7 @@ export function createDesigner(
     (draft: WidgetDraft, diagnostics: DesignerDiagnostics) => void
   >();
 
-  const preview = createPreview();
+  const preview = createPreview({ actions: options.actions ?? [] });
   const leftColumn = h("div", { class: "wgd-panels" });
   const rightSections = h("div", { class: "wgd-preview-pane" });
   const rightColumn = h("div", { class: "wgd-side" }, [preview.pane, rightSections]);
@@ -88,15 +97,24 @@ export function createDesigner(
   }
   container.appendChild(root);
 
+  const actionContext = {
+    actions: options.actions ?? [],
+    secretNames: options.secretNames ?? [],
+    schemas: options.schemas ?? []
+  };
   const panels = mountPanels(
     store,
     { left: leftColumn, right: rightSections },
     options.themes ?? [],
-    options.schemas ?? []
+    options.schemas ?? [],
+    actionContext
   );
 
   function refresh(draft: WidgetDraft): void {
-    const diagnostics = deriveDiagnostics(draft, { schemas: options.schemas ?? [] });
+    const diagnostics = deriveDiagnostics(draft, {
+      schemas: options.schemas ?? [],
+      actions: options.actions ?? []
+    });
     preview.update(draft, diagnostics);
     for (const listener of [...listeners]) listener(draft, diagnostics);
   }

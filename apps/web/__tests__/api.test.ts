@@ -365,3 +365,91 @@ describe("shared data schemas through the API", () => {
     ).toBeUndefined();
   });
 });
+
+/* ------------------------- actions, secrets, scopes ------------------------- */
+
+describe("actions, secrets and key scopes", () => {
+  const httpAction = {
+    label: "Refresh",
+    definition: {
+      kind: "http",
+      method: "GET",
+      url: "https://api.example.com/weather",
+      input: { type: "object", properties: { city: { type: "string" } } },
+      output: { type: "object", properties: { temp: { type: "number" } }, required: ["temp"] },
+      headers: { Authorization: { secret: "weather-token" } }
+    }
+  };
+
+  it("actions round-trip and ACTION_IN_USE surfaces with the widgets named", async () => {
+    let res = await fetch(`${base}/api/actions/refresh`, asAlice({ method: "PUT", body: JSON.stringify(httpAction) }));
+    expect(res.status).toBe(200);
+    const listed = (await (await fetch(`${base}/api/actions`, asAlice())).json()) as { actions: { name: string }[] };
+    expect(listed.actions.map((a) => a.name)).toContain("refresh");
+    res = await fetch(`${base}/api/widgets/bound-weather`, asAlice({
+      method: "PUT",
+      body: JSON.stringify({
+        template: { tag: "button", action: { ref: "refresh", input: { city: "city" } }, children: ["Refresh"] },
+        descriptor: { description: "bound", dataShape: "{ city }" },
+        load: { ref: "refresh", input: { city: "city" } }
+      })
+    }));
+    expect(res.status).toBe(200);
+    const widgets = (await (await fetch(`${base}/api/widgets`, asAlice())).json()) as { widgets: { kind: string; load?: unknown }[] };
+    expect(widgets.widgets.find((w) => w.kind === "bound-weather")?.load).toEqual({ ref: "refresh", input: { city: "city" } });
+    res = await fetch(`${base}/api/actions/refresh`, asAlice({ method: "DELETE" }));
+    expect(res.status).toBe(409);
+    const error = (await res.json()) as { error: { code: string; message: string } };
+    expect(error.error.code).toBe("ACTION_IN_USE");
+    expect(error.error.message).toContain("bound-weather");
+    await fetch(`${base}/api/widgets/bound-weather`, asAlice({ method: "DELETE" }));
+    res = await fetch(`${base}/api/actions/refresh`, asAlice({ method: "DELETE" }));
+    expect(res.status).toBe(200);
+  });
+
+  it("invalid actions are refused as validation errors", async () => {
+    const res = await fetch(`${base}/api/actions/bad`, asAlice({
+      method: "PUT",
+      body: JSON.stringify({ definition: { kind: "http", method: "GET", url: "http://plain.example", input: { type: "object" }, output: {} } })
+    }));
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe("INVALID_ACTION");
+  });
+
+  it("secrets are refused without a cipher, and the listing says so", async () => {
+    const listing = (await (await fetch(`${base}/api/secrets`, asAlice())).json()) as { enabled: boolean; secrets: unknown[] };
+    expect(listing).toEqual({ enabled: false, secrets: [] });
+    const res = await fetch(`${base}/api/secrets/weather-token`, asAlice({ method: "PUT", body: JSON.stringify({ value: "sk-live-123" }) }));
+    expect(res.status).toBe(503);
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe("NO_CIPHER");
+  });
+
+  it("keys take scopes at creation; execute is opt-in and write is refused", async () => {
+    const reader = (await (await fetch(`${base}/api/keys`, asAlice({ method: "POST", body: JSON.stringify({ name: "reader" }) }))).json()) as { entry: { scopes: string[] } };
+    expect(reader.entry.scopes).toEqual(["read"]);
+    const runner = (await (await fetch(`${base}/api/keys`, asAlice({ method: "POST", body: JSON.stringify({ name: "runner", scopes: ["read", "execute"] }) }))).json()) as { entry: { scopes: string[] } };
+    expect(runner.entry.scopes).toEqual(["read", "execute"]);
+    const writer = await fetch(`${base}/api/keys`, asAlice({ method: "POST", body: JSON.stringify({ name: "writer", scopes: ["write"] }) }));
+    expect(writer.status).toBe(422);
+    expect(((await writer.json()) as { error: { code: string } }).error.code).toBe("INVALID_SCOPES");
+  });
+
+  it("the test call runs server-side through the guarded path", async () => {
+    // No fetchDeps injected here: the guard refuses before any network —
+    // the server never reaches out for a name that resolves nowhere.
+    const res = await fetch(`${base}/api/actions/test`, asAlice({
+      method: "POST",
+      body: JSON.stringify({
+        definition: { ...httpAction.definition, headers: {}, url: "https://192.168.0.10/weather" },
+        args: { city: "Oslo" }
+      })
+    }));
+    expect(res.status).toBe(200);
+    const result = (await res.json()) as { ok: boolean; code?: string; message?: string };
+    expect(result.ok).toBe(false);
+    expect(result.code).toBe("ACTION_FETCH_FAILED");
+    expect(result.message).toContain("not a public address");
+    const notHttp = (await (await fetch(`${base}/api/actions/test`, asAlice({ method: "POST", body: JSON.stringify({ definition: { kind: "prompt", text: ["x"] } }) }))).json()) as { code?: string };
+    expect(notHttp.code).toBe("ACTION_NOT_HTTP");
+  });
+});

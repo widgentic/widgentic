@@ -229,6 +229,13 @@ export function injectDesignerStyles(doc: Document): void {
 .wgd-input, .wgd-textarea, .wgd-select { font: inherit; padding: 4px 6px; border: 1px solid var(--wgd-border); border-radius: 4px; background: var(--wgd-bg); color: var(--wgd-text); }
 /* Textareas fill their panel regardless of the intrinsic cols width. */
 .wgd-textarea { font-family: ui-monospace, monospace; white-space: pre; width: 100%; box-sizing: border-box; min-width: 0; resize: vertical; }
+.wgd-preview .wg-designer-action { position: relative; outline: 1px dashed var(--wgd-muted, #6b7280); outline-offset: 2px; }
+.wgd-preview .wg-designer-action::after { content: "⚡ action"; position: absolute; top: -0.9em; right: 0; font: 10px system-ui, sans-serif; color: var(--wgd-muted, #6b7280); background: var(--wgd-panel, #fbfcfe); padding: 0 4px; border-radius: 3px; pointer-events: none; }
+.wgd-binding { display: flex; flex-direction: column; gap: 6px; padding: 6px 8px; border: 1px dashed var(--wgd-border, #d5dbe3); border-radius: 4px; margin: 4px 0; }
+.wgd-binding-field { min-width: 8ch; font-family: ui-monospace, monospace; font-size: 12px; }
+.wgd-action-definition { display: flex; flex-direction: column; gap: 6px; }
+.wgd-action-schema { display: flex; flex-direction: column; gap: 4px; padding: 4px 0; }
+.wgd-test-output { font: 12px ui-monospace, monospace; white-space: pre-wrap; word-break: break-all; max-height: 240px; overflow: auto; margin: 6px 0 0; }
 .wgd-diagnostic { color: var(--wgd-danger); font-size: 12px; white-space: pre-wrap; }
 .wgd-banner { border: 1px solid var(--wgd-danger-line); background: var(--wgd-danger-bg); color: var(--wgd-danger); border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; }
 /* The preview is the WIDGET's surface, not chrome: it establishes the

@@ -1,0 +1,53 @@
+{
+  "name": "weather-current",
+  "label": "Current weather (WeatherAPI.com)",
+  "description": "GET current conditions for a place; the API key comes from the secret 'weatherapi-key'.",
+  "definition": {
+    "kind": "http",
+    "method": "GET",
+    "url": "https://api.weatherapi.com/v1/current.json",
+    "input": {
+      "type": "object",
+      "required": [
+        "q"
+      ],
+      "properties": {
+        "q": {
+          "type": "string"
+        }
+      }
+    },
+    "output": {
+      "type": "object",
+      "required": [
+        "current"
+      ],
+      "properties": {
+        "current": {
+          "type": "object",
+          "properties": {
+            "temp_c": {
+              "type": "number"
+            },
+            "wind_kph": {
+              "type": "number"
+            },
+            "condition": {
+              "type": "object",
+              "properties": {
+                "text": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "query": {
+      "key": {
+        "secret": "weatherapi-key"
+      }
+    }
+  }
+}

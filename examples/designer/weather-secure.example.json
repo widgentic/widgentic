@@ -1,0 +1,146 @@
+{
+  "kind": "weather-secure",
+  "template": {
+    "tag": "div",
+    "attrs": {
+      "class": "wg-card wg-weather"
+    },
+    "children": [
+      {
+        "tag": "h2",
+        "children": [
+          {
+            "bind": "place"
+          }
+        ]
+      },
+      {
+        "when": "reading",
+        "template": {
+          "tag": "p",
+          "children": [
+            {
+              "bind": "reading.temperature"
+            },
+            " °C · ",
+            {
+              "bind": "reading.condition"
+            },
+            " · wind ",
+            {
+              "bind": "reading.windspeed"
+            },
+            " km/h"
+          ]
+        },
+        "else": {
+          "tag": "p",
+          "attrs": {
+            "class": "wg-muted"
+          },
+          "children": [
+            "No reading yet."
+          ]
+        }
+      },
+      {
+        "tag": "div",
+        "attrs": {
+          "class": "wg-weather-actions"
+        },
+        "children": [
+          {
+            "tag": "button",
+            "action": {
+              "ref": "weather-current",
+              "input": {
+                "q": "place"
+              },
+              "output": {
+                "mode": "patch",
+                "path": "reading",
+                "map": {
+                  "temperature": "current.temp_c",
+                  "windspeed": "current.wind_kph",
+                  "condition": "current.condition.text"
+                }
+              }
+            },
+            "children": [
+              "Refresh"
+            ]
+          },
+          {
+            "tag": "button",
+            "action": {
+              "definition": {
+                "kind": "prompt",
+                "text": [
+                  "What should I wear today in ",
+                  {
+                    "bind": "place"
+                  },
+                  "?"
+                ]
+              }
+            },
+            "children": [
+              "Ask about today"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "descriptor": {
+    "description": "Current weather for a place via WeatherAPI.com (secret 'weatherapi-key'). Provide the place name; the widget loads and refreshes the reading itself.",
+    "dataShape": "{ place: string, reading?: { temperature, windspeed, condition } }",
+    "dataExample": {
+      "place": "Vancouver"
+    },
+    "dataSchema": {
+      "type": "object",
+      "required": [
+        "place"
+      ],
+      "properties": {
+        "place": {
+          "type": "string"
+        },
+        "reading": {
+          "type": "object"
+        }
+      }
+    },
+    "styles": {
+      ".wg-weather-actions": {
+        "display": "flex",
+        "gap": "8px",
+        "margin-top": "8px"
+      },
+      ".wg-weather-actions button": {
+        "font": "inherit",
+        "padding": "4px 10px",
+        "border": "1px solid var(--wg-border)",
+        "border-radius": "var(--wg-radius)",
+        "background": "var(--wg-surface, var(--wg-bg))",
+        "color": "var(--wg-fg)"
+      }
+    }
+  },
+  "load": {
+    "ref": "weather-current",
+    "input": {
+      "q": "place"
+    },
+    "output": {
+      "mode": "patch",
+      "path": "reading",
+      "map": {
+        "temperature": "current.temp_c",
+        "windspeed": "current.wind_kph",
+        "condition": "current.condition.text"
+      }
+    }
+  }
+}

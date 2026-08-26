@@ -5,6 +5,7 @@
  * evaluate for untrusted authors (see guards.ts). Directive nodes are
  * discriminated by their unique key (`bind` / `each` / `when`).
  */
+import type { ActionBinding } from "../actions/types.js";
 
 /**
  * Attribute value: literal string, a data binding, or a bind carrying one
@@ -25,11 +26,16 @@ export interface TemplateBind {
   bind: string;
 }
 
-/** A structural element; attrs and children may contain bindings. */
+/**
+ * A structural element; attrs and children may contain bindings. An
+ * `action` binding makes the element activatable: at render time it is
+ * resolved into a `data-wg-action` descriptor (never a handler).
+ */
 export interface TemplateElement {
   tag: string;
   attrs?: Record<string, TemplateAttrValue>;
   children?: TemplateNode[];
+  action?: ActionBinding;
 }
 
 /** Repeats `template` for each element of the array at `each`. */
@@ -60,7 +66,9 @@ export type TemplateErrorCode =
   | "INVALID_TEMPLATE_NODE"
   | "INVALID_PATH"
   | "FORBIDDEN_ATTRIBUTE"
-  | "TEMPLATE_TOO_DEEP";
+  | "TEMPLATE_TOO_DEEP"
+  | "INVALID_ACTION"
+  | "CONFLICTING_ATTRIBUTES";
 
 /**
  * Structured validation error. `path` is the dotted location of the

@@ -17,11 +17,61 @@ import {
   composeThemes,
   createFileStore
 } from "widgentic/store";
-import type { Principal, WidgetStore } from "widgentic/store";
+import type { ActionSource, Principal, WidgetStore } from "widgentic/store";
 import type { WidgetCatalog } from "widgentic/catalog";
 import type { ThemeRegistry } from "widgentic/theming";
+import type { SecretCipher } from "widgentic/secrets";
 
 const PORT = Number(process.env.PORT ?? 3001);
+
+/**
+ * Secret cipher, in configuration order:
+ *   - WIDGENTIC_KEK_ID: a Key Vault key identifier — data keys are wrapped
+ *     and unwrapped by the vault through the app's managed identity (the
+ *     `Key Vault Crypto Service Encryption User` role); the KEK never
+ *     enters this process.
+ *   - WIDGENTIC_LOCAL_KEK: 64 hex chars — the development cipher for rigs.
+ *   - neither: secrets are unavailable (execution of secret-bearing
+ *     actions fails cleanly; everything else works).
+ */
+const KEK_ID = process.env.WIDGENTIC_KEK_ID;
+const LOCAL_KEK = process.env.WIDGENTIC_LOCAL_KEK;
+let cipher: SecretCipher | undefined;
+if (KEK_ID !== undefined) {
+  const { createKeyVaultCipher } = await import("widgentic/secrets/keyvault");
+  const { DefaultAzureCredential } = await import("@azure/identity");
+  cipher = await createKeyVaultCipher({ keyId: KEK_ID, credential: new DefaultAzureCredential() });
+  console.error("widgentic mcp: secrets unwrap through Key Vault");
+} else if (LOCAL_KEK !== undefined) {
+  const { createLocalCipher } = await import("widgentic/secrets");
+  cipher = createLocalCipher(LOCAL_KEK);
+  console.error("widgentic mcp: secrets use the LOCAL development cipher");
+}
+
+/**
+ * Per-principal token bucket for execute_action: `WIDGENTIC_EXECUTE_RATE`
+ * executions per minute (default 60), per replica. A hostile client
+ * looping on the tool is bounded here; the frame's disable-while-in-flight
+ * is UX, not a control.
+ */
+const EXECUTE_RATE = Math.max(1, Number(process.env.WIDGENTIC_EXECUTE_RATE ?? 60));
+const buckets = new Map<string, { tokens: number; refilledAt: number }>();
+function takeExecutionToken(principalId: string): boolean {
+  const now = Date.now();
+  const bucket = buckets.get(principalId) ?? { tokens: EXECUTE_RATE, refilledAt: now };
+  const refill = ((now - bucket.refilledAt) / 60_000) * EXECUTE_RATE;
+  bucket.tokens = Math.min(EXECUTE_RATE, bucket.tokens + refill);
+  bucket.refilledAt = now;
+  if (bucket.tokens < 1) {
+    buckets.set(principalId, bucket);
+    console.error("widgentic mcp: execute_action rate-limited for a principal (outcome only).");
+    return false;
+  }
+  bucket.tokens -= 1;
+  buckets.set(principalId, bucket);
+  if (buckets.size > 10_000) buckets.clear(); // bounded memory; a reset is benign
+  return true;
+}
 
 /**
  * Optional per-principal store, in configuration order:
@@ -40,11 +90,12 @@ if (COSMOS_ENDPOINT !== undefined) {
   const { DefaultAzureCredential } = await import("@azure/identity");
   store = createCosmosStore({
     endpoint: COSMOS_ENDPOINT,
-    credential: new DefaultAzureCredential()
+    credential: new DefaultAzureCredential(),
+    ...(cipher === undefined ? {} : { cipher })
   });
   console.error(`widgentic mcp: per-principal store on Cosmos at ${COSMOS_ENDPOINT}`);
 } else if (STORE_DIR !== undefined) {
-  store = createFileStore(STORE_DIR);
+  store = createFileStore(STORE_DIR, cipher === undefined ? {} : { cipher });
 }
 
 /**
@@ -132,12 +183,17 @@ const httpServer = createHttpServer(async (req: IncomingMessage, res: ServerResp
         principal = resolved;
       }
     }
-    let composed: { catalog: WidgetCatalog; themes: ThemeRegistry } | undefined;
+    let composed:
+      | { catalog: WidgetCatalog; themes: ThemeRegistry; actions?: ActionSource }
+      | undefined;
+    // The key's scopes decide, per request, whether http actions render
+    // enabled and whether execute_action may run at all.
+    const executeAllowed = principal.scopes.includes("execute");
     if (store !== undefined) {
       // Nothing is compiled into production: anonymous callers get the
       // built-ins, and custom widgets come from principals' stores. The
       // guiding example for compiled-in widgets is examples/mcp-server.
-      const catalogResult = await composeCatalog(store, principal.id);
+      const catalogResult = await composeCatalog(store, principal.id, { executeAllowed });
       const themeResult = await composeThemes(store, principal.id);
       for (const diagnostic of [
         ...catalogResult.diagnostics,
@@ -145,7 +201,11 @@ const httpServer = createHttpServer(async (req: IncomingMessage, res: ServerResp
       ]) {
         console.error(`widgentic store [${principal.id}]: ${diagnostic}`);
       }
-      composed = { catalog: catalogResult.value, themes: themeResult.value };
+      composed = {
+        catalog: catalogResult.value,
+        themes: themeResult.value,
+        ...(catalogResult.actions === undefined ? {} : { actions: catalogResult.actions })
+      };
     }
 
     // The schema source is LAZY: list_schemas reads it when called, so
@@ -156,7 +216,12 @@ const httpServer = createHttpServer(async (req: IncomingMessage, res: ServerResp
       ...(composed ?? {}),
       ...(storeRef === undefined
         ? {}
-        : { schemas: () => storeRef.schemas(principalRef.id) }),
+        : {
+            schemas: () => storeRef.schemas(principalRef.id),
+            secrets: (name: string) => storeRef.secretValue(principalRef.id, name)
+          }),
+      scopes: principal.scopes,
+      rateLimit: () => takeExecutionToken(principalRef.id),
       ...(RESOURCE_DOMAINS.length > 0 ? { resourceDomains: RESOURCE_DOMAINS } : {})
     });
     // Stateless mode: no sessionIdGenerator (omitted — exactOptionalPropertyTypes

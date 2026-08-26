@@ -163,6 +163,7 @@ describe("SDK interoperability (in-memory transport, library assembly)", () => {
     const tools = await client.listTools();
     const names = tools.tools.map((tool) => tool.name).sort();
     expect(names).toEqual([
+      "execute_action",
       "get_authoring_guide",
       "list_schemas",
       "list_theme_tokens",
@@ -170,6 +171,13 @@ describe("SDK interoperability (in-memory transport, library assembly)", () => {
       "list_widgets",
       "render_widget"
     ]);
+    // App-only visibility: Apps hosts hide it from the model; the SDK
+    // itself lists it (filtering is the host's job), which is what a
+    // non-Apps client sees.
+    const execute = tools.tools.find((tool) => tool.name === "execute_action");
+    expect(execute?._meta).toMatchObject({
+      ui: { resourceUri: "ui://widgentic/app.html", visibility: ["app"] }
+    });
   });
 
   it("field descriptions from definitions reach the wire schema", async () => {

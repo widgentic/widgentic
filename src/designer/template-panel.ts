@@ -8,6 +8,11 @@
  */
 import type { DataSchema } from "widgentic/catalog";
 import type { WidgetTemplate } from "widgentic/templates";
+import type { ActionBinding, StoredAction } from "widgentic/actions";
+import { createBindingEditor } from "./action-editor.js";
+import type { SchemaEntry } from "./schema-designer.js";
+import { collectPaths, schemaType } from "./schema-paths.js";
+import { effectiveDataSchema } from "./validate.js";
 import { diagnosticLine, fitSelect, h, menuButton } from "./dom.js";
 import { createRecordEditor } from "./record-editor.js";
 import { attachJsonHighlight, repaintHighlight } from "./highlight.js";
@@ -18,38 +23,6 @@ type Path = (string | number)[];
 
 /** What a data path is being used for — decides which paths are offered. */
 type PathUse = "bind" | "each" | "when";
-
-function schemaType(schema: unknown): string | undefined {
-  if (!isPlainObject(schema)) return undefined;
-  const type = schema.type;
-  if (typeof type === "string") return type;
-  if (Array.isArray(type)) {
-    // Nullable arrays pick the PRIMARY type regardless of order.
-    const primary = type.find((t) => typeof t === "string" && t !== "null");
-    if (typeof primary === "string") return primary;
-  }
-  return undefined;
-}
-
-/**
- * Dotted paths reachable from a scope schema, with the schema at each
- * path. Arrays are offered as themselves (for `each`); descending into
- * their items needs an `each` first, so we stop there.
- */
-function collectPaths(
-  schema: unknown,
-  prefix: string,
-  out: { path: string; schema: unknown }[],
-  depth = 0
-): void {
-  if (!isPlainObject(schema) || depth > 3) return;
-  if (schemaType(schema) !== "object" || !isPlainObject(schema.properties)) return;
-  for (const [name, sub] of Object.entries(schema.properties)) {
-    const path = prefix === "" ? name : `${prefix}.${name}`;
-    out.push({ path, schema: sub });
-    collectPaths(sub, path, out, depth + 1);
-  }
-}
 
 /** Paths worth offering for a given use. */
 function pathOptions(scope: unknown, use: PathUse): string[] {
@@ -159,9 +132,17 @@ const NODE_PRESETS: Record<string, () => unknown> = {
   when: () => ({ when: ".", template: "shown" })
 };
 
+/** What element bindings can reach: shared actions, secrets, schemas. */
+export interface TemplateActionContext {
+  actions: StoredAction[];
+  secretNames: string[];
+  schemas: SchemaEntry[];
+}
+
 export function mountTemplatePanel(
   store: DraftStore,
-  refreshers: ((draft: WidgetDraft) => void)[]
+  refreshers: ((draft: WidgetDraft) => void)[],
+  actionContext: TemplateActionContext = { actions: [], secretNames: [], schemas: [] }
 ): {
   element: HTMLElement;
   refresh(draft: WidgetDraft, diagnostics: DesignerDiagnostics): void;
@@ -442,7 +423,8 @@ export function mountTemplatePanel(
     const errorHere =
       errorPath !== undefined &&
       (errorPath === here ||
-        (errorPath.startsWith(here === "" ? "attrs." : `${here}.attrs.`) &&
+        ((errorPath.startsWith(here === "" ? "attrs." : `${here}.attrs.`) ||
+          errorPath.startsWith(here === "" ? "action" : `${here}.action`)) &&
           isPlainObject(node) &&
           typeof node.tag === "string"))
         ? currentError
@@ -542,6 +524,7 @@ export function mountTemplatePanel(
     }
     if (typeof node.tag === "string") {
       const attrs = isPlainObject(node.attrs) ? node.attrs : {};
+      const binding = isPlainObject(node.action) ? (node.action as ActionBinding) : undefined;
       const attrRows = Object.entries(attrs).map(([name, value]) => {
         const isBind = isPlainObject(value) && typeof value.bind === "string";
         // The bind's transform fields, when present. Every write goes
@@ -681,12 +664,18 @@ export function mountTemplatePanel(
       const addMenu = menuButton(
         "+",
         "Add attribute or child node",
-        ["attribute", ...Object.keys(NODE_PRESETS)],
+        ["attribute", ...(binding === undefined ? ["action"] : []), ...Object.keys(NODE_PRESETS)],
         (choice) => {
           collapsedPaths.delete(pathString(path)); // never add into a fold
           const preset = NODE_PRESETS[choice];
           if (choice === "attribute") {
             commitAt(path, { ...node, attrs: { ...attrs, "": "" } });
+          } else if (choice === "action") {
+            const first = actionContext.actions[0];
+            commitAt(path, {
+              ...node,
+              action: first !== undefined ? { ref: first.name } : { definition: { kind: "prompt", text: ["Tell me more"] } }
+            });
           } else if (preset) {
             commitAt([...path, childNodes.length], preset());
           }
@@ -694,6 +683,32 @@ export function mountTemplatePanel(
       );
       const body: (Node | string)[] = [];
       if (attrRows.length > 0) body.push(h("div", { class: "wgd-attrs" }, attrRows));
+      // Action binding: the element becomes activatable in Apps hosts. The
+      // editor commits the whole binding; `undefined` drops the key.
+      const scopePaths = isPlainObject(scope) ? pathOptions(scope, "when") : [];
+      const bindingEditor = createBindingEditor(
+        binding,
+        {
+          ...actionContext,
+          scopePaths,
+          // The widget's effective data schema drives output-map targets.
+          getDataSchema: () => effectiveDataSchema(store.get(), actionContext.schemas)
+        },
+        (next) => {
+          if (next === undefined) {
+            const { action: _gone, ...rest } = node;
+            commitAt(path, rest);
+          } else {
+            commitAt(path, { ...node, action: next });
+          }
+        }
+      );
+      if (binding !== undefined) {
+        body.push(h("div", { class: "wgd-attrs wgd-node-action" }, [
+          h("span", { class: "wgd-slot-label" }, ["action"]),
+          bindingEditor.element
+        ]));
+      }
       if (childNodes.length > 0) {
         body.push(
           h(
@@ -716,6 +731,7 @@ export function mountTemplatePanel(
       if (attrRows.length > 0) {
         summaryParts.push(`${attrRows.length} attr${attrRows.length === 1 ? "" : "s"}`);
       }
+      if (binding !== undefined) summaryParts.push("action");
       if (childNodes.length > 0) {
         summaryParts.push(
           `${childNodes.length} ${childNodes.length === 1 ? "child" : "children"}`
@@ -750,6 +766,8 @@ export function mountTemplatePanel(
   /** Rebuild the tree from the last refresh inputs (collapse toggles). */
   function renderTree(): void {
     if (lastDraft === undefined) return;
+    // Shared refs resolve like inline schemas — a ref-based widget gets
+    // the same path completions (observed live: plain text boxes otherwise).
     treeHost.replaceChildren(
       renderNode(
         lastDraft.template,
@@ -757,7 +775,7 @@ export function mountTemplatePanel(
         lastErrorPath,
         true,
         undefined,
-        lastDraft.descriptor.dataSchema
+        effectiveDataSchema(lastDraft, actionContext.schemas)
       )
     );
   }

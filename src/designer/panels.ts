@@ -18,6 +18,9 @@ import { createStylesEditor } from "./styles-editor.js";
 import type { DraftStore, WidgetDraft } from "./store.js";
 import type { SchemaEntry } from "./schema-designer.js";
 import { mountTemplatePanel } from "./template-panel.js";
+import type { TemplateActionContext } from "./template-panel.js";
+import { createBindingEditor } from "./action-editor.js";
+import type { ActionBinding } from "widgentic/actions";
 import { mountThemePanel } from "./theme-panel.js";
 import { deriveDiagnostics, effectiveDataSchema } from "./validate.js";
 
@@ -109,7 +112,8 @@ export function mountPanels(
   store: DraftStore,
   columns: PanelColumns,
   themes: ThemeEntry[] = [],
-  schemas: SchemaEntry[] = []
+  schemas: SchemaEntry[] = [],
+  actionContext: TemplateActionContext = { actions: [], secretNames: [], schemas: [] }
 ): { dispose(): void } {
   const refreshers: Refresher[] = [];
   const disposers: (() => void)[] = [];
@@ -474,8 +478,35 @@ export function mountPanels(
     stylesDiag
   ]);
 
-  const templatePanel = mountTemplatePanel(store, refreshers);
+  const templatePanel = mountTemplatePanel(store, refreshers, actionContext);
   const themePanel = mountThemePanel(store, refreshers, themes);
+
+  // --- Load: the widget-level http GET action run once per instance -------
+  const loadDiag = diagnosticLine(undefined);
+  const loadEditor = createBindingEditor(
+    store.get().load,
+    {
+      ...actionContext,
+      loadOnly: true,
+      getDataSchema: () => effectiveDataSchema(store.get(), schemas)
+    },
+    (binding: ActionBinding | undefined) =>
+      store.update((d) => {
+        if (binding === undefined) {
+          const { load: _l, ...rest } = d;
+          return rest;
+        }
+        return { ...d, load: binding };
+      })
+  );
+  refreshers.push((draft) => {
+    if (!loadEditor.element.contains(document.activeElement)) loadEditor.setValue(draft.load);
+  });
+  const loadPanel = section(
+    "Load action (http GET, runs once when the widget first renders in an Apps host)",
+    [loadEditor.element, loadDiag],
+    false
+  );
   const ioPanel = mountIoPanel(store);
 
   // Read-only marks the right column's EDITING sections; the theme panel
@@ -489,6 +520,7 @@ export function mountPanels(
     schemaPanel,
     samplePanel,
     templatePanel.element,
+    loadPanel,
     ioPanel.element
   );
   columns.right.append(previewDataPanel, stylesPanel, themePanel.element);
@@ -497,8 +529,10 @@ export function mountPanels(
   // Diagnostics refresh: derive once per change here (cheap, pure) — and
   // once immediately, so the tree/JSON projections render before any edit.
   function applyDiagnostics(draft: WidgetDraft): void {
-    const diagnostics = deriveDiagnostics(draft, { schemas });
+    const diagnostics = deriveDiagnostics(draft, { schemas, actions: actionContext.actions });
     kindDiag.hidden = diagnostics.kind === undefined;
+    loadDiag.hidden = diagnostics.load === undefined && diagnostics.actionRefs === undefined;
+    loadDiag.textContent = [diagnostics.load, diagnostics.actionRefs].filter(Boolean).join(" ");
     kindDiag.textContent = diagnostics.kind ?? "";
     exampleDiag.hidden = diagnostics.example === undefined;
     exampleDiag.textContent = diagnostics.example

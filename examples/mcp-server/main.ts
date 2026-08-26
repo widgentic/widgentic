@@ -19,7 +19,7 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createWidgenticServer } from "widgentic/mcp-server/sdk";
 import { createCatalog } from "widgentic/catalog";
-import { registerTemplate } from "widgentic/templates";
+import { findActionBinding, registerTemplate } from "widgentic/templates";
 import { customWidgets } from "./widgets/index.js";
 
 const catalog = createCatalog();
@@ -27,8 +27,23 @@ for (const widget of customWidgets) {
   registerTemplate(catalog, widget.kind, widget.template, widget.descriptor);
 }
 
-const server = createWidgenticServer({ catalog });
+// Compiled-in widgets bind their actions INLINE (no store, no shared
+// refs), so the action source is a walk over the same definitions. A
+// stdio host is the operator's own machine: execution is allowed.
+const byKind = new Map(customWidgets.map((widget) => [widget.kind, widget]));
+const server = createWidgenticServer({
+  catalog,
+  actions: {
+    bindingAt: (kind, id) => {
+      const widget = byKind.get(kind);
+      return widget === undefined ? undefined : findActionBinding(widget.template, id);
+    },
+    load: (kind) => byKind.get(kind)?.load,
+    resolve: () => undefined
+  },
+  scopes: ["read", "execute"]
+});
 await server.connect(new StdioServerTransport());
 console.error(
-  "widgentic MCP server ready on stdio (tools: list_widgets, list_schemas, list_themes, list_theme_tokens, render_widget, get_authoring_guide)"
+  "widgentic MCP server ready on stdio (tools: list_widgets, list_schemas, list_themes, list_theme_tokens, render_widget, get_authoring_guide, execute_action)"
 );

@@ -1,5 +1,7 @@
 import type { TemplateError, WidgetTemplate } from "./types.js";
-import { FORBIDDEN_ATTR, MAX_TEMPLATE_DEPTH } from "./guards.js";
+import { FORBIDDEN_ATTR, MAX_TEMPLATE_DEPTH, RESERVED_ATTR } from "./guards.js";
+import { parsePath } from "./paths.js";
+import { validateActionBinding } from "../actions/validate.js";
 
 export type ValidateTemplateResult =
   | { ok: true; template: WidgetTemplate }
@@ -34,18 +36,14 @@ function nodeError(message: string, path: string): TemplateError {
   return { code: "INVALID_TEMPLATE_NODE", message, path };
 }
 
-/** Path syntax: "." (scope self) or non-empty dot segments. */
+/** Path syntax per paths.ts: ".", "$index", "$meta."/"$root."/"$parent."-prefixed, or dot segments. */
 function checkPathSyntax(value: string, path: string): TemplateError | undefined {
-  if (value === ".") return undefined;
-  const body = value.startsWith("$meta.") ? value.slice("$meta.".length) : value;
-  if (body.length === 0 || body.split(".").some((segment) => segment === "")) {
-    return {
-      code: "INVALID_PATH",
-      message: `Invalid data path '${value}'.`,
-      path
-    };
-  }
-  return undefined;
+  if (parsePath(value) !== undefined) return undefined;
+  return {
+    code: "INVALID_PATH",
+    message: `Invalid data path '${value}'.`,
+    path
+  };
 }
 
 function check(node: unknown, path: string, depth: number): TemplateError | undefined {
@@ -119,6 +117,13 @@ function check(node: unknown, path: string, depth: number): TemplateError | unde
             path: attrPath
           };
         }
+        if (RESERVED_ATTR.test(name)) {
+          return {
+            code: "FORBIDDEN_ATTRIBUTE",
+            message: `Attribute '${name}' is reserved for the renderer (data-wg-*); use an 'action' binding.`,
+            path: attrPath
+          };
+        }
         if (typeof value === "string") continue;
         if (isPlainObject(value) && typeof value.bind === "string") {
           const pathError = checkPathSyntax(value.bind, attrPath);
@@ -168,6 +173,26 @@ function check(node: unknown, path: string, depth: number): TemplateError | unde
           `Attribute '${name}' must be a string, { bind }, { bind, map, default? } or { bind, prefix } value.`,
           attrPath
         );
+      }
+    }
+    if ("action" in node && node.action !== undefined) {
+      // An element is a link OR an action — both would leave the bridge
+      // guessing which the author meant.
+      const hasHref =
+        isPlainObject(node.attrs) &&
+        Object.keys(node.attrs).some((name) => name.toLowerCase() === "href");
+      if (hasHref) {
+        return {
+          code: "CONFLICTING_ATTRIBUTES",
+          message: "An element carries 'href' or an 'action' binding, never both.",
+          path
+        };
+      }
+      const actionError = validateActionBinding(node.action, join(path, "action"), {
+        isPath: (value) => parsePath(value) !== undefined
+      });
+      if (actionError) {
+        return { code: "INVALID_ACTION", message: actionError.message, path: actionError.path };
       }
     }
     if ("children" in node && node.children !== undefined) {

@@ -5,7 +5,9 @@
  * Imports are untrusted — everything re-validates, and a failed import
  * never touches the current draft.
  */
-import { validateTemplate } from "widgentic/templates";
+import { parsePath, validateTemplate } from "widgentic/templates";
+import { validateLoadBinding } from "widgentic/actions";
+import type { ActionBinding } from "widgentic/actions";
 import { validateTheme } from "widgentic/theming";
 import { diagnosticLine, h, section, textArea } from "./dom.js";
 import { attachJsonHighlight, repaintHighlight } from "./highlight.js";
@@ -15,6 +17,7 @@ export interface WidgetDefinition {
   kind: WidgetDraft["kind"];
   template: WidgetDraft["template"];
   descriptor: WidgetDraft["descriptor"];
+  load?: ActionBinding;
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -37,6 +40,12 @@ export function checkDefinition(definition: unknown): string[] {
   } else if (typeof definition.descriptor.description !== "string") {
     errors.push("'descriptor.description' must be a string.");
   }
+  if (definition.load !== undefined) {
+    const problem = validateLoadBinding(definition.load, "load", {
+      isPath: (value) => parsePath(value) !== undefined
+    });
+    if (problem) errors.push(`load: ${problem.message} (at ${problem.path})`);
+  }
   return errors;
 }
 
@@ -44,7 +53,8 @@ export function exportWidgetJson(draft: WidgetDraft): string {
   const definition: WidgetDefinition = {
     kind: draft.kind,
     template: draft.template,
-    descriptor: draft.descriptor
+    descriptor: draft.descriptor,
+    ...(draft.load !== undefined ? { load: draft.load } : {})
   };
   return JSON.stringify(definition, null, 2);
 }
@@ -76,6 +86,7 @@ export function applyDefinition(store: DraftStore, definition: WidgetDefinition)
     kind: definition.kind,
     template: definition.template,
     descriptor: definition.descriptor,
+    ...(definition.load !== undefined ? { load: definition.load } : {}),
     ...(theme !== undefined ? { theme } : {})
   });
 }
@@ -97,7 +108,12 @@ export function toTypeScriptModule(draft: WidgetDraft): string {
   return (
     `import type { CustomWidget } from "./index.js";\n\n` +
     `export const ${name}Widget: CustomWidget = ${JSON.stringify(
-      { kind: draft.kind, template: draft.template, descriptor: draft.descriptor },
+      {
+        kind: draft.kind,
+        template: draft.template,
+        descriptor: draft.descriptor,
+        ...(draft.load !== undefined ? { load: draft.load } : {})
+      },
       null,
       2
     )};\n`

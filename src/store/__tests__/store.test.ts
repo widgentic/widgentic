@@ -29,6 +29,19 @@ const ticketWidget: StoredWidget = {
 };
 const brandTheme: ThemeEntry = { name: "brand", tokens: { accent: "#ff5a1f" } };
 
+/** The actions/secrets half of the read port, for fakes that only test widgets and themes. */
+const inertExtras = {
+  async actions() {
+    return [];
+  },
+  async listSecrets() {
+    return [];
+  },
+  async secretValue() {
+    return undefined;
+  }
+};
+
 const KEY_A = "wgk_aaaa1111";
 const KEY_B = "wgk_bbbb2222";
 
@@ -125,6 +138,8 @@ describe("memory store", () => {
       maxWidgets: 2,
       maxThemes: 1,
       maxSchemas: 50,
+      maxActions: 50,
+      maxSecrets: 50,
       maxEntryBytes: 65_536,
       maxTemplateNodes: 2_000
     });
@@ -142,6 +157,8 @@ describe("memory store", () => {
       maxWidgets: 100,
       maxThemes: 50,
       maxSchemas: 50,
+      maxActions: 50,
+      maxSecrets: 50,
       maxEntryBytes: 300,
       maxTemplateNodes: 5
     });
@@ -255,6 +272,7 @@ describe("composition", () => {
   it("skips an invalid entry and keeps the principal's valid ones", async () => {
     // Bypass write validation the way an out-of-band edit would.
     const rogue = {
+      ...inertExtras,
       async resolvePrincipal() {
         return undefined;
       },
@@ -291,6 +309,7 @@ describe("composition", () => {
   it("never lets a stored theme shadow a built-in theme name", async () => {
     // Out-of-band stores can hold one even though writes now refuse it.
     const rogue = {
+      ...inertExtras,
       async resolvePrincipal() {
         return undefined;
       },
@@ -336,6 +355,7 @@ describe("composition", () => {
 
   it("skips exotic identifiers at composition with a diagnostic", async () => {
     const rogue = {
+      ...inertExtras,
       async resolvePrincipal() {
         return undefined;
       },
@@ -382,6 +402,7 @@ describe("composition", () => {
       descriptor: { description: "too many nodes", dataShape: "x" }
     } as StoredWidget;
     const rogue = {
+      ...inertExtras,
       async resolvePrincipal() {
         return undefined;
       },
@@ -405,6 +426,7 @@ describe("composition", () => {
 
   it("never lets a stored entry shadow a built-in kind", async () => {
     const rogue = {
+      ...inertExtras,
       async resolvePrincipal() {
         return undefined;
       },
@@ -507,6 +529,7 @@ describe("shared data schemas", () => {
   it("a dangling ref skips that widget with a diagnostic, not the rest", async () => {
     // Out-of-band state: a rogue store hands back a ref with no schema.
     const rogue = {
+      ...inertExtras,
       async resolvePrincipal() {
         return undefined;
       },
@@ -530,6 +553,7 @@ describe("shared data schemas", () => {
   it("schemas load only when some widget carries a ref", async () => {
     let schemaReads = 0;
     const counting = {
+      ...inertExtras,
       async resolvePrincipal() {
         return undefined;
       },
@@ -563,5 +587,61 @@ describe("shared data schemas", () => {
     const reporting = createFileStore(dir, { onDiagnostic: (m) => diagnostics.push(m) });
     expect((await reporting.schemas("alice")).map((s) => s.name)).toEqual(["person"]);
     expect(diagnostics.join(" ")).toContain("INVALID_SHAPE");
+  });
+});
+
+describe("action bindings through composition", () => {
+  const refresh = {
+    name: "refresh",
+    definition: {
+      kind: "http" as const,
+      method: "GET" as const,
+      url: "https://api.example.com/weather",
+      input: { type: "object", properties: { city: { type: "string" } } },
+      output: { type: "object" }
+    }
+  };
+  const bound: StoredWidget = {
+    kind: "weather",
+    template: { tag: "button", action: { ref: "refresh", input: { city: "city" } }, children: ["Refresh"] },
+    descriptor: { description: "bound", dataShape: "{ city }" },
+    load: { ref: "refresh", input: { city: "city" } }
+  };
+  const descriptorOf = (catalog: { render(p: unknown): unknown }, payload: unknown) => {
+    const rendered = catalog.render(payload) as { ok: boolean; node?: { attrs?: Record<string, string> } };
+    return JSON.parse(rendered.node?.attrs?.["data-wg-action"] ?? "{}") as Record<string, unknown>;
+  };
+
+  it("resolves shared refs, exposes bindings and load through the action source", async () => {
+    const store = createMemoryStore([{ principal: { id: "alice", scopes: ["read", "execute"] }, widgets: [bound], actions: [refresh] }]);
+    const composed = await composeCatalog(store, "alice");
+    expect(composed.diagnostics).toEqual([]);
+    expect(descriptorOf(composed.value, { kind: "weather", data: { city: "Oslo" } })).toEqual({ id: "", kind: "http", args: { city: "Oslo" }, widget: "weather" });
+    expect(composed.actions?.resolve("refresh")).toEqual(refresh.definition);
+    expect(composed.actions?.bindingAt("weather", "")).toEqual((bound.template as { action?: unknown }).action);
+    expect(composed.actions?.bindingAt("weather", "children.0")).toBeUndefined();
+    expect(composed.actions?.load("weather")).toEqual(bound.load);
+    expect(composed.actions?.executeAllowed).toBe(true);
+  });
+
+  it("dangling refs degrade to disabled descriptors with a diagnostic", async () => {
+    const store = createMemoryStore([{ principal: { id: "alice", scopes: ["read"] }, widgets: [bound] }]);
+    const composed = await composeCatalog(store, "alice");
+    expect(composed.diagnostics.join(" ")).toContain("unknown action 'refresh'");
+    expect(descriptorOf(composed.value, { kind: "weather", data: { city: "Oslo" } })).toEqual({ id: "", disabled: "unresolved" });
+  });
+
+  it("a caller without execute sees http actions disabled by scope", async () => {
+    const store = createMemoryStore([{ principal: { id: "alice", scopes: ["read"] }, widgets: [bound], actions: [refresh] }]);
+    const composed = await composeCatalog(store, "alice", { executeAllowed: false });
+    expect(descriptorOf(composed.value, { kind: "weather", data: { city: "Oslo" } })).toEqual({ id: "", kind: "http", args: { city: "Oslo" }, disabled: "scope", widget: "weather" });
+    expect(composed.actions?.executeAllowed).toBe(false);
+  });
+
+  it("stores without a cipher refuse secret operations, and seeded keys carry scopes", async () => {
+    const store = createMemoryStore([{ principal: { id: "alice", scopes: ["read", "execute"] }, apiKey: "wgk_seed" }]);
+    await expect(store.putSecret("alice", "t", "v")).rejects.toMatchObject({ code: "NO_CIPHER" });
+    await expect(store.secretValue("alice", "t")).rejects.toMatchObject({ code: "NO_CIPHER" });
+    expect((await store.resolvePrincipal("wgk_seed"))?.scopes).toEqual(["read", "execute"]);
   });
 });

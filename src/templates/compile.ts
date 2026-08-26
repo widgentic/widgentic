@@ -7,13 +7,22 @@ import type {
   WidgetNodeAttrs,
   WidgetRenderer
 } from "../catalog/index.js";
+import type {
+  ActionBinding,
+  ActionDefinition,
+  ActionDescriptor,
+  ActionDisabledReason
+} from "../actions/types.js";
+import { PROMPT_TEXT_MAX } from "../actions/types.js";
 import type { WidgetTemplate } from "./types.js";
 import {
   FORBIDDEN_ATTR,
+  RESERVED_ATTR,
   URL_ATTRS,
   isSafeImageSrc,
   isSafeUrl
 } from "./guards.js";
+import { parsePath } from "./paths.js";
 import { InvalidTemplateError, validateTemplate } from "./validate.js";
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -39,23 +48,42 @@ function formatValue(value: unknown): string {
   }
 }
 
+function join(path: string, segment: string): string {
+  return path === "" ? segment : `${path}.${segment}`;
+}
+
 /**
- * Resolve a dot path. Scope is `payload.data` (or the current `each` item);
- * "." is the scope itself; a "$meta." prefix reads from `payload.meta`.
- * Missing or non-traversable paths resolve to `undefined` — never throws.
+ * One scope frame: the root frame holds `payload.data`; every `each`
+ * pushes the current item with its position. `$parent` walks the stack,
+ * `$root` reads the bottom, `$index` reads the top's position.
  */
-function resolvePath(path: string, scope: unknown, meta: unknown): unknown {
-  if (path === ".") return scope;
+interface Frame {
+  scope: unknown;
+  index?: number;
+}
+
+/**
+ * Resolve a path against the scope chain (see paths.ts for the grammar).
+ * Missing, non-traversable or malformed paths resolve to `undefined` —
+ * never throws.
+ */
+function resolvePath(path: string, frames: Frame[], meta: unknown): unknown {
+  const parsed = parsePath(path);
+  if (parsed === undefined) return undefined;
   let current: unknown;
-  let body: string;
-  if (path.startsWith("$meta.")) {
+  if (parsed.base === "meta") {
     current = meta;
-    body = path.slice("$meta.".length);
+  } else if (parsed.base === "root") {
+    current = frames[0]?.scope;
   } else {
-    current = scope;
-    body = path;
+    const depth = frames.length - 1 - parsed.up;
+    if (depth < 0) return undefined;
+    const frame = frames[depth];
+    if (frame === undefined) return undefined;
+    if (parsed.index) return frame.index;
+    current = frame.scope;
   }
-  for (const segment of body.split(".")) {
+  for (const segment of parsed.segments) {
     if (Array.isArray(current)) {
       const index = Number(segment);
       current = Number.isInteger(index) ? current[index] : undefined;
@@ -83,17 +111,79 @@ interface Budget {
   truncated: boolean;
 }
 
+/** Render-time knowledge about actions the caller supplies. */
+interface ActionContext {
+  actions?: (ref: string) => ActionDefinition | undefined;
+  httpDisabled?: ActionDisabledReason;
+  /** The registered kind, stamped into descriptors as `widget`. */
+  kind?: string;
+}
+
+/**
+ * Resolve a binding into the descriptor an element carries. Everything the
+ * bridge needs is decided here, in scope, at render time: the prompt's
+ * text, the http arguments, and whether the action is available at all.
+ */
+function buildDescriptor(
+  binding: ActionBinding,
+  id: string,
+  frames: Frame[],
+  meta: unknown,
+  ctx: ActionContext
+): ActionDescriptor {
+  const definition: ActionDefinition | undefined =
+    "ref" in binding && typeof binding.ref === "string"
+      ? ctx.actions?.(binding.ref)
+      : "definition" in binding && isPlainObject(binding.definition)
+        ? (binding.definition as ActionDefinition)
+        : undefined;
+  if (definition === undefined || (definition.kind !== "prompt" && definition.kind !== "http")) {
+    return { id, disabled: "unresolved" };
+  }
+  if (definition.kind === "prompt") {
+    let text = "";
+    const segments = Array.isArray(definition.text) ? definition.text : [];
+    for (const segment of segments) {
+      if (typeof segment === "string") text += segment;
+      else if (isPlainObject(segment) && typeof segment.bind === "string") {
+        text += formatValue(resolvePath(segment.bind, frames, meta));
+      }
+      if (text.length >= PROMPT_TEXT_MAX) break;
+    }
+    const prompt: ActionDescriptor = { id, kind: "prompt", text: text.slice(0, PROMPT_TEXT_MAX) };
+    if (ctx.kind !== undefined) prompt.widget = ctx.kind;
+    return prompt;
+  }
+  const args: Record<string, unknown> = {};
+  if (isPlainObject(binding.input)) {
+    for (const [field, value] of Object.entries(binding.input)) {
+      let resolved: unknown;
+      if (typeof value === "string") resolved = resolvePath(value, frames, meta);
+      else if (isPlainObject(value) && "const" in value) resolved = value.const;
+      if (resolved !== undefined) args[field] = resolved;
+    }
+  }
+  const descriptor: ActionDescriptor = { id, kind: "http", args };
+  if (ctx.httpDisabled !== undefined) descriptor.disabled = ctx.httpDisabled;
+  if (ctx.kind !== undefined) descriptor.widget = ctx.kind;
+  return descriptor;
+}
+
 /**
  * Interpret a template node into zero or more render-tree nodes.
  * Lenient by design: validation is the strict layer, so unknown or
  * malformed forms render as nothing rather than throwing (defense in
- * depth for templates that bypassed validation).
+ * depth for templates that bypassed validation). `tpath` is the node's
+ * dotted position in the TEMPLATE (the validator's path convention) — the
+ * identifier an action binding is known by.
  */
 function interpretNode(
   node: unknown,
-  scope: unknown,
+  frames: Frame[],
   meta: unknown,
-  budget: Budget
+  budget: Budget,
+  tpath: string,
+  ctx: ActionContext
 ): WidgetNode[] {
   if (budget.remaining <= 0) {
     budget.truncated = true;
@@ -107,33 +197,37 @@ function interpretNode(
 
   if (typeof node.bind === "string") {
     budget.remaining--;
-    return [formatValue(resolvePath(node.bind, scope, meta))];
+    return [formatValue(resolvePath(node.bind, frames, meta))];
   }
 
   if (typeof node.each === "string") {
-    const value = resolvePath(node.each, scope, meta);
+    const value = resolvePath(node.each, frames, meta);
     const items = Array.isArray(value) ? value : [];
     if (items.length === 0) {
       return node.empty === undefined
         ? []
-        : interpretNode(node.empty, scope, meta, budget);
+        : interpretNode(node.empty, frames, meta, budget, join(tpath, "empty"), ctx);
     }
     const out: WidgetNode[] = [];
-    for (const item of items) {
+    const itemPath = join(tpath, "template");
+    for (let i = 0; i < items.length; i++) {
       if (budget.remaining <= 0) {
         budget.truncated = true;
         break;
       }
-      out.push(...interpretNode(node.template, item, meta, budget));
+      frames.push({ scope: items[i], index: i });
+      out.push(...interpretNode(node.template, frames, meta, budget, itemPath, ctx));
+      frames.pop();
     }
     return out;
   }
 
   if (typeof node.when === "string") {
-    const branch = resolvePath(node.when, scope, meta)
-      ? node.template
-      : node.else;
-    return branch === undefined ? [] : interpretNode(branch, scope, meta, budget);
+    const truthy = Boolean(resolvePath(node.when, frames, meta));
+    const branch = truthy ? node.template : node.else;
+    return branch === undefined
+      ? []
+      : interpretNode(branch, frames, meta, budget, join(tpath, truthy ? "template" : "else"), ctx);
   }
 
   if (typeof node.tag === "string" && node.tag.length > 0) {
@@ -141,12 +235,13 @@ function interpretNode(
     const attrs: WidgetNodeAttrs = {};
     if (isPlainObject(node.attrs)) {
       for (const [name, raw] of Object.entries(node.attrs)) {
-        if (FORBIDDEN_ATTR.test(name)) continue;
+        // Handlers are code; data-wg-* is the renderer's own vocabulary.
+        if (FORBIDDEN_ATTR.test(name) || RESERVED_ATTR.test(name)) continue;
         let value: string | undefined;
         if (typeof raw === "string") {
           value = raw;
         } else if (isPlainObject(raw) && typeof raw.bind === "string") {
-          const resolved = resolvePath(raw.bind, scope, meta);
+          const resolved = resolvePath(raw.bind, frames, meta);
           if (isPlainObject(raw.map)) {
             // The resolved value SELECTS a key; every emitted character
             // is an author-written literal. A miss falls to `default`,
@@ -184,8 +279,15 @@ function interpretNode(
         attrs[name] = value;
       }
     }
+    if (isPlainObject(node.action)) {
+      attrs["data-wg-action"] = JSON.stringify(
+        buildDescriptor(node.action as ActionBinding, tpath, frames, meta, ctx)
+      );
+    }
     const children = Array.isArray(node.children)
-      ? node.children.flatMap((child) => interpretNode(child, scope, meta, budget))
+      ? node.children.flatMap((child, i) =>
+          interpretNode(child, frames, meta, budget, join(tpath, `children.${i}`), ctx)
+        )
       : [];
     const element: WidgetElementNode = { tag: node.tag };
     if (Object.keys(attrs).length > 0) element.attrs = attrs;
@@ -214,6 +316,18 @@ export function countTemplateNodes(template: unknown): number {
 export interface CompileOptions {
   /** Node budget for one render (default {@link DEFAULT_MAX_NODES}). */
   maxNodes?: number;
+  /**
+   * Resolve `{ ref }` action bindings to their definitions (the
+   * principal's shared actions). Unresolvable refs render disabled.
+   */
+  actions?: (ref: string) => ActionDefinition | undefined;
+  /**
+   * Render every http action disabled with this reason — the server sets
+   * `"scope"` when the caller's key cannot execute.
+   */
+  httpDisabled?: ActionDisabledReason;
+  /** The kind this template is registered as — stamped into descriptors. */
+  kind?: string;
 }
 
 /**
@@ -229,9 +343,15 @@ export function compileTemplate(
   options: CompileOptions = {}
 ): WidgetRenderer {
   const maxNodes = options.maxNodes ?? DEFAULT_MAX_NODES;
+  const ctx: ActionContext = {
+    ...(options.actions ? { actions: options.actions } : {}),
+    ...(options.httpDisabled ? { httpDisabled: options.httpDisabled } : {}),
+    ...(options.kind !== undefined ? { kind: options.kind } : {})
+  };
   return (payload: WidgetPayload): WidgetNode => {
     const budget: Budget = { remaining: maxNodes, truncated: false };
-    const nodes = interpretNode(template, payload.data, payload.meta, budget);
+    const frames: Frame[] = [{ scope: payload.data }];
+    const nodes = interpretNode(template, frames, payload.meta, budget, "", ctx);
     if (!budget.truncated && nodes.length === 1) {
       const only = nodes[0];
       if (only !== undefined) return only;
@@ -240,6 +360,25 @@ export function compileTemplate(
     if (budget.truncated) attrs["data-truncated"] = "true";
     return { tag: "div", attrs, children: nodes };
   };
+}
+
+/**
+ * Resolve a binding outside the tree — the widget-level `load` binding,
+ * whose descriptor rides `structuredContent.load` rather than an element.
+ * Resolved against the payload's root scope.
+ */
+export function resolveActionDescriptor(
+  binding: ActionBinding,
+  id: string,
+  payload: WidgetPayload,
+  options: Pick<CompileOptions, "actions" | "httpDisabled" | "kind"> = {}
+): ActionDescriptor {
+  const ctx: ActionContext = {
+    ...(options.actions ? { actions: options.actions } : {}),
+    ...(options.httpDisabled ? { httpDisabled: options.httpDisabled } : {}),
+    ...(options.kind !== undefined ? { kind: options.kind } : {})
+  };
+  return buildDescriptor(binding, id, [{ scope: payload.data }], payload.meta, ctx);
 }
 
 /**
@@ -258,5 +397,5 @@ export function registerTemplate(
   if (!validated.ok) {
     throw new InvalidTemplateError(kind, validated.error);
   }
-  catalog.register(kind, compileTemplate(validated.template, options), descriptor);
+  catalog.register(kind, compileTemplate(validated.template, { ...options, kind }), descriptor);
 }

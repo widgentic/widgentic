@@ -13,9 +13,10 @@
 import { describe, expect, it } from "vitest";
 import type { WritableWidgetStore } from "../types.js";
 import { StoreRejectionError } from "../types.js";
-import type { StoredWidget } from "../types.js";
+import type { StoredAction, StoredWidget } from "../types.js";
 
 export interface ContractContext {
+  /** Built WITH a secret cipher — the suite exercises secrets. */
   store: WritableWidgetStore;
   /** Limits the factory configured; the suite probes against them. */
   maxWidgets: number;
@@ -28,6 +29,26 @@ function widget(kind: string): StoredWidget {
     kind,
     template: { tag: "div", children: [{ bind: "title" }] },
     descriptor: { description: `contract fixture ${kind}`, dataShape: "{ title }" }
+  };
+}
+
+const refreshAction: StoredAction = {
+  name: "refresh",
+  definition: {
+    kind: "http",
+    method: "GET",
+    url: "https://api.example.com/weather",
+    input: { type: "object", properties: { city: { type: "string" } } },
+    output: { type: "object" },
+    headers: { Authorization: { secret: "weather-token" } }
+  }
+};
+
+function boundWidget(kind: string): StoredWidget {
+  return {
+    kind,
+    template: { tag: "button", action: { ref: "refresh", input: { city: "city" } }, children: ["Refresh"] },
+    descriptor: { description: `bound fixture ${kind}`, dataShape: "{ city }" }
   };
 }
 
@@ -263,6 +284,63 @@ export function describeStoreContract(
       expect(await reopened.listLinkedSubjects(p.id)).toEqual([
         { subject: "contract:persist-linked" }
       ]);
+    });
+
+    it("actions round-trip and cannot be removed while a widget binds them", async () => {
+      const { store } = await factory();
+      const p = await store.ensurePrincipal("contract:actions");
+      await store.putAction(p.id, refreshAction);
+      expect((await store.actions(p.id)).map((a) => a.name)).toEqual(["refresh"]);
+      await store.putWidget(p.id, boundWidget("weather"));
+      await expect(store.removeAction(p.id, "refresh")).rejects.toMatchObject({
+        code: "ACTION_IN_USE",
+        detail: expect.stringContaining("weather")
+      });
+      expect((await store.actions(p.id)).map((a) => a.name)).toEqual(["refresh"]);
+      await store.removeWidget(p.id, "weather");
+      await store.removeAction(p.id, "refresh");
+      expect(await store.actions(p.id)).toEqual([]);
+      await expect(
+        store.putAction(p.id, { name: "bad", definition: { kind: "http", method: "GET", url: "http://x", input: { type: "object" }, output: {} } })
+      ).rejects.toBeInstanceOf(StoreRejectionError);
+    });
+
+    it("secrets are write-only ciphertext with in-use protection", async () => {
+      const { store } = await factory();
+      const p = await store.ensurePrincipal("contract:secrets");
+      await store.putSecret(p.id, "weather-token", "sk-live-123");
+      const listed = await store.listSecrets(p.id);
+      expect(listed.map((e) => e.name)).toEqual(["weather-token"]);
+      expect(JSON.stringify(listed)).not.toContain("sk-live-123");
+      expect(await store.secretValue(p.id, "weather-token")).toBe("sk-live-123");
+      expect(await store.secretValue(p.id, "missing")).toBeUndefined();
+      await store.putSecret(p.id, "weather-token", "sk-live-456");
+      expect(await store.secretValue(p.id, "weather-token")).toBe("sk-live-456");
+      expect((await store.listSecrets(p.id)).length).toBe(1);
+      await store.putAction(p.id, refreshAction);
+      await expect(store.removeSecret(p.id, "weather-token")).rejects.toMatchObject({
+        code: "SECRET_IN_USE",
+        detail: expect.stringContaining("refresh")
+      });
+      await store.removeAction(p.id, "refresh");
+      await store.removeSecret(p.id, "weather-token");
+      expect(await store.listSecrets(p.id)).toEqual([]);
+      await expect(store.putSecret(p.id, "Bad Name", "v")).rejects.toMatchObject({ code: "INVALID_SECRET_NAME" });
+      await expect(store.putSecret(p.id, "big", "x".repeat(5000))).rejects.toMatchObject({ code: "SECRET_TOO_LARGE" });
+    });
+
+    it("key scopes are fixed at creation and travel with the key", async () => {
+      const { store } = await factory();
+      const p = await store.ensurePrincipal("contract:scopes");
+      const reader = await store.createKey(p.id, "reader");
+      const runner = await store.createKey(p.id, "runner", ["read", "execute"]);
+      expect(reader.entry.scopes).toEqual(["read"]);
+      expect(runner.entry.scopes).toEqual(["read", "execute"]);
+      expect((await store.resolvePrincipal(reader.key))?.scopes).toEqual(["read"]);
+      expect((await store.resolvePrincipal(runner.key))?.scopes).toEqual(["read", "execute"]);
+      await expect(store.createKey(p.id, "writer", ["write"])).rejects.toMatchObject({ code: "INVALID_SCOPES" });
+      const listed = await store.listKeys(p.id);
+      expect(listed.find((k) => k.name === "runner")?.scopes).toEqual(["read", "execute"]);
     });
   });
 }

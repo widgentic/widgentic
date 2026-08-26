@@ -118,7 +118,7 @@ function patch(prev, next, dom) {
 let mountedTree;
 let mountedRoot;
 let resultRendered = false;
-function render(sc) {
+function mountResult(sc) {
   resultRendered = true;
   root.removeAttribute("data-wgd-preview");
   if (typeof sc.css === "string") dynamicCss.textContent = sc.css;
@@ -137,6 +137,212 @@ function render(sc) {
   mountedTree = undefined;
   mountedRoot = undefined;
   if (typeof sc.html === "string") root.innerHTML = sc.html;
+}
+// --- Action layer -----------------------------------------------------------
+// Elements carry action DESCRIPTORS (data-wg-action: id, kind, args/text,
+// disabled) that the compiler resolved at render time. This layer only
+// dispatches them: a prompt becomes ui/message, an http action becomes a
+// tools/call of execute_action with the frame's held payload — never a
+// fetch, never an eval. Descriptors are inert until the first complete
+// tool-result and during streaming previews.
+let hostCapabilities = {};
+let heldPayload;
+let inFlight = false;
+let loadFired = false;
+const alertEl = document.createElement("div");
+alertEl.className = "wg-app-alert";
+alertEl.setAttribute("role", "alert");
+alertEl.hidden = true;
+document.body.appendChild(alertEl);
+function showAlert(text) {
+  alertEl.textContent = typeof text === "string" && text ? text : "Action failed.";
+  alertEl.hidden = false;
+}
+function clearAlert() {
+  alertEl.hidden = true;
+  alertEl.textContent = "";
+}
+function serverToolsAvailable() {
+  return !!(hostCapabilities && hostCapabilities.serverTools);
+}
+function actionsEnabled() {
+  return resultRendered && !root.hasAttribute("data-wgd-preview");
+}
+function parseDescriptor(el) {
+  try {
+    const d = JSON.parse(el.getAttribute("data-wg-action") || "");
+    return d && typeof d === "object" && typeof d.id === "string" ? d : undefined;
+  } catch (error) {
+    return undefined;
+  }
+}
+function disabledReason(d) {
+  if (d.disabled === "scope") return "This key cannot run widget actions (it lacks the execute scope).";
+  if (d.disabled === "unresolved") return "This action is not available.";
+  if (d.kind === "http" && !serverToolsAvailable()) return "This host cannot run widget actions.";
+  return undefined;
+}
+// Re-applied after every mount: the tree carries descriptors, the DOM
+// carries their availability (host capability and server-set reasons).
+function decorateActions() {
+  const els = root.querySelectorAll("[data-wg-action]");
+  for (let i = 0; i < els.length; i++) {
+    const el = els[i];
+    const d = parseDescriptor(el);
+    if (!d) continue;
+    const reason = disabledReason(d);
+    if (reason) {
+      el.setAttribute("aria-disabled", "true");
+      el.classList.add("wg-action-disabled");
+      el.setAttribute("title", reason);
+      if ("disabled" in el) el.disabled = true;
+    } else {
+      el.removeAttribute("aria-disabled");
+      el.classList.remove("wg-action-disabled");
+      if ("disabled" in el) el.disabled = false;
+    }
+  }
+}
+function render(sc) {
+  mountResult(sc);
+  if (sc && sc.payload && typeof sc.payload === "object") heldPayload = sc.payload;
+  decorateActions();
+}
+function setBusy(on, el) {
+  inFlight = on;
+  if (on) {
+    root.setAttribute("aria-busy", "true");
+    root.classList.add("wg-busy");
+    if (el && "disabled" in el) el.disabled = true;
+  } else {
+    root.removeAttribute("aria-busy");
+    root.classList.remove("wg-busy");
+    decorateActions();
+  }
+}
+function errorTextOf(result) {
+  const block = result && Array.isArray(result.content)
+    ? result.content.find(function (b) { return b && b.type === "text"; })
+    : undefined;
+  if (!block || typeof block.text !== "string") return "Action failed.";
+  try {
+    const parsed = JSON.parse(block.text);
+    return typeof parsed.message === "string" ? parsed.message : block.text;
+  } catch (error) {
+    return block.text;
+  }
+}
+const CONTEXT_CAP = 8192;
+// The model learns what the widget now shows: both a text block and the
+// structured payload, because hosts advertise inconsistent modality sets
+// and every host tested accepted both. Capped, truncated with a marker.
+function updateModelContext(actionId) {
+  if (!heldPayload) return;
+  let json = "";
+  try { json = JSON.stringify(heldPayload); } catch (error) { json = ""; }
+  let text = "Widget '" + heldPayload.kind + "' updated by action '" + actionId + "'. Current payload: " + json;
+  if (text.length > CONTEXT_CAP) text = text.slice(0, CONTEXT_CAP - 14) + " …[truncated]";
+  const structured = json.length > CONTEXT_CAP
+    ? { kind: heldPayload.kind, truncated: true, preview: json.slice(0, CONTEXT_CAP) }
+    : heldPayload;
+  request("ui/update-model-context", {
+    content: [{ type: "text", text: text }],
+    structuredContent: structured
+  }).catch(function () { /* context is best effort */ });
+}
+function promptAction(el, d) {
+  if (typeof d.text !== "string") return;
+  setBusy(true, el);
+  request("ui/message", { role: "user", content: [{ type: "text", text: d.text }] }).then(
+    function (result) {
+      if (result && result.isError) showAlert("The host declined the message.");
+      else clearAlert();
+    },
+    function (error) {
+      showAlert("This host does not support this action" +
+        (error && typeof error.message === "string" ? ": " + error.message : "."));
+    }
+  ).then(function () { setBusy(false, el); });
+}
+function httpAction(el, d) {
+  if (!serverToolsAvailable()) { showAlert("This host cannot run widget actions."); return Promise.resolve(); }
+  if (!heldPayload || typeof heldPayload.kind !== "string") { showAlert("Nothing to act on yet."); return Promise.resolve(); }
+  setBusy(true, el);
+  const callArgs = { widget: heldPayload.kind, action: d.id, args: d.args || {}, payload: heldPayload };
+  // An item inside a group: the server needs where it sits and its kind.
+  if (typeof d.at === "string") {
+    callArgs.at = d.at;
+    if (typeof d.widget === "string") callArgs.item = d.widget;
+  }
+  return request("tools/call", {
+    name: "execute_action",
+    arguments: callArgs
+  }).then(
+    function (result) {
+      if (result && result.isError) { showAlert(errorTextOf(result)); return; }
+      const sc = result && result.structuredContent;
+      if (!sc || typeof sc !== "object") { showAlert("The action returned no widget."); return; }
+      render(sc);
+      clearAlert();
+      updateModelContext(d.id);
+    },
+    function (error) {
+      showAlert(error && typeof error.message === "string" ? error.message : "Action failed.");
+    }
+  ).then(function () { setBusy(false, el); });
+}
+function activate(el, d) {
+  if (!actionsEnabled() || inFlight) return;
+  if (el.getAttribute("aria-disabled") === "true") return;
+  if (d.kind === "prompt") promptAction(el, d);
+  else if (d.kind === "http") httpAction(el, d);
+}
+function actionTarget(event) {
+  const target = event.target;
+  const el = target && target.closest ? target.closest("[data-wg-action]") : null;
+  return el && root.contains(el) ? el : null;
+}
+document.addEventListener("click", function (event) {
+  const el = actionTarget(event);
+  if (!el) return;
+  event.preventDefault();
+  const d = parseDescriptor(el);
+  if (d) activate(el, d);
+}, true);
+// Native buttons turn Enter/Space into clicks themselves; other focusable
+// hosts of a descriptor need the keyboard path here.
+document.addEventListener("keydown", function (event) {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  const el = actionTarget(event);
+  if (!el || el.tagName === "BUTTON" || el.tagName === "A") return;
+  event.preventDefault();
+  const d = parseDescriptor(el);
+  if (d) activate(el, d);
+}, true);
+// The widget-level load: once per instance, after the first complete
+// result, only where the host proxies tool calls.
+function maybeLoad(sc) {
+  if (loadFired || !sc) return;
+  const list = [];
+  if (sc.load && typeof sc.load.id === "string") list.push(sc.load);
+  if (Array.isArray(sc.loads)) {
+    for (let i = 0; i < sc.loads.length; i++) {
+      if (sc.loads[i] && typeof sc.loads[i].id === "string") list.push(sc.loads[i]);
+    }
+  }
+  if (list.length === 0) return;
+  loadFired = true;
+  if (!serverToolsAvailable()) return;
+  // Group items load one after another: each fold re-renders the whole
+  // group, so concurrent loads would race on the held payload.
+  const fire = function (entry) {
+    return httpAction(undefined, { id: "load", kind: "http", args: entry.args || {}, at: entry.at, widget: entry.widget });
+  };
+  let chain = fire(list[0]);
+  for (let i = 1; i < list.length; i++) {
+    const entry = list[i];
+    chain = chain.then(function () { return fire(entry); });
+  }
 }
 // --- Streaming input preview ----------------------------------------------
 // Hosts stream partial tool arguments (host-healed snapshots) while the
@@ -363,6 +569,8 @@ function onToolInput(params) {
   // Input after a result is a NEW call on a reused frame (basic-host
   // reuses frames; claude.ai mounts per render) — start a fresh cycle.
   resultRendered = false;
+  heldPayload = undefined;
+  loadFired = false;
   previewArgs = params && isObj(params.arguments) ? params.arguments : undefined;
   if (previewArgs === undefined) return;
   if (!previewQueued) {
@@ -393,6 +601,8 @@ window.addEventListener("message", (event) => {
     // linger looking like a rendered widget.
     previewArgs = undefined;
     resultRendered = false;
+    heldPayload = undefined;
+    loadFired = false;
     root.removeAttribute("data-wgd-preview");
     mountedTree = undefined;
     mountedRoot = undefined;
@@ -403,6 +613,7 @@ window.addEventListener("message", (event) => {
     const params = message.params || {};
     if (params.structuredContent) {
       render(params.structuredContent);
+      maybeLoad(params.structuredContent);
       return;
     }
     // Error (or structured-content-less) result: replace any pending
@@ -466,6 +677,8 @@ request("ui/initialize", {
   protocolVersion: "2026-01-26"
 }).then((result) => {
   applyHostContext(result && result.hostContext);
+  hostCapabilities = (result && result.hostCapabilities) || {};
+  decorateActions();
   send({ jsonrpc: "2.0", method: "ui/notifications/initialized" });
   const observer = new ResizeObserver(notifySize);
   observer.observe(document.documentElement);
@@ -527,7 +740,34 @@ body {
   border: 1px solid var(--wg-border, #e2e8f0);
   border-radius: var(--wg-radius, 6px);
   padding: calc(var(--wg-spacing, 8px) * 2);
-}`;
+}
+/* Action layer: availability, in-flight overlay, and the failure alert,
+   all in-flow so size-changed measures them. */
+[data-wg-action] { cursor: pointer; }
+.wg-action-disabled { opacity: 0.55; cursor: not-allowed; }
+.wg-busy { position: relative; pointer-events: none; }
+.wg-busy::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--wg-radius, 6px);
+  background: var(--wg-info, #0369a1);
+  animation: wg-busy-pulse 1s ease-in-out infinite;
+}
+@keyframes wg-busy-pulse {
+  0%, 100% { opacity: 0.06; }
+  50% { opacity: 0.16; }
+}
+.wg-app-alert {
+  margin-top: 8px;
+  color: var(--wg-danger, #b91c1c);
+  border: 1px solid var(--wg-danger, #b91c1c);
+  border-radius: var(--wg-radius, 6px);
+  padding: calc(var(--wg-spacing, 8px) * 1.5);
+  font-family: var(--wg-font-family, system-ui);
+  font-size: 0.9em;
+}
+.wg-app-alert[hidden] { display: none; }`;
 
   // Theme coherence for tokens the host bridge does NOT map: the base
   // stylesheet's :root defaults are the LIGHT literals, so on dark hosts

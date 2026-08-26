@@ -20,6 +20,7 @@ import type {
 import { hashKey } from "../keys.js";
 import { DEFAULT_LIMITS } from "../types.js";
 import { describeStoreContract } from "./contract.js";
+import { createLocalCipher, generateLocalKek } from "../../secrets/index.js";
 
 /* ---------------------------- fake client ---------------------------- */
 
@@ -181,11 +182,12 @@ const LIMITS = { ...DEFAULT_LIMITS, maxWidgets: 5 };
 
 describeStoreContract("cosmos (structural fake)", async () => {
   const { client } = fakeCosmos();
+  const cipher = createLocalCipher(generateLocalKek());
   return {
-    store: createCosmosStore({ client, limits: LIMITS, log: () => {} }),
+    store: createCosmosStore({ client, limits: LIMITS, log: () => {}, cipher }),
     maxWidgets: LIMITS.maxWidgets,
     // A second adapter over the SAME fake account = process restart.
-    reopen: () => createCosmosStore({ client, limits: LIMITS, log: () => {} })
+    reopen: () => createCosmosStore({ client, limits: LIMITS, log: () => {}, cipher })
   };
 });
 

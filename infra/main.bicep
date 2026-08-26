@@ -64,9 +64,17 @@ param mcpCustomDomains array = []
 @description('Custom domains bound to the web app, same contract as mcpCustomDomains.')
 param webCustomDomains array = []
 
+@description('EXISTING Key Vault (same resource group) that holds the secrets KEK: per-principal secrets are envelope-encrypted with data keys this key wraps and unwraps through the apps\' managed identities. Empty disables secrets entirely.')
+param keyVaultName string = 'widgentickv'
+
 var registryName = '${baseName}acr${uniqueString(resourceGroup().id)}'
 var appPort = 3001
 var webPort = 3002
+var secretsEnabled = !empty(keyVaultName)
+// Key Vault Crypto Service Encryption User: wrap/unwrap + key metadata,
+// nothing on secrets. The web identity wraps (secret writes), the MCP
+// identity unwraps (action execution); neither can read vault secrets.
+var cryptoServiceEncryptionUser = 'e147488a-f6f5-4113-8e2d-b22465e65bf6'
 
 resource logs 'Microsoft.OperationalInsights/workspaces@2025-02-01' = {
   name: '${baseName}-logs'
@@ -210,6 +218,44 @@ resource webCosmosWrite 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignment
   }
 }
 
+// Secrets KEK (widget-secrets capability): an RSA key in the existing vault.
+// The key material never leaves the vault — the apps only call wrap/unwrap.
+// Re-deploying an unchanged key is a no-op (no new version), so this is
+// safe on every redeploy; rotation is an explicit new version + re-wrap.
+resource vault 'Microsoft.KeyVault/vaults@2024-11-01' existing = if (secretsEnabled) {
+  name: keyVaultName
+}
+
+resource kek 'Microsoft.KeyVault/vaults/keys@2024-11-01' = if (secretsEnabled) {
+  parent: vault
+  name: '${baseName}-kek'
+  properties: {
+    kty: 'RSA'
+    keySize: 2048
+    keyOps: ['wrapKey', 'unwrapKey']
+  }
+}
+
+resource mcpKekUnwrap 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (secretsEnabled) {
+  name: guid(resourceGroup().id, keyVaultName, 'kek', identity.name)
+  scope: kek
+  properties: {
+    principalId: identity.properties.principalId
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', cryptoServiceEncryptionUser)
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource webKekWrap 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (secretsEnabled) {
+  name: guid(resourceGroup().id, keyVaultName, 'kek', webIdentity.name)
+  scope: kek
+  properties: {
+    principalId: webIdentity.properties.principalId
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', cryptoServiceEncryptionUser)
+    principalType: 'ServicePrincipal'
+  }
+}
+
 resource environment 'Microsoft.App/managedEnvironments@2025-01-01' = {
   name: '${baseName}-env'
   location: location
@@ -272,7 +318,8 @@ resource app 'Microsoft.App/containerApps@2025-01-01' = {
                   { name: 'WIDGENTIC_COSMOS_ENDPOINT', value: cosmos.properties.documentEndpoint }
                   { name: 'AZURE_CLIENT_ID', value: identity.properties.clientId }
                 ]
-              : []
+              : [],
+            secretsEnabled ? [{ name: 'WIDGENTIC_KEK_ID', value: kek!.properties.keyUriWithVersion }] : []
           )
           probes: [
             {
@@ -359,7 +406,8 @@ resource webApp 'Microsoft.App/containerApps@2025-01-01' = {
             ],
             empty(authClientSecret) ? [] : [
               { name: 'WIDGENTIC_AUTH_CLIENT_SECRET', secretRef: 'widgentic-auth-client-secret' }
-            ]
+            ],
+            secretsEnabled ? [{ name: 'WIDGENTIC_KEK_ID', value: kek!.properties.keyUriWithVersion }] : []
           )
           probes: [
             {

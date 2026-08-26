@@ -18,10 +18,31 @@ export {
   defineDesignerElement,
   defineThemeDesignerElement,
   defineSchemaDesignerElement,
+  defineActionDesignerElement,
   DEFAULT_TAG,
   DEFAULT_THEME_TAG,
-  DEFAULT_SCHEMA_TAG
+  DEFAULT_SCHEMA_TAG,
+  DEFAULT_ACTION_TAG
 } from "./element.js";
+export { createActionDesigner, checkActionEntry } from "./action-designer.js";
+export type {
+  ActionDesignerHandle,
+  ActionDesignerOptions,
+  ActionEntry,
+  ActionLoadResult
+} from "./action-designer.js";
+export {
+  createBindingEditor,
+  createDefinitionEditor,
+  starterHttpDefinition,
+  starterPromptDefinition
+} from "./action-editor.js";
+export type {
+  ActionEditorContext,
+  BindingEditor,
+  BindingEditorContext,
+  DefinitionEditor
+} from "./action-editor.js";
 export { createThemeDesigner, checkThemeEntry } from "./theme-designer.js";
 export { createSchemaDesigner, checkSchemaEntry } from "./schema-designer.js";
 export type {

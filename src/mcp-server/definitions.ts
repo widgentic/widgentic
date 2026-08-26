@@ -15,7 +15,11 @@ export const LIST_WIDGETS_TOOL: McpToolDefinition = {
   description:
     "List the available widget kinds with their purpose, expected data " +
     "shape, an example data value, and supported hints. Call this first to " +
-    "decide which widget fits your data, then call render_widget.",
+    "decide which widget fits your data, then call render_widget. ALWAYS " +
+    "call it again when the user asks what widgets are available or says " +
+    "they saved/imported something in the designer — catalogs are served " +
+    "per API key and change between calls; never answer from an earlier " +
+    "listing.",
   inputSchema: {
     type: "object",
     properties: {},
@@ -153,6 +157,47 @@ export const RENDER_WIDGET_TOOL: McpToolDefinition = {
       }
     },
     required: ["widget", "data"],
+    additionalProperties: false
+  }
+};
+
+/**
+ * Called by the mounted widget (app-only visibility), never by agents: a
+ * bound element's http action, or the widget's `load`, executed
+ * server-side against the principal's stored definition.
+ */
+export const EXECUTE_ACTION_TOOL: McpToolDefinition = {
+  name: "execute_action",
+  description:
+    "Called by widgentic widgets, not by agents: runs a widget's bound " +
+    "http action (a stored, author-declared request) server-side and " +
+    "returns the re-rendered widget. Requires a key with the 'execute' " +
+    "scope. Agents should call render_widget instead.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      widget: { type: "string", description: "The rendered widget's kind." },
+      action: {
+        type: "string",
+        description: "Binding identifier: the element's dotted template path, or \"load\"."
+      },
+      args: {
+        type: "object",
+        description: "Arguments as resolved in the element's descriptor.",
+        additionalProperties: true
+      },
+      payload: {
+        type: "object",
+        description: "The widget's current payload { kind, data, hints?, meta? }.",
+        additionalProperties: true
+      },
+      at: {
+        type: "string",
+        description: "Inside a group: dotted path of the item payload within 'payload' (e.g. data.items.2)."
+      },
+      item: { type: "string", description: "Inside a group: the item's kind." }
+    },
+    required: ["widget", "action", "payload"],
     additionalProperties: false
   }
 };

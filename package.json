@@ -2,7 +2,7 @@
   "name": "widgentic",
   "version": "0.0.0",
   "private": true,
-  "description": "Widgets for agents — generic UI for MCP skills/plugins.",
+  "description": "Widgets for agents \u2014 generic UI for MCP skills/plugins.",
   "type": "module",
   "main": "./src/contract/index.ts",
   "types": "./src/contract/index.ts",
@@ -14,6 +14,9 @@
     "./mcp": "./src/mcp/index.ts",
     "./reactive": "./src/reactive/index.ts",
     "./templates": "./src/templates/index.ts",
+    "./actions": "./src/actions/index.ts",
+    "./secrets": "./src/secrets/index.ts",
+    "./secrets/keyvault": "./src/secrets/keyvault.ts",
     "./theming": "./src/theming/index.ts",
     "./mcp-server": "./src/mcp-server/index.ts",
     "./mcp-server/sdk": "./src/mcp-server/server.ts",
@@ -26,14 +29,28 @@
     "@azure/identity": "^4",
     "@modelcontextprotocol/ext-apps": "^1",
     "@modelcontextprotocol/sdk": "^1",
-    "zod": "^4"
+    "zod": "^4",
+    "@azure/keyvault-keys": "^4"
   },
   "peerDependenciesMeta": {
-    "@azure/cosmos": { "optional": true },
-    "@azure/identity": { "optional": true },
-    "@modelcontextprotocol/ext-apps": { "optional": true },
-    "@modelcontextprotocol/sdk": { "optional": true },
-    "zod": { "optional": true }
+    "@azure/cosmos": {
+      "optional": true
+    },
+    "@azure/identity": {
+      "optional": true
+    },
+    "@modelcontextprotocol/ext-apps": {
+      "optional": true
+    },
+    "@modelcontextprotocol/sdk": {
+      "optional": true
+    },
+    "zod": {
+      "optional": true
+    },
+    "@azure/keyvault-keys": {
+      "optional": true
+    }
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -49,6 +66,7 @@
   "devDependencies": {
     "@azure/cosmos": "^4.10.0",
     "@azure/identity": "^4.13.1",
+    "@azure/keyvault-keys": "^4.10.2",
     "@modelcontextprotocol/ext-apps": "1.7.5",
     "@modelcontextprotocol/sdk": "1.30.0",
     "@types/node": "26.1.2",

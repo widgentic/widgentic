@@ -4,6 +4,9 @@ import type { WidgetContractError } from "../contract/index.js";
 import type { McpToolResult, McpContentBlock } from "../mcp/index.js";
 import { WIDGENTIC_MIME_TYPE, WIDGENTIC_URI } from "../mcp/index.js";
 import type { ThemeRegistry, WidgetTheme } from "../theming/index.js";
+import type { WidgetPayload } from "../contract/index.js";
+import type { ActionBinding, ActionDefinition } from "../actions/index.js";
+import { resolveActionDescriptor } from "../templates/index.js";
 import {
   THEME_TOKENS,
   TOKEN_DEFAULTS,
@@ -213,10 +216,77 @@ export interface StoredSchemaEntry {
  * catalog and the contract, render, and return the HTML plus the widgentic
  * payload block. Total — any input shape produces a result, never a throw.
  */
+/** Composition's view of a widget's `load` binding and shared definitions. */
+export interface RenderActionOptions {
+  load(kind: string): ActionBinding | undefined;
+  resolve(ref: string): ActionDefinition | undefined;
+  /** `false` (caller lacks `execute`) omits `structuredContent.load`. */
+  executeAllowed: boolean;
+}
+
+/** Tally of action descriptors in a render tree, for the model-facing tail. */
+function tallyActions(node: unknown, tally: { http: number; prompt: number; scope: number; unresolved: number }): void {
+  if (!isPlainObject(node)) return;
+  const raw = isPlainObject(node.attrs) ? node.attrs["data-wg-action"] : undefined;
+  if (typeof raw === "string") {
+    try {
+      const descriptor = JSON.parse(raw) as { kind?: string; disabled?: string };
+      if (descriptor.disabled === "unresolved") tally.unresolved++;
+      else if (descriptor.kind === "prompt") tally.prompt++;
+      else if (descriptor.kind === "http") {
+        tally.http++;
+        if (descriptor.disabled === "scope") tally.scope++;
+      }
+    } catch {
+      /* not a descriptor */
+    }
+  }
+  if (Array.isArray(node.children)) for (const child of node.children) tallyActions(child, tally);
+}
+
+/**
+ * The model never sees the frame: this tail tells it what the widget's
+ * buttons do — and, when http actions are disabled, exactly why — so it
+ * neither guesses nor tries to call execute_action itself.
+ */
+export function actionNotes(tree: unknown, hasLoad: boolean): string {
+  const tally = { http: 0, prompt: 0, scope: 0, unresolved: 0 };
+  tallyActions(tree, tally);
+  if (tally.http + tally.prompt + tally.unresolved === 0 && !hasLoad) return "";
+  const parts: string[] = [];
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+  if (tally.http > 0) {
+    if (tally.scope === tally.http) {
+      parts.push(
+        `${plural(tally.http, "http action")} disabled for this API key — it lacks the 'execute' scope; ` +
+          "the user can create a key with 'execute' at widgentic.dev to enable them"
+      );
+    } else {
+      parts.push(
+        `${plural(tally.http - tally.scope, "http action")} that run server-side when the user activates them ` +
+          "(the widget re-renders itself and posts its new data to your context)" +
+          (tally.scope > 0 ? `; ${plural(tally.scope, "other")} disabled for this key (no 'execute' scope)` : "")
+      );
+    }
+  }
+  if (tally.prompt > 0) {
+    parts.push(`${plural(tally.prompt, "prompt action")} that propose a message in the user's composer (they work with any key)`);
+  }
+  if (tally.unresolved > 0) {
+    parts.push(`${plural(tally.unresolved, "action")} disabled because the widget references an action the user has not saved`);
+  }
+  if (hasLoad) parts.push("it loads its data on first render");
+  return `\n\nAction notes: the widget has ${parts.join("; ")}. You do not call execute_action yourself — the widget does.`;
+}
+
 export function handleRenderWidget(
   catalog: WidgetCatalog,
   input: unknown,
-  options?: { slim?: boolean | undefined; themes?: ThemeRegistry | undefined }
+  options?: {
+    slim?: boolean | undefined;
+    themes?: ThemeRegistry | undefined;
+    actions?: RenderActionOptions | undefined;
+  }
 ): McpToolResult {
   if (!isPlainObject(input)) {
     return errorResult({
@@ -399,12 +469,40 @@ export function handleRenderWidget(
     });
   }
   if (diagnostics.length > 0) structuredContent.diagnostics = diagnostics;
+  // The widget-level `load` binding rides the template channel as a
+  // resolved descriptor — only for callers who may execute; a read-only
+  // key sees no load at all rather than a click that fails.
+  const loadBinding = options?.actions?.load(widget);
+  if (loadBinding !== undefined && options?.actions?.executeAllowed === true) {
+    const descriptor = resolveActionDescriptor(loadBinding, "load", payload as unknown as WidgetPayload, {
+      actions: options.actions.resolve
+    });
+    if (descriptor.disabled === undefined) {
+      structuredContent.load = { ...descriptor, widget };
+    }
+  }
+  // Group items load too: one descriptor per item that declares `load`,
+  // each stamped with the item's location so the fold lands in it.
+  if (widget === "group" && options?.actions?.executeAllowed === true && isPlainObject(payload.data) && Array.isArray(payload.data.items)) {
+    const loads: Record<string, unknown>[] = [];
+    payload.data.items.forEach((item, index) => {
+      if (!isPlainObject(item) || typeof item.kind !== "string") return;
+      const itemLoad = options.actions!.load(item.kind);
+      if (itemLoad === undefined) return;
+      const descriptor = resolveActionDescriptor(itemLoad, "load", item as unknown as WidgetPayload, {
+        actions: options.actions!.resolve,
+        kind: item.kind
+      });
+      if (descriptor.disabled === undefined) loads.push({ ...descriptor, widget: item.kind, at: `data.items.${index}` });
+    });
+    if (loads.length > 0) structuredContent.loads = loads;
+  }
   const hintNotes =
-    diagnostics.length > 0
+    (diagnostics.length > 0
       ? `\n\nHint notes: ${diagnostics
           .map((d) => `${d.hint}: ${d.message}`)
           .join("; ")}`
-      : "";
+      : "") + actionNotes(rendered.node, structuredContent.load !== undefined || structuredContent.loads !== undefined);
 
   switch (format as RenderFormat) {
     case "html":

@@ -5,7 +5,8 @@
  * input like any other.
  */
 import { createCatalog } from "widgentic/catalog";
-import { countTemplateNodes, validateTemplate } from "widgentic/templates";
+import { countTemplateNodes, validateTemplate, parsePath } from "widgentic/templates";
+import { ACTION_NAME, validateActionDefinition, validateLoadBinding } from "widgentic/actions";
 import { createThemeRegistry, validateTheme } from "widgentic/theming";
 import type { ThemeEntry } from "widgentic/theming";
 import type { StoreLimits, StoredSchema, StoredWidget } from "./types.js";
@@ -37,6 +38,7 @@ export interface EntryProblem {
     | "INVALID_THEME"
     | "UNKNOWN_SCHEMA"
     | "SCHEMA_IN_USE"
+    | "INVALID_ACTION"
     | "TOO_LARGE"
     | "TOO_MANY_NODES";
   message: string;
@@ -118,6 +120,19 @@ export function checkStoredWidget(
       code: "INVALID_TEMPLATE",
       message: `${template.error.code} — ${template.error.message}`
     };
+  }
+  // `load` is an http GET binding run once per widget instance; shared
+  // refs are resolved at composition, so only the shape is checked here.
+  if (entry.load !== undefined) {
+    const loadError = validateLoadBinding(entry.load, "load", {
+      isPath: (value) => parsePath(value) !== undefined
+    });
+    if (loadError) {
+      return {
+        code: "INVALID_TEMPLATE",
+        message: `${loadError.code} — ${loadError.message} (at ${loadError.path})`
+      };
+    }
   }
   const bytes = serializedBytes(entry);
   if (bytes > limits.maxEntryBytes) {
@@ -212,3 +227,37 @@ export function checkStoredSchema(
 }
 
 export type { StoredSchema, StoredWidget, ThemeEntry };
+
+/** Check a shared action entry. `undefined` means acceptable. */
+export function checkStoredAction(
+  entry: unknown,
+  limits: StoreLimits = DEFAULT_LIMITS
+): EntryProblem | undefined {
+  if (!isPlainObject(entry)) {
+    return { code: "INVALID_SHAPE", message: "Action entry must be an object." };
+  }
+  const name = entry.name;
+  if (typeof name !== "string" || !ACTION_NAME.test(name)) {
+    return {
+      code: "INVALID_IDENTIFIER",
+      message: "'name' must be lowercase letters, digits and dashes, starting with a letter (max 64)."
+    };
+  }
+  for (const field of ["label", "description"] as const) {
+    if (entry[field] !== undefined && typeof entry[field] !== "string") {
+      return { code: "INVALID_SHAPE", message: `'${field}' must be a string when present.` };
+    }
+  }
+  const problem = validateActionDefinition(entry.definition, "definition");
+  if (problem) {
+    return { code: "INVALID_ACTION", message: `${problem.message} (at ${problem.path})` };
+  }
+  const bytes = serializedBytes(entry);
+  if (bytes > limits.maxEntryBytes) {
+    return {
+      code: "TOO_LARGE",
+      message: `entry is ${bytes} bytes, over the ${limits.maxEntryBytes} limit.`
+    };
+  }
+  return undefined;
+}

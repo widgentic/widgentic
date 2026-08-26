@@ -8,10 +8,35 @@
 import { createHash } from "node:crypto";
 import type { WidgetDescriptorInput } from "widgentic/catalog";
 import type { WidgetTemplate } from "widgentic/templates";
+import type { ActionBinding, StoredAction } from "widgentic/actions";
+import type { EnvelopeRecord, SecretCipher } from "widgentic/secrets";
 import type { ThemeEntry } from "widgentic/theming";
 
-/** What a key grants. Writes belong to the app's authenticated path. */
-export type Scope = "read" | "write";
+/**
+ * What a key grants. `read` serves the catalog; `execute` lets widgets run
+ * http actions (with the principal's secrets); `write` belongs to the app's
+ * authenticated path and is never granted to a key.
+ */
+export type Scope = "read" | "write" | "execute";
+
+/** The scopes a key may carry. `read` is always granted. */
+export const KEY_SCOPES: readonly Scope[] = ["read", "execute"];
+
+export type { StoredAction } from "widgentic/actions";
+
+/** A secret as listings show it: never a value, preview or length. */
+export interface SecretEntry {
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A secret as stores persist it: the envelope record plus metadata. */
+export interface StoredSecret extends SecretEntry {
+  record: EnvelopeRecord;
+}
+
+export type { SecretCipher };
 
 export interface Principal {
   id: string;
@@ -38,6 +63,8 @@ export interface StoredWidget {
   kind: string;
   template: WidgetTemplate;
   descriptor: WidgetDescriptorInput & { dataSchemaRef?: string };
+  /** Optional http GET action run once when the widget first renders. */
+  load?: ActionBinding;
 }
 
 /**
@@ -62,6 +89,8 @@ export interface StoreLimits {
   maxWidgets: number;
   maxThemes: number;
   maxSchemas: number;
+  maxActions: number;
+  maxSecrets: number;
   /** Serialized bytes of a single entry. */
   maxEntryBytes: number;
   /** Template nodes in a single stored template (structure, not output). */
@@ -72,6 +101,8 @@ export const DEFAULT_LIMITS: StoreLimits = {
   maxWidgets: 100,
   maxThemes: 50,
   maxSchemas: 50,
+  maxActions: 50,
+  maxSecrets: 50,
   maxEntryBytes: 65_536,
   maxTemplateNodes: 2_000
 };
@@ -88,11 +119,24 @@ export const ANONYMOUS_PRINCIPAL: Principal = {
 };
 
 export interface WidgetStore {
-  /** Key → principal. `undefined` for unknown keys; never throws. */
+  /**
+   * Key → principal. `undefined` for unknown keys; never throws. The
+   * returned principal carries the PRESENTED KEY's scopes.
+   */
   resolvePrincipal(apiKey: string): Promise<Principal | undefined>;
   widgets(principalId: string): Promise<StoredWidget[]>;
   themes(principalId: string): Promise<ThemeEntry[]>;
   schemas(principalId: string): Promise<StoredSchema[]>;
+  /** The principal's shared actions. */
+  actions(principalId: string): Promise<StoredAction[]>;
+  /** The principal's secrets — names and timestamps only. */
+  listSecrets(principalId: string): Promise<SecretEntry[]>;
+  /**
+   * Execution-time resolution: the decrypted value, or `undefined` when
+   * the name is unknown. The ONLY path that yields a value. Refused with
+   * `NO_CIPHER` when the store was built without a cipher.
+   */
+  secretValue(principalId: string, name: string): Promise<string | undefined>;
 }
 
 /**
@@ -162,8 +206,32 @@ export interface WritableWidgetStore extends WidgetStore {
   unlinkSubject(principalId: string, subject: string): Promise<void>;
   /** The principal's linked identities (canonical subject excluded). */
   listLinkedSubjects(principalId: string): Promise<LinkedIdentity[]>;
-  /** Mint a named key. The raw key is returned here and never again. */
-  createKey(principalId: string, name: string): Promise<CreatedKey>;
+  /**
+   * Store a shared action (create or replace by name); validated at the
+   * door like every entry.
+   */
+  putAction(principalId: string, action: StoredAction): Promise<void>;
+  /**
+   * Remove a shared action. Refused with `ACTION_IN_USE` while a stored
+   * widget binds it by `ref`.
+   */
+  removeAction(principalId: string, name: string): Promise<void>;
+  /**
+   * Set or replace a secret: encrypted through the configured cipher,
+   * never stored or shown in clear. Refused with `NO_CIPHER` when none.
+   */
+  putSecret(principalId: string, name: string, value: string): Promise<void>;
+  /**
+   * Remove a secret. Refused with `SECRET_IN_USE` while a shared action or
+   * a widget's inline action references it.
+   */
+  removeSecret(principalId: string, name: string): Promise<void>;
+  /**
+   * Mint a named key with fixed scopes (default `["read"]`; `read` is
+   * always included; only {@link KEY_SCOPES} are accepted). The raw key is
+   * returned here and never again.
+   */
+  createKey(principalId: string, name: string, scopes?: Scope[]): Promise<CreatedKey>;
   /** The principal's keys — metadata only, never raw material. */
   listKeys(principalId: string): Promise<StoredKey[]>;
   /** Stamp one key revoked; the principal's other keys are untouched. */
@@ -192,4 +260,21 @@ export class StoreRejectionError extends Error {
     this.code = code;
     this.detail = detail;
   }
+}
+
+/** Normalize requested key scopes: always `read`, only key-grantable scopes, no duplicates. */
+export function normalizeKeyScopes(requested: unknown): Scope[] {
+  const scopes = new Set<Scope>(["read"]);
+  if (requested !== undefined) {
+    if (!Array.isArray(requested)) {
+      throw new StoreRejectionError("INVALID_SCOPES", "scopes must be an array.");
+    }
+    for (const scope of requested) {
+      if (!KEY_SCOPES.includes(scope as Scope)) {
+        throw new StoreRejectionError("INVALID_SCOPES", `'${String(scope)}' cannot be granted to a key.`);
+      }
+      scopes.add(scope as Scope);
+    }
+  }
+  return [...scopes];
 }

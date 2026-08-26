@@ -9,8 +9,12 @@ export type {
   CreatedKey,
   Principal,
   Scope,
+  SecretCipher,
+  SecretEntry,
+  StoredAction,
   StoredKey,
   StoredSchema,
+  StoredSecret,
   StoredWidget,
   StoreLimits,
   WidgetStore,
@@ -19,6 +23,8 @@ export type {
 export {
   ANONYMOUS_PRINCIPAL,
   DEFAULT_LIMITS,
+  KEY_SCOPES,
+  normalizeKeyScopes,
   principalIdForSubject,
   StoreRejectionError
 } from "./types.js";
@@ -27,12 +33,13 @@ export {
   checkStoredWidget,
   checkStoredTheme,
   checkStoredSchema,
+  checkStoredAction,
   SAFE_IDENTIFIER
 } from "./validate.js";
 export type { EntryProblem } from "./validate.js";
-export { createMemoryStore } from "./memory.js";
-export type { MemoryStore, MemorySeedPrincipal } from "./memory.js";
+export { createMemoryStore, referencesToSecret, widgetsReferencingAction } from "./memory.js";
+export type { MemoryStore, MemorySeedPrincipal, MemoryStoreOptions } from "./memory.js";
 export { createFileStore } from "./file.js";
 export type { FileStoreOptions } from "./file.js";
 export { composeCatalog, composeThemes } from "./compose.js";
-export type { ComposeOptions, ComposeResult } from "./compose.js";
+export type { ActionSource, ComposeOptions, ComposeResult } from "./compose.js";

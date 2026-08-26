@@ -128,12 +128,25 @@ export function buildAuthoringGuide(): Record<string, unknown> {
         forms: [
           "STRING — a text node: \"Hello\"",
           "BIND — { \"bind\": \"path.to.value\" } renders the value as text; '.' binds the scope itself",
+          "PATHS — dot paths against the current scope (each item inside EACH). Escapes: '$meta.x' reads payload.meta; '$root.x' reads the top-level data from any depth; '$parent.x' steps out of one enclosing EACH per token ('$parent.$parent.x'); '$index' is the zero-based position in the innermost EACH",
           "EACH — { \"each\": \"path.to.array\", \"template\": <node>, \"empty\"?: <node> } repeats template with each item as scope",
           "WHEN — { \"when\": \"path\", \"template\": <node>, \"else\"?: <node> } renders template when the value is truthy",
           "ELEMENT — { \"tag\": \"div\", \"attrs\"?: { \"class\": \"x\", \"src\": { \"bind\": \"path\" } }, \"children\"?: [<node>...] }",
           "ATTR MAP — { \"bind\": \"status\", \"map\": { \"do-not-contact\": \"wg-status wg-status-danger\", \"active\": \"wg-status wg-status-success\" }, \"default\": \"wg-status\" } — the bound value SELECTS one of your literals (semantic classes from data values); a miss emits default, or empty without one",
-          "ATTR PREFIX — { \"bind\": \"email\", \"prefix\": \"mailto:\" } — emits prefix+value only when the value is non-empty (mailto:/tel: links; both schemes are allowed on href). One transform per attr value: map OR prefix, never both"
+          "ATTR PREFIX — { \"bind\": \"email\", \"prefix\": \"mailto:\" } — emits prefix+value only when the value is non-empty (mailto:/tel: links; both schemes are allowed on href). One transform per attr value: map OR prefix, never both",
+          "ACTION — an element may carry \"action\": { \"ref\": \"<shared action name>\" } or an inline { \"definition\": { \"kind\": \"prompt\", \"text\": [\"Show the forecast for \", { \"bind\": \"city\" }] } } / { \"definition\": { \"kind\": \"http\", \"method\": \"GET\", \"url\": \"https://…\", \"input\": <schema>, \"output\": <schema> } }, plus \"input\": { \"<field>\": \"<path>\" | { \"const\": <value> } } and \"output\": { \"mode\"?: \"replace\"|\"merge\"|\"patch\", \"path\"?, \"map\"? }. Bindings resolve at render time; buttons and links (never both href and action) become activatable in Apps hosts. A widget-level \"load\" (http GET only) runs once when the widget first renders"
         ],
+        actions: {
+          kinds:
+            "prompt — proposes a message the user reviews and sends from their composer (works with any key); " +
+            "http — a server-side GET/POST to a fixed https URL with an input schema (GET → query, POST → JSON body) and an output schema the response must satisfy; headers/query values may reference the user's secrets by name ({ \"secret\": \"<name>\" }).",
+          binding:
+            "Put \"action\": { \"ref\": \"<shared action name>\" } or { \"definition\": <inline definition> } on a button or link (never together with href), plus \"input\": { \"<field>\": \"<data path>\" | { \"const\": <value> } } resolved at render time in the element's scope ($root/$parent/$index available) and \"output\": { \"mode\": \"merge\"|\"replace\"|\"patch\", \"path\"?, \"map\"? }. A widget-level \"load\" (http GET only) runs once when the widget first renders.",
+          execution:
+            "http actions run only in Apps hosts that proxy widget tool calls AND under an API key carrying the 'execute' scope (opt-in when the key is created). A render for a read-only key marks them disabled: \"scope\" (the key lacks execute), \"unresolved\" (a referenced shared action does not exist). The frame calls execute_action itself; agents never do. After each http action the widget posts its new payload to the model's context.",
+          secrets:
+            "Secrets are named, write-only, envelope-encrypted, and injected server-side at execution; they never appear in templates, results or logs."
+        },
         safety: {
           eventHandlers:
             "Attribute names matching on* are forbidden (FORBIDDEN_ATTRIBUTE).",

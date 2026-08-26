@@ -27,6 +27,7 @@ import {
   LIST_THEMES_TOOL,
   LIST_SCHEMAS_TOOL,
   GET_AUTHORING_GUIDE_TOOL,
+  EXECUTE_ACTION_TOOL,
   WIDGENTIC_UI_URI_PREFIX,
   WIDGENTIC_APP_TEMPLATE_URI
 } from "./definitions.js";
@@ -37,7 +38,10 @@ import {
   handleListThemes,
   handleListSchemas
 } from "./handlers.js";
-import type { StoredSchemaEntry } from "./handlers.js";
+import type { RenderActionOptions, StoredSchemaEntry } from "./handlers.js";
+import { handleExecuteAction } from "./actions.js";
+import type { ActionSourceLike } from "./actions.js";
+import type { GuardedFetchDeps } from "./guarded-fetch.js";
 import { inlineRenderResultImages } from "./inline-images.js";
 import { buildAppTemplate } from "./app-template.js";
 import { handleGetAuthoringGuide } from "./guide.js";
@@ -67,6 +71,20 @@ export interface WidgenticServerOptions {
    * extend it. Empty/absent keeps the inline-everything default.
    */
   resourceDomains?: string[];
+  /**
+   * Composition's action source for the caller's catalog (bindings by
+   * template path, `load` per kind, shared definitions). Omitted: no widget
+   * binds anything and `execute_action` answers UNKNOWN_ACTION.
+   */
+  actions?: ActionSourceLike;
+  /** The caller's scopes (from the resolved key). `execute` gates actions. */
+  scopes?: readonly string[];
+  /** Execution-time secret resolution for the caller's principal. */
+  secrets?: (name: string) => Promise<string | undefined>;
+  /** Per-principal rate-limit gate for `execute_action` (`false` = limited). */
+  rateLimit?: () => boolean;
+  /** Injectable transport for tests. */
+  fetchDeps?: GuardedFetchDeps;
 }
 
 export function createWidgenticServer(
@@ -95,6 +113,15 @@ export function createWidgenticServer(
     .map((domain) => domain.trim().toLowerCase())
     .filter((domain) => domain.length > 0);
   const skipHosts = new Set(resourceDomains);
+  const executeAllowed = (options.scopes ?? []).includes("execute");
+  const renderActions: RenderActionOptions | undefined =
+    options.actions === undefined
+      ? undefined
+      : {
+          load: options.actions.load,
+          resolve: options.actions.resolve,
+          executeAllowed
+        };
 
   const server = new McpServer({ name: "widgentic", version: "0.1.0" });
 
@@ -181,12 +208,58 @@ export function createWidgenticServer(
     async (args) => {
       const result = handleRenderWidget(catalog, args, {
         slim,
-        themes
+        themes,
+        actions: renderActions
       }) as CallToolResult;
       // Apps-host sandboxes block external img-src but allow data:, so the
       // iframe-facing surfaces get image bytes inlined as data URIs
       // (SSRF-guarded; see src/mcp-server/inline-images.ts). Disable with
       // WIDGENTIC_INLINE_IMAGES=0.
+      if (inlineImages) await inlineRenderResultImages(result, { skipHosts });
+      return result;
+    }
+  );
+
+  // The widget's own tool: app-only visibility hides it from the model on
+  // Apps hosts (non-Apps clients still list it — the description says what
+  // it is). The binding is resolved from the caller's composed catalog;
+  // the request never supplies a definition.
+  registerAppTool(
+    server,
+    EXECUTE_ACTION_TOOL.name,
+    {
+      description: EXECUTE_ACTION_TOOL.description,
+      _meta: {
+        ui: { resourceUri: WIDGENTIC_APP_TEMPLATE_URI, visibility: ["app" as const] }
+      },
+      inputSchema: {
+        widget: z.string().describe("The rendered widget's kind."),
+        action: z
+          .string()
+          .describe('Binding identifier: the element\'s dotted template path, or "load".'),
+        args: z
+          .record(z.string(), z.unknown())
+          .optional()
+          .describe("Arguments as resolved in the element's descriptor."),
+        payload: z
+          .record(z.string(), z.unknown())
+          .describe("The widget's current payload { kind, data, hints?, meta? }."),
+        at: z
+          .string()
+          .optional()
+          .describe("Inside a group: dotted path of the item payload within 'payload' (e.g. data.items.2)."),
+        item: z.string().optional().describe("Inside a group: the item's kind.")
+      }
+    },
+    async (args) => {
+      const result = (await handleExecuteAction(catalog, args, {
+        actions: options.actions,
+        scopes: options.scopes,
+        secrets: options.secrets,
+        rateLimit: options.rateLimit,
+        themes,
+        fetchDeps: options.fetchDeps
+      })) as CallToolResult;
       if (inlineImages) await inlineRenderResultImages(result, { skipHosts });
       return result;
     }

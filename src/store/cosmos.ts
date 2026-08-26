@@ -11,6 +11,8 @@
  *       id "widget:<kind>"  → { principalId, widget: StoredWidget }
  *       id "theme:<name>"   → { principalId, theme: ThemeEntry }
  *       id "schema:<name>"  → { principalId, schema: StoredSchema }
+ *       id "action:<name>"  → { principalId, action: StoredAction }
+ *       id "secret:<name>"  → { principalId, name, createdAt, updatedAt, record }  (ciphertext)
  *     Every read is a point read or a single-partition query.
  *   - `keys` container, partition key `/digest`, id = digest:
  *       { digest, principalId, keyId, name, scopes, createdAt, revokedAt? }
@@ -34,7 +36,16 @@
 import { CosmosClient } from "@azure/cosmos";
 import type { TokenCredential } from "@azure/identity";
 import type { ThemeEntry } from "widgentic/theming";
+import type { StoredAction } from "widgentic/actions";
+import {
+  checkSecretName,
+  decryptSecret,
+  encryptSecret,
+  SecretError
+} from "widgentic/secrets";
+import type { SecretCipher } from "widgentic/secrets";
 import { generateKey, hashKey } from "./keys.js";
+import { referencesToSecret, widgetsReferencingAction } from "./memory.js";
 import type {
   CreatedKey,
   Principal,
@@ -42,15 +53,22 @@ import type {
   StoreLimits,
   StoredKey,
   StoredSchema,
+  StoredSecret,
   StoredWidget,
   WritableWidgetStore
 } from "./types.js";
 import {
   DEFAULT_LIMITS,
+  normalizeKeyScopes,
   principalIdForSubject,
   StoreRejectionError
 } from "./types.js";
-import { checkStoredSchema, checkStoredTheme, checkStoredWidget } from "./validate.js";
+import {
+  checkStoredAction,
+  checkStoredSchema,
+  checkStoredTheme,
+  checkStoredWidget
+} from "./validate.js";
 
 /* ------------------------------------------------------------------ */
 /* Structural client types — satisfied by the real @azure/cosmos client
@@ -105,6 +123,8 @@ export interface CosmosStoreOptions {
   dataContainerId?: string;
   keysContainerId?: string;
   limits?: StoreLimits;
+  /** Enables `putSecret`/`secretValue`; without it both are refused with `NO_CIPHER`. */
+  cipher?: SecretCipher;
   /** Diagnostics sink; never receives key material. Default: stderr. */
   log?: (line: string) => void;
 }
@@ -154,6 +174,17 @@ interface SchemaDoc {
   id: string;
   principalId: string;
   schema: StoredSchema;
+}
+
+interface ActionDoc {
+  id: string;
+  principalId: string;
+  action: StoredAction;
+}
+
+interface SecretDoc extends StoredSecret {
+  id: string;
+  principalId: string;
 }
 
 interface KeyDoc {
@@ -240,6 +271,29 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
       scopes: doc.scopes,
       digestPreview: doc.digest.slice("sha256:".length, "sha256:".length + 8)
     };
+  }
+
+  function requireCipher(): SecretCipher {
+    if (options.cipher === undefined) {
+      throw new StoreRejectionError("NO_CIPHER", "this store was built without a secret cipher.");
+    }
+    return options.cipher;
+  }
+
+  async function listByPrefix(principalId: string, prefix: string): Promise<unknown[]> {
+    const { resources } = await data.items
+      .query(
+        {
+          query: "SELECT * FROM c WHERE c.principalId = @p AND STARTSWITH(c.id, @prefix)",
+          parameters: [
+            { name: "@p", value: principalId },
+            { name: "@prefix", value: prefix }
+          ]
+        },
+        { partitionKey: principalId }
+      )
+      .fetchAll();
+    return resources;
   }
 
   const store: WritableWidgetStore = {
@@ -434,6 +488,146 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
       }
     },
 
+    async actions(principalId) {
+      const out: StoredAction[] = [];
+      for (const raw of await listByPrefix(principalId, "action:")) {
+        const doc = raw as ActionDoc;
+        if (doc.action === undefined || typeof doc.action.name !== "string") {
+          log(`widgentic store: skipping malformed action doc '${doc.id}' for ${principalId}.`);
+          continue;
+        }
+        const problem = checkStoredAction(doc.action, limits);
+        if (problem) {
+          log(`widgentic store: skipping action '${doc.action.name}' for ${principalId}: ${problem.code}.`);
+          continue;
+        }
+        out.push(doc.action);
+      }
+      return out;
+    },
+
+    async putAction(principalId, action) {
+      const problem = checkStoredAction(action, limits);
+      if (problem) throw new StoreRejectionError(problem.code, problem.message);
+      await requirePrincipal(principalId);
+      const id = `action:${action.name}`;
+      const { statusCode } = await data.item(id, principalId).read();
+      if (statusCode === 404) {
+        const count = await countEntries(principalId, "action:");
+        if (count >= limits.maxActions) {
+          throw new StoreRejectionError(
+            "TOO_MANY_ACTIONS",
+            `principal is at the ${limits.maxActions}-action limit.`
+          );
+        }
+      }
+      const doc: ActionDoc = { id, principalId, action };
+      try {
+        await data.items.upsert(doc);
+      } catch (error) {
+        throw operationError("putAction", error);
+      }
+    },
+
+    async removeAction(principalId, name) {
+      // In-use guard: bindings live inside templates, so the scan is in
+      // code over the principal's own widgets (one single-partition query).
+      const referencing = widgetsReferencingAction(await store.widgets(principalId), name);
+      if (referencing.length > 0) {
+        throw new StoreRejectionError(
+          "ACTION_IN_USE",
+          `action '${name}' is referenced by: ${referencing.join(", ")}.`
+        );
+      }
+      try {
+        await data.item(`action:${name}`, principalId).delete();
+      } catch (error) {
+        if (isServiceError(error) && String(error.code) === "404") return;
+        throw operationError("removeAction", error);
+      }
+    },
+
+    async listSecrets(principalId) {
+      const out: { name: string; createdAt: string; updatedAt: string }[] = [];
+      for (const raw of await listByPrefix(principalId, "secret:")) {
+        const doc = raw as SecretDoc;
+        if (typeof doc.name !== "string" || typeof doc.record !== "object") {
+          log(`widgentic store: skipping malformed secret doc '${doc.id}' for ${principalId}.`);
+          continue;
+        }
+        out.push({ name: doc.name, createdAt: doc.createdAt, updatedAt: doc.updatedAt });
+      }
+      return out;
+    },
+
+    async secretValue(principalId, name) {
+      const cipher = requireCipher();
+      if (checkSecretName(name) !== undefined) return undefined;
+      const { resource } = await data.item(`secret:${name}`, principalId).read();
+      if (resource === undefined) return undefined;
+      return decryptSecret((resource as SecretDoc).record, cipher);
+    },
+
+    async putSecret(principalId, name, value) {
+      const cipher = requireCipher();
+      const nameError = checkSecretName(name);
+      if (nameError) throw new StoreRejectionError(nameError.code, nameError.message);
+      await requirePrincipal(principalId);
+      const id = `secret:${name}`;
+      const { statusCode, resource } = await data.item(id, principalId).read();
+      if (statusCode === 404) {
+        const count = await countEntries(principalId, "secret:");
+        if (count >= limits.maxSecrets) {
+          throw new StoreRejectionError(
+            "TOO_MANY_SECRETS",
+            `principal is at the ${limits.maxSecrets}-secret limit.`
+          );
+        }
+      }
+      let record;
+      try {
+        record = await encryptSecret(value, cipher);
+      } catch (error) {
+        if (error instanceof SecretError) throw new StoreRejectionError(error.code, error.message);
+        throw error;
+      }
+      const now = new Date().toISOString();
+      const existing = resource as SecretDoc | undefined;
+      const doc: SecretDoc = {
+        id,
+        principalId,
+        name,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+        record
+      };
+      try {
+        await data.items.upsert(doc);
+      } catch (error) {
+        throw operationError("putSecret", error);
+      }
+    },
+
+    async removeSecret(principalId, name) {
+      const [actions, widgets] = await Promise.all([
+        store.actions(principalId),
+        store.widgets(principalId)
+      ]);
+      const referencing = referencesToSecret(actions, widgets, name);
+      if (referencing.length > 0) {
+        throw new StoreRejectionError(
+          "SECRET_IN_USE",
+          `secret '${name}' is referenced by: ${referencing.join(", ")}.`
+        );
+      }
+      try {
+        await data.item(`secret:${name}`, principalId).delete();
+      } catch (error) {
+        if (isServiceError(error) && String(error.code) === "404") return;
+        throw operationError("removeSecret", error);
+      }
+    },
+
     async removeWidget(principalId, kind) {
       try {
         await data.item(`widget:${kind}`, principalId).delete();
@@ -535,10 +729,11 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
       return principal;
     },
 
-    async createKey(principalId, name) {
+    async createKey(principalId, name, scopes) {
       if (typeof name !== "string" || name.trim() === "") {
         throw new StoreRejectionError("INVALID_KEY_NAME", "key name must be non-empty.");
       }
+      const granted = normalizeKeyScopes(scopes);
       const { resource } = await data.item("profile", principalId).read();
       if (resource === undefined) {
         throw new StoreRejectionError("UNKNOWN_PRINCIPAL", principalId);
@@ -551,7 +746,7 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
         principalId,
         keyId: `key_${digest.slice("sha256:".length, "sha256:".length + 16)}`,
         name: name.trim(),
-        scopes: ["read"],
+        scopes: granted,
         createdAt: new Date().toISOString()
       };
       try {
@@ -621,13 +816,18 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
         // The subject owns its own principal: absorb only when empty —
         // emptiness INCLUDES unrevoked keys, or absorbing would silently
         // re-point a working key's catalog.
-        const [w, t, sc, keys] = await Promise.all([
+        const [w, t, sc, ac, se, keys] = await Promise.all([
           store.widgets(aliasId),
           store.themes(aliasId),
           store.schemas(aliasId),
+          store.actions(aliasId),
+          store.listSecrets(aliasId),
           store.listKeys(aliasId)
         ]);
-        if (w.length > 0 || t.length > 0 || sc.length > 0 || keys.some((k) => k.revokedAt === undefined)) {
+        if (
+          w.length > 0 || t.length > 0 || sc.length > 0 || ac.length > 0 || se.length > 0 ||
+          keys.some((k) => k.revokedAt === undefined)
+        ) {
           throw new StoreRejectionError(
             "SUBJECT_IN_USE",
             "subject already owns an account with content — remove its widgets, themes, schemas, and keys first."

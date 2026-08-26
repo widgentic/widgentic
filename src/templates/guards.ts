@@ -15,6 +15,13 @@ export {
 /** Event-handler attributes are code execution in a browser. */
 export const FORBIDDEN_ATTR = /^on/i;
 
+/**
+ * Renderer-owned attributes (`data-wg-*`): action descriptors and render
+ * markers. Authors cannot write them — only a validated `action` binding
+ * produces one — so a hand-written descriptor never reaches a tree.
+ */
+export const RESERVED_ATTR = /^data-wg-/i;
+
 /** Attributes whose values are URLs and can smuggle script schemes. */
 export const URL_ATTRS = new Set([
   "href",

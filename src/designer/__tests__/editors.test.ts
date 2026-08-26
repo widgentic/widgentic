@@ -363,8 +363,8 @@ describe("template tree usability", () => {
     const menu = container.querySelector(".wgd-menu") as HTMLElement;
     expect(menu.hidden).toBe(false);
     const labels = [...menu.querySelectorAll(".wgd-menu-item")].map((b) => b.textContent);
-    expect(labels).toEqual(["attribute", "text", "bind", "element", "each", "when"]);
-    (menu.querySelectorAll(".wgd-menu-item")[2] as HTMLButtonElement).click(); // bind
+    expect(labels).toEqual(["attribute", "action", "text", "bind", "element", "each", "when"]);
+    (menu.querySelectorAll(".wgd-menu-item")[3] as HTMLButtonElement).click(); // bind
     expect(getTemplate()).toEqual({ tag: "div", children: [{ bind: "." }] });
   });
 

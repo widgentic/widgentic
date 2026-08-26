@@ -7,6 +7,7 @@
 import type { WidgetDescriptorInput } from "widgentic/catalog";
 import type { WidgetTemplate } from "widgentic/templates";
 import type { WidgetTheme } from "widgentic/theming";
+import type { ActionBinding } from "widgentic/actions";
 
 /** The draft being designed — the server's `CustomWidget` shape plus session extras. */
 export interface WidgetDraft {
@@ -18,6 +19,8 @@ export interface WidgetDraft {
    * as authored — resolution belongs to the server's composition.
    */
   descriptor: WidgetDescriptorInput & { dataSchemaRef?: string };
+  /** Optional http GET action run once when the widget first renders. */
+  load?: ActionBinding;
   /** Optional preview data overriding `descriptor.dataExample`. */
   sampleData?: unknown;
   /** Preview theme (also the theme-designer working copy). */

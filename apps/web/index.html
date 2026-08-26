@@ -117,6 +117,8 @@
       <button id="tab-widgets" class="active">Widgets</button>
       <button id="tab-themes">Themes</button>
       <button id="tab-schemas">Data schemas</button>
+      <button id="tab-actions">Actions</button>
+      <button id="tab-secrets">Secrets</button>
       <button id="tab-keys">API keys</button>
     </nav>
 
@@ -170,6 +172,39 @@
       </div>
     </section>
 
+    <section id="actions-section" hidden>
+      <div class="split">
+        <div>
+          <div class="toolbar">
+            <button id="action-new">New</button>
+            <button id="action-save" class="primary">Save to my catalog</button>
+          </div>
+          <div id="action-list" class="list"></div>
+          <p class="muted">A <b>prompt</b> action proposes a message the user reviews and sends.
+             An <b>http</b> action runs server-side against a fixed URL and must pass a
+             test call before it can be saved.</p>
+        </div>
+        <div id="action-designer"></div>
+      </div>
+    </section>
+
+    <section id="secrets-section" hidden>
+      <p class="muted" id="secrets-note">Secrets are encrypted with a vault-held key, injected into http
+         actions by name, and never shown again after you enter them.</p>
+      <div class="toolbar">
+        <input id="secret-name" placeholder="name (e.g. weather-token)"
+               style="font: inherit; font-size: 13px; padding: 4px 8px;
+                      border: 1px solid var(--host-border); border-radius: 4px;
+                      background: var(--host-panel); color: var(--host-text);">
+        <input id="secret-value" type="password" placeholder="value" autocomplete="off"
+               style="font: inherit; font-size: 13px; padding: 4px 8px;
+                      border: 1px solid var(--host-border); border-radius: 4px;
+                      background: var(--host-panel); color: var(--host-text);">
+        <button id="secret-save" class="primary">Set secret</button>
+      </div>
+      <div id="secret-list" class="list"></div>
+    </section>
+
     <section id="keys-section" hidden>
       <h3 style="margin: 4px 0 8px; font-size: 14px;">Sign-in identities</h3>
       <div id="identity-list" class="list" style="margin-bottom: 8px;"></div>
@@ -180,16 +215,21 @@
                style="font: inherit; font-size: 13px; padding: 4px 8px;
                       border: 1px solid var(--host-border); border-radius: 4px;
                       background: var(--host-panel); color: var(--host-text);">
+        <label class="muted" title="Lets widgets run http actions with your secrets">
+          <input type="checkbox" id="key-execute"> execute
+        </label>
         <button id="key-create" class="primary">Create key</button>
       </div>
+      <p class="muted">Keys always read your catalog. Tick <b>execute</b> to let widgets rendered
+         with that key run http actions (using your secrets). Scopes are fixed at creation.</p>
       <div id="key-reveal"></div>
       <table>
-        <thead><tr><th>Name</th><th>Created</th><th>Digest</th><th>Status</th><th></th></tr></thead>
+        <thead><tr><th>Name</th><th>Created</th><th>Digest</th><th>Scopes</th><th>Status</th><th></th></tr></thead>
         <tbody id="key-rows"></tbody>
       </table>
       <p class="muted">Point an MCP host at <code>https://mcp.widgentic.dev/mcp?key=…</code>
-         (or send the key as <code>x-api-key</code>). Keys are read-only:
-         they select your catalog, they never write to it.</p>
+         (or send the key as <code>x-api-key</code>). Keys never write to your catalog;
+         only <b>execute</b> keys can run widget actions.</p>
     </section>
 
     <div class="toolbar"><span id="status"></span></div>

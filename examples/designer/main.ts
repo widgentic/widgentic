@@ -8,22 +8,26 @@
  * performs no network I/O and no persistence; hosts own both.
  */
 import {
+  createActionDesigner,
   createDesigner,
   createThemeDesigner,
+  defineActionDesignerElement,
   defineDesignerElement,
   defineThemeDesignerElement
 } from "widgentic/designer";
-import type { DesignerHandle, ThemeDesignerHandle } from "widgentic/designer";
+import type { ActionDesignerHandle, DesignerHandle, ThemeDesignerHandle } from "widgentic/designer";
 import { createThemeRegistry } from "widgentic/theming";
 import type { ThemeEntry } from "widgentic/theming";
 import { invoiceWidget } from "../mcp-server/widgets/invoice.js";
 import { xPostWidget } from "../mcp-server/widgets/x-post.js";
+import { weatherWidget } from "../mcp-server/widgets/weather.js";
 
 const DRAFT_KEY = "widgentic-designer-draft";
 const THEMES_KEY = "widgentic-designer-themes";
 
 defineDesignerElement();
 defineThemeDesignerElement();
+defineActionDesignerElement();
 
 const status = document.getElementById("status");
 const note = (text: string): void => {
@@ -94,10 +98,23 @@ function mountThemeDesigner(): void {
   });
 }
 
+// --- Action designer tab -------------------------------------------------
+// No testCall here: the demo has no server, so the Test control is absent
+// by design (the widgentic.dev app supplies the production execute path).
+const actionHost = document.getElementById("action-designer") as HTMLElement;
+let actionDesigner: ActionDesignerHandle | undefined;
+
+function mountActionDesigner(): void {
+  actionDesigner?.dispose();
+  actionHost.replaceChildren();
+  actionDesigner = createActionDesigner(actionHost, {});
+}
+
 // --- Tabs ----------------------------------------------------------------
 const tabs: Record<string, HTMLElement> = {
   widget: widgetHost,
-  theme: themeHost
+  theme: themeHost,
+  action: actionHost
 };
 
 function show(name: string): void {
@@ -114,6 +131,7 @@ function show(name: string): void {
 
 document.getElementById("tab-widget")?.addEventListener("click", () => show("widget"));
 document.getElementById("tab-theme")?.addEventListener("click", () => show("theme"));
+document.getElementById("tab-action")?.addEventListener("click", () => show("action"));
 
 document.getElementById("save-theme")?.addEventListener("click", () => {
   const entry = themeDesigner?.getTheme();
@@ -132,6 +150,11 @@ document.getElementById("load-xpost")?.addEventListener("click", () => {
   note("loaded the x-post example");
 });
 
+document.getElementById("load-weather")?.addEventListener("click", () => {
+  widgetDesigner?.loadWidget(weatherWidget);
+  note("loaded the weather example — see its Refresh (http) and Ask (prompt) bindings");
+});
+
 document.getElementById("reset")?.addEventListener("click", () => {
   localStorage.removeItem(DRAFT_KEY);
   localStorage.removeItem(THEMES_KEY);
@@ -139,4 +162,5 @@ document.getElementById("reset")?.addEventListener("click", () => {
 });
 
 mountThemeDesigner();
+mountActionDesigner();
 show("widget");
