@@ -323,11 +323,12 @@ export function mountTemplatePanel(
     value: string,
     scope: unknown,
     use: PathUse,
-    onCommit: (path: string) => void
+    onCommit: (path: string) => void,
+    className = "wgd-input wgd-node-value"
   ): HTMLElement {
     const options = isPlainObject(scope) ? pathOptions(scope, use) : [];
     if (options.length === 0) {
-      return changeInput(value, onCommit);
+      return changeInput(value, onCommit, className);
     }
     const select = h("select", { class: "wgd-select wgd-path" }) as HTMLSelectElement;
     const known = options.includes(value);
@@ -341,7 +342,7 @@ export function mountTemplatePanel(
     select.append(h("option", { value: "__custom__" }, ["custom…"]));
     select.value = value;
     fitSelect(select);
-    const custom = changeInput(value, onCommit);
+    const custom = changeInput(value, onCommit, className);
     custom.hidden = true;
     select.addEventListener("change", () => {
       if (select.value === "__custom__") {
@@ -352,7 +353,10 @@ export function mountTemplatePanel(
       custom.hidden = true;
       onCommit(select.value);
     });
-    return h("span", { class: "wgd-pathwrap" }, [select, custom]);
+    // The wrap carries the row-shape marker (e.g. wgd-attr-value) so rows
+    // read the same whether the value is a select or free text.
+    const marker = className.includes("wgd-attr-value") ? " wgd-attr-value" : "";
+    return h("span", { class: `wgd-pathwrap${marker}` }, [select, custom]);
   }
 
   function tagControl(tag: string, onCommit: (tag: string) => void): HTMLElement {
@@ -572,20 +576,22 @@ export function mountTemplatePanel(
         mode.append(h("option", { value: "bind" }, ["bind"]));
         mode.value = isBind ? "bind" : "literal";
         fitSelect(mode);
-        const valueInput = changeInput(
-          isBind ? bindValue!.bind : String(value),
-          (next) => {
-            setAttr(
-              mode.value === "bind"
-                ? rebuild({ ...(bindValue ?? { bind: "." }), bind: next })
-                : next
-            );
-          },
-          "wgd-input wgd-attr-value"
-        );
+        // Literal: free text. Bind: the same path dropdown the bind/each/when
+        // nodes use (observed live: img src/alt binds were plain text boxes).
+        const literalInput = changeInput(String(isBind ? "" : value), (next) => setAttr(next), "wgd-input wgd-attr-value");
+        const valueInput: HTMLElement = isBind
+          ? pathControl(
+              bindValue!.bind,
+              scope,
+              "bind",
+              (next) => setAttr(rebuild({ ...bindValue!, bind: next })),
+              "wgd-input wgd-attr-value"
+            )
+          : literalInput;
         mode.addEventListener("change", () => {
-          const current = valueInput.value;
-          setAttr(mode.value === "bind" ? { bind: current } : current);
+          // Switching modes carries the current text across as a starting point.
+          const current = isBind ? bindValue!.bind : literalInput.value;
+          setAttr(mode.value === "bind" ? { bind: current || "." } : current);
         });
         const removeAttr = h("button", { class: "wgd-icon", type: "button", title: "Remove attribute" }, ["✕"]);
         removeAttr.addEventListener("click", () => {

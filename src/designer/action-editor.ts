@@ -68,6 +68,43 @@ function select(options: { value: string; label?: string }[], value: string, cla
   return el;
 }
 
+/**
+ * Path picker: a select over the known paths (plus the current value when
+ * it is off-schema) with a "custom…" escape to free text — the template
+ * panel's pathControl, for mappings. With no known paths it is a text input.
+ */
+function pathSelect(
+  value: string,
+  options: string[],
+  onCommit: (path: string) => void,
+  placeholder: string,
+  className = "wgd-input wgd-rec-value"
+): HTMLElement {
+  if (options.length === 0) return input(value, className, onCommit, placeholder);
+  const sel = h("select", { class: "wgd-select wgd-path" }) as HTMLSelectElement;
+  const known = options.includes(value);
+  const listed = known || value === "" ? options : [value, ...options];
+  if (value === "") sel.append(h("option", { value: "" }, [placeholder]));
+  for (const option of listed) {
+    sel.append(h("option", { value: option }, [option === value && !known ? `${option} (off-schema)` : option]));
+  }
+  sel.append(h("option", { value: "__custom__" }, ["custom…"]));
+  sel.value = value;
+  fitSelect(sel);
+  const custom = input(value, className, onCommit, placeholder);
+  custom.hidden = true;
+  sel.addEventListener("change", () => {
+    if (sel.value === "__custom__") {
+      custom.hidden = false;
+      custom.focus();
+      return;
+    }
+    custom.hidden = true;
+    if (sel.value !== "") onCommit(sel.value);
+  });
+  return h("span", { class: "wgd-pathwrap" }, [sel, custom]);
+}
+
 /** Header/query map rows: name, literal-or-secret mode, value. */
 function headerMapEditor(
   initial: Record<string, string | { secret: string }> | undefined,
@@ -284,7 +321,6 @@ export function createBindingEditor(
   let current: ActionBinding | undefined = initial === undefined ? undefined : clone(initial);
   const element = h("div", { class: "wgd-binding" });
   const diag = diagnosticLine(undefined);
-  const listId = `wgd-paths-${Math.random().toString(36).slice(2, 8)}`;
 
   function definitionOf(binding: ActionBinding | undefined): ActionDefinition | undefined {
     if (binding === undefined) return undefined;
@@ -348,8 +384,7 @@ export function createBindingEditor(
       // Input mapping: one row per declared field, each a data path or a constant.
       const properties = isPlainObject(definition.input.properties) ? Object.keys(definition.input.properties) : [];
       const mapping = clone(((current as { input?: InputMapping }).input ?? {}) as InputMapping);
-      const datalist = h("datalist", { id: listId });
-      for (const path of [...(ctx.scopePaths ?? []), ...SCOPE_HELPERS]) datalist.append(h("option", { value: path }));
+      const pathOptions = [...(ctx.scopePaths ?? []), ...SCOPE_HELPERS];
       const rows = properties.map((field) => {
         const value = mapping[field];
         const isConst = isPlainObject(value) && "const" in value;
@@ -357,26 +392,23 @@ export function createBindingEditor(
           const nextMapping = { ...mapping, [field]: next === "const" ? { const: "" } : field };
           commit(withMapping(current as ActionBinding, nextMapping, (current as { output?: OutputBinding }).output));
         });
-        const valueInput = input(
-          isConst ? JSON.stringify((value as { const: unknown }).const) : typeof value === "string" ? value : "",
-          "wgd-input wgd-rec-value",
-          (next) => {
-            let entry: string | { const: unknown };
-            if (isConst) {
-              try { entry = { const: JSON.parse(next) as unknown }; } catch { entry = { const: next }; }
-            } else entry = next;
-            const nextMapping = { ...mapping, [field]: entry };
-            if (!isConst && next === "") delete nextMapping[field];
-            commit(withMapping(current as ActionBinding, nextMapping, (current as { output?: OutputBinding }).output), false);
-          },
-          isConst ? "JSON literal" : "data path"
-        );
-        if (!isConst) valueInput.setAttribute("list", listId);
+        const onValue = (next: string): void => {
+          let entry: string | { const: unknown };
+          if (isConst) {
+            try { entry = { const: JSON.parse(next) as unknown }; } catch { entry = { const: next }; }
+          } else entry = next;
+          const nextMapping = { ...mapping, [field]: entry };
+          if (!isConst && next === "") delete nextMapping[field];
+          commit(withMapping(current as ActionBinding, nextMapping, (current as { output?: OutputBinding }).output), false);
+        };
+        const valueInput = isConst
+          ? input(JSON.stringify((value as { const: unknown }).const), "wgd-input wgd-rec-value", onValue, "JSON literal")
+          : pathSelect(typeof value === "string" ? value : "", pathOptions, onValue, "data path");
         return h("div", { class: "wgd-rec-row" }, [h("span", { class: "wgd-rec-key wgd-binding-field" }, [field]), kindSelect, valueInput]);
       });
       element.append(
         h("span", { class: "wgd-field-label" }, ["Input mapping (field ← data path or constant)"]),
-        properties.length > 0 ? h("div", { class: "wgd-record" }, [...rows, datalist]) : h("div", { class: "wgd-diagnostic" }, ["The input schema declares no properties."])
+        properties.length > 0 ? h("div", { class: "wgd-record" }, rows) : h("div", { class: "wgd-diagnostic" }, ["The input schema declares no properties."])
       );
       // Output: mode, patch path, map projection.
       const output = clone(((current as { output?: OutputBinding }).output ?? {}) as OutputBinding);
@@ -417,10 +449,8 @@ export function createBindingEditor(
     const widgetSchema = ctx.getDataSchema?.();
     const base = (output.mode ?? "merge") === "patch" && output.path ? output.path : "";
     const targetRoot = base === "" ? widgetSchema : schemaAt(widgetSchema, base);
-    const targetList = h("datalist", { id: `${listId}-targets` });
-    for (const path of allPaths(targetRoot)) targetList.append(h("option", { value: path }));
-    const sourceList = h("datalist", { id: `${listId}-sources` });
-    for (const path of [".", ...allPaths(definition.output)]) sourceList.append(h("option", { value: path }));
+    const targetOptions = allPaths(targetRoot);
+    const sourceOptions = [".", ...allPaths(definition.output)];
     const mismatch = diagnosticLine(undefined);
 
     function commitMap(next: Record<string, string>): void {
@@ -437,13 +467,13 @@ export function createBindingEditor(
         if (typesConflict(sourceType, targetType)) {
           problems.push(`'${source}' is ${sourceType} in the response but '${base ? `${base}.` : ""}${target}' is ${targetType} in the widget schema`);
         }
-        const targetInput = input(target, "wgd-input wgd-rec-key", (next) => {
+        const targetInput = pathSelect(target, targetOptions, (next) => {
           const entries = Object.entries(map).map(([k, v]) => (k === target ? [next, v] : [k, v]));
           commitMap(Object.fromEntries(entries));
-        }, "target data path");
-        targetInput.setAttribute("list", `${listId}-targets`);
-        const sourceInput = input(source, "wgd-input wgd-rec-value", (next) => commitMap({ ...map, [target]: next }), "response path");
-        sourceInput.setAttribute("list", `${listId}-sources`);
+        }, "target data path", "wgd-input wgd-rec-key");
+        targetInput.classList.add("wgd-map-target");
+        const sourceInput = pathSelect(source, sourceOptions, (next) => commitMap({ ...map, [target]: next }), "response path");
+        sourceInput.classList.add("wgd-map-source");
         const remove = h("button", { class: "wgd-icon", type: "button", title: "Remove" }, ["✕"]);
         remove.addEventListener("click", () => {
           const { [target]: _gone, ...rest } = map;
@@ -456,7 +486,7 @@ export function createBindingEditor(
       mismatch.hidden = problems.length === 0;
       mismatch.textContent = problems.length === 0 ? "" : `Type mismatch: ${problems.join("; ")}.`;
       mismatch.classList.add("wgd-type-mismatch");
-      container.append(h("div", { class: "wgd-row" }, [add]), targetList, sourceList, mismatch);
+      container.append(h("div", { class: "wgd-row" }, [add]), mismatch);
     }
     render();
     return container;

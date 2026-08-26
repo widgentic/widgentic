@@ -145,10 +145,45 @@ describe("schema-driven completions and type checks", () => {
     expect(mismatch.hidden).toBe(false);
     expect(mismatch.textContent).toContain("'current.temp_c' is number");
     expect(mismatch.textContent).toContain("'reading.temperature' is string");
-    const targets = [...container.querySelectorAll(".wgd-node-action datalist")].find((d) => d.id.endsWith("-targets")) as HTMLElement;
-    expect([...targets.querySelectorAll("option")].map((o) => o.value)).toEqual(["temperature"]);
-    const sources = [...container.querySelectorAll(".wgd-node-action datalist")].find((d) => d.id.endsWith("-sources")) as HTMLElement;
-    expect([...sources.querySelectorAll("option")].map((o) => o.value)).toEqual(expect.arrayContaining([".", "current", "current.temp_c", "current.condition.text"]));
+    // Real dropdowns (not datalists): known paths plus the custom escape.
+    const targetSelect = container.querySelector(".wgd-node-action .wgd-map-target select") as HTMLSelectElement;
+    expect([...targetSelect.options].map((o) => o.value)).toEqual(["temperature", "__custom__"]);
+    const sourceSelect = container.querySelector(".wgd-node-action .wgd-map-source select") as HTMLSelectElement;
+    expect([...sourceSelect.options].map((o) => o.value)).toEqual(expect.arrayContaining([".", "current", "current.temp_c", "current.condition.text", "__custom__"]));
+    expect(sourceSelect.value).toBe("current.temp_c");
+    // Picking a known source commits it; "custom…" reveals free text.
+    sourceSelect.value = "current.condition.text";
+    sourceSelect.dispatchEvent(new Event("change"));
+    const draft = designer.getDraft();
+    const binding = (draft.template as { action: { output: { map: Record<string, string> } } }).action;
+    expect(binding.output.map).toEqual({ temperature: "current.condition.text" });
+    designer.dispose();
+  });
+});
+
+describe("attribute binds", () => {
+  it("bound attribute values use the path dropdown, literals stay free text", () => {
+    const container = host();
+    const designer = createDesigner(container);
+    designer.loadWidget({
+      kind: "avatar",
+      template: { tag: "img", attrs: { class: "wg-avatar", src: { bind: "avatarUrl" }, alt: { bind: "displayName" } } },
+      descriptor: {
+        description: "a",
+        dataShape: "{ avatarUrl, displayName }",
+        dataSchema: { type: "object", properties: { avatarUrl: { type: "string" }, displayName: { type: "string" } } }
+      }
+    });
+    const rows = [...container.querySelectorAll(".wgd-attr-row")];
+    expect(rows).toHaveLength(3);
+    const srcSelect = rows[1]?.querySelector("select.wgd-path") as HTMLSelectElement;
+    expect(srcSelect).not.toBeNull();
+    expect([...srcSelect.options].map((o) => o.value)).toEqual(expect.arrayContaining(["avatarUrl", "displayName", "__custom__"]));
+    expect(srcSelect.value).toBe("avatarUrl");
+    expect(rows[0]?.querySelector("select.wgd-path")).toBeNull(); // the literal class attr
+    srcSelect.value = "displayName";
+    srcSelect.dispatchEvent(new Event("change"));
+    expect((designer.getDraft().template as unknown as { attrs: { src: unknown } }).attrs.src).toEqual({ bind: "displayName" });
     designer.dispose();
   });
 });
