@@ -670,7 +670,12 @@ export function mountTemplatePanel(
       const addMenu = menuButton(
         "+",
         "Add attribute or child node",
-        ["attribute", ...(binding === undefined ? ["action"] : []), ...Object.keys(NODE_PRESETS)],
+        // Actions belong on activatable elements: buttons and links.
+        [
+          "attribute",
+          ...(binding === undefined && (node.tag === "button" || node.tag === "a") ? ["action"] : []),
+          ...Object.keys(NODE_PRESETS)
+        ],
         (choice) => {
           collapsedPaths.delete(pathString(path)); // never add into a fold
           const preset = NODE_PRESETS[choice];

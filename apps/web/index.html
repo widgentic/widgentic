@@ -90,7 +90,26 @@
   #signin-view { max-width: 460px; margin: 10vh auto; text-align: center; }
   #signin-view p { color: var(--host-muted); }
   .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
-  #status { color: var(--host-muted); font-size: 12px; margin-left: auto; }
+  /* Notifications: a banner under the header, where the eye already is. */
+  #status {
+    display: flex; align-items: center; gap: 12px;
+    margin: 0 0 12px; padding: 8px 12px; font-size: 13px;
+    border: 1px solid var(--host-accent); border-radius: 4px;
+    background: var(--host-panel); color: var(--host-text);
+  }
+  #status[data-tone="error"] { border-color: var(--host-danger); color: var(--host-danger); }
+  #status[data-tone="pending"] { border-color: var(--host-muted); color: var(--host-muted); }
+  #status[hidden] { display: none; }
+  #status .text { flex: 1; }
+  #status button { padding: 2px 8px; }
+  /* Async work in flight: the acting control shows it. */
+  button.busy { opacity: 0.7; cursor: progress; position: relative; }
+  button.busy::after {
+    content: ""; display: inline-block; width: 10px; height: 10px; margin-left: 6px;
+    border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%;
+    vertical-align: -1px; animation: host-spin 0.8s linear infinite;
+  }
+  @keyframes host-spin { to { transform: rotate(360deg); } }
 </style>
 <body>
 <header>
@@ -113,6 +132,7 @@
   </div>
 
   <div id="app-view" hidden>
+    <div id="status" role="status" hidden><span class="text"></span><button id="status-dismiss" type="button" aria-label="Dismiss">✕</button></div>
     <nav class="tabs">
       <button id="tab-widgets" class="active">Widgets</button>
       <button id="tab-themes">Themes</button>
@@ -232,7 +252,6 @@
          only <b>execute</b> keys can run widget actions.</p>
     </section>
 
-    <div class="toolbar"><span id="status"></span></div>
   </div>
 </main>
 <script type="module" src="/app.bundle.js"></script>

@@ -19,6 +19,17 @@ The app SHALL offer an Actions section beside Widgets, Themes and Schemas where 
 - **WHEN** a prompt action is saved
 - **THEN** the app SHALL have shown the notice and SHALL record acknowledgement with the save
 
+### Requirement: Authoring feedback is visible where the eye is
+Every asynchronous authoring operation (save, delete, key creation, secret writes, the action test call) SHALL mark the control that triggered it busy — disabled, with a visible in-progress indicator — until it settles, and SHALL announce a pending message. Notifications (results, validation refusals, errors) SHALL render in a banner directly under the app header — never in a corner — with a distinct error tone for failures, and SHALL be dismissible.
+
+#### Scenario: A save shows its progress on the button that started it
+- **WHEN** a person clicks Save on an entry
+- **THEN** that button SHALL be disabled and show an in-progress indicator until the request settles, and the banner SHALL read a pending message
+
+#### Scenario: Refusals are readable
+- **WHEN** a save is refused (for example an http action without a passing test call)
+- **THEN** the message SHALL appear in the banner under the header in the error tone
+
 ### Requirement: Secrets section is write-only
 The app SHALL offer a Secrets section where a person sets, replaces and deletes named secrets through a password-style field. After entry the app SHALL never display a value, a preview or a length; the list SHALL show names and timestamps only. Deleting a secret in use SHALL be refused with the referencing actions named.
 

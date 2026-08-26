@@ -231,8 +231,10 @@ export function createDefinitionEditor(
     const parts: (Node | string)[] = [h("span", { class: "wgd-field-label" }, [label]), builder.element];
     const shared = ctx.schemas ?? [];
     if (shared.length > 0) {
+      // Actions store their schemas INLINE (a contract must not drift when a
+      // shared schema is edited), so this is a copy — and says so.
       const copyFrom = select(
-        [{ value: "", label: "copy from shared schema…" }, ...shared.map((s) => ({ value: s.name }))],
+        [{ value: "", label: "copy a shared schema into this action…" }, ...shared.map((s) => ({ value: s.name }))],
         "",
         "wgd-select",
         (name) => {
@@ -240,7 +242,12 @@ export function createDefinitionEditor(
           if (entry) commit({ ...(current as HttpActionDefinition), [which]: clone(entry.schema) });
         }
       );
-      parts.push(h("div", { class: "wgd-row" }, [copyFrom]));
+      parts.push(
+        h("div", { class: "wgd-row" }, [
+          copyFrom,
+          h("span", { class: "wgd-field-label" }, ["(a copy — later edits to the shared schema do not follow)"])
+        ])
+      );
     }
     return h("div", { class: "wgd-action-schema" }, parts);
   }

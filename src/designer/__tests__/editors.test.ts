@@ -363,9 +363,22 @@ describe("template tree usability", () => {
     const menu = container.querySelector(".wgd-menu") as HTMLElement;
     expect(menu.hidden).toBe(false);
     const labels = [...menu.querySelectorAll(".wgd-menu-item")].map((b) => b.textContent);
-    expect(labels).toEqual(["attribute", "action", "text", "bind", "element", "each", "when"]);
-    (menu.querySelectorAll(".wgd-menu-item")[3] as HTMLButtonElement).click(); // bind
+    // A div is not activatable: no "action" here (see the button case below).
+    expect(labels).toEqual(["attribute", "text", "bind", "element", "each", "when"]);
+    (menu.querySelectorAll(".wgd-menu-item")[2] as HTMLButtonElement).click(); // bind
     expect(getTemplate()).toEqual({ tag: "div", children: [{ bind: "." }] });
+  });
+
+  it("offers an action only on buttons and links", () => {
+    for (const tag of ["button", "a"]) {
+      const { container } = designerWith({ tag, children: [] });
+      (container.querySelector(".wgd-menu-toggle") as HTMLButtonElement).click();
+      const labels = [...container.querySelectorAll(".wgd-menu .wgd-menu-item")].map((b) => b.textContent);
+      expect(labels, tag).toContain("action");
+    }
+    const { container } = designerWith({ tag: "span", children: [] });
+    (container.querySelector(".wgd-menu-toggle") as HTMLButtonElement).click();
+    expect([...container.querySelectorAll(".wgd-menu .wgd-menu-item")].map((b) => b.textContent)).not.toContain("action");
   });
 
   it("closes the add menu on outside click and Escape without inserting", () => {

@@ -57,9 +57,41 @@ interface StoredKeyJson {
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T =>
   document.getElementById(id) as T;
 
-const status = (text: string): void => {
-  $("status").textContent = text;
+type Tone = "info" | "error" | "pending";
+
+/** The notification banner under the header; errors get the error tone. */
+const status = (text: string, tone: Tone = "info"): void => {
+  const banner = $("status");
+  const label = banner.querySelector(".text");
+  if (label) label.textContent = text;
+  banner.dataset.tone = tone;
+  banner.hidden = text === "";
+  banner.setAttribute("role", tone === "error" ? "alert" : "status");
 };
+
+/**
+ * Run async work with visible feedback: the control that triggered it (the
+ * focused button) is disabled with a spinner and the banner shows the
+ * pending text until the work settles. Errors surface in the error tone.
+ */
+async function withBusy<T>(pending: string, work: () => Promise<T>): Promise<T> {
+  const control = document.activeElement instanceof HTMLButtonElement ? document.activeElement : undefined;
+  if (control) {
+    control.disabled = true;
+    control.classList.add("busy");
+    control.setAttribute("aria-busy", "true");
+  }
+  status(pending, "pending");
+  try {
+    return await work();
+  } finally {
+    if (control) {
+      control.disabled = false;
+      control.classList.remove("busy");
+      control.removeAttribute("aria-busy");
+    }
+  }
+}
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init);
@@ -116,7 +148,7 @@ function mountWidgetDesigner(loadDefinition?: unknown, readOnly = false): void {
   });
   if (loadDefinition !== undefined) {
     const result = widgetDesigner.loadWidget(loadDefinition);
-    if (!result.ok) status(`load failed: ${result.errors.join("; ")}`);
+    if (!result.ok) status(`load failed: ${result.errors.join("; ")}`, "error");
   }
 }
 
@@ -161,7 +193,7 @@ function renderWidgetList(): void {
       save.textContent = "Save";
       save.className = "primary";
       save.addEventListener("click", () => {
-        void saveWidget().catch((error: Error) => status(error.message));
+        void saveWidget().catch((error: Error) => status(error.message, "error"));
       });
       const cancel = document.createElement("button");
       cancel.textContent = "Cancel";
@@ -193,7 +225,7 @@ function renderWidgetList(): void {
       remove.setAttribute("aria-label", "Delete");
       remove.addEventListener("click", () => {
         void (async () => {
-          await api(`/api/widgets/${encodeURIComponent(widget.kind)}`, { method: "DELETE" });
+          await withBusy(`deleting ${widget.kind}…`, () => api(`/api/widgets/${encodeURIComponent(widget.kind)}`, { method: "DELETE" }));
           if (selectedKind === widget.kind) {
             selectedKind = undefined;
             widgetMode = "new";
@@ -202,7 +234,7 @@ function renderWidgetList(): void {
           }
           await refreshWidgets();
           status(`deleted ${widget.kind}`);
-        })().catch((error: Error) => status(error.message));
+        })().catch((error: Error) => status(error.message, "error"));
       });
       buttons.push(edit, base, remove);
     }
@@ -219,7 +251,7 @@ async function refreshWidgets(): Promise<void> {
 async function saveWidget(): Promise<void> {
   if (widgetDesigner === undefined) return;
   const draft = widgetDesigner.getDraft();
-  await api(`/api/widgets/${encodeURIComponent(draft.kind)}`, {
+  await withBusy(`saving ${draft.kind}…`, () => api(`/api/widgets/${encodeURIComponent(draft.kind)}`, {
     method: "PUT",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
@@ -227,7 +259,7 @@ async function saveWidget(): Promise<void> {
       descriptor: draft.descriptor,
       ...(draft.load !== undefined ? { load: draft.load } : {})
     })
-  });
+  }));
   selectedKind = draft.kind;
   await refreshWidgets();
   // A save ends the edit: back to viewing the stored entry read-only.
@@ -260,7 +292,7 @@ function mountThemeDesigner(loadEntry?: unknown, readOnly = false): void {
   themeDesigner = createThemeDesigner(host, { readOnly, widgets: myWidgets });
   if (loadEntry !== undefined) {
     const result = themeDesigner.loadTheme(loadEntry);
-    if (!result.ok) status(`load failed: ${result.errors.join("; ")}`);
+    if (!result.ok) status(`load failed: ${result.errors.join("; ")}`, "error");
   }
 }
 
@@ -303,7 +335,7 @@ function renderThemeList(): void {
       save.textContent = "Save";
       save.className = "primary";
       save.addEventListener("click", () => {
-        void saveTheme().catch((error: Error) => status(error.message));
+        void saveTheme().catch((error: Error) => status(error.message, "error"));
       });
       const cancel = document.createElement("button");
       cancel.textContent = "Cancel";
@@ -331,7 +363,7 @@ function renderThemeList(): void {
       remove.setAttribute("aria-label", "Delete");
       remove.addEventListener("click", () => {
         void (async () => {
-          await api(`/api/themes/${encodeURIComponent(theme.name)}`, { method: "DELETE" });
+          await withBusy(`deleting ${theme.name}…`, () => api(`/api/themes/${encodeURIComponent(theme.name)}`, { method: "DELETE" }));
           if (selectedTheme === theme.name) {
             selectedTheme = undefined;
             themeMode = "new";
@@ -340,7 +372,7 @@ function renderThemeList(): void {
           }
           await refreshThemes();
           status(`deleted ${theme.name}`);
-        })().catch((error: Error) => status(error.message));
+        })().catch((error: Error) => status(error.message, "error"));
       });
       buttons.push(edit, base, remove);
     }
@@ -357,11 +389,11 @@ async function refreshThemes(): Promise<void> {
 async function saveTheme(): Promise<void> {
   if (themeDesigner === undefined) return;
   const entry = themeDesigner.getTheme();
-  await api(`/api/themes/${encodeURIComponent(entry.name)}`, {
+  await withBusy(`saving theme ${entry.name}…`, () => api(`/api/themes/${encodeURIComponent(entry.name)}`, {
     method: "PUT",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(entry)
-  });
+  }));
   selectedTheme = entry.name;
   await refreshThemes();
   // A save ends the edit: back to viewing the stored entry read-only.
@@ -392,7 +424,7 @@ function mountSchemaDesigner(loadEntry?: unknown, readOnly = false): void {
   schemaDesigner = createSchemaDesigner(host, { readOnly });
   if (loadEntry !== undefined) {
     const result = schemaDesigner.loadSchema(loadEntry);
-    if (!result.ok) status(`load failed: ${result.errors.join("; ")}`);
+    if (!result.ok) status(`load failed: ${result.errors.join("; ")}`, "error");
   }
 }
 
@@ -434,7 +466,7 @@ function renderSchemaList(): void {
       save.textContent = "Save";
       save.className = "primary";
       save.addEventListener("click", () => {
-        void saveSchema().catch((error: Error) => status(error.message));
+        void saveSchema().catch((error: Error) => status(error.message, "error"));
       });
       const cancel = document.createElement("button");
       cancel.textContent = "Cancel";
@@ -456,7 +488,7 @@ function renderSchemaList(): void {
         void (async () => {
           // SCHEMA_IN_USE from the store surfaces here with the
           // referencing widgets named — never a silent failure.
-          await api(`/api/schemas/${encodeURIComponent(schema.name)}`, { method: "DELETE" });
+          await withBusy(`deleting ${schema.name}…`, () => api(`/api/schemas/${encodeURIComponent(schema.name)}`, { method: "DELETE" }));
           if (selectedSchema === schema.name) {
             selectedSchema = undefined;
             schemaMode = "new";
@@ -465,7 +497,7 @@ function renderSchemaList(): void {
           }
           await refreshSchemas();
           status(`deleted ${schema.name}`);
-        })().catch((error: Error) => status(error.message));
+        })().catch((error: Error) => status(error.message, "error"));
       });
       buttons.push(edit, remove);
     }
@@ -482,11 +514,11 @@ async function refreshSchemas(): Promise<void> {
 async function saveSchema(): Promise<void> {
   if (schemaDesigner === undefined) return;
   const entry = schemaDesigner.getSchema();
-  await api(`/api/schemas/${encodeURIComponent(entry.name)}`, {
+  await withBusy(`saving schema ${entry.name}…`, () => api(`/api/schemas/${encodeURIComponent(entry.name)}`, {
     method: "PUT",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(entry)
-  });
+  }));
   selectedSchema = entry.name;
   await refreshSchemas();
   const saved = mySchemas.find((s) => s.name === entry.name);
@@ -504,20 +536,19 @@ let testedDefinition: string | undefined;
 
 /** The designer's Test control runs the PRODUCTION execute path server-side. */
 async function testCall(definition: HttpActionDefinition, args: Record<string, unknown>): Promise<unknown> {
-  const result = await api<{ ok: boolean; code?: string; message?: string; status?: number; body?: unknown }>(
-    "/api/actions/test",
-    {
+  const result = await withBusy("running the test call…", () =>
+    api<{ ok: boolean; code?: string; message?: string; status?: number; body?: unknown }>("/api/actions/test", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ definition, args })
-    }
+    })
   );
   if (result.ok) {
     testedDefinition = JSON.stringify(definition);
     status("test call passed — the action can be saved");
   } else {
     testedDefinition = undefined;
-    status(`test call failed: ${result.code ?? ""} ${result.message ?? ""}`.trim());
+    status(`test call failed: ${result.code ?? ""} ${result.message ?? ""}`.trim(), "error");
   }
   return result;
 }
@@ -541,7 +572,7 @@ function mountActionDesigner(loadEntry?: unknown, readOnly = false): void {
   });
   if (loadEntry !== undefined) {
     const result = actionDesigner.loadAction(loadEntry);
-    if (!result.ok) status(`load failed: ${result.errors.join("; ")}`);
+    if (!result.ok) status(`load failed: ${result.errors.join("; ")}`, "error");
   }
 }
 
@@ -583,7 +614,7 @@ function renderActionList(): void {
       save.textContent = "Save";
       save.className = "primary";
       save.addEventListener("click", () => {
-        void saveAction().catch((error: Error) => status(error.message));
+        void saveAction().catch((error: Error) => status(error.message, "error"));
       });
       const cancel = document.createElement("button");
       cancel.textContent = "Cancel";
@@ -604,7 +635,7 @@ function renderActionList(): void {
       remove.addEventListener("click", () => {
         void (async () => {
           // ACTION_IN_USE surfaces here naming the widgets — never silently.
-          await api(`/api/actions/${encodeURIComponent(action.name)}`, { method: "DELETE" });
+          await withBusy(`deleting ${action.name}…`, () => api(`/api/actions/${encodeURIComponent(action.name)}`, { method: "DELETE" }));
           if (selectedAction === action.name) {
             selectedAction = undefined;
             actionMode = "new";
@@ -613,7 +644,7 @@ function renderActionList(): void {
           }
           await refreshActions();
           status(`deleted ${action.name}`);
-        })().catch((error: Error) => status(error.message));
+        })().catch((error: Error) => status(error.message, "error"));
       });
       buttons.push(edit, remove);
     }
@@ -638,18 +669,20 @@ async function saveAction(): Promise<void> {
   if (entry.definition.kind === "http") {
     // Save is gated on a passing test call for THIS definition.
     if (testedDefinition !== JSON.stringify(entry.definition)) {
-      status("run a passing test call first — http actions save only after their test call succeeds");
+      status("run a passing test call first — http actions save only after their test call succeeds", "error");
       return;
     }
   } else if (!window.confirm(PROMPT_NOTICE)) {
     status("save cancelled");
     return;
   }
-  await api(`/api/actions/${encodeURIComponent(entry.name)}`, {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ ...entry, acknowledged: entry.definition.kind === "prompt" })
-  });
+  await withBusy(`saving action ${entry.name}…`, () =>
+    api(`/api/actions/${encodeURIComponent(entry.name)}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ...entry, acknowledged: entry.definition.kind === "prompt" })
+    })
+  );
   selectedAction = entry.name;
   await refreshActions();
   const saved = myActions.find((a) => a.name === entry.name);
@@ -699,10 +732,10 @@ function renderSecretList(): void {
     remove.addEventListener("click", () => {
       void (async () => {
         // SECRET_IN_USE surfaces here naming the referencing actions.
-        await api(`/api/secrets/${encodeURIComponent(secret.name)}`, { method: "DELETE" });
+        await withBusy(`deleting ${secret.name}…`, () => api(`/api/secrets/${encodeURIComponent(secret.name)}`, { method: "DELETE" }));
         await refreshSecrets();
         status(`deleted secret ${secret.name}`);
-      })().catch((error: Error) => status(error.message));
+      })().catch((error: Error) => status(error.message, "error"));
     });
     row.append(name, replace, remove);
     list.append(row);
@@ -721,11 +754,13 @@ async function saveSecret(): Promise<void> {
   const valueInput = $<HTMLInputElement>("secret-value");
   const name = nameInput.value.trim();
   const value = valueInput.value;
-  await api(`/api/secrets/${encodeURIComponent(name)}`, {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ value })
-  });
+  await withBusy(`storing secret ${name}…`, () =>
+    api(`/api/secrets/${encodeURIComponent(name)}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ value })
+    })
+  );
   // The value leaves the page the moment it is stored.
   valueInput.value = "";
   nameInput.value = "";
@@ -761,10 +796,10 @@ async function refreshKeys(): Promise<void> {
       revoke.className = "danger";
       revoke.addEventListener("click", () => {
         void (async () => {
-          await api(`/api/keys/${encodeURIComponent(key.id)}`, { method: "DELETE" });
+          await withBusy(`revoking ${key.name}…`, () => api(`/api/keys/${encodeURIComponent(key.id)}`, { method: "DELETE" }));
           await refreshKeys();
           status(`revoked ${key.name}`);
-        })().catch((error: Error) => status(error.message));
+        })().catch((error: Error) => status(error.message, "error"));
       });
       actions.append(revoke);
     }
@@ -778,11 +813,13 @@ async function createKey(): Promise<void> {
   const name = input.value.trim();
   const execute = $<HTMLInputElement>("key-execute").checked;
   // Scopes are fixed at creation: read always, execute only when ticked.
-  const created = await api<{ key: string; notice: string }>("/api/keys", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ name, scopes: execute ? ["read", "execute"] : ["read"] })
-  });
+  const created = await withBusy("creating key…", () =>
+    api<{ key: string; notice: string }>("/api/keys", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name, scopes: execute ? ["read", "execute"] : ["read"] })
+    })
+  );
   input.value = "";
   $<HTMLInputElement>("key-execute").checked = false;
   const reveal = $("key-reveal");
@@ -891,7 +928,7 @@ async function refreshIdentities(): Promise<void> {
             `unlinked ${display(subject, label)} — signing in with it later starts a fresh account`
           );
           await refreshIdentities();
-        })().catch((error: Error) => status(error.message));
+        })().catch((error: Error) => status(error.message, "error"));
       });
       el.append(unlink);
     }
@@ -969,7 +1006,7 @@ async function boot(): Promise<void> {
   ]);
   for (const settled of sections) {
     if (settled.status === "rejected") {
-      status(`a section failed to load: ${String(settled.reason)}`);
+      status(`a section failed to load: ${String(settled.reason)}`, "error");
     }
   }
 
@@ -994,6 +1031,7 @@ async function boot(): Promise<void> {
   mountSchemaDesigner();
   mountActionDesigner();
 
+  $("status-dismiss").addEventListener("click", () => status(""));
   $("tab-widgets").addEventListener("click", () => showTab("widgets"));
   $("tab-themes").addEventListener("click", () => showTab("themes"));
   $("tab-schemas").addEventListener("click", () => showTab("schemas"));
@@ -1009,7 +1047,7 @@ async function boot(): Promise<void> {
     syncWidgetControls();
   });
   $("widget-save").addEventListener("click", () => {
-    void saveWidget().catch((error: Error) => status(error.message));
+    void saveWidget().catch((error: Error) => status(error.message, "error"));
   });
   $("widget-seed").addEventListener("change", () => {
     const select = $("widget-seed") as HTMLSelectElement;
@@ -1026,7 +1064,7 @@ async function boot(): Promise<void> {
     syncThemeControls();
   });
   $("theme-save").addEventListener("click", () => {
-    void saveTheme().catch((error: Error) => status(error.message));
+    void saveTheme().catch((error: Error) => status(error.message, "error"));
   });
   $("theme-seed").addEventListener("change", () => {
     const select = $("theme-seed") as HTMLSelectElement;
@@ -1043,10 +1081,10 @@ async function boot(): Promise<void> {
     syncSchemaControls();
   });
   $("schema-save").addEventListener("click", () => {
-    void saveSchema().catch((error: Error) => status(error.message));
+    void saveSchema().catch((error: Error) => status(error.message, "error"));
   });
   $("key-create").addEventListener("click", () => {
-    void createKey().catch((error: Error) => status(error.message));
+    void createKey().catch((error: Error) => status(error.message, "error"));
   });
   $("action-new").addEventListener("click", () => {
     selectedAction = undefined;
@@ -1056,10 +1094,10 @@ async function boot(): Promise<void> {
     syncActionControls();
   });
   $("action-save").addEventListener("click", () => {
-    void saveAction().catch((error: Error) => status(error.message));
+    void saveAction().catch((error: Error) => status(error.message, "error"));
   });
   $("secret-save").addEventListener("click", () => {
-    void saveSecret().catch((error: Error) => status(error.message));
+    void saveSecret().catch((error: Error) => status(error.message, "error"));
   });
 }
 
