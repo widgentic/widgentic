@@ -1,8 +1,7 @@
+import { isPlainObject } from "../shared/plain-object.js";
 import type {
-  ActionBinding,
   ActionDefinition,
-  ActionError,
-  HttpActionDefinition
+  ActionError
 } from "./types.js";
 import {
   HTTP_METHODS,
@@ -11,16 +10,34 @@ import {
   SECRET_NAME
 } from "./types.js";
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function join(path: string, segment: string): string {
   return path === "" ? segment : `${path}.${segment}`;
 }
 
 function fail(message: string, path: string): ActionError {
   return { code: "INVALID_ACTION", message, path };
+}
+
+/** RFC 7230 token: what a header or query parameter NAME may be. */
+const HEADER_TOKEN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+
+/** Header names the transport owns; an author must not set them. */
+const RESERVED_HEADERS: ReadonlySet<string> = new Set([
+  "host", "content-length", "transfer-encoding", "connection"
+]);
+
+/** Segments that would reach the prototype chain or the template grammar's reserved tokens. */
+const FORBIDDEN_SEGMENTS: ReadonlySet<string> = new Set(["__proto__", "constructor", "prototype"]);
+
+/**
+ * The dotted-path grammar for output `path` and `map` entries: non-empty
+ * segments, no `$`-tokens, nothing that addresses a prototype.
+ */
+export function isDataPath(value: string): boolean {
+  if (value === "") return false;
+  return value.split(".").every(
+    (segment) => segment !== "" && !segment.startsWith("$") && !FORBIDDEN_SEGMENTS.has(segment)
+  );
 }
 
 /** A header/query value: literal string or `{ secret: name }`. */
@@ -68,9 +85,15 @@ function checkUrl(url: unknown, path: string): ActionError | undefined {
  * Validate an action definition. `path` locates it for the caller (an
  * element's `action`, a stored action's `definition`). Never throws.
  */
+export interface DefinitionCheckOptions {
+  /** Path-syntax check supplied by the template layer (owner of the grammar). */
+  isPath?: (path: string) => boolean;
+}
+
 export function validateActionDefinition(
   input: unknown,
-  path = ""
+  path = "",
+  options: DefinitionCheckOptions = {}
 ): ActionError | undefined {
   if (!isPlainObject(input)) return fail("Action definition must be an object.", path);
   if (input.kind === "prompt") {
@@ -85,6 +108,9 @@ export function validateActionDefinition(
         continue;
       }
       if (isPlainObject(segment) && typeof segment.bind === "string" && Object.keys(segment).length === 1) {
+        if (options.isPath && !options.isPath(segment.bind)) {
+          return fail(`Invalid data path '${segment.bind}'.`, join(path, `text.${i}`));
+        }
         continue;
       }
       return fail("Prompt segments are strings or { bind } objects.", join(path, `text.${i}`));
@@ -95,7 +121,7 @@ export function validateActionDefinition(
     return undefined;
   }
   if (input.kind === "http") {
-    if (!HTTP_METHODS.includes(input.method as never)) {
+    if (!HTTP_METHODS.some((m) => m === input.method)) {
       return fail("'method' must be GET or POST.", join(path, "method"));
     }
     const urlError = checkUrl(input.url, join(path, "url"));
@@ -114,7 +140,14 @@ export function validateActionDefinition(
       if (map === undefined) continue;
       if (!isPlainObject(map)) return fail(`'${field}' must be an object.`, join(path, field));
       for (const [name, value] of Object.entries(map)) {
-        const error = checkHeaderValue(value, join(path, `${field}.${name}`));
+        const namePath = join(path, `${field}.${name}`);
+        if (!HEADER_TOKEN.test(name)) {
+          return fail(`'${name}' is not a valid ${field === "headers" ? "header" : "parameter"} name.`, namePath);
+        }
+        if (field === "headers" && RESERVED_HEADERS.has(name.toLowerCase())) {
+          return fail(`Header '${name}' is set by the transport and cannot be declared.`, namePath);
+        }
+        const error = checkHeaderValue(value, namePath);
         if (error) return error;
       }
     }
@@ -162,7 +195,9 @@ export function validateActionBinding(
       return fail(`Unknown action '${input.ref}'.`, join(path, "ref"));
     }
   } else if ("definition" in input) {
-    const definitionError = validateActionDefinition(input.definition, join(path, "definition"));
+    const definitionError = validateActionDefinition(input.definition, join(path, "definition"), {
+      ...(options.isPath ? { isPath: options.isPath } : {})
+    });
     if (definitionError) return definitionError;
   } else {
     return fail("A binding names a shared action ({ ref }) or carries an inline { definition }.", path);
@@ -180,8 +215,8 @@ export function validateActionBinding(
     if (definition?.kind === "prompt") {
       return fail("Prompt actions take no input mapping.", join(path, "input"));
     }
-    const declared = definition?.kind === "http" && isPlainObject((definition as HttpActionDefinition).input.properties)
-      ? (definition as HttpActionDefinition).input.properties as Record<string, unknown>
+    const declared = definition?.kind === "http" && isPlainObject(definition.input.properties)
+      ? definition.input.properties
       : undefined;
     for (const [field, value] of Object.entries(input.input)) {
       const fieldPath = join(path, `input.${field}`);
@@ -209,18 +244,30 @@ export function validateActionBinding(
     if (!isPlainObject(input.output)) return fail("'output' must be an object.", outPath);
     if (definition?.kind === "prompt") return fail("Prompt actions have no output.", outPath);
     const { mode, path: target, map } = input.output;
-    if (mode !== undefined && !OUTPUT_MODES.includes(mode as never)) {
+    if (mode !== undefined && !OUTPUT_MODES.some((m) => m === mode)) {
       return fail("'mode' must be replace, merge or patch.", join(outPath, "mode"));
     }
-    if (mode === "patch" && (typeof target !== "string" || target.length === 0)) {
-      return fail("'patch' requires a data 'path'.", join(outPath, "path"));
-    }
-    if (target !== undefined && typeof target !== "string") {
-      return fail("'path' must be a string.", join(outPath, "path"));
+    if (mode === "patch") {
+      if (typeof target !== "string" || !isDataPath(target)) {
+        return fail("'patch' requires a valid data 'path'.", join(outPath, "path"));
+      }
+    } else if (target !== undefined) {
+      return fail("'path' is only meaningful with mode \"patch\".", join(outPath, "path"));
     }
     if (map !== undefined) {
-      if (!isPlainObject(map) || Object.values(map).some((v) => typeof v !== "string")) {
-        return fail("'map' must be an object of string paths.", join(outPath, "map"));
+      if (!isPlainObject(map)) return fail("'map' must be an object of data paths.", join(outPath, "map"));
+      const entries = Object.entries(map);
+      if (entries.length === 0) return fail("'map' must not be empty (omit it to take the whole response).", join(outPath, "map"));
+      for (const [key, value] of entries) {
+        const entryPath = join(outPath, `map.${key}`);
+        if (key === ".") {
+          if (entries.length > 1) return fail("A '.' target takes the whole projection and must be the only entry.", entryPath);
+        } else if (!isDataPath(key)) {
+          return fail(`'${key}' is not a valid data path.`, entryPath);
+        }
+        if (typeof value !== "string" || (value !== "." && !isDataPath(value))) {
+          return fail("Map values are data paths into the response ('.' for the whole response).", entryPath);
+        }
       }
     }
   }

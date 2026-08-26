@@ -19,8 +19,9 @@ import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ThemeEntry } from "widgentic/theming";
 import type { StoredAction } from "widgentic/actions";
-import { decryptSecret } from "widgentic/secrets";
+import { checkSecretName, decryptSecret } from "widgentic/secrets";
 import type { SecretCipher } from "widgentic/secrets";
+import { asStoreRejection } from "./errors.js";
 import { findByKey } from "./keys.js";
 import type {
   Principal,
@@ -31,12 +32,13 @@ import type {
   StoredWidget,
   WidgetStore
 } from "./types.js";
-import { DEFAULT_LIMITS, StoreRejectionError } from "./types.js";
+import { DEFAULT_LIMITS, KEY_SCOPES, normalizeKeyScopes, StoreRejectionError } from "./types.js";
 import {
   checkStoredAction,
   checkStoredSchema,
   checkStoredTheme,
-  checkStoredWidget
+  checkStoredWidget,
+  SAFE_IDENTIFIER
 } from "./validate.js";
 
 interface PrincipalRow extends Principal {
@@ -98,7 +100,7 @@ export function createFileStore(
 
   /** Path traversal guard: ids address directories, so constrain them. */
   function safeId(principalId: string): string | undefined {
-    return /^[a-zA-Z0-9._-]+$/.test(principalId) ? principalId : undefined;
+    return SAFE_IDENTIFIER.test(principalId) ? principalId : undefined;
   }
 
   return {
@@ -107,7 +109,9 @@ export function createFileStore(
       const row = findByKey(apiKey, await principals());
       if (row === undefined) return undefined;
       const { keyDigest: _digest, ...principal } = row;
-      return principal;
+      // A row's scopes are the KEY's scopes: only key-grantable ones apply.
+      const rowScopes = Array.isArray(principal.scopes) ? principal.scopes : [];
+      return { ...principal, scopes: normalizeKeyScopes(rowScopes.filter((s) => KEY_SCOPES.includes(s))) };
     },
 
     async widgets(principalId) {
@@ -202,12 +206,16 @@ export function createFileStore(
         throw new StoreRejectionError("NO_CIPHER", "this store was built without a secret cipher.");
       }
       const id = safeId(principalId);
-      if (id === undefined || !/^[a-z][a-z0-9-]{0,63}$/.test(name)) return undefined;
+      if (id === undefined || checkSecretName(name) !== undefined) return undefined;
       const stored = (await readJson(join(dir, id, "secrets", `${name}.json`))) as
         | Partial<StoredSecret>
         | undefined;
       if (stored === undefined || stored.record === undefined) return undefined;
-      return decryptSecret(stored.record, options.cipher);
+      try {
+        return await decryptSecret(stored.record, options.cipher);
+      } catch (error) {
+        throw asStoreRejection(error, "secret could not be decrypted.");
+      }
     },
 
     /** Provisioning helper for the rig; the app owns its own write path. */

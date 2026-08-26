@@ -4,18 +4,23 @@ import { baseStylesheet, darkTheme } from "../theming/index.js";
  * The declared MCP Apps template (`ui://widgentic/app.html`).
  *
  * A self-contained loader: widgentic base stylesheet inline, host-variable
- * token mapping, and a minimal hand-rolled bridge implementing the Apps
- * iframe protocol (JSON-RPC over postMessage, spec 2026-01-26):
- *   - `ui/initialize` handshake + `ui/notifications/initialized`
+ * token mapping, and a hand-rolled bridge implementing the Apps iframe
+ * protocol (JSON-RPC over postMessage, spec 2026-01-26):
+ *   - `ui/initialize` handshake (host capabilities kept) + `initialized`
  *   - host context integration (theme, style variables, safe-area insets),
  *     applied from the initialize result and on `host-context-changed`
- *   - `tool-input` placeholder, `tool-result` rendering of structuredContent
- *     (native mount from `tree` — DOM built from data and patched in place
- *     across results; `html` injection only as the tree-less fallback)
- *   - ResizeObserver-driven `size-changed` notifications
- *   - `ping` and `ui/resource-teardown` responders
+ *   - streaming previews from `tool-input-partial`/`tool-input`, then
+ *     `tool-result` rendering of structuredContent (native mount from
+ *     `tree`, patched in place across results; `html` only as fallback)
+ *   - links → `ui/open-link` (the frame never navigates)
+ *   - the action layer: descriptors on elements become `ui/message`
+ *     (prompt) or `tools/call execute_action` (http) with busy/alert
+ *     states, one-shot `load`, and `ui/update-model-context` afterwards
+ *   - ResizeObserver-driven `size-changed`; `ping`/`resource-teardown`
  * Widget content stays script-free and fully escaped; this loader is fixed
- * infrastructure. No external references; CSP domains are never declared.
+ * infrastructure. The frame never fetches; the only egress is the host.
+ * CSP resource domains, when the operator declares any, are announced on
+ * the resource by the server assembly, not here.
  */
 export function buildAppTemplate(): string {
   const bridge = `
@@ -24,10 +29,23 @@ const dynamicCss = document.getElementById("wg-dynamic-css");
 const pending = new Map();
 let nextId = 1;
 function send(message) { window.parent.postMessage(message, "*"); }
-function request(method, params) {
+// Protocol requests wait indefinitely; ACTION requests pass a timeout so
+// a host that never answers cannot leave the widget busy forever.
+function request(method, params, timeoutMs) {
   return new Promise((resolve, reject) => {
     const id = nextId++;
-    pending.set(id, { resolve, reject });
+    let timer;
+    if (typeof timeoutMs === "number") {
+      timer = setTimeout(function () {
+        if (pending.delete(id)) {
+          reject(new Error("The host did not answer within " + Math.round(timeoutMs / 1000) + " s."));
+        }
+      }, timeoutMs);
+    }
+    pending.set(id, {
+      resolve: function (value) { clearTimeout(timer); resolve(value); },
+      reject: function (error) { clearTimeout(timer); reject(error); }
+    });
     send({ jsonrpc: "2.0", id, method, params });
   });
 }
@@ -149,6 +167,12 @@ let hostCapabilities = {};
 let heldPayload;
 let inFlight = false;
 let loadFired = false;
+// Loads seen before the host advertised its capabilities: fired once it does.
+let pendingLoads;
+// Increments on every new tool call on this frame; an in-flight action
+// result whose cycle is stale is dropped rather than resurrecting a widget.
+let cycle = 0;
+const ACTION_TIMEOUT_MS = 30000;
 const alertEl = document.createElement("div");
 alertEl.className = "wg-app-alert";
 alertEl.setAttribute("role", "alert");
@@ -190,8 +214,16 @@ function decorateActions() {
     const el = els[i];
     const d = parseDescriptor(el);
     if (!d) continue;
+    // Bound anchors have no href (the validator forbids the pair), so no
+    // native focus or activation: every non-button host is made reachable.
+    if (el.tagName !== "BUTTON") {
+      if (!el.hasAttribute("tabindex")) el.setAttribute("tabindex", "0");
+      if (!el.hasAttribute("role")) el.setAttribute("role", "button");
+    }
     const reason = disabledReason(d);
     if (reason) {
+      // Stash the author's title so it comes back when the element is live.
+      if (!el.hasAttribute("data-wg-title")) el.setAttribute("data-wg-title", el.getAttribute("title") || "");
       el.setAttribute("aria-disabled", "true");
       el.classList.add("wg-action-disabled");
       el.setAttribute("title", reason);
@@ -199,6 +231,11 @@ function decorateActions() {
     } else {
       el.removeAttribute("aria-disabled");
       el.classList.remove("wg-action-disabled");
+      if (el.hasAttribute("data-wg-title")) {
+        const original = el.getAttribute("data-wg-title");
+        if (original) el.setAttribute("title", original); else el.removeAttribute("title");
+        el.removeAttribute("data-wg-title");
+      }
       if ("disabled" in el) el.disabled = false;
     }
   }
@@ -253,20 +290,22 @@ function updateModelContext(actionId) {
 function promptAction(el, d) {
   if (typeof d.text !== "string") return;
   setBusy(true, el);
-  request("ui/message", { role: "user", content: [{ type: "text", text: d.text }] }).then(
+  return request("ui/message", { role: "user", content: [{ type: "text", text: d.text }] }, ACTION_TIMEOUT_MS).then(
     function (result) {
       if (result && result.isError) showAlert("The host declined the message.");
       else clearAlert();
     },
     function (error) {
-      showAlert("This host does not support this action" +
-        (error && typeof error.message === "string" ? ": " + error.message : "."));
+      if (error && error.code === -32601) showAlert("This host does not support this action.");
+      else showAlert(error && typeof error.message === "string" ? error.message : "Action failed.");
     }
   ).then(function () { setBusy(false, el); });
 }
-function httpAction(el, d) {
+// deferContext: a load chain posts ONE context update when it settles.
+function httpAction(el, d, deferContext) {
   if (!serverToolsAvailable()) { showAlert("This host cannot run widget actions."); return Promise.resolve(); }
   if (!heldPayload || typeof heldPayload.kind !== "string") { showAlert("Nothing to act on yet."); return Promise.resolve(); }
+  const startedCycle = cycle;
   setBusy(true, el);
   const callArgs = { widget: heldPayload.kind, action: d.id, args: d.args || {}, payload: heldPayload };
   // An item inside a group: the server needs where it sits and its kind.
@@ -277,16 +316,18 @@ function httpAction(el, d) {
   return request("tools/call", {
     name: "execute_action",
     arguments: callArgs
-  }).then(
+  }, ACTION_TIMEOUT_MS).then(
     function (result) {
+      if (startedCycle !== cycle) return; // a new tool call replaced this instance
       if (result && result.isError) { showAlert(errorTextOf(result)); return; }
       const sc = result && result.structuredContent;
       if (!sc || typeof sc !== "object") { showAlert("The action returned no widget."); return; }
       render(sc);
       clearAlert();
-      updateModelContext(d.id);
+      if (!deferContext) updateModelContext(d.id);
     },
     function (error) {
+      if (startedCycle !== cycle) return;
       showAlert(error && typeof error.message === "string" ? error.message : "Action failed.");
     }
   ).then(function () { setBusy(false, el); });
@@ -309,12 +350,12 @@ document.addEventListener("click", function (event) {
   const d = parseDescriptor(el);
   if (d) activate(el, d);
 }, true);
-// Native buttons turn Enter/Space into clicks themselves; other focusable
-// hosts of a descriptor need the keyboard path here.
+// Native buttons turn Enter/Space into clicks themselves; every other host
+// (action anchors included — they carry no href) takes the keyboard path.
 document.addEventListener("keydown", function (event) {
   if (event.key !== "Enter" && event.key !== " ") return;
   const el = actionTarget(event);
-  if (!el || el.tagName === "BUTTON" || el.tagName === "A") return;
+  if (!el || el.tagName === "BUTTON") return;
   event.preventDefault();
   const d = parseDescriptor(el);
   if (d) activate(el, d);
@@ -331,18 +372,26 @@ function maybeLoad(sc) {
     }
   }
   if (list.length === 0) return;
+  // The result can beat the initialize response: hold the loads until the
+  // host's capabilities are known instead of losing them for the instance.
+  if (!serverToolsAvailable()) { pendingLoads = list; return; }
+  runLoads(list);
+}
+function runLoads(list) {
   loadFired = true;
-  if (!serverToolsAvailable()) return;
+  const startedCycle = cycle;
   // Group items load one after another: each fold re-renders the whole
-  // group, so concurrent loads would race on the held payload.
+  // group, so concurrent loads would race on the held payload. The model
+  // hears about the final state once.
   const fire = function (entry) {
-    return httpAction(undefined, { id: "load", kind: "http", args: entry.args || {}, at: entry.at, widget: entry.widget });
+    return httpAction(undefined, { id: "load", kind: "http", args: entry.args || {}, at: entry.at, widget: entry.widget }, true);
   };
   let chain = fire(list[0]);
   for (let i = 1; i < list.length; i++) {
     const entry = list[i];
     chain = chain.then(function () { return fire(entry); });
   }
+  chain.then(function () { if (startedCycle === cycle) updateModelContext("load"); });
 }
 // --- Streaming input preview ----------------------------------------------
 // Hosts stream partial tool arguments (host-healed snapshots) while the
@@ -571,6 +620,9 @@ function onToolInput(params) {
   resultRendered = false;
   heldPayload = undefined;
   loadFired = false;
+  pendingLoads = undefined;
+  cycle++;
+  clearAlert();
   previewArgs = params && isObj(params.arguments) ? params.arguments : undefined;
   if (previewArgs === undefined) return;
   if (!previewQueued) {
@@ -603,6 +655,9 @@ window.addEventListener("message", (event) => {
     resultRendered = false;
     heldPayload = undefined;
     loadFired = false;
+    pendingLoads = undefined;
+    cycle++;
+    clearAlert();
     root.removeAttribute("data-wgd-preview");
     mountedTree = undefined;
     mountedRoot = undefined;
@@ -612,6 +667,7 @@ window.addEventListener("message", (event) => {
   if (message.method === "ui/notifications/tool-result") {
     const params = message.params || {};
     if (params.structuredContent) {
+      clearAlert();
       render(params.structuredContent);
       maybeLoad(params.structuredContent);
       return;
@@ -653,6 +709,8 @@ window.addEventListener("message", (event) => {
 // browser instead; a host that denies leaves the widget intact.
 document.addEventListener("click", function (event) {
   const target = event.target;
+  // An action inside a link is an action, not a navigation.
+  if (target && target.closest && target.closest("[data-wg-action]")) return;
   const anchor = target && target.closest ? target.closest("a[href]") : null;
   if (!anchor) return;
   event.preventDefault();
@@ -679,6 +737,11 @@ request("ui/initialize", {
   applyHostContext(result && result.hostContext);
   hostCapabilities = (result && result.hostCapabilities) || {};
   decorateActions();
+  if (pendingLoads && serverToolsAvailable()) {
+    const list = pendingLoads;
+    pendingLoads = undefined;
+    runLoads(list);
+  }
   send({ jsonrpc: "2.0", method: "ui/notifications/initialized" });
   const observer = new ResizeObserver(notifySize);
   observer.observe(document.documentElement);

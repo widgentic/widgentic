@@ -5,9 +5,11 @@
  * (`document.activeElement` wins) — the store is the single model, the
  * DOM is a projection.
  */
+import { errorMessage } from "../shared/error-message.js";
+import { isPlainObject } from "../shared/plain-object.js";
 import type { DataSchema } from "widgentic/catalog";
 import type { ThemeEntry } from "widgentic/theming";
-import { diagnosticLine, h, section, textArea, textField } from "./dom.js";
+import { diagnosticLine, h, section, textArea, textField, requireChild } from "./dom.js";
 import { attachJsonHighlight, repaintHighlight } from "./highlight.js";
 import { mountIoPanel } from "./io.js";
 import { createJsonTreeEditor } from "./json-tree-editor.js";
@@ -55,10 +57,6 @@ export interface PanelColumns {
 
 type Refresher = (draft: WidgetDraft) => void;
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 /**
  * JSON-valued textarea with parse gating: invalid JSON never reaches the
  * store (last-valid-wins) — the parse error shows beside the field.
@@ -91,13 +89,13 @@ function jsonField(
       } catch (error) {
         parseError.hidden = false;
         parseError.textContent = `Invalid JSON (draft keeps the last valid value): ${String(
-          (error as Error).message
+          errorMessage(error)
         )}`;
       }
     },
     rows
   );
-  const area = field.querySelector("textarea") as HTMLTextAreaElement;
+  const area = requireChild(field, "textarea");
   attachJsonHighlight(area);
   refreshers.push((draft) => {
     if (document.activeElement === area) return;
@@ -126,7 +124,7 @@ export function mountPanels(
     const field = textField(label, read(store.get()), (value) =>
       store.update((draft) => write(draft, value))
     );
-    const input = field.querySelector("input") as HTMLInputElement;
+    const input = requireChild(field, "input");
     refreshers.push((draft) => {
       if (document.activeElement !== input) input.value = read(draft);
     });
@@ -226,13 +224,13 @@ export function mountPanels(
     }
   ]);
 
-  const modeSelect = h("select", { class: "wgd-select wgd-schema-mode" }) as HTMLSelectElement;
+  const modeSelect = h("select", { class: "wgd-select wgd-schema-mode" });
   modeSelect.append(h("option", { value: "inline" }, ["define inline"]));
-  const sharedOption = h("option", { value: "shared" }, ["use shared"]) as HTMLOptionElement;
+  const sharedOption = h("option", { value: "shared" }, ["use shared"]);
   if (schemas.length === 0) sharedOption.disabled = true;
   modeSelect.append(sharedOption);
 
-  const refSelect = h("select", { class: "wgd-select wgd-schema-ref" }) as HTMLSelectElement;
+  const refSelect = h("select", { class: "wgd-select wgd-schema-ref" });
   for (const entry of schemas) {
     refSelect.append(h("option", { value: entry.name }, [entry.label ?? entry.name]));
   }
@@ -250,7 +248,7 @@ export function mountPanels(
     rows: "10",
     readonly: "",
     spellcheck: "false"
-  }) as HTMLTextAreaElement;
+  });
   const schemaRefDiag = diagnosticLine(undefined);
   const sharedWrap = h("div", undefined, [
     h("div", { class: "wgd-row" }, [
@@ -478,7 +476,7 @@ export function mountPanels(
     stylesDiag
   ]);
 
-  const templatePanel = mountTemplatePanel(store, refreshers, actionContext);
+  const templatePanel = mountTemplatePanel(store, refreshers, { actionContext });
   const themePanel = mountThemePanel(store, refreshers, themes);
 
   // --- Load: the widget-level http GET action run once per instance -------
@@ -531,8 +529,10 @@ export function mountPanels(
   function applyDiagnostics(draft: WidgetDraft): void {
     const diagnostics = deriveDiagnostics(draft, { schemas, actions: actionContext.actions });
     kindDiag.hidden = diagnostics.kind === undefined;
-    loadDiag.hidden = diagnostics.load === undefined && diagnostics.actionRefs === undefined;
-    loadDiag.textContent = [diagnostics.load, diagnostics.actionRefs].filter(Boolean).join(" ");
+    // Unknown refs are flagged in the template panel, at the element; the
+    // Load section only ever speaks about the load binding.
+    loadDiag.hidden = diagnostics.load === undefined;
+    loadDiag.textContent = diagnostics.load ?? "";
     kindDiag.textContent = diagnostics.kind ?? "";
     exampleDiag.hidden = diagnostics.example === undefined;
     exampleDiag.textContent = diagnostics.example

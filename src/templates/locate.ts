@@ -5,11 +5,8 @@
  * references, so stores can enforce referential integrity without a
  * second grammar.
  */
+import { isPlainObject } from "../shared/plain-object.js";
 import type { ActionBinding } from "../actions/types.js";
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 /** The template node at a dotted path ("" is the root); `undefined` when absent. */
 export function findTemplateNode(template: unknown, path: string): unknown {
@@ -37,37 +34,35 @@ export function findActionBinding(template: unknown, path: string): ActionBindin
   return undefined;
 }
 
-/** Every shared-action name a template (and an optional `load`) references by `ref`. */
-export function collectActionRefs(template: unknown, load?: unknown): string[] {
-  const refs = new Set<string>();
+/** Visit every binding object a template (and an optional `load`) carries. */
+function eachBinding(template: unknown, load: unknown, onBinding: (binding: Record<string, unknown>) => void): void {
   const visit = (node: unknown): void => {
     if (!isPlainObject(node)) return;
-    if (isPlainObject(node.action) && typeof node.action.ref === "string") refs.add(node.action.ref);
+    if (isPlainObject(node.action)) onBinding(node.action);
     for (const key of ["template", "empty", "else"] as const) {
       if (node[key] !== undefined) visit(node[key]);
     }
     if (Array.isArray(node.children)) for (const child of node.children) visit(child);
   };
   visit(template);
-  if (isPlainObject(load) && typeof load.ref === "string") refs.add(load.ref);
+  if (isPlainObject(load)) onBinding(load);
+}
+
+/** Every shared-action name a template (and an optional `load`) references by `ref`. */
+export function collectActionRefs(template: unknown, load?: unknown): string[] {
+  const refs = new Set<string>();
+  eachBinding(template, load, (binding) => {
+    if (typeof binding.ref === "string") refs.add(binding.ref);
+  });
   return [...refs];
 }
 
 /** Every inline action definition in a template (and `load`), for secret-reference scans. */
 export function collectInlineActions(template: unknown, load?: unknown): unknown[] {
   const out: unknown[] = [];
-  const visit = (node: unknown): void => {
-    if (!isPlainObject(node)) return;
-    if (isPlainObject(node.action) && typeof node.action.ref !== "string" && node.action.definition !== undefined) {
-      out.push(node.action.definition);
-    }
-    for (const key of ["template", "empty", "else"] as const) {
-      if (node[key] !== undefined) visit(node[key]);
-    }
-    if (Array.isArray(node.children)) for (const child of node.children) visit(child);
-  };
-  visit(template);
-  if (isPlainObject(load) && typeof load.ref !== "string" && load.definition !== undefined) out.push(load.definition);
+  eachBinding(template, load, (binding) => {
+    if (typeof binding.ref !== "string" && binding.definition !== undefined) out.push(binding.definition);
+  });
   return out;
 }
 

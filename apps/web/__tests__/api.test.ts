@@ -437,7 +437,7 @@ describe("actions, secrets and key scopes", () => {
   it("the test call runs server-side through the guarded path", async () => {
     // No fetchDeps injected here: the guard refuses before any network —
     // the server never reaches out for a name that resolves nowhere.
-    const res = await fetch(`${base}/api/actions/test`, asAlice({
+    const res = await fetch(`${base}/api/action-test`, asAlice({
       method: "POST",
       body: JSON.stringify({
         definition: { ...httpAction.definition, headers: {}, url: "https://192.168.0.10/weather" },
@@ -449,7 +449,7 @@ describe("actions, secrets and key scopes", () => {
     expect(result.ok).toBe(false);
     expect(result.code).toBe("ACTION_FETCH_FAILED");
     expect(result.message).toContain("not a public address");
-    const notHttp = (await (await fetch(`${base}/api/actions/test`, asAlice({ method: "POST", body: JSON.stringify({ definition: { kind: "prompt", text: ["x"] } }) }))).json()) as { code?: string };
+    const notHttp = (await (await fetch(`${base}/api/action-test`, asAlice({ method: "POST", body: JSON.stringify({ definition: { kind: "prompt", text: ["x"] } }) }))).json()) as { code?: string };
     expect(notHttp.code).toBe("ACTION_NOT_HTTP");
   });
 });
@@ -485,7 +485,7 @@ describe("secrets over the API with a cipher", () => {
       expect(error.error.code).toBe("SECRET_IN_USE");
       expect(error.error.message).toContain("secured");
       // The test call resolves the secret server-side; a private target is still refused before any bytes.
-      const test = (await (await fetch(`${cipherBase}/api/actions/test`, asAlice({
+      const test = (await (await fetch(`${cipherBase}/api/action-test`, asAlice({
         method: "POST",
         body: JSON.stringify({ definition: { kind: "http", method: "GET", url: "https://10.0.0.9/w", input: { type: "object" }, output: { type: "object" }, headers: { Authorization: { secret: "weather-token" } } }, args: {} })
       }))).json()) as { ok: boolean; code?: string; message?: string };
@@ -498,5 +498,49 @@ describe("secrets over the API with a cipher", () => {
     } finally {
       cipherServer.close();
     }
+  });
+});
+
+describe("hardening: web API", () => {
+  it("an action named 'test' is an ordinary action; the test call has its own route", async () => {
+    const res = await fetch(`${base}/api/actions/test`, asAlice({ method: "PUT", body: JSON.stringify({ definition: { kind: "prompt", text: ["x"] } }) }));
+    expect(res.status).toBe(200);
+    const listed = (await (await fetch(`${base}/api/actions`, asAlice())).json()) as { actions: { name: string }[] };
+    expect(listed.actions.map((a) => a.name)).toContain("test");
+    expect((await fetch(`${base}/api/actions/test`, asAlice({ method: "DELETE" }))).status).toBe(200);
+    expect((await fetch(`${base}/api/actions/test`, asAlice({ method: "POST", body: "{}" }))).status).toBe(404);
+  });
+
+  it("test calls spend the shared execution budget and malformed definitions answer structurally", async () => {
+    const { createExecutionLimiter } = await import("../../../src/mcp-server/index.js");
+    const limiter = createExecutionLimiter(1); // one bucket for the server, as in production
+    const limited = createServer((req, res) => {
+      void handleApiRequest(req, res, { store, readSession, limiter }).then((handled) => {
+        if (!handled) res.writeHead(404).end();
+      });
+    });
+    await new Promise<void>((resolve) => limited.listen(0, resolve));
+    const address = limited.address();
+    const limitedBase = `http://localhost:${typeof address === "object" && address !== null ? address.port : 0}`;
+    try {
+      const body = JSON.stringify({ definition: { kind: "http", method: "GET", url: "https://10.0.0.9/w", input: { type: "object" }, output: { type: "object" } }, args: {} });
+      const first = (await (await fetch(`${limitedBase}/api/action-test`, asAlice({ method: "POST", body }))).json()) as { code?: string };
+      expect(first.code).toBe("ACTION_FETCH_FAILED");
+      const second = await fetch(`${limitedBase}/api/action-test`, asAlice({ method: "POST", body }));
+      expect(second.status).toBe(200);
+      expect(((await second.json()) as { ok: boolean; code?: string }).code).toBe("RATE_LIMITED");
+    } finally {
+      limited.close();
+    }
+    const malformed = (await (await fetch(`${base}/api/action-test`, asAlice({ method: "POST", body: JSON.stringify({ definition: { kind: "http", method: "GET" } }) }))).json()) as { ok: boolean; code?: string };
+    expect(malformed.ok).toBe(false);
+    expect(malformed.code).toBe("INVALID_ACTION_INPUT");
+  });
+
+  it("secret writes are gated by secretsEnabled at the API, not only by the store", async () => {
+    const put = await fetch(`${base}/api/secrets/token`, asAlice({ method: "PUT", body: JSON.stringify({ value: "sk-live-12345" }) }));
+    expect(put.status).toBe(503);
+    expect(((await put.json()) as { error: { code: string } }).error.code).toBe("NO_CIPHER");
+    expect((await fetch(`${base}/api/secrets/token`, asAlice({ method: "DELETE" }))).status).toBe(503);
   });
 });

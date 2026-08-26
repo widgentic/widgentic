@@ -4,10 +4,7 @@
  * output mapping completions, type checks). Nullable type arrays pick the
  * PRIMARY type; `any` (no type) is treated as unknown, never mismatched.
  */
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
+import { isPlainObject } from "../shared/plain-object.js";
 /** The primary type a schema declares, if any. */
 export function schemaType(schema: unknown): string | undefined {
   if (!isPlainObject(schema)) return undefined;

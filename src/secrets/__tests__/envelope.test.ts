@@ -22,14 +22,14 @@ describe("envelope encryption", () => {
   });
 
   it("the same value encrypts differently every time", async () => {
-    const a = await encryptSecret("same", cipher);
-    const b = await encryptSecret("same", cipher);
+    const a = await encryptSecret("same-value-twice", cipher);
+    const b = await encryptSecret("same-value-twice", cipher);
     expect(a.ciphertext).not.toBe(b.ciphertext);
     expect(a.wrappedKey).not.toBe(b.wrappedKey);
   });
 
   it("tampering fails closed", async () => {
-    const record = await encryptSecret("value", cipher);
+    const record = await encryptSecret("value-eight+", cipher);
     const flipped = Buffer.from(record.tag, "base64");
     flipped[0] = (flipped[0] ?? 0) ^ 1;
     await expect(decryptSecret({ ...record, tag: flipped.toString("base64") }, cipher)).rejects.toBeInstanceOf(SecretError);
@@ -41,7 +41,7 @@ describe("envelope encryption", () => {
   it("re-wrapping changes only the key material", async () => {
     const kek = generateLocalKek();
     const v1 = createLocalCipher(kek, "v1");
-    const record = await encryptSecret("value", v1);
+    const record = await encryptSecret("value-eight+", v1);
     const rotated: SecretCipher = {
       wrap: async (k) => ({ ...(await createLocalCipher(kek, "v2").wrap(k)), kekVersion: "v2" }),
       unwrap: (w, v) => (v === "v1" ? v1.unwrap(w, v) : createLocalCipher(kek, "v2").unwrap(w, v))
@@ -50,7 +50,7 @@ describe("envelope encryption", () => {
     expect(rewrapped.kekVersion).toBe("v2");
     expect(rewrapped.wrappedKey).not.toBe(record.wrappedKey);
     expect([rewrapped.ciphertext, rewrapped.iv, rewrapped.tag]).toEqual([record.ciphertext, record.iv, record.tag]);
-    expect(await decryptSecret(rewrapped, rotated)).toBe("value");
+    expect(await decryptSecret(rewrapped, rotated)).toBe("value-eight+");
   });
 
   it("enforces name and size rules", () => {
@@ -59,7 +59,29 @@ describe("envelope encryption", () => {
     expect(checkSecretName("1abc")?.code).toBe("INVALID_SECRET_NAME");
     expect(checkSecretValue("x".repeat(4096))).toBeUndefined();
     expect(checkSecretValue("x".repeat(4097))?.code).toBe("SECRET_TOO_LARGE");
-    expect(checkSecretValue("")?.code).toBe("SECRET_TOO_LARGE");
+    expect(checkSecretValue("")?.code).toBe("INVALID_SECRET_VALUE");
+    expect(checkSecretValue("short")?.code).toBe("INVALID_SECRET_VALUE");
+    expect(checkSecretValue(42)?.code).toBe("INVALID_SECRET_VALUE");
+  });
+
+  it("malformed records are refused before any unwrap; failures are never raw cipher errors", async () => {
+    const record = await encryptSecret("sk-live-123", cipher);
+    let unwraps = 0;
+    const counting: SecretCipher = { wrap: cipher.wrap, unwrap: (w, v) => { unwraps++; return cipher.unwrap(w, v); } };
+    for (const bad of [
+      { ...record, iv: Buffer.alloc(4).toString("base64") },
+      { ...record, tag: Buffer.alloc(8).toString("base64") },
+      { ...record, wrappedKey: "" },
+      { ...record, ciphertext: "not*base64" },
+      { ...record, kekVersion: 5 }
+    ]) {
+      await expect(decryptSecret(bad, counting)).rejects.toMatchObject({ code: "INVALID_ENVELOPE" });
+    }
+    expect(unwraps).toBe(0);
+    const failing: SecretCipher = { wrap: cipher.wrap, unwrap: async () => { throw new Error("vault said no"); } };
+    await expect(rewrapSecret(record, failing)).rejects.toMatchObject({ code: "DECRYPTION_FAILED" });
+    const rewrapped = await rewrapSecret({ ...record, foreign: "field" }, cipher);
+    expect(Object.keys(rewrapped).sort()).toEqual(["alg", "ciphertext", "iv", "kekVersion", "tag", "wrappedKey"]);
   });
 
   it("the local cipher refuses malformed keys", () => {

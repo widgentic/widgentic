@@ -4,6 +4,7 @@
  * Everything here goes through public package entries — the designer owns
  * no validation logic of its own.
  */
+import { isPlainObject } from "../shared/plain-object.js";
 import {
   createCatalog,
   validateDataAgainstSchema,
@@ -76,10 +77,6 @@ export function effectiveDataSchema(
 }
 
 const BASE_KINDS = new Set(createCatalog().kinds());
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 /**
  * Detect style entries the renderer would skip, using only the public

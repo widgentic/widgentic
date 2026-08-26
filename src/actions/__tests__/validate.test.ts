@@ -63,3 +63,33 @@ describe("validateActionBinding", () => {
     expect(validateLoadBinding({ ref: "later" }, "load")).toBeUndefined();
   });
 });
+
+describe("hardening: names and output grammar", () => {
+  const resolve = (ref: string) => (ref === "refresh" ? (http as never) : undefined);
+
+  it("header and parameter names must be tokens; transport headers are reserved", () => {
+    for (const [name, path] of [["", "headers."], ["Bad Name", "headers.Bad Name"], ["Host", "headers.Host"], ["Transfer-Encoding", "headers.Transfer-Encoding"]]) {
+      const error = validateActionDefinition({ ...http, headers: { [name as string]: "v" } }, "");
+      expect(error?.path, name).toBe(path);
+    }
+    expect(validateActionDefinition({ ...http, query: { "": "v" } }, "")?.path).toBe("query.");
+    expect(validateActionDefinition({ ...http, headers: { Authorization: { secret: "t" }, "X-Api-Version": "2" } }, "")).toBeUndefined();
+  });
+
+  it("output paths follow the grammar", () => {
+    const cases: [Record<string, unknown>, string][] = [
+      [{ mode: "patch", path: "a..b" }, "b.output.path"],
+      [{ mode: "patch", path: "$root.x" }, "b.output.path"],
+      [{ mode: "patch", path: "reading", map: { "__proto__.x": "y" } }, "b.output.map.__proto__.x"],
+      [{ map: {} }, "b.output.map"],
+      [{ map: { ".": "a", b: "c" } }, "b.output.map.."],
+      [{ mode: "merge", path: "x" }, "b.output.path"],
+      [{ map: { ok: "a..b" } }, "b.output.map.ok"]
+    ];
+    for (const [output, path] of cases) {
+      expect(validateActionBinding({ ref: "refresh", output }, "b", { resolve })?.path, JSON.stringify(output)).toBe(path);
+    }
+    expect(validateActionBinding({ ref: "refresh", output: { mode: "patch", path: "reading", map: { ".": "current" } } }, "b", { resolve })).toBeUndefined();
+    expect(validateActionBinding({ ref: "refresh", output: { map: { temperature: "current.temp_c", condition: "." } } }, "b", { resolve })).toBeUndefined();
+  });
+});

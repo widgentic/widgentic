@@ -7,8 +7,10 @@
  * others. Shares the chrome, the schema builder, and the parse-gated
  * JSON discipline.
  */
+import { errorMessage } from "../shared/error-message.js";
+import { isPlainObject } from "../shared/plain-object.js";
 import type { DataSchema } from "widgentic/catalog";
-import { diagnosticLine, h, injectDesignerStyles, section, textField } from "./dom.js";
+import { diagnosticLine, h, injectDesignerStyles, section, textField, requireChild } from "./dom.js";
 import { attachJsonHighlight, repaintHighlight } from "./highlight.js";
 import { createSchemaBuilder } from "./schema-builder.js";
 
@@ -42,10 +44,6 @@ export interface SchemaDesignerHandle {
   setReadOnly(readOnly: boolean): void;
   subscribe(listener: (entry: SchemaEntry) => void): () => void;
   dispose(): void;
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function starterEntry(): SchemaEntry {
@@ -109,7 +107,7 @@ export function createSchemaDesigner(
     write: (value: string) => void
   ): HTMLElement {
     const field = textField(label, read(), write);
-    const input = field.querySelector("input") as HTMLInputElement;
+    const input = requireChild(field, "input");
     identityRefreshers.push(() => {
       if (document.activeElement !== input) input.value = read();
     });
@@ -161,7 +159,7 @@ export function createSchemaDesigner(
     class: "wgd-textarea",
     rows: "12",
     spellcheck: "false"
-  }) as HTMLTextAreaElement;
+  });
   const jsonWrap = h("div", undefined, [jsonArea, jsonError]);
   jsonArea.value = JSON.stringify(entry.schema, null, 2);
   jsonArea.addEventListener("input", () => {
@@ -176,7 +174,7 @@ export function createSchemaDesigner(
     } catch (error) {
       jsonError.hidden = false;
       jsonError.textContent = `Invalid JSON (schema keeps the last valid value): ${String(
-        (error as Error).message
+        errorMessage(error)
       )}`;
     }
   });
@@ -225,7 +223,7 @@ export function createSchemaDesigner(
     class: "wgd-textarea wgd-schema-import",
     rows: "6",
     spellcheck: "false"
-  }) as HTMLTextAreaElement;
+  });
   const importButton = h("button", { class: "wgd-button", type: "button" }, [
     "Import"
   ]);
@@ -235,7 +233,7 @@ export function createSchemaDesigner(
       parsed = JSON.parse(importArea.value);
     } catch (error) {
       importError.hidden = false;
-      importError.textContent = `Invalid JSON: ${String((error as Error).message)}`;
+      importError.textContent = `Invalid JSON: ${errorMessage(error)}`;
       return;
     }
     const result = loadSchema(parsed);
@@ -256,7 +254,7 @@ export function createSchemaDesigner(
     rows: "8",
     readonly: "",
     spellcheck: "false"
-  }) as HTMLTextAreaElement;
+  });
   const exportButton = h("button", { class: "wgd-button wgd-add", type: "button" }, [
     "Export schema entry"
   ]);

@@ -3,9 +3,9 @@ import {
   clearInlineImageCache,
   fetchImageAsDataUri,
   inlineImagesInHtml,
-  inlineRenderResultImages,
-  isPrivateAddress
+  inlineRenderResultImages
 } from "../inline-images.js";
+import { isPrivateAddress } from "../guarded-fetch.js";
 import type { InlineImageDeps } from "../inline-images.js";
 
 const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);

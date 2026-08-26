@@ -6,11 +6,14 @@
  * performs no network I/O, and a test call must run through the host's
  * production execution path (secrets, SSRF guard, redaction).
  */
+import { errorMessage } from "../shared/error-message.js";
+import { isPlainObject } from "../shared/plain-object.js";
 import type { ActionDefinition, HttpActionDefinition, StoredAction } from "widgentic/actions";
 import { ACTION_NAME, validateActionDefinition } from "widgentic/actions";
 import type { DataSchema } from "widgentic/catalog";
+import { clone } from "../shared/clone.js";
 import { createDefinitionEditor } from "./action-editor.js";
-import { diagnosticLine, h, injectDesignerStyles, section, textField } from "./dom.js";
+import { diagnosticLine, h, injectDesignerStyles, section, textField, requireChild } from "./dom.js";
 import { attachJsonHighlight, repaintHighlight } from "./highlight.js";
 import { createSchemaForm } from "./schema-form.js";
 import type { SchemaEntry } from "./schema-designer.js";
@@ -43,10 +46,6 @@ export interface ActionDesignerHandle {
   dispose(): void;
 }
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function starterEntry(): ActionEntry {
   return {
     name: "my-action",
@@ -62,9 +61,28 @@ export function checkActionEntry(entry: unknown): string[] {
   if (typeof entry.name !== "string" || !ACTION_NAME.test(entry.name)) {
     errors.push("'name' must be lowercase letters, digits and dashes, starting with a letter (max 64).");
   }
+  for (const field of ["label", "description"] as const) {
+    if (entry[field] !== undefined && typeof entry[field] !== "string") {
+      errors.push(`'${field}' must be a string when present.`);
+    }
+  }
   const problem = validateActionDefinition(entry.definition, "definition");
   if (problem) errors.push(`${problem.message} (at ${problem.path})`);
   return errors;
+}
+
+/** A checked entry with only the fields the shape declares; empty texts are dropped. */
+function normalizeEntry(input: Record<string, unknown>): ActionEntry {
+  const entry: ActionEntry = { name: input.name as string, definition: clone(input.definition as ActionDefinition) };
+  if (typeof input.label === "string" && input.label !== "") entry.label = input.label;
+  if (typeof input.description === "string" && input.description !== "") entry.description = input.description;
+  return entry;
+}
+
+/** Set or drop an optional text field: an emptied field leaves the entry. */
+function withText(current: ActionEntry, field: "label" | "description", value: string): ActionEntry {
+  const { [field]: _gone, ...rest } = current;
+  return value === "" ? rest : { ...rest, [field]: value };
 }
 
 export function createActionDesigner(
@@ -73,9 +91,8 @@ export function createActionDesigner(
 ): ActionDesignerHandle {
   injectDesignerStyles(document);
 
-  let entry: ActionEntry = options.initialAction
-    ? (JSON.parse(JSON.stringify(options.initialAction)) as ActionEntry)
-    : starterEntry();
+  let entry: ActionEntry = options.initialAction ? clone(options.initialAction) : starterEntry();
+  const testCall = options.testCall;
   const listeners = new Set<(entry: ActionEntry) => void>();
 
   const panels = h("div", { class: "wgd-panels" });
@@ -85,7 +102,7 @@ export function createActionDesigner(
   }
   container.appendChild(root);
 
-  const getEntry = (): ActionEntry => JSON.parse(JSON.stringify(entry)) as ActionEntry;
+  const getEntry = (): ActionEntry => clone(entry);
   function notify(): void {
     for (const listener of [...listeners]) listener(getEntry());
   }
@@ -95,7 +112,7 @@ export function createActionDesigner(
   const nameDiag = diagnosticLine(undefined);
   function identityField(label: string, read: () => string, write: (value: string) => void): HTMLElement {
     const field = textField(label, read(), write);
-    const inputEl = field.querySelector("input") as HTMLInputElement;
+    const inputEl = requireChild(field, "input");
     identityRefreshers.push(() => {
       if (document.activeElement !== inputEl) inputEl.value = read();
     });
@@ -111,11 +128,11 @@ export function createActionDesigner(
     }),
     nameDiag,
     identityField("Label", () => entry.label ?? "", (value) => {
-      entry = { ...entry, label: value };
+      entry = withText(entry, "label", value);
       notify();
     }),
     identityField("Description", () => entry.description ?? "", (value) => {
-      entry = { ...entry, description: value };
+      entry = withText(entry, "description", value);
       notify();
     })
   ]);
@@ -134,7 +151,7 @@ export function createActionDesigner(
     }
   );
   const jsonError = diagnosticLine(undefined);
-  const jsonArea = h("textarea", { class: "wgd-textarea", rows: "12", spellcheck: "false" }) as HTMLTextAreaElement;
+  const jsonArea = h("textarea", { class: "wgd-textarea", rows: "12", spellcheck: "false" });
   const jsonWrap = h("div", undefined, [jsonArea, jsonError]);
   jsonArea.value = JSON.stringify(entry.definition, null, 2);
   jsonArea.addEventListener("input", () => {
@@ -151,7 +168,7 @@ export function createActionDesigner(
       notify();
     } catch (error) {
       jsonError.hidden = false;
-      jsonError.textContent = `Invalid (definition keeps the last valid value): ${String((error as Error).message)}`;
+      jsonError.textContent = `Invalid (definition keeps the last valid value): ${errorMessage(error)}`;
     }
   });
   function syncJson(): void {
@@ -193,24 +210,31 @@ export function createActionDesigner(
   const testHost = h("div", { class: "wgd-action-test" });
   const testSection = section("Test", [testHost]);
   let testArgs: Record<string, unknown> = {};
+  // Arguments belong to one input schema: a different schema starts them over.
+  let testInputJson: string | undefined;
   function refreshTest(): void {
-    if (options.testCall === undefined) return;
+    if (testCall === undefined) return;
     testHost.replaceChildren();
     if (entry.definition.kind !== "http") {
+      testInputJson = undefined;
+      testArgs = {};
       testHost.append(h("p", { class: "wgd-diagnostic" }, ["Prompt actions run in the host's composer; nothing to test."]));
       return;
     }
     const definitionNow = entry.definition;
+    const inputJson = JSON.stringify(definitionNow.input);
+    if (inputJson !== testInputJson) testArgs = {};
+    testInputJson = inputJson;
     const form = createSchemaForm(definitionNow.input as DataSchema, testArgs, (value) => {
       testArgs = isPlainObject(value) ? value : {};
     });
     testArgs = isPlainObject(form.getValue()) ? (form.getValue() as Record<string, unknown>) : {};
     const output = h("pre", { class: "wgd-test-output" });
-    const run = h("button", { class: "wgd-button wgd-add wgd-test-run", type: "button" }, ["Test call"]) as HTMLButtonElement;
+    const run = h("button", { class: "wgd-button wgd-add wgd-test-run", type: "button" }, ["Test call"]);
     run.addEventListener("click", () => {
       run.disabled = true;
       output.textContent = "…";
-      void options.testCall!(definitionNow, testArgs)
+      void testCall(definitionNow, testArgs)
         .then((result) => {
           output.textContent = typeof result === "string" ? result : JSON.stringify(result, null, 2);
         })
@@ -227,7 +251,7 @@ export function createActionDesigner(
 
   // --- Import / Export ------------------------------------------------------
   const importError = diagnosticLine(undefined);
-  const importArea = h("textarea", { class: "wgd-textarea wgd-action-import", rows: "6", spellcheck: "false" }) as HTMLTextAreaElement;
+  const importArea = h("textarea", { class: "wgd-textarea wgd-action-import", rows: "6", spellcheck: "false" });
   const importButton = h("button", { class: "wgd-button", type: "button" }, ["Import"]);
   importButton.addEventListener("click", () => {
     let parsed: unknown;
@@ -235,7 +259,7 @@ export function createActionDesigner(
       parsed = JSON.parse(importArea.value);
     } catch (error) {
       importError.hidden = false;
-      importError.textContent = `Invalid JSON: ${String((error as Error).message)}`;
+      importError.textContent = `Invalid JSON: ${errorMessage(error)}`;
       return;
     }
     const result = loadAction(parsed);
@@ -248,7 +272,7 @@ export function createActionDesigner(
     importError,
     h("div", { class: "wgd-row" }, [importButton])
   ]);
-  const output = h("textarea", { class: "wgd-textarea", rows: "8", readonly: "", spellcheck: "false" }) as HTMLTextAreaElement;
+  const output = h("textarea", { class: "wgd-textarea", rows: "8", readonly: "", spellcheck: "false" });
   const exportButton = h("button", { class: "wgd-button wgd-add", type: "button" }, ["Export action entry"]);
   exportButton.addEventListener("click", () => {
     output.value = JSON.stringify(getEntry(), null, 2);
@@ -257,7 +281,7 @@ export function createActionDesigner(
   const exportSection = section("Export", [h("div", { class: "wgd-toolbar" }, [exportButton]), output]);
   exportSection.classList.add("wgd-view-only");
 
-  panels.append(identity, definition, ...(options.testCall === undefined ? [] : [testSection]), importSection, exportSection);
+  panels.append(identity, definition, ...(testCall === undefined ? [] : [testSection]), importSection, exportSection);
   attachJsonHighlight(jsonArea);
   attachJsonHighlight(importArea);
   attachJsonHighlight(output);
@@ -265,7 +289,8 @@ export function createActionDesigner(
   function loadAction(input: unknown): ActionLoadResult {
     const errors = checkActionEntry(input);
     if (errors.length > 0) return { ok: false, errors };
-    entry = JSON.parse(JSON.stringify(input)) as ActionEntry;
+    entry = normalizeEntry(input as Record<string, unknown>);
+    testArgs = {};
     for (const refresh of identityRefreshers) refresh();
     nameDiag.hidden = true;
     editor.setValue(entry.definition);

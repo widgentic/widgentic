@@ -11,7 +11,14 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { createWidgenticServer } from "widgentic/mcp-server/sdk";
-import { createExecutionLimiter } from "widgentic/mcp-server";
+import {
+  BodyTooLargeError,
+  createExecutionLimiter,
+  DEFAULT_EXECUTIONS_PER_MINUTE,
+  DEFAULT_MAX_BODY_BYTES,
+  positiveIntFromEnv,
+  readBodyText
+} from "widgentic/mcp-server";
 import {
   ANONYMOUS_PRINCIPAL,
   composeCatalog,
@@ -53,11 +60,18 @@ if (KEK_ID !== undefined) {
  * Per-principal rate limit for execute_action: `WIDGENTIC_EXECUTE_RATE`
  * executions per minute (default 60), per replica (see rate-limit.ts).
  */
-const EXECUTE_RATE = Math.max(1, Number(process.env.WIDGENTIC_EXECUTE_RATE ?? 60));
+const EXECUTE_RATE = positiveIntFromEnv(process.env.WIDGENTIC_EXECUTE_RATE, DEFAULT_EXECUTIONS_PER_MINUTE);
+const MAX_BODY_BYTES = positiveIntFromEnv(process.env.WIDGENTIC_MAX_BODY_BYTES, DEFAULT_MAX_BODY_BYTES);
 const limiter = createExecutionLimiter(EXECUTE_RATE);
+let lastLimitLog = 0;
 function takeExecutionToken(principalId: string): boolean {
   const allowed = limiter.take(principalId);
-  if (!allowed) console.error("widgentic mcp: execute_action rate-limited for a principal (outcome only).");
+  // Log at most once a minute: the limiter exists for exactly the storm
+  // that would otherwise flood the log.
+  if (!allowed && Date.now() - lastLimitLog > 60_000) {
+    lastLimitLog = Date.now();
+    console.error("widgentic mcp: execute_action rate-limited (outcome only; further notices suppressed for a minute).");
+  }
   return allowed;
 }
 
@@ -151,9 +165,18 @@ const httpServer = createHttpServer(async (req: IncomingMessage, res: ServerResp
   }
 
   try {
-    req.setEncoding("utf8");
-    let raw = "";
-    for await (const chunk of req) raw += chunk as string;
+    let raw: string;
+    try {
+      raw = await readBodyText(req, MAX_BODY_BYTES);
+    } catch (error) {
+      if (error instanceof BodyTooLargeError) {
+        res.writeHead(413, { "Content-Type": "application/json" }).end(
+          JSON.stringify({ jsonrpc: "2.0", error: { code: -32600, message: error.message }, id: null })
+        );
+        return;
+      }
+      throw error;
+    }
     const body = raw.length > 0 ? JSON.parse(raw) : undefined;
 
     // Resolve the principal BEFORE building the server, so the trust

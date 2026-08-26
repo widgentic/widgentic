@@ -5,11 +5,13 @@
  * Imports are untrusted — everything re-validates, and a failed import
  * never touches the current draft.
  */
+import { errorMessage } from "../shared/error-message.js";
+import { isPlainObject } from "../shared/plain-object.js";
 import { parsePath, validateTemplate } from "widgentic/templates";
 import { validateLoadBinding } from "widgentic/actions";
 import type { ActionBinding } from "widgentic/actions";
-import { validateTheme } from "widgentic/theming";
-import { diagnosticLine, h, section, textArea } from "./dom.js";
+import { } from "widgentic/theming";
+import { diagnosticLine, h, section, textArea, requireChild } from "./dom.js";
 import { attachJsonHighlight, repaintHighlight } from "./highlight.js";
 import type { DraftStore, WidgetDraft } from "./store.js";
 
@@ -18,10 +20,6 @@ export interface WidgetDefinition {
   template: WidgetDraft["template"];
   descriptor: WidgetDraft["descriptor"];
   load?: ActionBinding;
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /** Validate an untrusted definition; errors instead of throws. */
@@ -72,7 +70,7 @@ export function importWidgetJson(text: string): ImportResult {
   try {
     parsed = JSON.parse(text);
   } catch (error) {
-    return { ok: false, errors: [`Invalid JSON: ${String((error as Error).message)}`] };
+    return { ok: false, errors: [`Invalid JSON: ${errorMessage(error)}`] };
   }
   const errors = checkDefinition(parsed);
   if (errors.length > 0) return { ok: false, errors };
@@ -129,7 +127,7 @@ export function mountIoPanel(store: DraftStore): {
     rows: "8",
     readonly: "",
     spellcheck: "false"
-  }) as HTMLTextAreaElement;
+  });
 
   function button(label: string, produce: () => string): HTMLElement {
     const el = h("button", { class: "wgd-button wgd-add", type: "button" }, [label]);
@@ -142,7 +140,7 @@ export function mountIoPanel(store: DraftStore): {
 
   const importError = diagnosticLine(undefined);
   const importField = textArea("Import widget JSON", "", () => undefined, 5);
-  const importArea = importField.querySelector("textarea") as HTMLTextAreaElement;
+  const importArea = requireChild(importField, "textarea");
   attachJsonHighlight(importArea);
   const importButton = h("button", { class: "wgd-button", type: "button" }, [
     "Import"

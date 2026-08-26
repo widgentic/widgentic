@@ -11,6 +11,7 @@ import { createThemeRegistry, validateTheme } from "widgentic/theming";
 import type { ThemeEntry } from "widgentic/theming";
 import type { StoreLimits, StoredSchema, StoredWidget } from "./types.js";
 import { DEFAULT_LIMITS } from "./types.js";
+import { isPlainObject } from "../shared/plain-object.js";
 
 /** Kind names the built-ins own; a stored widget may never shadow them. */
 const BUILTIN_KINDS: ReadonlySet<string> = new Set(createCatalog().kinds());
@@ -36,8 +37,6 @@ export interface EntryProblem {
     | "RESERVED_THEME"
     | "INVALID_TEMPLATE"
     | "INVALID_THEME"
-    | "UNKNOWN_SCHEMA"
-    | "SCHEMA_IN_USE"
     | "INVALID_ACTION"
     | "TOO_LARGE"
     | "TOO_MANY_NODES";
@@ -51,10 +50,6 @@ export interface EntryProblem {
  * port means memory, file, and Cosmos accept and reject identically.
  */
 export const SAFE_IDENTIFIER = /^[a-zA-Z0-9._-]+$/;
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function serializedBytes(value: unknown): number {
   try {
@@ -248,7 +243,9 @@ export function checkStoredAction(
       return { code: "INVALID_SHAPE", message: `'${field}' must be a string when present.` };
     }
   }
-  const problem = validateActionDefinition(entry.definition, "definition");
+  const problem = validateActionDefinition(entry.definition, "definition", {
+    isPath: (value) => parsePath(value) !== undefined
+  });
   if (problem) {
     return { code: "INVALID_ACTION", message: `${problem.message} (at ${problem.path})` };
   }

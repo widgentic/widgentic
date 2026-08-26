@@ -5,12 +5,9 @@
  * the subset actually has — which is what makes an in-house generator a
  * few hundred lines instead of a 150 KB dependency.
  */
+import { isPlainObject } from "../shared/plain-object.js";
 import type { DataSchema } from "widgentic/catalog";
 import { h } from "./dom.js";
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function firstType(schema: DataSchema): string | undefined {
   const type = schema.type;
@@ -91,7 +88,7 @@ export function createSchemaForm(
 
   function control(node: DataSchema, value: unknown, path: Path, label: string): HTMLElement {
     if (Array.isArray(node.enum)) {
-      const select = h("select", { class: "wgd-select" }) as HTMLSelectElement;
+      const select = h("select", { class: "wgd-select" });
       for (const option of node.enum) {
         select.append(h("option", { value: JSON.stringify(option) }, [JSON.stringify(option)]));
       }
@@ -103,14 +100,14 @@ export function createSchemaForm(
     }
     switch (firstType(node)) {
       case "boolean": {
-        const box = h("input", { type: "checkbox" }) as HTMLInputElement;
+        const box = h("input", { type: "checkbox" });
         box.checked = value === true;
         box.addEventListener("change", () => commit(path, box.checked));
         return field(label, box);
       }
       case "number":
       case "integer": {
-        const input = h("input", { type: "number", class: "wgd-input" }) as HTMLInputElement;
+        const input = h("input", { type: "number", class: "wgd-input" });
         input.value = typeof value === "number" ? String(value) : "0";
         input.addEventListener("change", () => {
           const parsed = Number(input.value);
@@ -168,7 +165,7 @@ export function createSchemaForm(
         ]);
       }
       default: {
-        const input = h("input", { type: "text", class: "wgd-input" }) as HTMLInputElement;
+        const input = h("input", { type: "text", class: "wgd-input" });
         if (typeof node.pattern === "string") {
           input.setAttribute("placeholder", `pattern: ${node.pattern}`);
           input.setAttribute("title", `Must match ${node.pattern}`);

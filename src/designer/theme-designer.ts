@@ -9,6 +9,7 @@
  * embedding one should not ship the other. Both share the preview
  * controller, chrome, and store discipline.
  */
+import { errorMessage } from "../shared/error-message.js";
 import { createCatalog } from "widgentic/catalog";
 import {
   THEME_TOKENS,
@@ -18,7 +19,7 @@ import {
   validateTheme
 } from "widgentic/theming";
 import type { ThemeEntry, WidgetThemeInput } from "widgentic/theming";
-import { diagnosticLine, h, injectDesignerStyles, section, textField } from "./dom.js";
+import { diagnosticLine, h, injectDesignerStyles, section, textField, requireChild } from "./dom.js";
 import { createPreview } from "./preview.js";
 import type { PreviewWidget } from "./preview.js";
 import { starterDraft } from "./store.js";
@@ -141,7 +142,7 @@ export function createThemeDesigner(
     write: (value: string) => void
   ): HTMLElement {
     const field = textField(label, read(), write);
-    const input = field.querySelector("input") as HTMLInputElement;
+    const input = requireChild(field, "input");
     identityRefreshers.push(() => {
       if (document.activeElement !== input) input.value = read();
     });
@@ -179,7 +180,7 @@ export function createThemeDesigner(
   // preview, outside the editing panels — read-only mode keeps it live.
   const kindSelect = h("select", {
     class: "wgd-select wgd-preview-kind"
-  }) as HTMLSelectElement;
+  });
   for (const kind of previewKinds) {
     kindSelect.append(h("option", { value: kind }, [kind]));
   }
@@ -203,7 +204,7 @@ export function createThemeDesigner(
       type: "text",
       class: "wgd-input",
       placeholder: TOKEN_DEFAULTS[token]
-    }) as HTMLInputElement;
+    });
     input.value = entry.tokens[token] ?? "";
     const issue = diagnosticLine(undefined);
     // Control choice comes from the token's declared type — no guessing.
@@ -212,7 +213,7 @@ export function createThemeDesigner(
           type: "color",
           class: "wgd-swatch",
           title: `Pick --wg-${token}`
-        }) as HTMLInputElement)
+        }))
       : undefined;
 
     const paint = (value: string): void => {
@@ -274,7 +275,7 @@ export function createThemeDesigner(
       const nameInput = h("input", {
         type: "text",
         class: "wgd-input wgd-jt-keyinput"
-      }) as HTMLInputElement;
+      });
       nameInput.value = key;
       nameInput.addEventListener("change", () => {
         const next = nameInput.value;
@@ -295,7 +296,7 @@ export function createThemeDesigner(
       const valueInput = h("input", {
         type: "text",
         class: "wgd-input"
-      }) as HTMLInputElement;
+      });
       valueInput.value = value;
       valueInput.addEventListener("input", () => setToken(key, valueInput.value));
       const remove = h("button", { class: "wgd-icon", type: "button", title: "Remove" }, ["✕"]);
@@ -328,7 +329,7 @@ export function createThemeDesigner(
     rows: "8",
     readonly: "",
     spellcheck: "false"
-  }) as HTMLTextAreaElement;
+  });
   const exportButton = h("button", { class: "wgd-button wgd-add", type: "button" }, [
     "Export theme entry"
   ]);
@@ -339,7 +340,7 @@ export function createThemeDesigner(
     class: "wgd-textarea",
     rows: "5",
     spellcheck: "false"
-  }) as HTMLTextAreaElement;
+  });
   const importError = diagnosticLine(undefined);
   const importButton = h("button", { class: "wgd-button", type: "button" }, ["Import"]);
   importButton.addEventListener("click", () => {
@@ -348,7 +349,7 @@ export function createThemeDesigner(
       parsed = JSON.parse(importArea.value);
     } catch (error) {
       importError.hidden = false;
-      importError.textContent = `Invalid JSON: ${String((error as Error).message)}`;
+      importError.textContent = `Invalid JSON: ${errorMessage(error)}`;
       return;
     }
     const result = loadTheme(parsed);

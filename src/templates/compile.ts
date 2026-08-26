@@ -17,6 +17,7 @@ import { PROMPT_TEXT_MAX } from "../actions/types.js";
 import type { WidgetTemplate } from "./types.js";
 import {
   FORBIDDEN_ATTR,
+  FORBIDDEN_TAGS,
   RESERVED_ATTR,
   URL_ATTRS,
   isSafeImageSrc,
@@ -24,29 +25,8 @@ import {
 } from "./guards.js";
 import { parsePath } from "./paths.js";
 import { InvalidTemplateError, validateTemplate } from "./validate.js";
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-/** Same display-text discipline as the catalog's built-in renderers. */
-function formatValue(value: unknown): string {
-  if (typeof value === "string") return value;
-  if (value === undefined) return "";
-  if (
-    value === null ||
-    typeof value === "number" ||
-    typeof value === "boolean" ||
-    typeof value === "bigint"
-  ) {
-    return String(value);
-  }
-  try {
-    return JSON.stringify(value) ?? String(value);
-  } catch {
-    return String(value);
-  }
-}
+import { formatValue } from "../catalog/widgets/format.js";
+import { isPlainObject } from "../shared/plain-object.js";
 
 function join(path: string, segment: string): string {
   return path === "" ? segment : `${path}.${segment}`;
@@ -100,9 +80,10 @@ function resolvePath(path: string, frames: Frame[], meta: unknown): unknown {
  * Interpretation budget. `each` multiplies template nodes by the length of
  * AGENT-supplied data, so template size bounds nothing on its own — a
  * stored template driven by a large payload could otherwise spend the
- * process. Counting nodes (rather than watching a clock) keeps the bound
- * exact and reproducible: the same template and data always truncate at
- * the same place.
+ * process. Counting work (nodes emitted, plus one unit per `each`
+ * iteration so empty iterations are not free) rather than watching a
+ * clock keeps the bound reproducible: the same template and data always
+ * truncate at the same place.
  */
 export const DEFAULT_MAX_NODES = 50_000;
 
@@ -112,12 +93,8 @@ interface Budget {
 }
 
 /** Render-time knowledge about actions the caller supplies. */
-interface ActionContext {
-  actions?: (ref: string) => ActionDefinition | undefined;
-  httpDisabled?: ActionDisabledReason;
-  /** The registered kind, stamped into descriptors as `widget`. */
-  kind?: string;
-}
+/** The compile options the action layer reads; the options object itself serves. */
+type ActionContext = Pick<CompileOptions, "actions" | "httpDisabled" | "kind">;
 
 /**
  * Resolve a binding into the descriptor an element carries. Everything the
@@ -138,7 +115,9 @@ function buildDescriptor(
         ? (binding.definition as ActionDefinition)
         : undefined;
   if (definition === undefined || (definition.kind !== "prompt" && definition.kind !== "http")) {
-    return { id, disabled: "unresolved" };
+    const unresolved: ActionDescriptor = { id, disabled: "unresolved" };
+    if (ctx.kind !== undefined) unresolved.widget = ctx.kind;
+    return unresolved;
   }
   if (definition.kind === "prompt") {
     let text = "";
@@ -150,7 +129,8 @@ function buildDescriptor(
       }
       if (text.length >= PROMPT_TEXT_MAX) break;
     }
-    const prompt: ActionDescriptor = { id, kind: "prompt", text: text.slice(0, PROMPT_TEXT_MAX) };
+    // Cap by code point so a surrogate pair is never split.
+    const prompt: ActionDescriptor = { id, kind: "prompt", text: Array.from(text).slice(0, PROMPT_TEXT_MAX).join("") };
     if (ctx.kind !== undefined) prompt.widget = ctx.kind;
     return prompt;
   }
@@ -215,6 +195,7 @@ function interpretNode(
         budget.truncated = true;
         break;
       }
+      budget.remaining--; // the iteration itself costs, even when it renders nothing
       frames.push({ scope: items[i], index: i });
       out.push(...interpretNode(node.template, frames, meta, budget, itemPath, ctx));
       frames.pop();
@@ -231,6 +212,7 @@ function interpretNode(
   }
 
   if (typeof node.tag === "string" && node.tag.length > 0) {
+    if (FORBIDDEN_TAGS.has(node.tag.toLowerCase())) return []; // active content never reaches a tree
     budget.remaining--;
     const attrs: WidgetNodeAttrs = {};
     if (isPlainObject(node.attrs)) {
@@ -343,11 +325,7 @@ export function compileTemplate(
   options: CompileOptions = {}
 ): WidgetRenderer {
   const maxNodes = options.maxNodes ?? DEFAULT_MAX_NODES;
-  const ctx: ActionContext = {
-    ...(options.actions ? { actions: options.actions } : {}),
-    ...(options.httpDisabled ? { httpDisabled: options.httpDisabled } : {}),
-    ...(options.kind !== undefined ? { kind: options.kind } : {})
-  };
+  const ctx: ActionContext = options;
   return (payload: WidgetPayload): WidgetNode => {
     const budget: Budget = { remaining: maxNodes, truncated: false };
     const frames: Frame[] = [{ scope: payload.data }];
@@ -373,11 +351,7 @@ export function resolveActionDescriptor(
   payload: WidgetPayload,
   options: Pick<CompileOptions, "actions" | "httpDisabled" | "kind"> = {}
 ): ActionDescriptor {
-  const ctx: ActionContext = {
-    ...(options.actions ? { actions: options.actions } : {}),
-    ...(options.httpDisabled ? { httpDisabled: options.httpDisabled } : {}),
-    ...(options.kind !== undefined ? { kind: options.kind } : {})
-  };
+  const ctx: ActionContext = options;
   return buildDescriptor(binding, id, [{ scope: payload.data }], payload.meta, ctx);
 }
 

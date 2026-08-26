@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyOutput, buildRequest, validateArgs } from "../index.js";
+import { applyOutput, buildRequest, getAtPath, setAtPath, validateArgs } from "../index.js";
 import type { HttpActionDefinition } from "../index.js";
 
 const weather: HttpActionDefinition = {
@@ -78,5 +78,44 @@ describe("applyOutput", () => {
   it("a response that violates the output schema is refused", () => {
     const result = applyOutput(weather, undefined, data, { temp: "warm" });
     expect(result).toEqual({ ok: false, error: { code: "INVALID_ACTION_OUTPUT", message: expect.any(String), path: "response.temp" } });
+  });
+});
+
+describe("hardening: argument policy and path safety", () => {
+  const withFixed: HttpActionDefinition = { ...weather, query: { key: { secret: "k" }, units: "metric" } };
+  const data = { city: "Vancouver", temp: 12 };
+
+  it("refuses undeclared and colliding arguments before any request", () => {
+    expect(validateArgs(withFixed, { city: "Oslo", extra: 1 })).toMatchObject({ code: "INVALID_ACTION_INPUT", path: "args.extra" });
+    expect(validateArgs(withFixed, { city: "Oslo", key: "ATTACKER" })).toMatchObject({ code: "INVALID_ACTION_INPUT", path: "args.key" });
+    expect(validateArgs({ ...weather, input: { type: "object" } }, { city: "Oslo" })?.path).toBe("args.city");
+    expect(validateArgs(withFixed, "nope")?.path).toBe("args");
+    expect(validateArgs(withFixed, { city: "Oslo" })).toBeUndefined();
+  });
+
+  it("the author's fixed values are written last and always win", () => {
+    const built = buildRequest(withFixed, { city: "Oslo", key: "ATTACKER" }, () => "SECRET") as { url: string };
+    const params = new URL(built.url).searchParams;
+    expect(params.get("key")).toBe("SECRET");
+    expect(params.get("units")).toBe("metric");
+    expect(params.get("city")).toBe("Oslo");
+  });
+
+  it("paths read own properties only and write into arrays by index only", () => {
+    const rows = { rows: [{ id: 1 }, { id: 2 }] };
+    expect(getAtPath(rows, "rows.1.id")).toBe(2);
+    expect(getAtPath(rows, "rows.foo")).toBeUndefined();
+    expect(getAtPath({}, "constructor")).toBeUndefined();
+    expect(setAtPath(rows, "rows.0.id", 9)).toEqual({ rows: [{ id: 9 }, { id: 2 }] });
+    expect(setAtPath(rows, "rows.foo", 9)).toBe(rows); // refused: no property invented on an array
+    const written = setAtPath({}, "__proto__.polluted", true) as Record<string, unknown>;
+    expect(Object.prototype.hasOwnProperty.call(written, "__proto__")).toBe(true);
+    expect(({} as { polluted?: boolean }).polluted).toBeUndefined();
+  });
+
+  it("merge needs objects on both sides", () => {
+    const result = applyOutput({ ...weather, output: { type: "array" } }, undefined, data, [1, 2]);
+    expect(result).toEqual({ ok: false, error: { code: "INVALID_ACTION_OUTPUT", message: expect.stringContaining("merge needs an object"), path: "response" } });
+    expect(applyOutput({ ...weather, output: { type: "array" } }, { mode: "replace" }, data, [1, 2])).toEqual({ ok: true, data: [1, 2] });
   });
 });

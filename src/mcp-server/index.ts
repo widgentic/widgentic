@@ -25,7 +25,6 @@ export {
   inlineImagesInHtml,
   inlineRenderResultImages,
   fetchImageAsDataUri,
-  isPrivateAddress,
   clearInlineImageCache
 } from "./inline-images.js";
 export type { InlineImageDeps } from "./inline-images.js";
@@ -41,9 +40,11 @@ export {
   guardedJsonFetch,
   pinnedHttpsFetch,
   resolvePublicAddress,
+  isPrivateAddress,
   ACTION_MAX_BYTES,
   ACTION_TIMEOUT_MS
 } from "./guarded-fetch.js";
 export type { GuardedFetchDeps, GuardedJsonResult, PinnedFetch } from "./guarded-fetch.js";
-export { createExecutionLimiter } from "./rate-limit.js";
+export { createExecutionLimiter, DEFAULT_EXECUTIONS_PER_MINUTE } from "./rate-limit.js";
+export { readBodyText, positiveIntFromEnv, BodyTooLargeError, DEFAULT_MAX_BODY_BYTES } from "./body.js";
 export type { ExecutionLimiter } from "./rate-limit.js";

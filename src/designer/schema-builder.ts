@@ -4,6 +4,8 @@
  * keywords (type/properties/required/items/enum/pattern) so it stays a
  * dependency-free couple hundred lines.
  */
+import { errorMessage } from "../shared/error-message.js";
+import { isPlainObject } from "../shared/plain-object.js";
 import type { DataSchema } from "widgentic/catalog";
 import { diagnosticLine, fitSelect, h } from "./dom.js";
 
@@ -15,10 +17,6 @@ const TYPES = ["object", "array", "string", "number", "integer", "boolean", "nul
  * objects/arrays belongs in the JSON tab, not a form.
  */
 const ENUM_TYPES = new Set(["string", "number", "integer", "any"]);
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 export interface SchemaBuilder {
   element: HTMLElement;
@@ -60,7 +58,7 @@ export function createSchemaBuilder(
   ): HTMLElement {
     const rows: (Node | string)[] = [];
 
-    const typeSelect = h("select", { class: "wgd-select wgd-sb-type" }) as HTMLSelectElement;
+    const typeSelect = h("select", { class: "wgd-select wgd-sb-type" });
     for (const t of TYPES) typeSelect.append(h("option", { value: t }, [t]));
     // Nullable type arrays ([<type>, "null"], either order) present as the
     // PRIMARY type + a nullable toggle — never collapsing to "any", which
@@ -74,14 +72,14 @@ export function createSchemaBuilder(
       typeof rawType === "string"
         ? rawType
         : (typeList?.find((t) => t !== "null") ?? (nullable ? "null" : "any"));
-    typeSelect.value = TYPES.includes(currentType as (typeof TYPES)[number])
+    typeSelect.value = TYPES.some((type) => type === currentType)
       ? currentType
       : "any";
     fitSelect(typeSelect);
     const nullBox = h("input", {
       type: "checkbox",
       title: "Also allows null"
-    }) as HTMLInputElement;
+    });
     nullBox.checked = nullable;
     nullBox.disabled = typeSelect.value === "any" || typeSelect.value === "null";
     /** The `type` value the current controls describe. */
@@ -122,7 +120,7 @@ export function createSchemaBuilder(
         type: "text",
         class: "wgd-input wgd-sb-constraint",
         placeholder: "pattern (regex, optional)"
-      }) as HTMLInputElement;
+      });
       pattern.value = typeof node.pattern === "string" ? node.pattern : "";
       pattern.addEventListener("change", () =>
         apply(withKey(node, "pattern", pattern.value === "" ? undefined : pattern.value))
@@ -138,7 +136,7 @@ export function createSchemaBuilder(
         type: "text",
         class: "wgd-input wgd-sb-constraint",
         placeholder: 'enum ["a","b"] (optional)'
-      }) as HTMLInputElement;
+      });
       enumInput.value = Array.isArray(node.enum) ? JSON.stringify(node.enum) : "";
       enumInput.addEventListener("change", () => {
         if (enumInput.value.trim() === "") {
@@ -153,7 +151,7 @@ export function createSchemaBuilder(
           apply(withKey(node, "enum", parsed));
         } catch (error) {
           enumError.hidden = false;
-          enumError.textContent = `enum ignored: ${String((error as Error).message)}`;
+          enumError.textContent = `enum ignored: ${errorMessage(error)}`;
         }
       });
       constraints.push(h("span", { class: "wgd-sb-label" }, ["enum"]), enumInput);
@@ -174,7 +172,7 @@ export function createSchemaBuilder(
           type: "text",
           class: "wgd-input wgd-sb-prop",
           placeholder: "property name"
-        }) as HTMLInputElement;
+        });
         nameInput.value = name;
         nameInput.addEventListener("change", () => {
           const entries = Object.entries(properties).map(([k, v]) =>
@@ -189,7 +187,7 @@ export function createSchemaBuilder(
             )
           );
         });
-        const requiredBox = h("input", { type: "checkbox", title: "required" }) as HTMLInputElement;
+        const requiredBox = h("input", { type: "checkbox", title: "required" });
         requiredBox.checked = required.includes(name);
         requiredBox.addEventListener("change", () => {
           const nextRequired = requiredBox.checked

@@ -139,3 +139,31 @@ describe("descriptors inside groups", () => {
     expect(plain.ok ? renderToHtml(plain.node) : "").not.toContain("data-wg-action");
   });
 });
+
+describe("hardening: descriptor details", () => {
+  it("unresolved descriptors still name their kind and prompt caps never split a surrogate pair", () => {
+    const node = compileTemplate({ tag: "b", action: { ref: "nope" } }, { actions: shared, kind: "weather" })({ kind: "weather", data: {} });
+    expect(descriptorOf(node)).toEqual({ id: "", disabled: "unresolved", widget: "weather" });
+    const emoji = "😀".repeat(1500); // 3000 code units, 1500 code points
+    const capped = compileTemplate({ tag: "b", action: { definition: { kind: "prompt", text: [{ bind: "v" }] } } })({ kind: "x", data: { v: emoji } }) as WidgetElementNode;
+    const text = descriptorOf(capped).text as string;
+    expect(Array.from(text).length).toBe(1500);
+    expect(text.endsWith("😀")).toBe(true);
+  });
+});
+
+describe("hardening: group stamping is a copy", () => {
+  it("does not mutate the node a renderer returned", async () => {
+    const { createCatalog } = await import("../../catalog/index.js");
+    const catalog = createCatalog();
+    const cached = { tag: "button", attrs: { "data-wg-action": JSON.stringify({ id: "", kind: "prompt", text: "hi", widget: "fixed" }) } };
+    catalog.register("fixed", () => cached, { description: "cached renderer", dataShape: "any" });
+    const first = catalog.render({ kind: "group", data: { items: [{ kind: "fixed", data: {} }] } });
+    const second = catalog.render({ kind: "group", data: { items: [{ kind: "card", data: { title: "t" } }, { kind: "fixed", data: {} }] } });
+    expect(first.ok && second.ok).toBe(true);
+    expect(JSON.parse(cached.attrs["data-wg-action"]).at).toBeUndefined(); // the renderer's node is untouched
+    const html = second.ok ? renderToHtml(second.node) : "";
+    expect(html).toContain("&quot;at&quot;:&quot;data.items.1&quot;");
+    expect(html).not.toContain("data.items.0.data.items");
+  });
+});

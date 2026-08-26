@@ -20,6 +20,8 @@
  *                               wraps (managed identity, wrap/unwrap role).
  *   WIDGENTIC_LOCAL_KEK         64 hex chars — development cipher for rigs.
  *                               Without either, the Secrets section is off.
+ *   WIDGENTIC_EXECUTE_RATE      Action test calls per principal per minute
+ *                               (default 60 — the MCP edge's own default).
  *
  * Without Cosmos configuration the store is in-memory (local dev): real
  * flows, disposable data.
@@ -29,6 +31,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { build } from "esbuild";
+import { createExecutionLimiter, DEFAULT_EXECUTIONS_PER_MINUTE, positiveIntFromEnv } from "widgentic/mcp-server";
 import { createMemoryStore } from "widgentic/store";
 import type { WritableWidgetStore } from "widgentic/store";
 import type { SecretCipher } from "widgentic/secrets";
@@ -126,7 +129,10 @@ const assets: Record<string, StaticAsset> = {
   }
 };
 
-const handle = createWebAppHandler({ store, auth, assets, devLogin, secretsEnabled: cipher !== undefined });
+const limiter = createExecutionLimiter(
+  positiveIntFromEnv(process.env.WIDGENTIC_EXECUTE_RATE, DEFAULT_EXECUTIONS_PER_MINUTE)
+);
+const handle = createWebAppHandler({ store, auth, assets, devLogin, secretsEnabled: cipher !== undefined, limiter });
 
 createServer((req, res) => {
   void handle(req, res).catch(() => {

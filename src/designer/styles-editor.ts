@@ -5,6 +5,7 @@
  * only), so the tree enforces the exact shape the server's style guards
  * expect; anything looser belongs in the JSON tab.
  */
+import { isPlainObject } from "../shared/plain-object.js";
 import { h } from "./dom.js";
 
 export type WidgetStylesValue = Record<string, Record<string, string>>;
@@ -13,10 +14,6 @@ export interface StylesEditor {
   element: HTMLElement;
   getValue(): WidgetStylesValue | undefined;
   setValue(styles: WidgetStylesValue | undefined): void;
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export function createStylesEditor(
@@ -44,7 +41,7 @@ export function createStylesEditor(
       class: className,
       placeholder,
       spellcheck: "false"
-    }) as HTMLInputElement;
+    });
     input.value = value;
     input.addEventListener("change", () => onCommit(input.value));
     return input;

@@ -30,7 +30,7 @@ export function mountThemePanel(
   // Theme selector: "none" plus whatever the host supplied.
   const themeSelect = h("select", {
     class: "wgd-select wgd-theme-select"
-  }) as HTMLSelectElement;
+  });
   themeSelect.append(h("option", { value: "" }, ["(none — defaults)"]));
   for (const entry of themes) {
     themeSelect.append(

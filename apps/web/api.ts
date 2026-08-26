@@ -1,6 +1,6 @@
 /**
- * The authoring API: widgets, themes, and API keys over HTTP, authorized
- * by a validated session and nothing else.
+ * The authoring API: widgets, themes, schemas, shared actions, secrets and
+ * API keys over HTTP, authorized by a validated session and nothing else.
  *
  * The trust rules this file exists to enforce (design D7):
  *   - Only a session authenticates a write. A valid MCP API key presented
@@ -14,10 +14,10 @@
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ThemeEntry } from "widgentic/theming";
-import { StoreRejectionError, principalIdForSubject } from "widgentic/store";
+import { StoreRejectionError, normalizeKeyScopes, principalIdForSubject } from "widgentic/store";
 import type { StoredAction, StoredSchema, StoredWidget, WritableWidgetStore } from "widgentic/store";
 import { testHttpAction } from "widgentic/mcp-server";
-import type { GuardedFetchDeps } from "widgentic/mcp-server";
+import type { ExecutionLimiter, GuardedFetchDeps } from "widgentic/mcp-server";
 import type { SessionClaims } from "./auth.js";
 
 export interface ApiDeps {
@@ -28,6 +28,8 @@ export interface ApiDeps {
   secretsEnabled?: boolean;
   /** Injectable transport for the action test call (tests). */
   fetchDeps?: GuardedFetchDeps;
+  /** Execution budget shared with the MCP edge; test calls draw from the same bucket. */
+  limiter?: ExecutionLimiter;
 }
 
 function send(res: ServerResponse, status: number, body: unknown): void {
@@ -180,23 +182,30 @@ export async function handleApiRequest(
       }
     }
 
+    // The designer's test call: the production execution path (secrets,
+    // SSRF guard, output validation), redacted — never a browser fetch. Its
+    // own route, so an action may be named `test`; it spends the same
+    // per-principal execution budget as execute_action.
+    if (resource === "action-test" && method === "POST" && id === "") {
+      if (deps.limiter !== undefined && !deps.limiter.take(principal.id)) {
+        send(res, 200, { ok: false, code: "RATE_LIMITED", message: "Too many test calls; try again in a minute." });
+        return true;
+      }
+      const body = (await readBody(req)) as { definition?: unknown; args?: unknown } | undefined;
+      const result = await testHttpAction(body?.definition, body?.args ?? {}, {
+        secrets: (name) => deps.store.secretValue(principal.id, name),
+        fetchDeps: deps.fetchDeps
+      });
+      send(res, 200, result);
+      return true;
+    }
+
     if (resource === "actions") {
       if (method === "GET" && id === "") {
         send(res, 200, { actions: await deps.store.actions(principal.id) });
         return true;
       }
-      // The designer's test call: the production execution path (secrets,
-      // SSRF guard, output validation), redacted — never a browser fetch.
-      if (method === "POST" && id === "test") {
-        const body = (await readBody(req)) as { definition?: unknown; args?: unknown } | undefined;
-        const result = await testHttpAction(body?.definition, body?.args ?? {}, {
-          secrets: (name) => deps.store.secretValue(principal.id, name),
-          fetchDeps: deps.fetchDeps
-        });
-        send(res, 200, result);
-        return true;
-      }
-      if (method === "PUT" && id !== "" && id !== "test") {
+      if (method === "PUT" && id !== "") {
         const body = (await readBody(req)) as Partial<StoredAction> | undefined;
         if (body === undefined || typeof body !== "object") {
           sendError(res, 400, "INVALID_BODY", "Expected an action JSON body.");
@@ -221,6 +230,12 @@ export async function handleApiRequest(
           enabled: deps.secretsEnabled === true,
           secrets: deps.secretsEnabled === true ? await deps.store.listSecrets(principal.id) : []
         });
+        return true;
+      }
+      // Without a cipher there is nothing to write with — the same gate the
+      // listing applies, so a deployment never half-supports secrets.
+      if ((method === "PUT" || method === "DELETE") && id !== "" && deps.secretsEnabled !== true) {
+        sendError(res, 503, "NO_CIPHER", "This deployment holds no secret cipher.");
         return true;
       }
       if (method === "PUT" && id !== "") {
@@ -279,12 +294,8 @@ export async function handleApiRequest(
         const body = (await readBody(req)) as { name?: unknown; scopes?: unknown } | undefined;
         const name = typeof body?.name === "string" ? body.name : "";
         // Scopes are fixed at creation; `read` is always granted and only
-        // key-grantable scopes are accepted (the store enforces both).
-        const created = await deps.store.createKey(
-          principal.id,
-          name,
-          Array.isArray(body?.scopes) ? (body.scopes as StoredAction["name"][] as never) : undefined
-        );
+        // key-grantable scopes are accepted (INVALID_SCOPES otherwise).
+        const created = await deps.store.createKey(principal.id, name, normalizeKeyScopes(body?.scopes));
         // The raw key exists in this response and nowhere else, ever.
         send(res, 201, {
           key: created.key,
@@ -307,8 +318,12 @@ export async function handleApiRequest(
       sendError(res, rejectionStatus(error.code), error.code, error.detail);
       return true;
     }
-    if (error instanceof SyntaxError || (error as Error).message === "body too large") {
-      sendError(res, 400, "INVALID_BODY", (error as Error).message);
+    if (error instanceof SyntaxError) {
+      sendError(res, 400, "INVALID_BODY", "Malformed JSON body.");
+      return true;
+    }
+    if (error instanceof Error && error.message === "body too large") {
+      sendError(res, 400, "INVALID_BODY", "Request body too large.");
       return true;
     }
     sendError(res, 500, "INTERNAL", "Unexpected error.");

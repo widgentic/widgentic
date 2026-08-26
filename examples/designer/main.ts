@@ -1,11 +1,11 @@
 /**
- * Demo host for the widgentic designers: two destinations (widget and
- * theme), host-side persistence in localStorage, and the wiring that makes
- * them cooperate — themes saved in the theme designer become the widget
- * designer's preview options.
+ * Demo host for the widgentic designers: widget, theme and action
+ * destinations, host-side persistence in localStorage, and the wiring that
+ * makes them cooperate — themes saved in the theme designer become the
+ * widget designer's preview options.
  *
- * This page is what the future widgentic.dev app replaces: the library
- * performs no network I/O and no persistence; hosts own both.
+ * The widgentic.dev app is the real host; this page shows the library
+ * alone: it performs no network I/O and no persistence, hosts own both.
  */
 import {
   createActionDesigner,
@@ -107,7 +107,7 @@ let actionDesigner: ActionDesignerHandle | undefined;
 function mountActionDesigner(): void {
   actionDesigner?.dispose();
   actionHost.replaceChildren();
-  actionDesigner = createActionDesigner(actionHost, {});
+  actionDesigner = createActionDesigner(actionHost);
 }
 
 // --- Tabs ----------------------------------------------------------------

@@ -39,7 +39,7 @@ export function createRecordEditor(
       class: className,
       placeholder,
       spellcheck: "false"
-    }) as HTMLInputElement;
+    });
     input.value = value;
     input.addEventListener("change", () => onCommit(input.value));
     return input;

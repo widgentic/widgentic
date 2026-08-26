@@ -13,3 +13,19 @@ describe("redaction", () => {
     expect(redactValue(value, [])).toBe(value);
   });
 });
+
+describe("hardening: encoded forms, keys, overlaps", () => {
+  it("scrubs percent-encoded and JSON-escaped forms and object keys", () => {
+    const secret = 'sk+live/1"x';
+    const echoed = `url ?key=${encodeURIComponent(secret)} body ${JSON.stringify({ k: secret })}`;
+    const out = redactText(echoed, [secret]);
+    expect(out).not.toContain("sk%2Blive");
+    expect(out).not.toContain('sk+live/1\\"x');
+    expect(out).toContain("***");
+    expect(redactValue({ [secret]: 1, nested: { "x sk+live/1\"x": secret } }, [secret])).toEqual({ "***": 1, nested: { "x ***": "***" } });
+  });
+
+  it("longer secrets are scrubbed whole when one contains another", () => {
+    expect(redactText("token abcdef and abc", ["abc", "abcdef"])).toBe("token *** and ***");
+  });
+});

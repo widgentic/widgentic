@@ -1,5 +1,5 @@
 export type { EnvelopeRecord, SecretCipher, SecretErrorCode } from "./types.js";
-export { SECRET_VALUE_MAX_BYTES, SecretError } from "./types.js";
+export { SECRET_VALUE_MAX_BYTES, SECRET_VALUE_MIN_BYTES, SecretError } from "./types.js";
 export {
   checkSecretName,
   checkSecretValue,

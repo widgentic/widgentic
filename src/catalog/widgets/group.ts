@@ -120,10 +120,10 @@ export function renderGroupContainer(
   children: WidgetNode[]
 ): WidgetNode {
   const h = isPlainObject(hints) ? hints : {};
-  const layout = GROUP_LAYOUTS.includes(h.layout as (typeof GROUP_LAYOUTS)[number])
+  const layout = GROUP_LAYOUTS.some((known) => known === h.layout)
     ? (h.layout as string)
     : "stack";
-  const gap = GROUP_GAPS.includes(h.gap as (typeof GROUP_GAPS)[number])
+  const gap = GROUP_GAPS.some((known) => known === h.gap)
     ? (h.gap as string)
     : "md";
   const classes = [`wg-group`, `wg-group-${layout}`, `wg-gap-${gap}`];

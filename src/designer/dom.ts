@@ -7,11 +7,23 @@
 
 export type Child = Node | string;
 
-export function h(
-  tag: string,
+/** The first `<selector>` under `parent`, which the caller's own markup guarantees exists. */
+export function requireChild<K extends keyof HTMLElementTagNameMap>(
+  parent: ParentNode,
+  selector: K
+): HTMLElementTagNameMap[K] {
+  const found = parent.querySelector(selector);
+  if (found === null) throw new Error(`Designer chrome is missing a <${selector}> element.`);
+  return found;
+}
+
+export function h<K extends keyof HTMLElementTagNameMap>(
+  tag: K,
   attrs?: Record<string, string>,
   children?: Child[]
-): HTMLElement {
+): HTMLElementTagNameMap[K];
+export function h(tag: string, attrs?: Record<string, string>, children?: Child[]): HTMLElement;
+export function h(tag: string, attrs?: Record<string, string>, children?: Child[]): HTMLElement {
   const element = document.createElement(tag);
   if (attrs) {
     for (const [name, value] of Object.entries(attrs)) {
@@ -32,7 +44,7 @@ export function textField(
   value: string,
   onInput: (value: string) => void
 ): HTMLElement {
-  const input = h("input", { type: "text", class: "wgd-input" }) as HTMLInputElement;
+  const input = h("input", { type: "text", class: "wgd-input" });
   input.value = value;
   input.addEventListener("input", () => onInput(input.value));
   return h("label", { class: "wgd-field" }, [
@@ -52,7 +64,7 @@ export function textArea(
     class: "wgd-textarea",
     rows: String(rows),
     spellcheck: "false"
-  }) as HTMLTextAreaElement;
+  });
   area.value = value;
   area.addEventListener("input", () => onInput(area.value));
   // An empty label means the surrounding chrome already names the field —

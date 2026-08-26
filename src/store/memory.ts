@@ -7,16 +7,17 @@
 import { randomBytes } from "node:crypto";
 import type { ThemeEntry } from "widgentic/theming";
 import type { StoredAction } from "widgentic/actions";
-import { collectSecretRefs } from "widgentic/actions";
-import { collectActionRefs, collectInlineActions } from "widgentic/templates";
-import {
-  checkSecretName,
-  decryptSecret,
-  encryptSecret,
-  SecretError
-} from "widgentic/secrets";
-import type { SecretCipher } from "widgentic/secrets";
+import { checkSecretName, decryptSecret, encryptSecret } from "widgentic/secrets";
+import type { EnvelopeRecord, SecretCipher } from "widgentic/secrets";
+import { asStoreRejection } from "./errors.js";
 import { findByKey, generateKey, hashKey } from "./keys.js";
+import {
+  isGetHttp,
+  loadRefOf,
+  referencesToSecret,
+  widgetsLoadingAction,
+  widgetsReferencingAction
+} from "./refs.js";
 import type {
   CreatedKey,
   Principal,
@@ -30,6 +31,7 @@ import type {
 } from "./types.js";
 import {
   DEFAULT_LIMITS,
+  KEY_SCOPES,
   normalizeKeyScopes,
   principalIdForSubject,
   StoreRejectionError
@@ -87,32 +89,6 @@ function publicKey(key: KeyRecord): StoredKey {
   return clone(entry);
 }
 
-/** Widgets binding the named shared action (by `ref`, in the template or `load`). */
-export function widgetsReferencingAction(widgets: Iterable<StoredWidget>, name: string): string[] {
-  return [...widgets]
-    .filter((w) => collectActionRefs(w.template, w.load).includes(name))
-    .map((w) => w.kind);
-}
-
-/** Actions (shared, or inline in widgets) referencing the named secret. */
-export function referencesToSecret(
-  actions: Iterable<StoredAction>,
-  widgets: Iterable<StoredWidget>,
-  name: string
-): string[] {
-  const out: string[] = [];
-  for (const action of actions) {
-    if (collectSecretRefs(action.definition).includes(name)) out.push(`action '${action.name}'`);
-  }
-  for (const widget of widgets) {
-    const inline = collectInlineActions(widget.template, widget.load);
-    if (inline.some((definition) => collectSecretRefs(definition).includes(name))) {
-      out.push(`widget '${widget.kind}'`);
-    }
-  }
-  return out;
-}
-
 export function createMemoryStore(
   seed: MemorySeedPrincipal[] = [],
   limits: StoreLimits = DEFAULT_LIMITS,
@@ -156,7 +132,7 @@ export function createMemoryStore(
   for (const entry of seed) {
     // A seeded key carries the seeded principal's key-grantable scopes.
     const seedScopes = normalizeKeyScopes(
-      entry.principal.scopes.filter((scope) => scope === "execute")
+      entry.principal.scopes.filter((scope) => KEY_SCOPES.includes(scope))
     );
     const created: Record_ = {
       principal: entry.principal,
@@ -217,7 +193,9 @@ export function createMemoryStore(
       );
       const match = findByKey(apiKey, candidates);
       if (match === undefined) return undefined;
-      return clone({ ...match.principal, scopes: match.scopes });
+      // Key resolution answers "who and what may they do", never the identity subject.
+      const { subject: _subject, ...principal } = match.principal;
+      return clone({ ...principal, scopes: match.scopes });
     },
     async widgets(principalId) {
       return [...(record(principalId)?.widgets.values() ?? [])].map(clone);
@@ -242,7 +220,11 @@ export function createMemoryStore(
       const active = requireCipher();
       const stored = record(principalId)?.secrets.get(name);
       if (stored === undefined) return undefined;
-      return decryptSecret(stored.record, active);
+      try {
+        return await decryptSecret(stored.record, active);
+      } catch (error) {
+        throw asStoreRejection(error, "secret could not be decrypted.");
+      }
     },
     async putWidget(principalId, widget) {
       const target = requireRecord(principalId);
@@ -264,6 +246,16 @@ export function createMemoryStore(
         throw new StoreRejectionError(
           "UNKNOWN_SCHEMA",
           `widget references missing schema '${ref}'.`
+        );
+      }
+      // A `load` through a shared action needs that action to be a GET now;
+      // a dangling ref stays non-fatal (it renders disabled).
+      const loadRef = loadRefOf(widget);
+      const loadTarget = loadRef === undefined ? undefined : target.actions.get(loadRef);
+      if (loadTarget !== undefined && !isGetHttp(loadTarget.definition)) {
+        throw new StoreRejectionError(
+          "INVALID_ACTION",
+          `load references '${loadRef}', which is not an http GET action.`
         );
       }
       target.widgets.set(widget.kind, clone(widget));
@@ -305,6 +297,15 @@ export function createMemoryStore(
           `principal is at the ${limits.maxActions}-action limit.`
         );
       }
+      if (!isGetHttp(action.definition)) {
+        const loaders = widgetsLoadingAction(target.widgets.values(), action.name);
+        if (loaders.length > 0) {
+          throw new StoreRejectionError(
+            "ACTION_IN_USE",
+            `action '${action.name}' is the load of: ${loaders.join(", ")}; a load must stay an http GET.`
+          );
+        }
+      }
       target.actions.set(action.name, clone(action));
     },
     async putSecret(principalId, name, value) {
@@ -318,12 +319,11 @@ export function createMemoryStore(
           `principal is at the ${limits.maxSecrets}-secret limit.`
         );
       }
-      let record_;
+      let record_: EnvelopeRecord;
       try {
         record_ = await encryptSecret(value, active);
       } catch (error) {
-        if (error instanceof SecretError) throw new StoreRejectionError(error.code, error.message);
-        throw error;
+        throw asStoreRejection(error, "secret could not be encrypted.");
       }
       const now = new Date().toISOString();
       const existing = target.secrets.get(name);
@@ -503,15 +503,17 @@ export function createMemoryStore(
       if (key.revokedAt === undefined) key.revokedAt = new Date().toISOString();
     },
     snapshot() {
-      return [...records.values()].map((r) => ({
-        principal: r.principal,
-        keys: r.keys.map((k) => ({ ...publicKey(k), digest: k.digest })),
-        widgets: [...r.widgets.values()],
-        themes: [...r.themes.values()],
-        schemas: [...r.schemas.values()],
-        actions: [...r.actions.values()],
-        secrets: [...r.secrets.values()]
-      }));
+      return clone(
+        [...records.values()].map((r) => ({
+          principal: r.principal,
+          keys: r.keys.map((k) => ({ ...publicKey(k), digest: k.digest })),
+          widgets: [...r.widgets.values()],
+          themes: [...r.themes.values()],
+          schemas: [...r.schemas.values()],
+          actions: [...r.actions.values()],
+          secrets: [...r.secrets.values()]
+        }))
+      );
     }
   };
 }

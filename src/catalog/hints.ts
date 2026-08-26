@@ -131,13 +131,13 @@ export function analyzeHints(
       // Group hints select layout presets; values are checked against the
       // fixed vocabularies (the renderer falls back silently — this is
       // where the caller finds out).
-      if (key === "layout" && !["stack", "row", "grid"].includes(value as string)) {
+      if (key === "layout" && !["stack", "row", "grid"].some((known) => known === value)) {
         diagnostics.push({
           hint: "layout",
           code: "INVALID_VALUE",
           message: "'layout' must be 'stack', 'row', or 'grid' (fell back to 'stack')"
         });
-      } else if (key === "gap" && !["none", "sm", "md", "lg"].includes(value as string)) {
+      } else if (key === "gap" && !["none", "sm", "md", "lg"].some((known) => known === value)) {
         diagnostics.push({
           hint: "gap",
           code: "INVALID_VALUE",

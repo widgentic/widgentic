@@ -1,4 +1,5 @@
-import type { DataSchema, HintDiagnostic, WidgetCatalog, WidgetStyles } from "../catalog/index.js";
+import { isPlainObject } from "../shared/plain-object.js";
+import type { DataSchema, HintDiagnostic, WidgetCatalog } from "../catalog/index.js";
 import { analyzeHints, renderToHtml, widgetStylesToCss } from "../catalog/index.js";
 import type { WidgetContractError } from "../contract/index.js";
 import type { McpToolResult, McpContentBlock } from "../mcp/index.js";
@@ -67,11 +68,6 @@ function composePage(
     `<!doctype html>\n<meta charset="utf-8">\n<title>widgentic</title>\n` +
     `<style>\n${parts.join("\n")}\n</style>\n<body>${fragment}</body>`
   );
-}
-
-/** Same plain-object definition as the contract validator. */
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /**
@@ -211,11 +207,6 @@ export interface StoredSchemaEntry {
   schema: Record<string, unknown>;
 }
 
-/**
- * `render_widget`: validate `{ widget, data, hints?, meta? }` against the
- * catalog and the contract, render, and return the HTML plus the widgentic
- * payload block. Total — any input shape produces a result, never a throw.
- */
 /** Composition's view of a widget's `load` binding and shared definitions. */
 export interface RenderActionOptions {
   load(kind: string): ActionBinding | undefined;
@@ -224,18 +215,31 @@ export interface RenderActionOptions {
   executeAllowed: boolean;
 }
 
-/** Tally of action descriptors in a render tree, for the model-facing tail. */
-function tallyActions(node: unknown, tally: { http: number; prompt: number; scope: number; unresolved: number }): void {
+interface ActionTally {
+  http: number;
+  prompt: number;
+  scope: number;
+  unresolved: number;
+  /** Binding identities already counted — an `each` repeats one binding per row. */
+  seen: Set<string>;
+}
+
+/** Tally of action BINDINGS in a render tree (per id, not per rendered row), for the model-facing tail. */
+function tallyActions(node: unknown, tally: ActionTally): void {
   if (!isPlainObject(node)) return;
   const raw = isPlainObject(node.attrs) ? node.attrs["data-wg-action"] : undefined;
   if (typeof raw === "string") {
     try {
-      const descriptor = JSON.parse(raw) as { kind?: string; disabled?: string };
-      if (descriptor.disabled === "unresolved") tally.unresolved++;
-      else if (descriptor.kind === "prompt") tally.prompt++;
-      else if (descriptor.kind === "http") {
-        tally.http++;
-        if (descriptor.disabled === "scope") tally.scope++;
+      const descriptor = JSON.parse(raw) as { id?: string; kind?: string; disabled?: string; widget?: string; at?: string };
+      const identity = `${descriptor.at ?? ""}|${descriptor.widget ?? ""}|${descriptor.id ?? ""}`;
+      if (!tally.seen.has(identity)) {
+        tally.seen.add(identity);
+        if (descriptor.disabled === "unresolved") tally.unresolved++;
+        else if (descriptor.kind === "prompt") tally.prompt++;
+        else if (descriptor.kind === "http") {
+          tally.http++;
+          if (descriptor.disabled === "scope") tally.scope++;
+        }
       }
     } catch {
       /* not a descriptor */
@@ -249,12 +253,13 @@ function tallyActions(node: unknown, tally: { http: number; prompt: number; scop
  * buttons do — and, when http actions are disabled, exactly why — so it
  * neither guesses nor tries to call execute_action itself.
  */
-export function actionNotes(tree: unknown, hasLoad: boolean): string {
-  const tally = { http: 0, prompt: 0, scope: 0, unresolved: 0 };
+function actionNotes(tree: unknown, hasLoad: boolean): string {
+  const tally: ActionTally = { http: 0, prompt: 0, scope: 0, unresolved: 0, seen: new Set() };
   tallyActions(tree, tally);
   if (tally.http + tally.prompt + tally.unresolved === 0 && !hasLoad) return "";
   const parts: string[] = [];
   const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+  const verb = (n: number, singular: string, pluralForm: string) => (n === 1 ? singular : pluralForm);
   if (tally.http > 0) {
     if (tally.scope === tally.http) {
       parts.push(
@@ -262,15 +267,16 @@ export function actionNotes(tree: unknown, hasLoad: boolean): string {
           "the user can create a key with 'execute' at widgentic.dev to enable them"
       );
     } else {
+      const live = tally.http - tally.scope;
       parts.push(
-        `${plural(tally.http - tally.scope, "http action")} that run server-side when the user activates them ` +
+        `${plural(live, "http action")} that ${verb(live, "runs", "run")} server-side when the user activates ${verb(live, "it", "them")} ` +
           "(the widget re-renders itself and posts its new data to your context)" +
           (tally.scope > 0 ? `; ${plural(tally.scope, "other")} disabled for this key (no 'execute' scope)` : "")
       );
     }
   }
   if (tally.prompt > 0) {
-    parts.push(`${plural(tally.prompt, "prompt action")} that propose a message in the user's composer (they work with any key)`);
+    parts.push(`${plural(tally.prompt, "prompt action")} that ${verb(tally.prompt, "proposes", "propose")} a message in the user's composer (${verb(tally.prompt, "it works", "they work")} with any key)`);
   }
   if (tally.unresolved > 0) {
     parts.push(`${plural(tally.unresolved, "action")} disabled because the widget references an action the user has not saved`);
@@ -279,6 +285,11 @@ export function actionNotes(tree: unknown, hasLoad: boolean): string {
   return `\n\nAction notes: the widget has ${parts.join("; ")}. You do not call execute_action yourself — the widget does.`;
 }
 
+/**
+ * `render_widget`: validate `{ widget, data, hints?, meta? }` against the
+ * catalog and the contract, render, and return the HTML plus the widgentic
+ * payload block. Total — any input shape produces a result, never a throw.
+ */
 export function handleRenderWidget(
   catalog: WidgetCatalog,
   input: unknown,
@@ -312,7 +323,7 @@ export function handleRenderWidget(
   }
 
   const format: unknown = input.format === undefined ? "both" : input.format;
-  if (!FORMATS.includes(format as RenderFormat)) {
+  if (!FORMATS.some((known) => known === format)) {
     return errorResult({
       code: "INVALID_TYPE",
       path: "format",
@@ -472,30 +483,33 @@ export function handleRenderWidget(
   // The widget-level `load` binding rides the template channel as a
   // resolved descriptor — only for callers who may execute; a read-only
   // key sees no load at all rather than a click that fails.
-  const loadBinding = options?.actions?.load(widget);
-  if (loadBinding !== undefined && options?.actions?.executeAllowed === true) {
-    const descriptor = resolveActionDescriptor(loadBinding, "load", payload as unknown as WidgetPayload, {
-      actions: options.actions.resolve
-    });
-    if (descriptor.disabled === undefined) {
-      structuredContent.load = { ...descriptor, widget };
-    }
-  }
-  // Group items load too: one descriptor per item that declares `load`,
-  // each stamped with the item's location so the fold lands in it.
-  if (widget === "group" && options?.actions?.executeAllowed === true && isPlainObject(payload.data) && Array.isArray(payload.data.items)) {
-    const loads: Record<string, unknown>[] = [];
-    payload.data.items.forEach((item, index) => {
-      if (!isPlainObject(item) || typeof item.kind !== "string") return;
-      const itemLoad = options.actions!.load(item.kind);
-      if (itemLoad === undefined) return;
-      const descriptor = resolveActionDescriptor(itemLoad, "load", item as unknown as WidgetPayload, {
-        actions: options.actions!.resolve,
-        kind: item.kind
+  const actions = options?.actions;
+  if (actions !== undefined && actions.executeAllowed) {
+    const loadBinding = actions.load(widget);
+    if (loadBinding !== undefined) {
+      const descriptor = resolveActionDescriptor(loadBinding, "load", payload as WidgetPayload, {
+        actions: actions.resolve,
+        kind: widget
       });
-      if (descriptor.disabled === undefined) loads.push({ ...descriptor, widget: item.kind, at: `data.items.${index}` });
-    });
-    if (loads.length > 0) structuredContent.loads = loads;
+      if (descriptor.disabled === undefined) structuredContent.load = descriptor;
+    }
+    // Group items load too: one descriptor per item that declares `load`,
+    // stamped with the item's location so the fold lands in it (groups do
+    // not nest, so one level is the whole story).
+    if (widget === "group" && isPlainObject(payload.data) && Array.isArray(payload.data.items)) {
+      const loads: Record<string, unknown>[] = [];
+      payload.data.items.forEach((item, index) => {
+        if (!isPlainObject(item) || typeof item.kind !== "string") return;
+        const itemLoad = actions.load(item.kind);
+        if (itemLoad === undefined) return;
+        const descriptor = resolveActionDescriptor(itemLoad, "load", item as WidgetPayload, {
+          actions: actions.resolve,
+          kind: item.kind
+        });
+        if (descriptor.disabled === undefined) loads.push({ ...descriptor, at: `data.items.${index}` });
+      });
+      if (loads.length > 0) structuredContent.loads = loads;
+    }
   }
   const hintNotes =
     (diagnostics.length > 0

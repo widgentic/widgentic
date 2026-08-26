@@ -4,6 +4,7 @@
  * dependencies so tests drive it in-process; `http.ts` is the entry that
  * builds the bundle, wires env configuration, and listens.
  */
+import type { ExecutionLimiter } from "widgentic/mcp-server";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { WritableWidgetStore } from "widgentic/store";
 import { handleApiRequest } from "./api.js";
@@ -30,6 +31,8 @@ export interface WebAppDeps {
   devLogin?: boolean;
   /** Whether the store holds a secret cipher (Secrets section enabled). */
   secretsEnabled?: boolean;
+  /** Execution budget for action test calls (shared shape with the MCP edge). */
+  limiter?: ExecutionLimiter;
   log?: (line: string) => void;
 }
 
@@ -182,7 +185,8 @@ export function createWebAppHandler(deps: WebAppDeps) {
     const handled = await handleApiRequest(req, res, {
       store: deps.store,
       readSession: (cookie) => deps.auth.readSession(cookie),
-      ...(deps.secretsEnabled === undefined ? {} : { secretsEnabled: deps.secretsEnabled })
+      ...(deps.secretsEnabled === undefined ? {} : { secretsEnabled: deps.secretsEnabled }),
+      ...(deps.limiter === undefined ? {} : { limiter: deps.limiter })
     });
     if (handled) return;
 

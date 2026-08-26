@@ -33,8 +33,12 @@ export interface SecretCipher {
 /** Largest secret value accepted, in UTF-8 bytes. */
 export const SECRET_VALUE_MAX_BYTES = 4_096;
 
+/** Smallest secret value accepted: anything shorter is a guessable token and would blank every echo of those characters under redaction. */
+export const SECRET_VALUE_MIN_BYTES = 8;
+
 export type SecretErrorCode =
   | "INVALID_SECRET_NAME"
+  | "INVALID_SECRET_VALUE"
   | "SECRET_TOO_LARGE"
   | "INVALID_ENVELOPE"
   | "DECRYPTION_FAILED";

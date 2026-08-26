@@ -293,3 +293,113 @@ describe("context updates and keyboard activation", () => {
     expect(t.count("ui/message")).toBe(2);
   });
 });
+
+import { vi } from "vitest";
+
+describe("hardening: bridge state machine", () => {
+  const promptTree = { tag: "div", children: [{ tag: "a", attrs: { "data-wg-action": descriptor({ id: "children.0", kind: "prompt", text: "Hi" }) }, children: ["Hi"] }] };
+
+  it("action anchors are focusable, role=button, and Enter/Space activate them", async () => {
+    const t = bootTemplate();
+    t.initialize({ serverTools: {} });
+    await tick();
+    t.dispatch(toolResult({ tree: promptTree, payload }));
+    const anchor = t.root().querySelector("a") as HTMLElement;
+    expect(anchor.getAttribute("tabindex")).toBe("0");
+    expect(anchor.getAttribute("role")).toBe("button");
+    anchor.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    expect(t.count("ui/message")).toBe(1);
+  });
+
+  it("drops an in-flight result whose cycle was reset by tool-input", async () => {
+    const t = bootTemplate();
+    t.initialize({ serverTools: {} });
+    await tick();
+    t.dispatch(toolResult({ tree: tree(12), payload }));
+    click(t.root().querySelector("button") as HTMLElement);
+    const call = t.lastRequest("tools/call");
+    t.dispatch({ jsonrpc: "2.0", method: "ui/notifications/tool-input", params: { arguments: { widget: "weather" } } });
+    t.dispatch({ jsonrpc: "2.0", id: call.id, result: { content: [], structuredContent: { tree: tree(99), payload: { kind: "weather", data: { temp: 99 } } } } });
+    await tick();
+    expect(t.root().querySelector(".wg-temp")?.textContent).not.toBe("99");
+    expect(t.count("ui/update-model-context")).toBe(0);
+  });
+
+  it("a silent host times out into the alert and clears the busy state", async () => {
+    vi.useFakeTimers();
+    try {
+      const t = bootTemplate();
+      t.initialize({ serverTools: {} });
+      await Promise.resolve(); await Promise.resolve();
+      t.dispatch(toolResult({ tree: tree(12), payload }));
+      click(t.root().querySelector("button") as HTMLElement);
+      expect(t.root().getAttribute("aria-busy")).toBe("true");
+      vi.advanceTimersByTime(30_001);
+      await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+      expect(t.root().getAttribute("aria-busy")).toBeNull();
+      expect(t.alert().hidden).toBe(false);
+      expect(t.alert().textContent).toContain("did not answer");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a result that beats initialize still loads once capabilities arrive", async () => {
+    const t = bootTemplate();
+    t.dispatch(toolResult({ tree: tree(12), payload, load: { id: "load", kind: "http", args: { city: "Oslo" }, widget: "weather" } }));
+    expect(t.count("tools/call")).toBe(0);
+    t.initialize({ serverTools: {} });
+    await tick();
+    expect(t.count("tools/call")).toBe(1);
+    expect((t.lastRequest("tools/call").params.arguments as { action: string }).action).toBe("load");
+  });
+
+  it("a load chain updates the model context once", async () => {
+    const t = bootTemplate();
+    t.initialize({ serverTools: {} });
+    await tick();
+    const groupPayload = { kind: "group", data: { items: [{ kind: "weather", data: {} }, { kind: "weather", data: {} }] } };
+    t.dispatch(toolResult({ tree: tree(1), payload: groupPayload, loads: [
+      { id: "load", kind: "http", args: {}, widget: "weather", at: "data.items.0" },
+      { id: "load", kind: "http", args: {}, widget: "weather", at: "data.items.1" }
+    ] }));
+    const first = t.lastRequest("tools/call");
+    t.dispatch({ jsonrpc: "2.0", id: first.id, result: { content: [], structuredContent: { tree: tree(2), payload: groupPayload } } });
+    await tick(); await tick();
+    expect(t.count("ui/update-model-context")).toBe(0);
+    const second = t.lastRequest("tools/call");
+    t.dispatch({ jsonrpc: "2.0", id: second.id, result: { content: [], structuredContent: { tree: tree(3), payload: groupPayload } } });
+    await tick(); await tick();
+    expect(t.count("ui/update-model-context")).toBe(1);
+  });
+
+  it("alerts clear on a new cycle; author titles survive a disabled spell", async () => {
+    const t = bootTemplate();
+    t.initialize({ serverTools: {} });
+    await tick();
+    t.dispatch(toolResult({ tree: tree(12), payload }));
+    click(t.root().querySelector("button") as HTMLElement);
+    const call = t.lastRequest("tools/call");
+    t.dispatch({ jsonrpc: "2.0", id: call.id, result: { isError: true, content: [{ type: "text", text: JSON.stringify({ code: "X", message: "boom" }) }] } });
+    await tick();
+    expect(t.alert().hidden).toBe(false);
+    t.dispatch({ jsonrpc: "2.0", method: "ui/notifications/tool-input", params: { arguments: {} } });
+    expect(t.alert().hidden).toBe(true);
+    // Title: disabled reason replaces it, re-enabling restores it.
+    const titled = (extra: Record<string, unknown>) => ({ tag: "div", children: [{ tag: "button", attrs: { title: "Author tip", "data-wg-action": descriptor({ id: "children.0", kind: "http", args: {}, ...extra }) }, children: ["Go"] }] });
+    t.dispatch(toolResult({ tree: titled({ disabled: "scope" }), payload }));
+    expect(t.root().querySelector("button")?.getAttribute("title")).toContain("execute scope");
+    t.dispatch(toolResult({ tree: titled({}), payload }));
+    expect(t.root().querySelector("button")?.getAttribute("title")).toBe("Author tip");
+  });
+
+  it("an action inside a link does not also open the link", async () => {
+    const t = bootTemplate();
+    t.initialize({ serverTools: {} });
+    await tick();
+    t.dispatch(toolResult({ tree: { tag: "a", attrs: { href: "https://x.example" }, children: [{ tag: "button", attrs: { "data-wg-action": descriptor({ id: "children.0", kind: "prompt", text: "Hi" }) }, children: ["Hi"] }] }, payload }));
+    click(t.root().querySelector("button") as HTMLElement);
+    expect(t.count("ui/message")).toBe(1);
+    expect(t.count("ui/open-link")).toBe(0);
+  });
+});

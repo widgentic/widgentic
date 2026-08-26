@@ -14,25 +14,32 @@ import { checkGroupEnvelope, renderGroupContainer } from "./widgets/group.js";
 /**
  * Group composition: an item's action descriptors were compiled against
  * the ITEM's template, so they name the item's kind (`widget`) but not
- * where the item sits in the group payload. Stamping `at` here (nested
- * groups prefix outward) lets the server fold an action's result back
- * into the right item and re-render the whole group.
+ * where the item sits in the group payload. Stamping `at` lets the server
+ * fold an action's result back into the right item and re-render the whole
+ * group. Returns a NEW tree — renderers may hand back cached nodes, and
+ * composition must not mutate what a pure renderer returned. Groups do not
+ * nest, so the location is always one level: `data.items.<i>`.
  */
-function stampActionLocation(node: WidgetNode, prefix: string): void {
-  if (typeof node === "string") return;
+function stampActionLocation(node: WidgetNode, location: string): WidgetNode {
+  if (typeof node === "string") return node;
   const raw = node.attrs?.["data-wg-action"];
+  let attrs = node.attrs;
   if (typeof raw === "string") {
     try {
-      const descriptor = JSON.parse(raw) as { at?: unknown };
+      const descriptor = JSON.parse(raw) as Record<string, unknown>;
       if (typeof descriptor === "object" && descriptor !== null) {
-        descriptor.at = typeof descriptor.at === "string" ? `${prefix}.${descriptor.at}` : prefix;
-        node.attrs!["data-wg-action"] = JSON.stringify(descriptor);
+        attrs = { ...node.attrs, "data-wg-action": JSON.stringify({ ...descriptor, at: location }) };
       }
     } catch {
       /* not a descriptor */
     }
   }
-  for (const child of node.children ?? []) stampActionLocation(child, prefix);
+  const children = node.children?.map((child) => stampActionLocation(child, location));
+  return {
+    tag: node.tag,
+    ...(attrs !== undefined ? { attrs } : {}),
+    ...(children !== undefined ? { children } : {})
+  };
 }
 
 /**
@@ -150,8 +157,7 @@ export function createCatalog(): WidgetCatalog {
               }
             };
           }
-          stampActionLocation(sub.node, `data.items.${i}`);
-          children.push(sub.node);
+          children.push(stampActionLocation(sub.node, `data.items.${i}`));
         }
         return {
           ok: true,

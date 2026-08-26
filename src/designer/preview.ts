@@ -8,6 +8,7 @@
  * Invalid drafts freeze the last good render behind an error banner —
  * never a blank pane (the app-template error-state lesson).
  */
+import { isPlainObject } from "../shared/plain-object.js";
 import { createCatalog, widgetStylesToCss } from "widgentic/catalog";
 import type { WidgetRenderer } from "widgentic/catalog";
 import type { WidgetPayload } from "widgentic/contract";
@@ -32,10 +33,6 @@ export interface PreviewWidget {
   kind: string;
   template: unknown;
   descriptor?: unknown;
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export interface PreviewOptions {
@@ -72,7 +69,7 @@ export function createPreview(options: PreviewOptions = {}): PreviewController {
 
   const banner = h("div", { class: "wgd-banner" });
   banner.hidden = true;
-  const kindStyles = h("style") as HTMLStyleElement;
+  const kindStyles = h("style");
   const mountRoot = h("div", { class: "wgd-preview" });
   const pane = h("div", { class: "wgd-preview-pane" }, [banner, kindStyles, mountRoot]);
 

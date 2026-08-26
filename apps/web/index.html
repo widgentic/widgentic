@@ -90,6 +90,11 @@
   #signin-view { max-width: 460px; margin: 10vh auto; text-align: center; }
   #signin-view p { color: var(--host-muted); }
   .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+  .toolbar input {
+    font: inherit; font-size: 13px; padding: 4px 8px;
+    border: 1px solid var(--host-border); border-radius: 4px;
+    background: var(--host-panel); color: var(--host-text);
+  }
   /* Notifications: a banner under the header, where the eye already is. */
   #status {
     display: flex; align-items: center; gap: 12px;
@@ -123,8 +128,9 @@
 <main>
   <div id="signin-view" hidden>
     <h2>Your widgets, your catalog</h2>
-    <p>Sign in to design widgets and themes, create MCP API keys, and see
-       everything appear in your own catalog on the next tool call.</p>
+    <p>Sign in to design widgets, themes, schemas and actions, keep the secrets
+       your actions use, create MCP API keys, and see everything appear in your
+       own catalog on the next tool call.</p>
     <p>
       <a class="btn" href="/auth/login">Sign in with email</a>
       <a class="btn" href="/auth/github">Sign in with GitHub</a>
@@ -231,10 +237,7 @@
       <div class="toolbar" id="identity-actions" style="margin-bottom: 16px;"></div>
       <h3 style="margin: 4px 0 8px; font-size: 14px;">API keys</h3>
       <div class="toolbar">
-        <input id="key-name" placeholder="key name (e.g. laptop)"
-               style="font: inherit; font-size: 13px; padding: 4px 8px;
-                      border: 1px solid var(--host-border); border-radius: 4px;
-                      background: var(--host-panel); color: var(--host-text);">
+        <input id="key-name" placeholder="key name (e.g. laptop)">
         <label class="muted" title="Lets widgets run http actions with your secrets">
           <input type="checkbox" id="key-execute"> execute
         </label>

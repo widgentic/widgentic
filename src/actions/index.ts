@@ -24,11 +24,12 @@ export {
 } from "./types.js";
 export {
   collectSecretRefs,
+  isDataPath,
   validateActionBinding,
   validateActionDefinition,
   validateLoadBinding
 } from "./validate.js";
-export type { BindingCheckOptions } from "./validate.js";
+export type { BindingCheckOptions, DefinitionCheckOptions } from "./validate.js";
 export { applyOutput, buildRequest, getAtPath, setAtPath, validateArgs } from "./execute.js";
 export type {
   ActionExecutionError,

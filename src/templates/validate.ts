@@ -1,5 +1,6 @@
+import { isPlainObject } from "../shared/plain-object.js";
 import type { TemplateError, WidgetTemplate } from "./types.js";
-import { FORBIDDEN_ATTR, MAX_TEMPLATE_DEPTH, RESERVED_ATTR } from "./guards.js";
+import { FORBIDDEN_ATTR, FORBIDDEN_TAGS, MAX_TEMPLATE_DEPTH, RESERVED_ATTR } from "./guards.js";
 import { parsePath } from "./paths.js";
 import { validateActionBinding } from "../actions/validate.js";
 
@@ -22,10 +23,6 @@ export class InvalidTemplateError extends Error {
     this.name = "InvalidTemplateError";
     this.templateError = error;
   }
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function join(path: string, segment: string): string {
@@ -104,6 +101,13 @@ function check(node: unknown, path: string, depth: number): TemplateError | unde
     if (typeof node.tag !== "string" || node.tag.length === 0) {
       return nodeError("'tag' must be a non-empty string.", path);
     }
+    if (FORBIDDEN_TAGS.has(node.tag.toLowerCase())) {
+      return {
+        code: "FORBIDDEN_TAG",
+        message: `Element '${node.tag}' is not allowed in templates (active or foreign content).`,
+        path
+      };
+    }
     if ("attrs" in node && node.attrs !== undefined) {
       if (!isPlainObject(node.attrs)) {
         return nodeError("'attrs' must be an object.", path);
@@ -113,7 +117,7 @@ function check(node: unknown, path: string, depth: number): TemplateError | unde
         if (FORBIDDEN_ATTR.test(name)) {
           return {
             code: "FORBIDDEN_ATTRIBUTE",
-            message: `Event-handler attribute '${name}' is not allowed in templates.`,
+            message: `Attribute '${name}' is not allowed in templates (event handlers and srcdoc).`,
             path: attrPath
           };
         }

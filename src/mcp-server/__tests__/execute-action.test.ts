@@ -206,7 +206,7 @@ describe("model-facing action notes", () => {
     const liveText = String(handleRenderWidget(live.value, { widget: "weather", data: payload.data }, {
       actions: { load: live.actions!.load, resolve: live.actions!.resolve, executeAllowed: true }
     }).content[0]?.text);
-    expect(liveText).toContain("1 http action that run server-side");
+    expect(liveText).toContain("1 http action that runs server-side");
     expect(liveText).toContain("it loads its data on first render");
     expect(liveText).toContain("You do not call execute_action yourself");
     const plain = String(handleRenderWidget(live.value, { widget: "card", data: { title: "x" } }).content[0]?.text);
@@ -249,5 +249,55 @@ describe("actions inside group renders", () => {
     expect(errorOf(await run({ widget: "group", action: "children.1", at: "data.items.5", item: "weather", payload: group }, () => jsonResponse(200, {}))).code).toBe("INVALID_TYPE");
     expect(errorOf(await run({ widget: "group", action: "children.1", at: "data.items.1", item: "weather", payload: group }, () => jsonResponse(200, {}))).code).toBe("INVALID_TYPE");
     expect(errorOf(await run({ widget: "group", action: "children.1", payload: group }, () => jsonResponse(200, {}))).code).toBe("UNKNOWN_ACTION");
+  });
+});
+
+describe("hardening: execute_action input and error hygiene", () => {
+  it("refuses empty ids and stray locations before fetching", async () => {
+    const { run, calls } = await rig();
+    expect(errorOf(await run({ widget: "weather", action: "", payload }, () => jsonResponse(200, {}))).code).toBe("MISSING_FIELD");
+    expect(errorOf(await run({ widget: "weather", action: "children.1", at: "meta.x", item: "weather", args: { city: "Oslo" }, payload }, () => jsonResponse(200, {})))).toMatchObject({ code: "INVALID_TYPE", path: "at" });
+    expect(calls).toHaveLength(0);
+  });
+
+  it("never echoes store or vault error text; names the referencing field for unknown secrets", async () => {
+    const { composed } = await rig();
+    const result = await handleExecuteAction(composed.value, { widget: "weather", action: "children.1", args: { city: "Oslo" }, payload }, {
+      actions: composed.actions,
+      scopes: ["read", "execute"],
+      secrets: async () => { throw new Error("KeyVault https://kv.vault.azure.net/keys/kek/abc unreachable"); },
+      fetchDeps: { lookupImpl: async () => ["93.184.216.34"], fetchImpl: async () => jsonResponse(200, {}) }
+    });
+    const error = errorOf(result);
+    expect(error.code).toBe("ACTION_FETCH_FAILED");
+    expect(JSON.stringify(result)).not.toContain("kv.vault.azure.net");
+    const missing = await rig(["read", "execute"], null);
+    expect(errorOf(await missing.run({ widget: "weather", action: "children.1", args: { city: "Oslo" }, payload }, () => jsonResponse(200, {})))).toMatchObject({ code: "UNKNOWN_SECRET", path: "headers.Authorization" });
+  });
+
+  it("testHttpAction validates the definition before doing anything", async () => {
+    const { testHttpAction } = await import("../index.js");
+    const malformed = await testHttpAction({ kind: "http" }, {}, {});
+    expect(malformed).toMatchObject({ ok: false, code: "INVALID_ACTION_INPUT" });
+    const prompt = await testHttpAction({ kind: "prompt", text: ["x"] }, {}, {});
+    expect(prompt).toMatchObject({ ok: false, code: "ACTION_NOT_HTTP" });
+  });
+
+  it("notes count bindings, not repeated rows, and agree in number", async () => {
+    const store = createMemoryStore([{
+      principal: { id: "alice", scopes: ["read", "execute"] },
+      widgets: [{
+        kind: "rows",
+        template: { tag: "ul", children: [{ each: "rows", template: { tag: "button", action: { ref: "refresh", input: { city: "city" } }, children: ["Go"] } }] },
+        descriptor: { description: "rows", dataShape: "{ rows }" }
+      }],
+      actions: [refresh]
+    }]);
+    const composed = await composeCatalog(store, "alice");
+    const text = String(handleRenderWidget(composed.value, { widget: "rows", data: { rows: Array.from({ length: 20 }, (_, i) => ({ city: `c${i}` })) } }, {
+      actions: { load: composed.actions!.load, resolve: composed.actions!.resolve, executeAllowed: true }
+    }).content[0]?.text);
+    expect(text).toContain("1 http action that runs server-side");
+    expect(text).not.toContain("20 http");
   });
 });

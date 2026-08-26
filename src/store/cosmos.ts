@@ -37,15 +37,19 @@ import { CosmosClient } from "@azure/cosmos";
 import type { TokenCredential } from "@azure/identity";
 import type { ThemeEntry } from "widgentic/theming";
 import type { StoredAction } from "widgentic/actions";
-import {
-  checkSecretName,
-  decryptSecret,
-  encryptSecret,
-  SecretError
-} from "widgentic/secrets";
-import type { SecretCipher } from "widgentic/secrets";
+import { checkSecretName, decryptSecret, encryptSecret } from "widgentic/secrets";
+import type { EnvelopeRecord, SecretCipher } from "widgentic/secrets";
+import { asStoreRejection } from "./errors.js";
 import { generateKey, hashKey } from "./keys.js";
-import { referencesToSecret, widgetsReferencingAction } from "./memory.js";
+import {
+  isGetHttp,
+  loadRefOf,
+  looseAction,
+  looseWidget,
+  referencesToSecret,
+  widgetsLoadingAction,
+  widgetsReferencingAction
+} from "./refs.js";
 import type {
   CreatedKey,
   Principal,
@@ -296,6 +300,26 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
     return resources;
   }
 
+  // Integrity scans read RAW docs: a widget the validator rejects today
+  // still holds its references, and a delete must not slip past it.
+  async function rawWidgets(principalId: string): Promise<StoredWidget[]> {
+    const out: StoredWidget[] = [];
+    for (const raw of await listByPrefix(principalId, "widget:")) {
+      const widget = looseWidget((raw as Partial<WidgetDoc>).widget);
+      if (widget !== undefined) out.push(widget);
+    }
+    return out;
+  }
+
+  async function rawActions(principalId: string): Promise<StoredAction[]> {
+    const out: StoredAction[] = [];
+    for (const raw of await listByPrefix(principalId, "action:")) {
+      const action = looseAction((raw as Partial<ActionDoc>).action);
+      if (action !== undefined) out.push(action);
+    }
+    return out;
+  }
+
   const store: WritableWidgetStore = {
     async resolvePrincipal(apiKey) {
       if (typeof apiKey !== "string" || apiKey === "") return undefined;
@@ -316,16 +340,7 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
     },
 
     async widgets(principalId) {
-      const { resources } = await data.items
-        .query(
-          {
-            query:
-              "SELECT * FROM c WHERE c.principalId = @p AND STARTSWITH(c.id, 'widget:')",
-            parameters: [{ name: "@p", value: principalId }]
-          },
-          { partitionKey: principalId }
-        )
-        .fetchAll();
+      const resources = await listByPrefix(principalId, "widget:");
       const out: StoredWidget[] = [];
       for (const raw of resources) {
         const doc = raw as WidgetDoc;
@@ -346,16 +361,7 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
     },
 
     async themes(principalId) {
-      const { resources } = await data.items
-        .query(
-          {
-            query:
-              "SELECT * FROM c WHERE c.principalId = @p AND STARTSWITH(c.id, 'theme:')",
-            parameters: [{ name: "@p", value: principalId }]
-          },
-          { partitionKey: principalId }
-        )
-        .fetchAll();
+      const resources = await listByPrefix(principalId, "theme:");
       const out: ThemeEntry[] = [];
       for (const raw of resources) {
         const doc = raw as ThemeDoc;
@@ -390,6 +396,19 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
           throw new StoreRejectionError(
             "UNKNOWN_SCHEMA",
             `widget references missing schema '${ref}'.`
+          );
+        }
+      }
+      // A `load` through a shared action needs that action to be a GET now;
+      // a dangling ref stays non-fatal (it renders disabled).
+      const loadRef = loadRefOf(widget);
+      if (loadRef !== undefined) {
+        const { resource: actionDoc } = await data.item(`action:${loadRef}`, principalId).read();
+        const shared = looseAction((actionDoc as Partial<ActionDoc> | undefined)?.action);
+        if (shared !== undefined && !isGetHttp(shared.definition)) {
+          throw new StoreRejectionError(
+            "INVALID_ACTION",
+            `load references '${loadRef}', which is not an http GET action.`
           );
         }
       }
@@ -436,16 +455,7 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
     },
 
     async schemas(principalId) {
-      const { resources } = await data.items
-        .query(
-          {
-            query:
-              "SELECT * FROM c WHERE c.principalId = @p AND STARTSWITH(c.id, 'schema:')",
-            parameters: [{ name: "@p", value: principalId }]
-          },
-          { partitionKey: principalId }
-        )
-        .fetchAll();
+      const resources = await listByPrefix(principalId, "schema:");
       const out: StoredSchema[] = [];
       for (const raw of resources) {
         const doc = raw as SchemaDoc;
@@ -503,7 +513,7 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
         }
         out.push(doc.action);
       }
-      return out;
+      return out.slice(0, limits.maxActions);
     },
 
     async putAction(principalId, action) {
@@ -521,6 +531,15 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
           );
         }
       }
+      if (!isGetHttp(action.definition)) {
+        const loaders = widgetsLoadingAction(await rawWidgets(principalId), action.name);
+        if (loaders.length > 0) {
+          throw new StoreRejectionError(
+            "ACTION_IN_USE",
+            `action '${action.name}' is the load of: ${loaders.join(", ")}; a load must stay an http GET.`
+          );
+        }
+      }
       const doc: ActionDoc = { id, principalId, action };
       try {
         await data.items.upsert(doc);
@@ -532,7 +551,7 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
     async removeAction(principalId, name) {
       // In-use guard: bindings live inside templates, so the scan is in
       // code over the principal's own widgets (one single-partition query).
-      const referencing = widgetsReferencingAction(await store.widgets(principalId), name);
+      const referencing = widgetsReferencingAction(await rawWidgets(principalId), name);
       if (referencing.length > 0) {
         throw new StoreRejectionError(
           "ACTION_IN_USE",
@@ -555,7 +574,11 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
           log(`widgentic store: skipping malformed secret doc '${doc.id}' for ${principalId}.`);
           continue;
         }
-        out.push({ name: doc.name, createdAt: doc.createdAt, updatedAt: doc.updatedAt });
+        out.push({
+          name: doc.name,
+          createdAt: typeof doc.createdAt === "string" ? doc.createdAt : "",
+          updatedAt: typeof doc.updatedAt === "string" ? doc.updatedAt : ""
+        });
       }
       return out;
     },
@@ -563,9 +586,18 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
     async secretValue(principalId, name) {
       const cipher = requireCipher();
       if (checkSecretName(name) !== undefined) return undefined;
-      const { resource } = await data.item(`secret:${name}`, principalId).read();
+      let resource: unknown;
+      try {
+        ({ resource } = await data.item(`secret:${name}`, principalId).read());
+      } catch (error) {
+        throw operationError("secretValue", error);
+      }
       if (resource === undefined) return undefined;
-      return decryptSecret((resource as SecretDoc).record, cipher);
+      try {
+        return await decryptSecret((resource as SecretDoc).record, cipher);
+      } catch (error) {
+        throw asStoreRejection(error, "secret could not be decrypted.");
+      }
     },
 
     async putSecret(principalId, name, value) {
@@ -584,12 +616,11 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
           );
         }
       }
-      let record;
+      let record: EnvelopeRecord;
       try {
         record = await encryptSecret(value, cipher);
       } catch (error) {
-        if (error instanceof SecretError) throw new StoreRejectionError(error.code, error.message);
-        throw error;
+        throw asStoreRejection(error, "secret could not be encrypted.");
       }
       const now = new Date().toISOString();
       const existing = resource as SecretDoc | undefined;
@@ -610,8 +641,8 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
 
     async removeSecret(principalId, name) {
       const [actions, widgets] = await Promise.all([
-        store.actions(principalId),
-        store.widgets(principalId)
+        rawActions(principalId),
+        rawWidgets(principalId)
       ]);
       const referencing = referencesToSecret(actions, widgets, name);
       if (referencing.length > 0) {
@@ -830,7 +861,7 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
         ) {
           throw new StoreRejectionError(
             "SUBJECT_IN_USE",
-            "subject already owns an account with content — remove its widgets, themes, schemas, and keys first."
+            "subject already owns an account with content — remove its widgets, themes, schemas, actions, secrets, and keys first."
           );
         }
       }

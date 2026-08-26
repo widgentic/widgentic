@@ -6,7 +6,9 @@
  * `validateTemplate`, which surfaces as diagnostics pinned to the node
  * path without ever losing the draft.
  */
-import type { DataSchema } from "widgentic/catalog";
+import { errorMessage } from "../shared/error-message.js";
+import { collectActionRefs } from "widgentic/templates";
+import { isPlainObject } from "../shared/plain-object.js";
 import type { WidgetTemplate } from "widgentic/templates";
 import type { ActionBinding, StoredAction } from "widgentic/actions";
 import { createBindingEditor } from "./action-editor.js";
@@ -62,10 +64,6 @@ function itemScope(scope: unknown, eachPath: string): unknown {
 }
 
 const REMOVE = Symbol("remove");
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function pathString(path: Path): string {
   let out = "";
@@ -139,22 +137,37 @@ export interface TemplateActionContext {
   schemas: SchemaEntry[];
 }
 
+export interface TemplatePanelOptions {
+  actionContext?: TemplateActionContext;
+}
+
+/** A bound attribute value, narrowed once per attribute row (a type literal: comparable with the raw record). */
+type AttrBind = {
+  bind: string;
+  prefix?: string;
+  map?: Record<string, string>;
+  default?: string;
+};
+
 export function mountTemplatePanel(
   store: DraftStore,
   refreshers: ((draft: WidgetDraft) => void)[],
-  actionContext: TemplateActionContext = { actions: [], secretNames: [], schemas: [] }
+  options: TemplatePanelOptions = {}
 ): {
   element: HTMLElement;
   refresh(draft: WidgetDraft, diagnostics: DesignerDiagnostics): void;
   dispose(): void;
 } {
+  const actionContext: TemplateActionContext = options.actionContext ?? { actions: [], secretNames: [], schemas: [] };
+  // Shared refs the draft binds that no supplied action answers to.
+  let unknownRefs = new Set<string>();
   const treeHost = h("div", { class: "wgd-tree" });
   const jsonError = diagnosticLine(undefined);
   const jsonArea = h("textarea", {
     class: "wgd-textarea wgd-template-json",
     rows: "14",
     spellcheck: "false"
-  }) as HTMLTextAreaElement;
+  });
   const jsonWrap = h("div", undefined, [jsonArea, jsonError]);
   attachJsonHighlight(jsonArea);
   jsonWrap.hidden = true;
@@ -199,7 +212,7 @@ export function mountTemplatePanel(
     } catch (error) {
       jsonError.hidden = false;
       jsonError.textContent = `Invalid JSON (template keeps the last valid value): ${String(
-        (error as Error).message
+        errorMessage(error)
       )}`;
     }
   });
@@ -210,7 +223,7 @@ export function mountTemplatePanel(
     onCommit: (value: string) => void,
     className = "wgd-input wgd-node-value"
   ): HTMLInputElement {
-    const input = h("input", { type: "text", class: className }) as HTMLInputElement;
+    const input = h("input", { type: "text", class: className });
     input.value = value;
     input.addEventListener("change", () => onCommit(input.value));
     return input;
@@ -330,7 +343,7 @@ export function mountTemplatePanel(
     if (options.length === 0) {
       return changeInput(value, onCommit, className);
     }
-    const select = h("select", { class: "wgd-select wgd-path" }) as HTMLSelectElement;
+    const select = h("select", { class: "wgd-select wgd-path" });
     const known = options.includes(value);
     for (const option of known ? options : [value, ...options]) {
       select.append(
@@ -360,7 +373,7 @@ export function mountTemplatePanel(
   }
 
   function tagControl(tag: string, onCommit: (tag: string) => void): HTMLElement {
-    const select = h("select", { class: "wgd-select wgd-tag" }) as HTMLSelectElement;
+    const select = h("select", { class: "wgd-select wgd-tag" });
     const options = TAG_OPTIONS.includes(tag) ? TAG_OPTIONS : [tag, ...TAG_OPTIONS];
     for (const option of options) {
       select.append(h("option", { value: option }, [option]));
@@ -530,17 +543,13 @@ export function mountTemplatePanel(
       const attrs = isPlainObject(node.attrs) ? node.attrs : {};
       const binding = isPlainObject(node.action) ? (node.action as ActionBinding) : undefined;
       const attrRows = Object.entries(attrs).map(([name, value]) => {
-        const isBind = isPlainObject(value) && typeof value.bind === "string";
         // The bind's transform fields, when present. Every write goes
         // through rebuild() so editing one field never drops the others.
-        const bindValue = isBind
-          ? (value as {
-              bind: string;
-              prefix?: string;
-              map?: Record<string, string>;
-              default?: string;
-            })
-          : undefined;
+        // `bound` is meaningful only while `isBind`; narrowed once here.
+        const bound: AttrBind =
+          isPlainObject(value) && typeof value.bind === "string" ? (value as AttrBind) : { bind: "" };
+        const isBind = isPlainObject(value) && typeof value.bind === "string";
+        const bindValue = isBind ? bound : undefined;
         const rebuild = (fields: {
           bind: string;
           prefix?: string | undefined;
@@ -571,26 +580,25 @@ export function mountTemplatePanel(
           },
           "wgd-input wgd-attr-name"
         );
-        const mode = h("select", { class: "wgd-select wgd-attr-mode" }) as HTMLSelectElement;
+        const mode = h("select", { class: "wgd-select wgd-attr-mode" });
         mode.append(h("option", { value: "literal" }, ["literal"]));
         mode.append(h("option", { value: "bind" }, ["bind"]));
         mode.value = isBind ? "bind" : "literal";
         fitSelect(mode);
-        // Literal: free text. Bind: the same path dropdown the bind/each/when
-        // nodes use (observed live: img src/alt binds were plain text boxes).
+        // Literal: free text. Bind: the same path dropdown the bind/each/when nodes use.
         const literalInput = changeInput(String(isBind ? "" : value), (next) => setAttr(next), "wgd-input wgd-attr-value");
         const valueInput: HTMLElement = isBind
           ? pathControl(
-              bindValue!.bind,
+              bound.bind,
               scope,
               "bind",
-              (next) => setAttr(rebuild({ ...bindValue!, bind: next })),
+              (next) => setAttr(rebuild({ ...bound, bind: next })),
               "wgd-input wgd-attr-value"
             )
           : literalInput;
         mode.addEventListener("change", () => {
           // Switching modes carries the current text across as a starting point.
-          const current = isBind ? bindValue!.bind : literalInput.value;
+          const current = isBind ? bound.bind : literalInput.value;
           setAttr(mode.value === "bind" ? { bind: current || "." } : current);
         });
         const removeAttr = h("button", { class: "wgd-icon", type: "button", title: "Remove attribute" }, ["✕"]);
@@ -608,7 +616,7 @@ export function mountTemplatePanel(
           // active — one transform per value, mirroring the validator.
           const prefixInput = changeInput(
             bindValue?.prefix ?? "",
-            (next) => setAttr(rebuild({ ...bindValue!, map: undefined, prefix: next })),
+            (next) => setAttr(rebuild({ ...bound, map: undefined, prefix: next })),
             "wgd-input wgd-attr-prefix"
           );
           prefixInput.placeholder = "prefix";
@@ -622,31 +630,32 @@ export function mountTemplatePanel(
             ["map"]
           );
           addMap.addEventListener("click", () =>
-            setAttr(rebuild({ ...bindValue!, prefix: undefined, map: {} }))
+            setAttr(rebuild({ ...bound, prefix: undefined, map: {} }))
           );
           row.push(h("span", { class: "wgd-node-icons" }, [addMap, removeAttr]));
         } else {
           row.push(removeAttr);
         }
 
-        const parts: (Node | string)[] = [h("div", { class: "wgd-attr-row" }, row)];
+        const attrRow = h("div", { class: "wgd-attr-row" }, row);
+        const parts: (Node | string)[] = [attrRow];
         if (isBind && hasMap) {
           // The map block: data value → authored literal rows, plus the
           // miss default. Emptying the record drops the transform.
           const mapEditor = createRecordEditor(
-            bindValue!.map,
+            bound.map,
             { key: "data value", value: "authored literal", add: "+ mapping" },
             (nextMap) => {
               setAttr(
                 nextMap === undefined
-                  ? { bind: bindValue!.bind }
-                  : rebuild({ ...bindValue!, map: nextMap })
+                  ? { bind: bound.bind }
+                  : rebuild({ ...bound, map: nextMap })
               );
             }
           );
           const defaultInput = changeInput(
-            bindValue!.default ?? "",
-            (next) => setAttr(rebuild({ ...bindValue!, default: next })),
+            bound.default ?? "",
+            (next) => setAttr(rebuild({ ...bound, default: next })),
             "wgd-input wgd-attr-map-default"
           );
           defaultInput.placeholder = "default (on miss)";
@@ -661,7 +670,7 @@ export function mountTemplatePanel(
           );
         }
         return parts.length === 1
-          ? (parts[0] as HTMLElement)
+          ? attrRow
           : h("div", { class: "wgd-attr" }, parts);
       });
       const childNodes = Array.isArray(node.children) ? (node.children as unknown[]) : [];
@@ -696,29 +705,32 @@ export function mountTemplatePanel(
       if (attrRows.length > 0) body.push(h("div", { class: "wgd-attrs" }, attrRows));
       // Action binding: the element becomes activatable in Apps hosts. The
       // editor commits the whole binding; `undefined` drops the key.
-      const scopePaths = isPlainObject(scope) ? pathOptions(scope, "when") : [];
-      const bindingEditor = createBindingEditor(
-        binding,
-        {
-          ...actionContext,
-          scopePaths,
-          // The widget's effective data schema drives output-map targets.
-          getDataSchema: () => effectiveDataSchema(store.get(), actionContext.schemas)
-        },
-        (next) => {
-          if (next === undefined) {
-            const { action: _gone, ...rest } = node;
-            commitAt(path, rest);
-          } else {
-            commitAt(path, { ...node, action: next });
-          }
-        }
-      );
       if (binding !== undefined) {
-        body.push(h("div", { class: "wgd-attrs wgd-node-action" }, [
-          h("span", { class: "wgd-slot-label" }, ["action"]),
-          bindingEditor.element
-        ]));
+        const scopePaths = isPlainObject(scope) ? pathOptions(scope, "when") : [];
+        const bindingEditor = createBindingEditor(
+          binding,
+          {
+            ...actionContext,
+            scopePaths,
+            // The widget's effective data schema drives output-map targets.
+            getDataSchema: () => effectiveDataSchema(store.get(), actionContext.schemas)
+          },
+          (next) => {
+            if (next === undefined) {
+              const { action: _gone, ...rest } = node;
+              commitAt(path, rest);
+            } else {
+              commitAt(path, { ...node, action: next });
+            }
+          }
+        );
+        const actionParts: (Node | string)[] = [h("span", { class: "wgd-slot-label" }, ["action"]), bindingEditor.element];
+        // An unknown shared ref is flagged at the element carrying it.
+        const ref = "ref" in binding && typeof binding.ref === "string" ? binding.ref : undefined;
+        if (ref !== undefined && unknownRefs.has(ref)) {
+          actionParts.push(diagnosticLine(`Unknown shared action '${ref}' — this element renders disabled.`));
+        }
+        body.push(h("div", { class: "wgd-attrs wgd-node-action" }, actionParts));
       }
       if (childNodes.length > 0) {
         body.push(
@@ -777,8 +789,7 @@ export function mountTemplatePanel(
   /** Rebuild the tree from the last refresh inputs (collapse toggles). */
   function renderTree(): void {
     if (lastDraft === undefined) return;
-    // Shared refs resolve like inline schemas — a ref-based widget gets
-    // the same path completions (observed live: plain text boxes otherwise).
+    // Shared refs resolve like inline schemas — a ref-based widget gets the same path completions.
     treeHost.replaceChildren(
       renderNode(
         lastDraft.template,
@@ -797,13 +808,16 @@ export function mountTemplatePanel(
       : undefined;
     lastDraft = draft;
     lastErrorPath = diagnostics.template?.path;
-    templateDiag.hidden = diagnostics.template === undefined;
-    templateDiag.textContent = diagnostics.template
+    const known = new Set(actionContext.actions.map((action) => action.name));
+    unknownRefs = new Set(collectActionRefs(draft.template, draft.load).filter((ref) => !known.has(ref)));
+    const templateMessage = diagnostics.template
       ? `${diagnostics.template.code}: ${diagnostics.template.message}` +
         (diagnostics.template.path !== undefined && diagnostics.template.path !== ""
           ? ` (at ${diagnostics.template.path})`
           : "")
-      : "";
+      : diagnostics.actionRefs;
+    templateDiag.hidden = templateMessage === undefined;
+    templateDiag.textContent = templateMessage ?? "";
     if (!treeHost.hidden || treeHost.childNodes.length === 0) {
       renderTree();
     }

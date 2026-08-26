@@ -7,6 +7,7 @@
  * cheap. Every entry is re-validated on the way in — the store is
  * untrusted input, even when it is ours.
  */
+import { errorMessage } from "../shared/error-message.js";
 import { createCatalog } from "widgentic/catalog";
 import type { WidgetCatalog } from "widgentic/catalog";
 import type { ActionBinding, ActionDefinition, StoredAction } from "widgentic/actions";
@@ -14,9 +15,9 @@ import {
   collectActionRefs,
   DEFAULT_MAX_NODES,
   findActionBinding,
-  hasActionBindings,
   registerTemplate
 } from "widgentic/templates";
+import { isPlainObject } from "../shared/plain-object.js";
 import { createThemeRegistry } from "widgentic/theming";
 import type { ThemeRegistry } from "widgentic/theming";
 import type { StoreLimits, StoredWidget, WidgetStore } from "./types.js";
@@ -57,8 +58,17 @@ export interface ComposeResult<T> {
   value: T;
   /** Entries skipped, and why. Never thrown — visible, not fatal. */
   diagnostics: string[];
-  /** Present on catalog composition. */
-  actions?: ActionSource;
+}
+
+/** Catalog composition also hands back the action source the server acts on. */
+export interface CatalogComposeResult extends ComposeResult<WidgetCatalog> {
+  actions: ActionSource;
+}
+
+/** Shared-action refs of an entry that has not been validated yet; none for a malformed one. */
+function refsOf(entry: unknown): string[] {
+  if (!isPlainObject(entry) || !isPlainObject(entry.template)) return [];
+  return collectActionRefs(entry.template, entry.load);
 }
 
 /**
@@ -71,7 +81,7 @@ export async function composeCatalog(
   store: WidgetStore | undefined,
   principalId: string,
   options: ComposeOptions = {}
-): Promise<ComposeResult<WidgetCatalog>> {
+): Promise<CatalogComposeResult> {
   const limits = options.limits ?? DEFAULT_LIMITS;
   const maxNodes = options.maxNodes ?? DEFAULT_MAX_NODES;
   const executeAllowed = options.executeAllowed ?? true;
@@ -81,8 +91,7 @@ export async function composeCatalog(
   const stored = store === undefined ? [] : await store.widgets(principalId);
   const entries = [...(options.extraWidgets ?? []), ...stored];
 
-  // Shared schemas load once per compose, and only when some widget
-  // actually carries a ref — the join this feature adds is one read.
+  // Shared schemas load once per compose, and only when some widget carries a ref.
   const needsSchemas = entries.some(
     (entry) => (entry as StoredWidget)?.descriptor?.dataSchemaRef !== undefined
   );
@@ -93,14 +102,24 @@ export async function composeCatalog(
     }
   }
 
-  // Shared actions likewise: one read, only when some widget binds anything.
-  const needsActions = entries.some((entry) =>
-    hasActionBindings((entry as StoredWidget)?.template, (entry as StoredWidget)?.load)
-  );
+  // Shared actions likewise: one read, only when some widget binds by `ref`
+  // (inline definitions need nothing from the store).
+  const needsActions = entries.some((entry) => refsOf(entry).length > 0);
   const actionByName = new Map<string, StoredAction>();
   if (needsActions && store !== undefined) {
     for (const action of await store.actions(principalId)) {
-      if (checkStoredAction(action, limits) === undefined) actionByName.set(action.name, action);
+      if (actionByName.size >= limits.maxActions) {
+        diagnostics.push(`stopped at the ${limits.maxActions}-action limit; later actions were skipped.`);
+        break;
+      }
+      const problem = checkStoredAction(action, limits);
+      if (problem !== undefined) {
+        diagnostics.push(
+          `skipped action '${String((action as Partial<StoredAction>)?.name)}': ${problem.code} — ${problem.message}`
+        );
+        continue;
+      }
+      actionByName.set(action.name, action);
     }
   }
   const resolve = (ref: string): ActionDefinition | undefined => actionByName.get(ref)?.definition;
@@ -158,7 +177,7 @@ export async function composeCatalog(
       // Duplicate kinds within a principal's own set, or anything the
       // catalog refuses: skip and keep going.
       diagnostics.push(
-        `skipped widget '${entry.kind}': ${(error as Error).message}`
+        `skipped widget '${entry.kind}': ${errorMessage(error)}`
       );
     }
   }
@@ -206,7 +225,7 @@ export async function composeThemes(
       registry.register(entry);
       registered++;
     } catch (error) {
-      diagnostics.push(`skipped theme '${entry.name}': ${(error as Error).message}`);
+      diagnostics.push(`skipped theme '${entry.name}': ${errorMessage(error)}`);
     }
   }
 

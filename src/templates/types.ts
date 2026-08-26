@@ -68,7 +68,8 @@ export type TemplateErrorCode =
   | "FORBIDDEN_ATTRIBUTE"
   | "TEMPLATE_TOO_DEEP"
   | "INVALID_ACTION"
-  | "CONFLICTING_ATTRIBUTES";
+  | "CONFLICTING_ATTRIBUTES"
+  | "FORBIDDEN_TAG";
 
 /**
  * Structured validation error. `path` is the dotted location of the

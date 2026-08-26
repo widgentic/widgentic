@@ -230,26 +230,22 @@ export function createWidgenticServer(
     {
       description: EXECUTE_ACTION_TOOL.description,
       _meta: {
-        ui: { resourceUri: WIDGENTIC_APP_TEMPLATE_URI, visibility: ["app" as const] }
+        ui: { resourceUri: WIDGENTIC_APP_TEMPLATE_URI, visibility: ["app"] }
       },
-      inputSchema: {
-        widget: z.string().describe("The rendered widget's kind."),
-        action: z
-          .string()
-          .describe('Binding identifier: the element\'s dotted template path, or "load".'),
-        args: z
-          .record(z.string(), z.unknown())
-          .optional()
-          .describe("Arguments as resolved in the element's descriptor."),
-        payload: z
-          .record(z.string(), z.unknown())
-          .describe("The widget's current payload { kind, data, hints?, meta? }."),
-        at: z
-          .string()
-          .optional()
-          .describe("Inside a group: dotted path of the item payload within 'payload' (e.g. data.items.2)."),
-        item: z.string().optional().describe("Inside a group: the item's kind.")
-      }
+      // Descriptions come from definitions.ts, exactly as render_widget's do,
+      // so the wire schema cannot drift from the documented one.
+      inputSchema: (() => {
+        const docs = EXECUTE_ACTION_TOOL.inputSchema.properties as Record<string, { description?: string }>;
+        const doc = (field: string) => docs[field]?.description ?? "";
+        return {
+          widget: z.string().describe(doc("widget")),
+          action: z.string().describe(doc("action")),
+          args: z.record(z.string(), z.unknown()).optional().describe(doc("args")),
+          payload: z.record(z.string(), z.unknown()).describe(doc("payload")),
+          at: z.string().optional().describe(doc("at")),
+          item: z.string().optional().describe(doc("item"))
+        };
+      })()
     },
     async (args) => {
       const result = (await handleExecuteAction(catalog, args, {

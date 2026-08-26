@@ -10,21 +10,18 @@
  *
  * The fetch is SSRF-guarded: https only, private/reserved addresses
  * rejected on every redirect hop, `image/*` content type required, byte
- * and time caps, bounded image count per render. Residual DNS-rebinding
- * TOCTOU is accepted at this stage (documented in the change design).
+ * and time caps, bounded image count per render. DNS is resolved once and
+ * the connection pinned to the checked address (guarded-fetch), so a
+ * rebinding resolver cannot swap in a private target between check and use.
  */
 import type { WidgetElementNode, WidgetNode } from "../catalog/index.js";
 import { WIDGENTIC_APP_MIME_TYPE } from "./definitions.js";
 import {
   defaultLookup,
-  isPrivateAddress,
   pinnedHttpsFetch,
   resolvePublicAddress
 } from "./guarded-fetch.js";
-import type { PinnedRequestInit } from "./guarded-fetch.js";
-
-export { isPrivateAddress };
-export type { PinnedRequestInit };
+import type { Lookup, PinnedFetch } from "./guarded-fetch.js";
 
 const REDIRECT_LIMIT = 3;
 const TIMEOUT_MS = 4000;
@@ -40,9 +37,9 @@ const CACHE_MAX = 50;
 
 /** Injectable dependencies so tests can run without network or DNS. */
 export interface InlineImageDeps {
-  fetchImpl?: (url: string, init: PinnedRequestInit) => Promise<Response>;
+  fetchImpl?: PinnedFetch;
   /** Resolve a hostname to its addresses (defaults to node:dns lookup). */
-  lookupImpl?: (hostname: string) => Promise<string[]>;
+  lookupImpl?: Lookup;
   /**
    * Deployment-declared resource domains (lowercased hostnames): sources
    * on these hosts are left un-inlined — the frame is allowed to load

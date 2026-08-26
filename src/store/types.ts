@@ -23,6 +23,8 @@ export type Scope = "read" | "write" | "execute";
 export const KEY_SCOPES: readonly Scope[] = ["read", "execute"];
 
 export type { StoredAction } from "widgentic/actions";
+import type { SecretErrorCode } from "widgentic/secrets";
+import type { EntryProblem } from "./validate.js";
 
 /** A secret as listings show it: never a value, preview or length. */
 export interface SecretEntry {
@@ -231,7 +233,7 @@ export interface WritableWidgetStore extends WidgetStore {
    * always included; only {@link KEY_SCOPES} are accepted). The raw key is
    * returned here and never again.
    */
-  createKey(principalId: string, name: string, scopes?: Scope[]): Promise<CreatedKey>;
+  createKey(principalId: string, name: string, scopes?: readonly Scope[]): Promise<CreatedKey>;
   /** The principal's keys — metadata only, never raw material. */
   listKeys(principalId: string): Promise<StoredKey[]>;
   /** Stamp one key revoked; the principal's other keys are untouched. */
@@ -249,12 +251,37 @@ export function principalIdForSubject(subject: string): string {
   return `usr_${createHash("sha256").update(subject, "utf8").digest("hex").slice(0, 24)}`;
 }
 
-/** Refusal from a write, carrying which rule said no. */
+/** Every rule a store can say no with. */
+export type StoreRejectionCode =
+  | EntryProblem["code"]
+  | SecretErrorCode
+  | "UNKNOWN_PRINCIPAL"
+  | "UNKNOWN_KEY"
+  | "UNKNOWN_SCHEMA"
+  | "SCHEMA_IN_USE"
+  | "ACTION_IN_USE"
+  | "SECRET_IN_USE"
+  | "TOO_MANY_WIDGETS"
+  | "TOO_MANY_THEMES"
+  | "TOO_MANY_SCHEMAS"
+  | "TOO_MANY_ACTIONS"
+  | "TOO_MANY_SECRETS"
+  | "NO_CIPHER"
+  | "INVALID_SCOPES"
+  | "INVALID_SUBJECT"
+  | "INVALID_KEY_NAME"
+  | "SUBJECT_IN_USE"
+  | "CANNOT_UNLINK_PRIMARY"
+  | "INVALID_OPTIONS"
+  | "FORBIDDEN"
+  | "STORE_ERROR";
+
+/** Refusal from a store operation, carrying which rule said no. */
 export class StoreRejectionError extends Error {
-  readonly code: string;
+  readonly code: StoreRejectionCode;
   readonly detail: string;
 
-  constructor(code: string, detail: string) {
+  constructor(code: StoreRejectionCode, detail: string) {
     super(`${code}: ${detail}`);
     this.name = "StoreRejectionError";
     this.code = code;
@@ -270,7 +297,7 @@ export function normalizeKeyScopes(requested: unknown): Scope[] {
       throw new StoreRejectionError("INVALID_SCOPES", "scopes must be an array.");
     }
     for (const scope of requested) {
-      if (!KEY_SCOPES.includes(scope as Scope)) {
+      if (!KEY_SCOPES.some((allowed) => allowed === scope)) {
         throw new StoreRejectionError("INVALID_SCOPES", `'${String(scope)}' cannot be granted to a key.`);
       }
       scopes.add(scope as Scope);

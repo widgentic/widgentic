@@ -8,7 +8,7 @@
  * leaving here is scrubbed of the execution's secret values.
  */
 import type { WidgetCatalog } from "../catalog/index.js";
-import type { ActionBinding, ActionDefinition } from "../actions/index.js";
+import type { ActionBinding, ActionDefinition, ActionExecutionErrorCode, HttpActionDefinition } from "../actions/index.js";
 import {
   applyOutput,
   buildRequest,
@@ -17,8 +17,11 @@ import {
   redactText,
   redactValue,
   setAtPath,
+  validateActionDefinition,
   validateArgs
 } from "../actions/index.js";
+import { errorMessage } from "../shared/error-message.js";
+import { isPlainObject } from "../shared/plain-object.js";
 import type { McpToolResult } from "../mcp/index.js";
 import type { ThemeRegistry } from "../theming/index.js";
 import { guardedJsonFetch } from "./guarded-fetch.js";
@@ -33,17 +36,31 @@ export interface ActionSourceLike {
 }
 
 export type ExecuteActionErrorCode =
+  | ActionExecutionErrorCode
   | "INVALID_TYPE"
   | "MISSING_FIELD"
   | "UNKNOWN_KIND"
   | "UNKNOWN_ACTION"
   | "ACTION_NOT_HTTP"
   | "FORBIDDEN_SCOPE"
-  | "INVALID_ACTION_INPUT"
-  | "UNKNOWN_SECRET"
   | "ACTION_FETCH_FAILED"
-  | "INVALID_ACTION_OUTPUT"
   | "RATE_LIMITED";
+
+/** `at` names an item of a group render and nothing else. */
+const ITEM_LOCATION = /^data\.items\.\d+$/;
+
+/** The fixed text clients see when the secret store fails — the detail goes to the log. */
+const SECRETS_UNAVAILABLE = "Secret store unavailable; try again later.";
+
+/** Where a definition references a secret (`headers.X` / `query.k`), for error paths. */
+function secretRefLocation(definition: HttpActionDefinition, name: string): string {
+  for (const field of ["headers", "query"] as const) {
+    for (const [key, value] of Object.entries(definition[field] ?? {})) {
+      if (isPlainObject(value) && value.secret === name) return `${field}.${key}`;
+    }
+  }
+  return "headers";
+}
 
 export interface ExecuteActionOptions {
   /** Composition's binding/definition source; absent means no widget binds anything. */
@@ -58,18 +75,14 @@ export interface ExecuteActionOptions {
   fetchDeps?: GuardedFetchDeps | undefined;
 }
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
+/** Same `{ code, path, message }` shape as render_widget's errors (path "" = the input root). */
 function errorResult(
   code: ExecuteActionErrorCode,
   message: string,
-  path?: string,
+  path = "",
   secrets: readonly string[] = []
 ): McpToolResult {
-  const error: Record<string, unknown> = { code, message: redactText(message, secrets) };
-  if (path !== undefined) error.path = path;
+  const error = { code, path, message: redactText(message, secrets) };
   return { isError: true, content: [{ type: "text", text: JSON.stringify(error) }] };
 }
 
@@ -93,10 +106,14 @@ export async function testHttpAction(
   args: unknown,
   options: TestActionOptions = {}
 ): Promise<TestActionResult> {
-  if (!isPlainObject(definition) || definition.kind !== "http") {
+  if (isPlainObject(definition) && definition.kind === "prompt") {
     return { ok: false, code: "ACTION_NOT_HTTP", message: "Only http actions can be tested." };
   }
-  const http = definition as unknown as ActionDefinition & { kind: "http" };
+  const problem = validateActionDefinition(definition, "definition");
+  if (problem) {
+    return { ok: false, code: "INVALID_ACTION_INPUT", message: problem.message, path: problem.path };
+  }
+  const http = definition as HttpActionDefinition;
   const argsError = validateArgs(http, isPlainObject(args) ? args : {});
   if (argsError) {
     return { ok: false, code: "INVALID_ACTION_INPUT", message: argsError.message, ...(argsError.path ? { path: argsError.path } : {}) };
@@ -107,9 +124,12 @@ export async function testHttpAction(
     try {
       value = await options.secrets?.(name);
     } catch (error) {
-      return { ok: false, code: "ACTION_FETCH_FAILED", message: `Secret store unavailable: ${(error as Error).message}` };
+      console.error(`widgentic: secret resolution failed: ${errorMessage(error)}`);
+      return { ok: false, code: "ACTION_FETCH_FAILED", message: SECRETS_UNAVAILABLE };
     }
-    if (value === undefined) return { ok: false, code: "UNKNOWN_SECRET", message: `Unknown secret '${name}'.` };
+    if (value === undefined) {
+      return { ok: false, code: "UNKNOWN_SECRET", message: `Unknown secret '${name}'.`, path: secretRefLocation(http, name) };
+    }
     resolved.set(name, value);
   }
   const built = buildRequest(http, isPlainObject(args) ? args : {}, (name) => resolved.get(name));
@@ -138,7 +158,7 @@ export async function handleExecuteAction(
     return errorResult("MISSING_FIELD", "'widget' must be the rendered widget's kind.", "widget");
   }
   const id = input.action;
-  if (typeof id !== "string") {
+  if (typeof id !== "string" || id.length === 0) {
     return errorResult("MISSING_FIELD", "'action' must be a binding identifier (a template path or \"load\").", "action");
   }
   if (!isPlainObject(input.payload) || input.payload.kind !== widget) {
@@ -154,6 +174,9 @@ export async function handleExecuteAction(
   let target: Record<string, unknown> = payload;
   let bindingKind = widget;
   if (at !== undefined) {
+    if (!ITEM_LOCATION.test(at)) {
+      return errorResult("INVALID_TYPE", "'at' must locate a group item (data.items.<index>).", "at");
+    }
     const located = getAtPath(payload, at);
     if (!isPlainObject(located) || typeof located.kind !== "string" || (typeof input.item === "string" && located.kind !== input.item)) {
       return errorResult("INVALID_TYPE", "'at' must locate an item payload of kind 'item' within 'payload'.", "at");
@@ -162,7 +185,9 @@ export async function handleExecuteAction(
     bindingKind = located.kind;
   }
 
-  // Scope before anything else: the anonymous principal never executes.
+  // Scope is checked before any binding lookup or network activity (the
+  // shape checks above only read the request): the anonymous principal
+  // never executes.
   if (!(options.scopes ?? []).includes("execute")) {
     return errorResult("FORBIDDEN_SCOPE", "This key cannot execute widget actions (missing the 'execute' scope).");
   }
@@ -201,7 +226,7 @@ export async function handleExecuteAction(
   }
 
   const argsError = validateArgs(definition, args);
-  if (argsError) return errorResult("INVALID_ACTION_INPUT", argsError.message, argsError.path);
+  if (argsError) return errorResult("INVALID_ACTION_INPUT", argsError.message, argsError.path ?? "args");
 
   // Resolve every referenced secret up front (async), then build.
   const resolved = new Map<string, string>();
@@ -210,25 +235,26 @@ export async function handleExecuteAction(
     try {
       value = await options.secrets?.(name);
     } catch (error) {
-      return errorResult("ACTION_FETCH_FAILED", `Secret store unavailable: ${(error as Error).message}`);
+      console.error(`widgentic: secret resolution failed: ${errorMessage(error)}`);
+      return errorResult("ACTION_FETCH_FAILED", SECRETS_UNAVAILABLE);
     }
     if (value === undefined) {
-      return errorResult("UNKNOWN_SECRET", `Unknown secret '${name}'.`, `headers.${name}`);
+      return errorResult("UNKNOWN_SECRET", `Unknown secret '${name}'.`, secretRefLocation(definition, name));
     }
     resolved.set(name, value);
   }
   const built = buildRequest(definition, args, (name) => resolved.get(name));
-  if ("code" in built) return errorResult(built.code, built.message, built.path);
+  if ("code" in built) return errorResult(built.code, built.message, built.path ?? "");
   const secretValues = built.secretValues;
 
   const fetched = await guardedJsonFetch(built, options.fetchDeps);
   if (!fetched.ok) {
-    return errorResult("ACTION_FETCH_FAILED", `Action '${id}' failed: ${fetched.reason}`, undefined, secretValues);
+    return errorResult("ACTION_FETCH_FAILED", `Action '${id}' failed: ${fetched.reason}`, "", secretValues);
   }
 
   const folded = applyOutput(definition, binding.output, target.data, fetched.body);
   if (!folded.ok) {
-    return errorResult("INVALID_ACTION_OUTPUT", folded.error.message, folded.error.path, secretValues);
+    return errorResult("INVALID_ACTION_OUTPUT", folded.error.message, folded.error.path ?? "response", secretValues);
   }
   const rootData = at === undefined ? folded.data : (setAtPath(payload, `${at}.data`, folded.data) as Record<string, unknown>).data;
 
@@ -247,7 +273,7 @@ export async function handleExecuteAction(
     // A response the widget's own schema refuses is an output failure.
     const text = rendered.content.find((block) => block.type === "text");
     const detail = text !== undefined && "text" in text ? String(text.text) : "render failed";
-    return errorResult("INVALID_ACTION_OUTPUT", `Merged data failed the widget's validation: ${detail}`, undefined, secretValues);
+    return errorResult("INVALID_ACTION_OUTPUT", `Merged data failed the widget's validation: ${detail}`, "", secretValues);
   }
   return secretValues.length === 0 ? rendered : redactValue(rendered, secretValues);
 }

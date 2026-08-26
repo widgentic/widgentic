@@ -10,7 +10,7 @@ export type {
   TemplateErrorCode
 } from "./types.js";
 export { validateTemplate, InvalidTemplateError } from "./validate.js";
-export { MAX_TEMPLATE_DEPTH, URL_ATTRS, RESERVED_ATTR } from "./guards.js";
+export { MAX_TEMPLATE_DEPTH, URL_ATTRS, RESERVED_ATTR, FORBIDDEN_TAGS } from "./guards.js";
 export { parsePath } from "./paths.js";
 export {
   collectActionRefs,

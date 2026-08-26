@@ -53,7 +53,7 @@
     }
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit --noUnusedLocals --noUnusedParameters",
     "build": "tsc -p tsconfig.build.json",
     "test": "vitest run",
     "test:types": "vitest --typecheck.only run",

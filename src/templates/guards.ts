@@ -12,8 +12,21 @@ export {
   isSafeImageSrc
 } from "../contract/urls.js";
 
-/** Event-handler attributes are code execution in a browser. */
-export const FORBIDDEN_ATTR = /^on/i;
+/**
+ * Attributes that are code or embedded documents: event handlers (`on*`)
+ * and `srcdoc`, which smuggles a whole document past the tag policy.
+ */
+export const FORBIDDEN_ATTR = /^(?:on.*|srcdoc)$/i;
+
+/**
+ * Tags that introduce active or foreign content into the frame. A template
+ * is data, never a program: these fail validation and render as nothing
+ * when validation was bypassed — the same two-layer stance as `on*`.
+ */
+export const FORBIDDEN_TAGS: ReadonlySet<string> = new Set([
+  "script", "iframe", "frame", "frameset", "object", "embed", "style",
+  "link", "meta", "base", "template", "noscript"
+]);
 
 /**
  * Renderer-owned attributes (`data-wg-*`): action descriptors and render
@@ -28,7 +41,10 @@ export const URL_ATTRS = new Set([
   "src",
   "action",
   "formaction",
-  "xlink:href"
+  "xlink:href",
+  "data",
+  "poster",
+  "ping"
 ]);
 
 /** Maximum template nesting depth accepted by validation. */

@@ -14,7 +14,7 @@ import {
   verifyKey,
   StoreRejectionError
 } from "../index.js";
-import type { MemorySeedPrincipal, StoredWidget } from "../index.js";
+import type { MemorySeedPrincipal, StoredAction, StoredWidget } from "../index.js";
 import type { ThemeEntry } from "../../theming/index.js";
 
 const reportWidget: StoredWidget = {
@@ -628,7 +628,7 @@ describe("action bindings through composition", () => {
     const store = createMemoryStore([{ principal: { id: "alice", scopes: ["read"] }, widgets: [bound] }]);
     const composed = await composeCatalog(store, "alice");
     expect(composed.diagnostics.join(" ")).toContain("unknown action 'refresh'");
-    expect(descriptorOf(composed.value, { kind: "weather", data: { city: "Oslo" } })).toEqual({ id: "", disabled: "unresolved" });
+    expect(descriptorOf(composed.value, { kind: "weather", data: { city: "Oslo" } })).toEqual({ id: "", disabled: "unresolved", widget: "weather" });
   });
 
   it("a caller without execute sees http actions disabled by scope", async () => {
@@ -673,5 +673,95 @@ describe("file store: actions and secrets directories", () => {
     const withoutCipher = createFileStore(dir, { onDiagnostic: () => undefined });
     await expect(withoutCipher.secretValue("alice", "token")).rejects.toMatchObject({ code: "NO_CIPHER" });
     expect(await withoutCipher.actions("nobody")).toEqual([]);
+  });
+});
+
+describe("hardening: store", () => {
+  const alice = { id: "alice", scopes: ["read", "write", "execute"] as ("read" | "write" | "execute")[] };
+  const schema = { input: { type: "object", properties: {} }, output: { type: "object" } };
+  const getAction: StoredAction = { name: "fetch", definition: { kind: "http", method: "GET", url: "https://api.example/x", ...schema } };
+  const postAction: StoredAction = { name: "fetch", definition: { ...getAction.definition, method: "POST" } as StoredAction["definition"] };
+  const loader: StoredWidget = {
+    kind: "loader",
+    template: { tag: "div", children: [{ bind: "temp" }] },
+    descriptor: { description: "Loads", dataShape: "{ temp }" },
+    load: { ref: "fetch" }
+  };
+
+  it("a load-referenced action cannot become non-GET, and a load cannot point at a non-GET", async () => {
+    const store = createMemoryStore([{ principal: alice, actions: [getAction] }]);
+    await store.putWidget("alice", loader);
+    await expect(store.putAction("alice", postAction)).rejects.toMatchObject({ code: "ACTION_IN_USE", detail: expect.stringContaining("loader") });
+    await store.putAction("alice", { name: "fetch", definition: { kind: "http", method: "GET", url: "https://api.example/y", ...schema } });
+    const other = createMemoryStore([{ principal: alice, actions: [postAction] }]);
+    await expect(other.putWidget("alice", loader)).rejects.toMatchObject({ code: "INVALID_ACTION" });
+  });
+
+  it("reference scans see references inside entries the validator rejects", async () => {
+    const { looseWidget, widgetsReferencingAction, referencesToSecret } = await import("../refs.js");
+    const invalid = looseWidget({ kind: "broken", template: { tag: "button", action: { ref: "fetch" } } });
+    expect(invalid).toBeDefined();
+    expect(widgetsReferencingAction([invalid!], "fetch")).toEqual(["broken"]);
+    const inlineSecret = looseWidget({ kind: "leaky", template: { tag: "button", action: { definition: { kind: "http", method: "GET", url: "https://a.example", headers: { "X-Key": { secret: "token" } } } } } });
+    expect(referencesToSecret([], [inlineSecret!], "token")).toEqual(["widget 'leaky'"]);
+    expect(looseWidget({ kind: 1 })).toBeUndefined();
+  });
+
+  it("secret failures leave the store as StoreRejectionError, never raw cipher errors", async () => {
+    const { createLocalCipher } = await import("../../secrets/index.js");
+    const good = createLocalCipher("ab".repeat(32));
+    const broken = { wrap: good.wrap, unwrap: async () => { throw new Error("vault down"); } };
+    const store = createMemoryStore([{ principal: alice }], DEFAULT_LIMITS, { cipher: broken });
+    await store.putSecret("alice", "token", "sk-live-123");
+    await expect(store.secretValue("alice", "token")).rejects.toBeInstanceOf(StoreRejectionError);
+    await expect(store.secretValue("alice", "token")).rejects.toMatchObject({ code: "DECRYPTION_FAILED" });
+    await expect(store.putSecret("alice", "short", "abc")).rejects.toMatchObject({ code: "INVALID_SECRET_VALUE" });
+  });
+
+  it("key resolution omits the identity subject; seeded key scopes are key-grantable only", async () => {
+    const store = createMemoryStore([{ principal: alice, apiKey: "wgk_seed" }]);
+    const p = await store.ensurePrincipal("oidc|bob");
+    const { key } = await store.createKey(p.id, "cli");
+    const resolved = await store.resolvePrincipal(key);
+    expect(resolved).toBeDefined();
+    expect(resolved).not.toHaveProperty("subject");
+    expect((await store.resolvePrincipal("wgk_seed"))?.scopes).toEqual(["read", "execute"]);
+    const snapshot = store.snapshot() as { principal: { scopes: string[] } }[];
+    snapshot[0]!.principal.scopes.push("mutated");
+    expect((await store.resolvePrincipal("wgk_seed"))?.scopes).toEqual(["read", "execute"]);
+  });
+
+  it("file store rows normalize their scopes through KEY_SCOPES", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "wg-store-"));
+    const store = createFileStore(dir, { onDiagnostic: () => undefined });
+    const raw = generateKey();
+    await store.seedPrincipal({ id: "carol", scopes: ["write", "execute"], keyDigest: hashKey(raw) });
+    expect((await store.resolvePrincipal(raw))?.scopes).toEqual(["read", "execute"]);
+  });
+
+  it("compose reports skipped actions and reads shared actions only when a ref exists", async () => {
+    const reads: string[] = [];
+    const inlineOnly: StoredWidget = {
+      kind: "inline",
+      template: { tag: "button", action: { definition: { kind: "prompt", text: ["hi"] } }, children: ["Go"] },
+      descriptor: { description: "Inline", dataShape: "{}" }
+    };
+    const fake = {
+      widgets: async () => [inlineOnly],
+      themes: async () => [],
+      schemas: async () => [],
+      actions: async () => { reads.push("actions"); return [{ name: "bad", definition: { kind: "http" } }, getAction]; },
+      listSecrets: async () => [],
+      secretValue: async () => undefined,
+      resolvePrincipal: async () => undefined
+    } as unknown as Parameters<typeof composeCatalog>[0];
+    const first = await composeCatalog(fake, "alice");
+    expect(reads).toEqual([]);
+    expect(first.actions.resolve("fetch")).toBeUndefined();
+    const withRef = { ...fake, widgets: async () => [inlineOnly, loader] } as typeof fake;
+    const second = await composeCatalog(withRef, "alice");
+    expect(reads).toEqual(["actions"]);
+    expect(second.diagnostics.some((d) => d.startsWith("skipped action 'bad'"))).toBe(true);
+    expect(second.actions.resolve("fetch")?.kind).toBe("http");
   });
 });

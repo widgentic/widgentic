@@ -147,7 +147,7 @@ describe("schema-driven completions and type checks", () => {
     expect(mismatch.textContent).toContain("'reading.temperature' is string");
     // Real dropdowns (not datalists): known paths plus the custom escape.
     const targetSelect = container.querySelector(".wgd-node-action .wgd-map-target select") as HTMLSelectElement;
-    expect([...targetSelect.options].map((o) => o.value)).toEqual(["temperature", "__custom__"]);
+    expect([...targetSelect.options].map((o) => o.value)).toEqual(["", "temperature", "__custom__"]);
     const sourceSelect = container.querySelector(".wgd-node-action .wgd-map-source select") as HTMLSelectElement;
     expect([...sourceSelect.options].map((o) => o.value)).toEqual(expect.arrayContaining([".", "current", "current.temp_c", "current.condition.text", "__custom__"]));
     expect(sourceSelect.value).toBe("current.temp_c");

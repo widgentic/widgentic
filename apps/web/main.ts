@@ -1,6 +1,7 @@
 /**
- * The widgentic.dev client: sign-in state, the two designers mounted
- * against the authoring API, and key management. Design-it-is-publish:
+ * The widgentic.dev client: sign-in state, the four designers (widgets,
+ * themes, schemas, actions) mounted against the authoring API, write-only
+ * secrets, linked identities and key management. Design-it-is-publish:
  * "Save to my catalog" PUTs through the session, and the entry is in the
  * caller's MCP catalog on the next tool call — no other step exists.
  */
@@ -38,13 +39,6 @@ interface SecretEntryJson {
   updatedAt: string;
 }
 
-interface StoredSchemaJson {
-  name: string;
-  label?: string;
-  description?: string;
-  schema: Record<string, unknown>;
-}
-
 interface StoredKeyJson {
   id: string;
   name: string;
@@ -69,13 +63,23 @@ const status = (text: string, tone: Tone = "info"): void => {
   banner.setAttribute("role", tone === "error" ? "alert" : "status");
 };
 
+/** The button a click handler runs for, when the event has one. */
+function busyControl(event: Event): HTMLButtonElement | undefined {
+  return event.currentTarget instanceof HTMLButtonElement ? event.currentTarget : undefined;
+}
+
 /**
- * Run async work with visible feedback: the control that triggered it (the
- * focused button) is disabled with a spinner and the banner shows the
- * pending text until the work settles. Errors surface in the error tone.
+ * Run async work with visible feedback: `control` (the handler's
+ * `event.currentTarget`; falls back to the focused button for work that
+ * starts outside a click handler) is disabled with a spinner and the banner
+ * shows the pending text until the work settles. Errors surface in the
+ * error tone.
  */
-async function withBusy<T>(pending: string, work: () => Promise<T>): Promise<T> {
-  const control = document.activeElement instanceof HTMLButtonElement ? document.activeElement : undefined;
+async function withBusy<T>(
+  pending: string,
+  work: () => Promise<T>,
+  control: HTMLButtonElement | undefined = document.activeElement instanceof HTMLButtonElement ? document.activeElement : undefined
+): Promise<T> {
   if (control) {
     control.disabled = true;
     control.classList.add("busy");
@@ -118,7 +122,7 @@ type ListMode = "new" | "viewing" | "editing";
 let widgetDesigner: DesignerHandle | undefined;
 let myThemes: ThemeEntry[] = [];
 let myWidgets: StoredWidgetJson[] = [];
-let mySchemas: StoredSchemaJson[] = [];
+let mySchemas: SchemaEntry[] = [];
 let myActions: ActionEntry[] = [];
 let mySecrets: SecretEntryJson[] = [];
 let secretsEnabled = false;
@@ -141,7 +145,7 @@ function mountWidgetDesigner(loadDefinition?: unknown, readOnly = false): void {
   // widget-level load; the widget designer binds, never authors them.
   widgetDesigner = createDesigner(host, {
     themes: designerThemes(),
-    schemas: mySchemas as SchemaEntry[],
+    schemas: mySchemas,
     actions: myActions,
     secretNames: mySecrets.map((s) => s.name),
     readOnly
@@ -223,9 +227,9 @@ function renderWidgetList(): void {
       remove.className = "danger icon";
       remove.title = "Delete";
       remove.setAttribute("aria-label", "Delete");
-      remove.addEventListener("click", () => {
+      remove.addEventListener("click", (event) => {
         void (async () => {
-          await withBusy(`deleting ${widget.kind}…`, () => api(`/api/widgets/${encodeURIComponent(widget.kind)}`, { method: "DELETE" }));
+          await withBusy(`deleting ${widget.kind}…`, () => api(`/api/widgets/${encodeURIComponent(widget.kind)}`, { method: "DELETE" }), busyControl(event));
           if (selectedKind === widget.kind) {
             selectedKind = undefined;
             widgetMode = "new";
@@ -361,9 +365,9 @@ function renderThemeList(): void {
       remove.className = "danger icon";
       remove.title = "Delete";
       remove.setAttribute("aria-label", "Delete");
-      remove.addEventListener("click", () => {
+      remove.addEventListener("click", (event) => {
         void (async () => {
-          await withBusy(`deleting ${theme.name}…`, () => api(`/api/themes/${encodeURIComponent(theme.name)}`, { method: "DELETE" }));
+          await withBusy(`deleting ${theme.name}…`, () => api(`/api/themes/${encodeURIComponent(theme.name)}`, { method: "DELETE" }), busyControl(event));
           if (selectedTheme === theme.name) {
             selectedTheme = undefined;
             themeMode = "new";
@@ -433,7 +437,7 @@ function syncSchemaControls(): void {
   $("schema-save").hidden = schemaMode !== "new";
 }
 
-function showSchema(schema: StoredSchemaJson, mode: "viewing" | "editing"): void {
+function showSchema(schema: SchemaEntry, mode: "viewing" | "editing"): void {
   selectedSchema = schema.name;
   schemaMode = mode;
   mountSchemaDesigner(schema, mode === "viewing");
@@ -507,7 +511,7 @@ function renderSchemaList(): void {
 }
 
 async function refreshSchemas(): Promise<void> {
-  mySchemas = (await api<{ schemas: StoredSchemaJson[] }>("/api/schemas")).schemas;
+  mySchemas = (await api<{ schemas: SchemaEntry[] }>("/api/schemas")).schemas;
   renderSchemaList();
 }
 
@@ -534,10 +538,14 @@ let actionMode: ListMode = "new";
 /** JSON of the http definition whose test call last passed; save requires a match. */
 let testedDefinition: string | undefined;
 
+function isActionEntry(value: unknown): value is ActionEntry {
+  return typeof value === "object" && value !== null && typeof (value as ActionEntry).name === "string" && typeof (value as ActionEntry).definition === "object";
+}
+
 /** The designer's Test control runs the PRODUCTION execute path server-side. */
 async function testCall(definition: HttpActionDefinition, args: Record<string, unknown>): Promise<unknown> {
   const result = await withBusy("running the test call…", () =>
-    api<{ ok: boolean; code?: string; message?: string; status?: number; body?: unknown }>("/api/actions/test", {
+    api<{ ok: boolean; code?: string; message?: string; status?: number; body?: unknown }>("/api/action-test", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ definition, args })
@@ -557,10 +565,12 @@ function mountActionDesigner(loadEntry?: unknown, readOnly = false): void {
   const host = $("action-designer");
   actionDesigner?.dispose();
   host.replaceChildren();
-  testedDefinition = undefined;
+  // A re-mount of the very definition that passed (a tab switch) keeps its pass.
+  const loadedDefinition = isActionEntry(loadEntry) && loadEntry.definition.kind === "http" ? JSON.stringify(loadEntry.definition) : undefined;
+  if (loadedDefinition === undefined || loadedDefinition !== testedDefinition) testedDefinition = undefined;
   actionDesigner = createActionDesigner(host, {
     readOnly,
-    schemas: mySchemas as SchemaEntry[],
+    schemas: mySchemas,
     secretNames: mySecrets.map((s) => s.name),
     testCall
   });
@@ -632,10 +642,10 @@ function renderActionList(): void {
       remove.className = "danger icon";
       remove.title = "Delete";
       remove.setAttribute("aria-label", "Delete");
-      remove.addEventListener("click", () => {
+      remove.addEventListener("click", (event) => {
         void (async () => {
           // ACTION_IN_USE surfaces here naming the widgets — never silently.
-          await withBusy(`deleting ${action.name}…`, () => api(`/api/actions/${encodeURIComponent(action.name)}`, { method: "DELETE" }));
+          await withBusy(`deleting ${action.name}…`, () => api(`/api/actions/${encodeURIComponent(action.name)}`, { method: "DELETE" }), busyControl(event));
           if (selectedAction === action.name) {
             selectedAction = undefined;
             actionMode = "new";
@@ -729,10 +739,10 @@ function renderSecretList(): void {
     remove.className = "danger icon";
     remove.title = "Delete";
     remove.setAttribute("aria-label", "Delete");
-    remove.addEventListener("click", () => {
+    remove.addEventListener("click", (event) => {
       void (async () => {
         // SECRET_IN_USE surfaces here naming the referencing actions.
-        await withBusy(`deleting ${secret.name}…`, () => api(`/api/secrets/${encodeURIComponent(secret.name)}`, { method: "DELETE" }));
+        await withBusy(`deleting ${secret.name}…`, () => api(`/api/secrets/${encodeURIComponent(secret.name)}`, { method: "DELETE" }), busyControl(event));
         await refreshSecrets();
         status(`deleted secret ${secret.name}`);
       })().catch((error: Error) => status(error.message, "error"));
@@ -794,9 +804,9 @@ async function refreshKeys(): Promise<void> {
       const revoke = document.createElement("button");
       revoke.textContent = "Revoke";
       revoke.className = "danger";
-      revoke.addEventListener("click", () => {
+      revoke.addEventListener("click", (event) => {
         void (async () => {
-          await withBusy(`revoking ${key.name}…`, () => api(`/api/keys/${encodeURIComponent(key.id)}`, { method: "DELETE" }));
+          await withBusy(`revoking ${key.name}…`, () => api(`/api/keys/${encodeURIComponent(key.id)}`, { method: "DELETE" }), busyControl(event));
           await refreshKeys();
           status(`revoked ${key.name}`);
         })().catch((error: Error) => status(error.message, "error"));
@@ -808,7 +818,7 @@ async function refreshKeys(): Promise<void> {
   }
 }
 
-async function createKey(): Promise<void> {
+async function createKey(control?: HTMLButtonElement): Promise<void> {
   const input = $<HTMLInputElement>("key-name");
   const name = input.value.trim();
   const execute = $<HTMLInputElement>("key-execute").checked;
@@ -818,7 +828,7 @@ async function createKey(): Promise<void> {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ name, scopes: execute ? ["read", "execute"] : ["read"] })
-    })
+    }), control
   );
   input.value = "";
   $<HTMLInputElement>("key-execute").checked = false;
@@ -835,6 +845,7 @@ async function createKey(): Promise<void> {
   dismiss.addEventListener("click", () => reveal.replaceChildren());
   reveal.append(note, code, dismiss);
   await refreshKeys();
+  status(`key ${name || "created"} — copy it now; it will not be shown again`);
 }
 
 /* -------------------------------- tabs ------------------------------- */
@@ -1083,8 +1094,8 @@ async function boot(): Promise<void> {
   $("schema-save").addEventListener("click", () => {
     void saveSchema().catch((error: Error) => status(error.message, "error"));
   });
-  $("key-create").addEventListener("click", () => {
-    void createKey().catch((error: Error) => status(error.message, "error"));
+  $("key-create").addEventListener("click", (event) => {
+    void createKey(busyControl(event)).catch((error: Error) => status(error.message, "error"));
   });
   $("action-new").addEventListener("click", () => {
     selectedAction = undefined;

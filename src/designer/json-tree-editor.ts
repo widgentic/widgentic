@@ -106,7 +106,7 @@ export function createJsonTreeEditor(
   }
 
   function typeSelect(value: unknown, path: Path): HTMLSelectElement {
-    const select = h("select", { class: "wgd-select wgd-jt-type" }) as HTMLSelectElement;
+    const select = h("select", { class: "wgd-select wgd-jt-type" });
     for (const option of TYPE_OPTIONS) {
       select.append(h("option", { value: option }, [option]));
     }
@@ -120,14 +120,14 @@ export function createJsonTreeEditor(
   function valueControl(value: unknown, path: Path): Node {
     const type = typeOf(value);
     if (type === "boolean") {
-      const box = h("input", { type: "checkbox" }) as HTMLInputElement;
+      const box = h("input", { type: "checkbox" });
       box.checked = value as boolean;
       box.addEventListener("change", () => commit(setAt(current, path, box.checked)));
       return box;
     }
     if (type === "null") return h("code", undefined, ["null"]);
     if (type === "string" || type === "number") {
-      const input = h("input", { type: "text", class: "wgd-input" }) as HTMLInputElement;
+      const input = h("input", { type: "text", class: "wgd-input" });
       input.value = String(value);
       input.addEventListener("change", () => commitText(path, type, input.value));
       return input;
@@ -176,7 +176,7 @@ export function createJsonTreeEditor(
         const keyInput = h("input", {
           type: "text",
           class: "wgd-input wgd-jt-keyinput"
-        }) as HTMLInputElement;
+        });
         keyInput.value = key;
         keyInput.addEventListener("change", () =>
           commit(renameKey(current, path, key, keyInput.value))

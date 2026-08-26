@@ -3,9 +3,9 @@ import type { SecretCipher } from "./types.js";
 
 /**
  * Development cipher: wraps data keys with AES-256-GCM under a KEK held in
- * memory (from `WIDGENTIC_LOCAL_KEK`, 64 hex characters). Same port, same
- * record shape as production, no vault — for file-store rigs and tests.
- * Never the production path: the KEK lives in the process here.
+ * memory (callers typically pass `WIDGENTIC_LOCAL_KEK`, 64 hex characters).
+ * Same port, same record shape as production, no vault — for file-store
+ * rigs and tests. Never the production path: the KEK lives in the process.
  */
 export function createLocalCipher(hexKey: string, version = "local"): SecretCipher {
   if (!/^[0-9a-fA-F]{64}$/.test(hexKey)) {

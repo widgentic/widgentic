@@ -1,5 +1,6 @@
 /**
- * widgentic/designer — the embeddable widget designer.
+ * widgentic/designer — the embeddable designers: widget, theme, schema and
+ * action, each mountable standalone or as a custom element.
  *
  * Import discipline: this capability consumes the rest of widgentic ONLY
  * through public package entries (`widgentic/catalog`, `widgentic/templates`,
