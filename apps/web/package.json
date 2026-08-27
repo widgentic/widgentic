@@ -5,8 +5,8 @@
   "type": "module",
   "description": "Private: apps/web",
   "dependencies": {
-    "@widgentic/core": "^0.0.0",
-    "@widgentic/designer": "^0.0.0",
-    "@widgentic/mcp": "^0.0.0"
+    "@widgentic/core": "^0.1.0",
+    "@widgentic/designer": "^0.1.0",
+    "@widgentic/mcp": "^0.1.0"
   }
 }

@@ -1,7 +1,7 @@
 {
   "name": "@widgentic/core",
-  "version": "0.0.0",
-  "description": "Widgets for agents \u2014 the widgentic engine: contract, adapters, mapper, catalog, theming, templates, actions and reactive rendering.",
+  "version": "0.1.0",
+  "description": "Widgets for agents — the widgentic engine: contract, adapters, mapper, catalog, theming, templates, actions and reactive rendering.",
   "license": "MIT",
   "type": "module",
   "exports": {
