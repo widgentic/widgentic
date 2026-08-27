@@ -6,7 +6,7 @@ The action model for interactive widgets: what an action is (`prompt` or `http`)
 ## Requirements
 
 ### Requirement: Two action kinds with declared contracts
-An action definition SHALL be one of two kinds. A `prompt` action SHALL carry `text`: a sequence of literal strings and `{ bind }` segments that resolves, at render time, to one plain-text message of at most 2 000 characters; it proposes a user message through the host and involves no server call. An `http` action SHALL carry `method` (`"GET"` or `"POST"`), `url` (an absolute `https:` URL with no userinfo and no fragment; the URL itself SHALL contain no bindings), `input` (a JSON Schema of type `object` describing the arguments), `output` (a JSON Schema the response body MUST satisfy), and optional `headers` and `query` maps whose values are literal strings or `{ "secret": "<name>" }` references. For `GET`, the validated arguments SHALL be sent as query parameters (values string-coerced); for `POST`, as a JSON body with `Content-Type: application/json`. Definitions SHALL be JSON-serializable plain data.
+An action definition SHALL be one of two kinds. A `prompt` action SHALL carry `text`: a sequence of literal strings and `{ bind }` segments that resolves, at render time, to one plain-text message of at most 2 000 characters; it proposes a user message through the host and involves no server call. An `http` action SHALL carry `method` (`"GET"` or `"POST"`), `url` (an absolute `https:` URL with no userinfo and no fragment; the URL itself SHALL contain no bindings), `input` (a JSON Schema of type `object` describing the arguments), `output` (a JSON Schema the response body MUST satisfy), and optional `headers` and `query` maps whose values are literal strings or `{ "secret": "<name>" }` references. For `GET`, the validated arguments SHALL be sent as query parameters (values string-coerced); for `POST`, as a JSON body with `Content-Type: application/json`. Definitions SHALL be JSON-serializable plain data. Header and query NAMES SHALL be non-empty RFC 7230 tokens; `host`, `content-length`, `transfer-encoding` and `connection` SHALL be refused as header names (the transport owns them).
 
 #### Scenario: A GET action serializes its arguments as query parameters
 - **WHEN** an http action `{ method: "GET", url: "https://api.example.com/weather", input: { type: "object", properties: { city: { type: "string" } } } }` executes with arguments `{ city: "Vancouver" }`
@@ -20,6 +20,10 @@ An action definition SHALL be one of two kinds. A `prompt` action SHALL carry `t
 - **WHEN** a definition has an `http:` URL, a URL with userinfo, a method other than GET/POST, an `input` schema that is not `type: object`, or a `prompt` text over 2 000 characters after resolution
 - **THEN** validation SHALL fail with a structured error naming the offending field
 
+#### Scenario: Malformed or reserved header names are refused
+- **WHEN** a definition declares a header named `""`, `"Bad Name"`, `"Host"` or `"Transfer-Encoding"`
+- **THEN** validation SHALL fail naming `headers.<name>`
+
 ### Requirement: Bindings attach actions to elements and to the widget's load
 A template element SHALL be able to carry an `action` binding, and a widget SHALL be able to carry one `load` binding. A binding SHALL name its action either by reference to a shared action (`{ ref: "<name>" }`) or by an inline definition nested under `definition` (`{ definition: <action definition> }` — nested so the definition's `input`/`output` schemas never collide with the binding's own keys), and MAY carry `input` (a record mapping each input-schema field to a template path or a `{ const }` literal) and `output` (see the output requirement). `load` SHALL accept only `http` actions with `method: "GET"`. Every binding SHALL have a stable identifier: the dotted template path of the element that carries it, or the literal `"load"`.
 
@@ -32,7 +36,7 @@ A template element SHALL be able to carry an `action` binding, and a widget SHAL
 - **THEN** validation SHALL fail with a structured error at `load`
 
 ### Requirement: Arguments resolve at render time in node scope
-Input mappings SHALL be resolved when the widget renders, against the scope of the element carrying the binding (the current `each` item where applicable), using the template path grammar — including `$root`, `$parent` and `$index` — so a row's button can name that row's fields without any client-side evaluation. The resolved arguments and, for `prompt` actions, the resolved text SHALL be embedded in the rendered output as the element's action descriptor; nothing is evaluated after render.
+Input mappings SHALL be resolved when the widget renders, against the scope of the element carrying the binding (the current `each` item where applicable), using the template path grammar — including `$root`, `$parent` and `$index` — so a row's button can name that row's fields without any client-side evaluation. The resolved arguments and, for `prompt` actions, the resolved text SHALL be embedded in the rendered output as the element's action descriptor; nothing is evaluated after render. Every descriptor — unresolved ones included — SHALL carry the `widget` its template was registered as, and the prompt-text cap SHALL never split a surrogate pair.
 
 #### Scenario: A row action names its row
 - **WHEN** `{ each: "rows", template: { tag: "button", action: { ref: "open", input: { id: "id", owner: "$root.owner" } } } }` renders `{ owner: "ada", rows: [{ id: 1 }, { id: 2 }] }`
@@ -42,8 +46,12 @@ Input mappings SHALL be resolved when the widget renders, against the scope of t
 - **WHEN** a prompt action with text `["Show the 7-day forecast for ", { bind: "city" }]` renders `{ city: "Vancouver" }`
 - **THEN** the descriptor SHALL carry the text `"Show the 7-day forecast for Vancouver"` with no markup
 
+#### Scenario: Unresolved descriptors still name their kind
+- **WHEN** a registered template binds an unknown shared action
+- **THEN** the rendered descriptor SHALL be `{ id, disabled: "unresolved", widget: <kind> }`
+
 ### Requirement: Output flows back through an explicit mode
-An http binding's `output` SHALL declare how the validated response merges into the widget's data: `mode` is `"replace"` (the response becomes `data`), `"merge"` (a shallow merge of the response's top-level keys over `data` — the default when `mode` is absent) or `"patch"` (the response is written at `path`, a required dotted data path). An optional `map` (a record of target data path → source response path) SHALL project the response before the mode applies. The result SHALL be re-validated as a payload of the widget's kind before rendering.
+An http binding's `output` SHALL declare how the validated response merges into the widget's data: `mode` is `"replace"` (the response becomes `data`), `"merge"` (a shallow merge of the response's top-level keys over `data` — the default when `mode` is absent) or `"patch"` (the response is written at `path`, a required dotted data path). An optional `map` (a record of target data path → source response path) SHALL project the response before the mode applies. The result SHALL be re-validated as a payload of the widget's kind before rendering. `path` and every `map` key and value SHALL follow the dotted-path grammar — non-empty segments, no reserved `$` tokens, no `__proto__`, `constructor` or `prototype` segments — and SHALL be rejected otherwise; a `map` target of `"."` (the whole projection) SHALL be valid only as the sole entry; `path` SHALL be accepted only with `mode: "patch"`; an empty `map` SHALL be rejected. Writes into arrays SHALL address elements by index only. A `merge` whose response (or target data) is not an object SHALL fail with `INVALID_ACTION_OUTPUT` rather than silently replacing.
 
 #### Scenario: Merge keeps fields the response did not return
 - **WHEN** data `{ city: "Vancouver", temp: 12 }` receives response `{ temp: 18, asOf: "…" }` under the default mode
@@ -57,8 +65,16 @@ An http binding's `output` SHALL declare how the validated response merges into 
 - **WHEN** the merged data violates the widget's `dataSchema`
 - **THEN** execution SHALL fail with `INVALID_ACTION_OUTPUT` and the widget's previous data SHALL stand
 
+#### Scenario: Output paths follow the grammar
+- **WHEN** a binding declares `output: { mode: "patch", path: "a..b" }`, `map: { "__proto__.x": "y" }`, `map: {}`, `map: { ".": "a", "b": "c" }`, or `mode: "merge"` with a `path`
+- **THEN** validation SHALL fail with `INVALID_ACTION` at the offending field
+
+#### Scenario: Merge needs objects on both sides
+- **WHEN** a `merge` binding's response is an array
+- **THEN** execution SHALL fail with `INVALID_ACTION_OUTPUT` and the widget's data SHALL stand
+
 ### Requirement: Execution is server-side and principal-scoped
-Only the principal's own stored definitions SHALL ever execute: an execution request names a widget kind and a binding identifier, and the server SHALL resolve the definition from that principal's stored template or shared action — a request SHALL NOT be able to supply a URL, method, headers or schema of its own. Arguments SHALL be validated against the input schema before any network activity; the response SHALL be required to be `application/json`, to parse, and to satisfy the output schema. Outbound requests SHALL be `https` only, SHALL refuse targets that resolve to private, loopback, link-local or metadata addresses (validated per connection, with the connection pinned to the validated address), SHALL NOT follow redirects, and SHALL be bounded by an 8-second timeout and a 256 KiB response cap. Executing an http action SHALL require the caller's `execute` scope; `prompt` actions need no server call and no scope.
+Only the principal's own stored definitions SHALL ever execute: an execution request names a widget kind and a binding identifier, and the server SHALL resolve the definition from that principal's stored template or shared action — a request SHALL NOT be able to supply a URL, method, headers or schema of its own. Arguments SHALL be validated against the input schema before any network activity; the response SHALL be required to be `application/json`, to parse, and to satisfy the output schema. Outbound requests SHALL be `https` only, SHALL refuse targets that resolve to private, loopback, link-local or metadata addresses (validated per connection, with the connection pinned to the validated address), SHALL NOT follow redirects, and SHALL be bounded by an 8-second TOTAL deadline (covering connection, headers and body streaming — a slow-drip body cannot extend it) and a 256 KiB response cap; the content type SHALL be checked before the body is read, `application/json` and `application/*+json` SHALL be accepted, and a `204` or empty body SHALL be delivered as `null` for the output schema to judge. Executing an http action SHALL require the caller's `execute` scope; `prompt` actions need no server call and no scope. Arguments SHALL be accepted only for fields the input schema declares (`INVALID_ACTION_INPUT` otherwise, including when the schema declares none), SHALL NOT share a name with a fixed `query` parameter, and fixed `headers`/`query` SHALL be applied AFTER the arguments so the author's values always win.
 
 #### Scenario: A tampered request cannot redirect execution
 - **WHEN** an execution request carries a `url` or `headers` field alongside the binding identifier
@@ -76,8 +92,24 @@ Only the principal's own stored definitions SHALL ever execute: an execution req
 - **WHEN** a caller whose key carries only `read` requests execution of an http action
 - **THEN** the result SHALL be `FORBIDDEN_SCOPE` and no request SHALL leave the server
 
+#### Scenario: Undeclared or colliding arguments are refused
+- **WHEN** an action declares `input.properties: { city }` and `query: { key: { secret: "k" } }` and the request carries `args: { city: "Oslo", key: "ATTACKER" }` or `args: { city: "Oslo", extra: 1 }`
+- **THEN** execution SHALL fail with `INVALID_ACTION_INPUT` naming the offending argument and no request SHALL leave the server
+
+#### Scenario: The author's fixed parameters always win
+- **WHEN** a fixed `query` value and an argument could both set `key`
+- **THEN** the outbound URL SHALL carry the author's fixed value
+
+#### Scenario: The deadline covers slow bodies
+- **WHEN** the target answers headers promptly then streams one byte per second
+- **THEN** execution SHALL fail with `ACTION_FETCH_FAILED` no later than the deadline
+
+#### Scenario: Empty responses are null, structured JSON variants are accepted
+- **WHEN** the target answers `204` with no body, or `200` with `application/problem+json`
+- **THEN** the response body SHALL be `null` (validated against the output schema) or the parsed JSON respectively
+
 ### Requirement: The model learns what the widget now shows
-After every successful http action or load, the widget SHALL inform the host's model context of its new state with both a plain-text summary and the structured payload in one update (hosts advertise inconsistent modality sets; all accept both). The update SHALL be bounded (text and structured content each capped at 8 KiB, truncated with a marker), and SHALL replace any earlier update from the same widget instance.
+After every successful http action or load, the widget SHALL inform the host's model context of its new state with both a plain-text summary and the structured payload in one update (hosts advertise inconsistent modality sets; all accept both). The update SHALL be bounded (text and structured content each capped at 8 KiB, truncated with a marker), and SHALL replace any earlier update from the same widget instance. A widget whose first render fires several `load` bindings (a group) SHALL send ONE model-context update after the whole chain settles, not one per item.
 
 #### Scenario: A refresh updates the model's view
 - **WHEN** an http action changes the widget's data
@@ -86,3 +118,7 @@ After every successful http action or load, the widget SHALL inform the host's m
 #### Scenario: Large payloads are truncated, not dropped
 - **WHEN** the new payload serializes to more than 8 KiB
 - **THEN** the update SHALL still be sent, with the text and structured parts truncated and marked as truncated
+
+#### Scenario: A load chain updates the model once
+- **WHEN** a group render carries two `loads` and both succeed
+- **THEN** exactly one `ui/update-model-context` SHALL follow, carrying the final payload

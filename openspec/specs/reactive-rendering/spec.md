@@ -4,7 +4,7 @@
 In-place DOM updates for mounted widget payloads. A mount handle (`mountWidget` → `initial`/`update`/`node`/`dispose`) re-renders payloads through the widget catalog, diffs the pure `WidgetNode` trees, and patches minimally — unchanged elements keep their DOM identity, failed updates leave the DOM untouched, and disposal is deterministic. Zero dependencies; the Arrow JS direction realized as a data-driven diff layer.
 ## Requirements
 ### Requirement: Reactive mount programmatic surface
-The package SHALL export `mountWidget(payload: unknown, container: Element, options?: MountOptions): WidgetMount` from a `./reactive` entry. `MountOptions.catalog` SHALL accept a `WidgetCatalog` (default: a fresh `createCatalog()` per mount). `MountOptions.onAction` SHALL accept a callback `(activation: { id, kind, args?, text?, disabled? }, payload) => void`: when present, activating a mounted `[data-wg-action]` element (click, or Enter/Space on a focused button) SHALL parse its descriptor and invoke the callback with it and the currently mounted payload, with the default action prevented; when absent, such elements SHALL be inert — no navigation, no error, no callback. The mount SHALL never execute an action itself; deciding what an activation means is the host's. `WidgetMount` SHALL expose `initial: UpdateResult`, `update(payload: unknown): UpdateResult`, `node(): WidgetNode | undefined`, and `dispose(): void`, where `UpdateResult` is `{ ok: true } | { ok: false; error: WidgetContractError }`.
+The package SHALL export `mountWidget(payload: unknown, container: Element, options?: MountOptions): WidgetMount` from a `./reactive` entry. `MountOptions.catalog` SHALL accept a `WidgetCatalog` (default: a fresh `createCatalog()` per mount). `MountOptions.onAction` SHALL accept a callback `(activation: { id, kind, args?, text?, disabled? }, payload) => void`: when present, activating a mounted `[data-wg-action]` element (click, or Enter/Space on any focused non-button host, action anchors included — the mount SHALL make such hosts focusable) SHALL parse its descriptor and invoke the callback with it and the currently mounted payload, with the default action prevented; when absent, such elements SHALL be inert — no navigation, no error, no callback. The mount SHALL never execute an action itself; deciding what an activation means is the host's. `WidgetMount` SHALL expose `initial: UpdateResult`, `update(payload: unknown): UpdateResult`, `node(): WidgetNode | undefined`, and `dispose(): void`, where `UpdateResult` is `{ ok: true } | { ok: false; error: WidgetContractError }`. Descriptors marked `disabled` SHALL NOT be forwarded (their default action is still prevented).
 
 #### Scenario: Mount renders the initial payload
 - **WHEN** `mountWidget({ kind: "card", data: { title: "T" } }, container)` is called
@@ -30,6 +30,14 @@ The package SHALL export `mountWidget(payload: unknown, container: Element, opti
 #### Scenario: Disposal detaches the listener
 - **WHEN** `dispose()` has been called
 - **THEN** a later click on a former action element SHALL NOT invoke the callback
+
+#### Scenario: Disabled descriptors stay with the mount
+- **WHEN** a mounted element's descriptor carries `disabled: "scope"` and it is clicked
+- **THEN** `onAction` SHALL NOT be invoked and the click's default SHALL be prevented
+
+#### Scenario: Action anchors activate from the keyboard
+- **WHEN** an `a` element carrying a descriptor is focused and Enter is pressed
+- **THEN** `onAction` SHALL receive its descriptor
 
 ### Requirement: In-place DOM patching
 `update(payload)` SHALL re-render through the catalog, diff the new `WidgetNode` tree against the previous one, and patch the DOM minimally: text changes update text nodes, attribute changes set or remove only the affected attributes, and same-shape elements SHALL keep their DOM identity across updates. A changed tag or node type SHALL replace only that subtree.
