@@ -237,4 +237,4 @@ otherwise it runs `pack:check`. After a publish, bump the range in
 - `openspec/specs/<capability>/spec.md` — current behavior; `openspec/changes/archive/` — every change with proposal, design decisions and tasks.
 - `TESTING.md` — package testing, protocol smokes, host registration snippets, package-level verification log.
 - `packages/*/README.md` — per-package install/usage.
-- Backlog (not scheduled): docs site `docs.widgentic.dev`; custom-kind streaming previews (`get_widget_template` app tool); template performance/resource size of `ui://widgentic/app.html`; form inputs / client-side arg collection for actions; DEK unwrap cache; account merge.
+- Backlog (not scheduled): custom-kind streaming previews (`get_widget_template` app tool); template performance/resource size of `ui://widgentic/app.html`; form inputs / client-side arg collection for actions; DEK unwrap cache; merging two accounts that both already hold content (account LINKING shipped in v41–v43 and aliases a second sign-in onto one account — linking a subject that already owns a populated account is refused with `SUBJECT_IN_USE`; a merge would combine the two).
