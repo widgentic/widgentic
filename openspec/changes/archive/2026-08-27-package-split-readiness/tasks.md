@@ -1,6 +1,6 @@
 ## 1. Decisions and workspace scaffolding
 
-- [ ] 1.1 Add the MIT `LICENSE` (decided) and reference it from every public manifest; configure npm trusted publishing for the already-registered `@widgentic` scope (publishing stays dry-run until the workflow is wired)
+- [x] 1.1 Add the MIT `LICENSE` (decided) and reference it from every public manifest; configure npm trusted publishing for the already-registered `@widgentic` scope (publishing stays dry-run until the workflow is wired)
 - [x] 1.2 Turn the root `package.json` into a private workspace root (`workspaces: ["packages/*", "apps/*", "examples/*"]`, shared devDependencies and scripts), create `packages/core`, `packages/designer`, `packages/mcp` skeletons
 - [x] 1.3 Root `tsconfig.json` with `paths` `@widgentic/*` → `packages/*/src`, per-package `tsconfig.json` / `tsconfig.build.json` (`rootDir: src`, `outDir: dist`, declarations + maps); vitest `projects` per package plus a root `tools` project, `resolve.alias` matching `paths`
 

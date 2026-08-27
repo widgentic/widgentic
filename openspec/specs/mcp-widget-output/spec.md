@@ -26,11 +26,15 @@ Hosts SHALL advertise widgentic support so tools can decide whether to emit widg
 - **THEN** tools SHALL emit a plain text representation instead of a widget payload
 
 ### Requirement: MCP module programmatic surface
-The package SHALL export the widgentic MCP convention from a `./mcp` entry: `toWidgetResult`, `toTextResult`, `extractWidgetPayload`, `isWidgetResult`, `hostSupportsWidgets`, `declareWidgetCapability`, and the constants `WIDGENTIC_MIME_TYPE` (`"application/vnd.widgentic+json"`), `WIDGENTIC_URI` (`"ui://widgentic/widget"`), `WIDGENTIC_CAPABILITY` (`"widgentic"`), and `WIDGENTIC_VERSION` (`1`). MCP shapes SHALL be structural local types; the module SHALL NOT depend on an MCP SDK.
+The `@widgentic/mcp` package SHALL export the widgentic MCP convention from its root entry: `toWidgetResult`, `toTextResult`, `extractWidgetPayload`, `isWidgetResult`, `hostSupportsWidgets`, `declareWidgetCapability`, and the constants `WIDGENTIC_MIME_TYPE` (`"application/vnd.widgentic+json"`), `WIDGENTIC_URI` (`"ui://widgentic/widget"`), `WIDGENTIC_CAPABILITY` (`"widgentic"`), and `WIDGENTIC_VERSION` (`1`). MCP shapes SHALL be structural local types; the convention SHALL NOT depend on an MCP SDK, so a host on any MCP framework can emit and read widgentic results.
 
 #### Scenario: Constants are exported for interop
-- **WHEN** `WIDGENTIC_MIME_TYPE` is imported from `widgentic/mcp`
+- **WHEN** `WIDGENTIC_MIME_TYPE` is imported from `@widgentic/mcp`
 - **THEN** it SHALL equal `"application/vnd.widgentic+json"`
+
+#### Scenario: The convention needs no SDK
+- **WHEN** a host imports `toWidgetResult` and `extractWidgetPayload` from `@widgentic/mcp` with no MCP SDK package installed
+- **THEN** the import SHALL succeed and both functions SHALL work on plain result objects
 
 ### Requirement: Widget result emission
 `toWidgetResult(payload, options?)` SHALL return an MCP-shaped tool result whose `content` contains a text fallback block followed by an embedded resource block with `mimeType: WIDGENTIC_MIME_TYPE`, `uri: WIDGENTIC_URI` (overridable via `options.uri`), and `text` holding the JSON-serialized payload. Unknown top-level payload fields SHALL survive the round trip. `options.text` SHALL override the generated fallback text. When the payload cannot be JSON-serialized, the result SHALL degrade to the text-only shape.
@@ -102,4 +106,3 @@ The package SHALL export the widgentic MCP convention from a `./mcp` entry: `toW
 #### Scenario: Absent or malformed capabilities mean no support
 - **WHEN** `hostSupportsWidgets(undefined)`, `hostSupportsWidgets({})`, or `hostSupportsWidgets({ experimental: null })` is called
 - **THEN** the result SHALL be `false`
-

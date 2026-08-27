@@ -29,10 +29,10 @@ The contract SHALL ignore unknown fields rather than fail, so agents written aga
 - **THEN** the renderer SHALL render successfully and SHALL NOT raise a validation error
 
 ### Requirement: TypeScript type exports
-The package SHALL export TypeScript types `WidgetPayload`, `WidgetKind`, `WidgetHints`, and `WidgetMeta` describing the contract `{ kind, data, hints?, meta? }` from the `widgentic/contract` entry — the package's `exports` map is the single resolution authority, and it deliberately exposes named entries only (there is no `"."` root export).
+The `@widgentic/core` package SHALL export TypeScript types `WidgetPayload`, `WidgetKind`, `WidgetHints`, and `WidgetMeta` describing the contract `{ kind, data, hints?, meta? }` from both its root entry and the `@widgentic/core/contract` subpath — the package's `exports` map is the single resolution authority, and every documented entry SHALL be listed there.
 
 #### Scenario: Import types from the package entry
-- **WHEN** a consumer imports `WidgetPayload` from the package's contract entry (`widgentic/contract`, resolved through the `exports` map)
+- **WHEN** a consumer imports `WidgetPayload` from `@widgentic/core` or from `@widgentic/core/contract` (resolved through the `exports` map)
 - **THEN** the type SHALL be available and resolve to a discriminated object containing at minimum `kind: string` and `data: unknown`
 
 #### Scenario: Optional fields are typed optional

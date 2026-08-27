@@ -92,7 +92,7 @@ Failures SHALL be returned as `isError: true` results whose text content is the 
 - **THEN** each SHALL return an `isError: true` result with a structured error
 
 ### Requirement: Runnable server and SDK interoperability
-The repository SHALL provide `examples/mcp-server/main.ts` wiring the library's server assembly onto stdio with that example's compiled-in custom widgets registered (the invoice template among them) — a self-contained demonstration of hosting widgentic with your own widgets, importing only public `widgentic/*` entries — started by `npm run mcp` using devDependencies only. The test suite SHALL verify via the SDK's in-memory transport that `list_widgets` and `render_widget` round-trip through the real protocol against the library assembly, including the `isError` path for an unknown widget.
+The repository SHALL provide `examples/mcp-server/main.ts` wiring the library's server assembly onto stdio with that example's compiled-in custom widgets registered (the invoice template among them) — a self-contained demonstration of hosting widgentic with your own widgets, importing only public `@widgentic/*` entries — started by `npm run mcp` using devDependencies only. The test suite SHALL verify via the SDK's in-memory transport that `list_widgets` and `render_widget` round-trip through the real protocol against the library assembly, including the `isError` path for an unknown widget.
 
 #### Scenario: Protocol round trip
 - **WHEN** an in-memory SDK client calls `render_widget` with `{ widget: "card", data: { title: "T" } }`
@@ -107,11 +107,11 @@ The repository SHALL provide `examples/mcp-server/main.ts` wiring the library's 
 - **THEN** the delivered result SHALL have `isError: true` with the `UNKNOWN_KIND` JSON error
 
 #### Scenario: Dependencies stay dev-only
-- **WHEN** `package.json` is inspected after this change
-- **THEN** the SDK and tsx SHALL appear only under `devDependencies` — the SDK packages additionally as **optional** `peerDependencies` for the assembly entry — and no `dependencies` section SHALL exist
+- **WHEN** the `@widgentic/mcp` manifest is inspected
+- **THEN** the MCP SDK packages SHALL appear only as optional `peerDependencies` (for the `./sdk` entry), `@widgentic/core` as its sole `dependencies` entry, and tsx only under the workspace's `devDependencies`
 
 ### Requirement: Server assembly is a library export
-The package SHALL export `createWidgenticServer(options?: { catalog?, themes? })` from a `widgentic/mcp-server/sdk` entry, producing a connectable official-SDK `McpServer` with the full wiring: the tools, the formal Apps declaration, the app-template resource, capability-aware slimming, and image inlining. Its MCP SDK packages SHALL be optional peer dependencies — installed only by hosts importing this entry — and the base `widgentic/mcp-server` entry SHALL remain importable without any SDK present. With no options the assembly SHALL serve exactly the built-in kinds and built-in themes; compiled-in extras are the host's explicit choice via `catalog`.
+The package SHALL export `createWidgenticServer(options?: { catalog?, themes? })` from the `@widgentic/mcp/sdk` entry, producing a connectable official-SDK `McpServer` with the full wiring: the tools, the formal Apps declaration, the app-template resource, capability-aware slimming, and image inlining. Its MCP SDK packages SHALL be optional peer dependencies — installed only by hosts importing this entry — and the base `@widgentic/mcp` entry SHALL remain importable without any SDK present. With no options the assembly SHALL serve exactly the built-in kinds and built-in themes; compiled-in extras are the host's explicit choice via `catalog`.
 
 #### Scenario: One assembly serves every transport
 - **WHEN** the HTTP entry, the stdio example, and the in-memory interop tests construct their servers
@@ -122,8 +122,8 @@ The package SHALL export `createWidgenticServer(options?: { catalog?, themes? })
 - **THEN** the descriptor list SHALL contain exactly the built-in kinds
 
 #### Scenario: The base entry stays SDK-free
-- **WHEN** the modules reachable from the `widgentic/mcp-server` entry are inspected
-- **THEN** none SHALL import from an MCP SDK package — the SDK surface exists only behind `widgentic/mcp-server/sdk`
+- **WHEN** the modules reachable from the `@widgentic/mcp` entry are inspected
+- **THEN** none SHALL import from an MCP SDK package — the SDK surface exists only behind `@widgentic/mcp/sdk`
 
 ### Requirement: Output format selection
 `render_widget` SHALL accept `format?: "both" | "html" | "widget" | "page" | "app"` (default `"both"`, the current dual-block behavior). `"html"` SHALL return only the fragment text block; `"widget"` only the widgentic resource block; `"page"` SHALL return a self-contained styled HTML document (doctype, inlined base stylesheet, the rendered fragment) as the text block, keeping the widgentic resource block; `"app"` SHALL return the app composition (text fallback, `text/html` `ui://` resource, widgentic payload block). An unrecognized `format` SHALL return `INVALID_TYPE` at `path: "format"`.
@@ -257,7 +257,7 @@ Every successful `render_widget` result SHALL carry `structuredContent: { html, 
 - **AND** for a caller without `execute`, or a kind without `load`, the key SHALL be absent
 
 ### Requirement: Formal Apps declaration at the wiring layer
-The server assembly SHALL declare the tool↔UI linkage per the MCP Apps specification using the official `@modelcontextprotocol/ext-apps` server helpers: `render_widget` registered with `_meta.ui.resourceUri: "ui://widgentic/app.html"`, and the app template registered as a resource with mime type `"text/html;profile=mcp-app"`. When the assembly is given `resourceDomains` (a list of hostnames the operator trusts the frame to load assets from), the app resource SHALL declare them as `_meta.ui.csp.resourceDomains` (the Apps CSP block) and the same list SHALL govern the inliner's declared-domain skip; with none given, nothing is declared and every external image faces inlining. The list is deployment configuration — stored widgets and render inputs SHALL have no way to extend it. The assembly SHALL detect the client's Apps capability (`extensions["io.modelcontextprotocol/ui"]`) after initialization and note the outcome on stderr. SDK and host-flavor specifics SHALL live only behind the `widgentic/mcp-server/sdk` entry; the base `widgentic/mcp-server` entry remains SDK-free (per the server-assembly requirement).
+The server assembly SHALL declare the tool↔UI linkage per the MCP Apps specification using the official `@modelcontextprotocol/ext-apps` server helpers: `render_widget` registered with `_meta.ui.resourceUri: "ui://widgentic/app.html"`, and the app template registered as a resource with mime type `"text/html;profile=mcp-app"`. When the assembly is given `resourceDomains` (a list of hostnames the operator trusts the frame to load assets from), the app resource SHALL declare them as `_meta.ui.csp.resourceDomains` (the Apps CSP block) and the same list SHALL govern the inliner's declared-domain skip; with none given, nothing is declared and every external image faces inlining. The list is deployment configuration — stored widgets and render inputs SHALL have no way to extend it. The assembly SHALL detect the client's Apps capability (`extensions["io.modelcontextprotocol/ui"]`) after initialization and note the outcome on stderr. SDK and host-flavor specifics SHALL live only behind the `@widgentic/mcp/sdk` entry; the base `@widgentic/mcp` entry remains SDK-free (per the server-assembly requirement).
 
 #### Scenario: Tool declares its template
 - **WHEN** an SDK client lists tools
