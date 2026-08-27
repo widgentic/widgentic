@@ -4,9 +4,9 @@
  * Apps declaration. Transport-agnostic — hosts connect it to stdio,
  * Streamable HTTP, or in-memory pipes.
  *
- * This module ships from its own entry (`widgentic/mcp-server/sdk`); the
+ * This module ships from its own entry (`@widgentic/mcp/sdk`); the
  * MCP SDK packages are optional peer dependencies installed only by
- * hosts that import it. The base `widgentic/mcp-server` entry stays
+ * hosts that import it. The base `@widgentic/mcp` entry stays
  * SDK-free.
  */
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";

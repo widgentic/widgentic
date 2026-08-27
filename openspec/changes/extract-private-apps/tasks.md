@@ -21,5 +21,5 @@
 
 ## 5. Verification and closure
 
-- [ ] 5.1 Both repositories green in CI; production on v59 from `widgentic/apps`; `widgentic/widgentic` contains no `apps/`, `infra/` or Dockerfile and no reference to them outside the archive
-- [ ] 5.2 Update the dev-loop notes: the archive routine now runs per repository; app changes needing package changes follow release → bump
+- [x] 5.1 Both repositories green in CI; production on v59 from `widgentic/apps`; `widgentic/widgentic` contains no `apps/`, `infra/` or Dockerfile and no reference to them outside the archive
+- [x] 5.2 Update the dev-loop notes: the archive routine now runs per repository; app changes needing package changes follow release → bump

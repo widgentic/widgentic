@@ -3,8 +3,8 @@
  * action, each mountable standalone or as a custom element.
  *
  * Import discipline: this capability consumes the rest of widgentic ONLY
- * through public package entries (`widgentic/catalog`, `widgentic/templates`,
- * `widgentic/theming`, `widgentic/reactive`, `widgentic/contract`) so it can
+ * through public package entries (`@widgentic/core/catalog`, `@widgentic/core/templates`,
+ * `@widgentic/core/theming`, `@widgentic/core/reactive`, `@widgentic/core/contract`) so it can
  * be extracted into a standalone npm package without code changes. It
  * performs no network I/O — hosts own persistence via change events.
  */

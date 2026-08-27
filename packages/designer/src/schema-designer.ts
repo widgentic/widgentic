@@ -14,7 +14,7 @@ import { diagnosticLine, h, injectDesignerStyles, section, textField, requireChi
 import { attachJsonHighlight, repaintHighlight } from "./highlight.js";
 import { createSchemaBuilder } from "./schema-builder.js";
 
-/** The store's identifier charset — kept local: `widgentic/store` is a
+/** The store's identifier charset — kept local: `@widgentic/mcp/store` is a
  * Node-only entry and the designer runs in browsers. */
 const SAFE_NAME = /^[a-zA-Z0-9._-]+$/;
 

@@ -7,11 +7,11 @@
  *      TypeScript emits exactly the `widgets/` module shape),
  *   2. register them into a catalog,
  *   3. hand that catalog to the library's server assembly
- *      (`widgentic/mcp-server/sdk` — the MCP SDK packages are optional
+ *      (`@widgentic/mcp/sdk` — the MCP SDK packages are optional
  *      peer dependencies, installed by hosts like this one),
  *   4. connect whatever transport your host speaks.
  *
- * Everything imports public `widgentic/*` entries only: copy this folder,
+ * Everything imports public `@widgentic/*` entries only: copy this folder,
  * swap the widgets, and you have your own deployment. The hosted server
  * (private repository widgentic/apps) is the same assembly fed from a per-principal store
  * instead of compiled-in modules.
