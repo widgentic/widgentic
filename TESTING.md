@@ -1,7 +1,9 @@
 # Widgentic — testing & operations runbook
 
-Everything runnable, hosted, and learned the hard way: local entries, the
-Apps rig, production for both container apps, and host registration.
+Package-level testing for the public monorepo: the runnable entries, the
+protocol smokes worth running against any server built on `@widgentic/mcp`,
+and host registration snippets for the sample server. Nothing here is about
+our deployments — those live in the private `widgentic/apps` repository.
 
 ## Layout: what lives here and what moved
 
@@ -21,9 +23,7 @@ runnable hosts here.
 | Command | Transport | Use for |
 |--|--|--|
 | `npm run mcp` | stdio | Claude Desktop, Claude Code, any stdio client |
-| `npm run designer` | HTTP on `:8082` | The designers in a demo host (widget + theme + action tabs); rig: `:9446` |
-| *(env)* `WIDGENTIC_LOCAL_KEK=<64 hex>` | — | Enables secrets on a local rig (development cipher; `openssl rand -hex 32`). Production uses `WIDGENTIC_KEK_ID` (Key Vault) instead |
-| *(env)* `WIDGENTIC_EXECUTE_RATE=<n>` | — | `execute_action` per-principal executions per minute (default 60) |
+| `npm run designer` | HTTP on `:8082` | The designers in a demo host (widget + theme + action tabs); `/standalone.html` uses the published browser bundle |
 
 Quick checks without any host:
 
@@ -33,8 +33,9 @@ npm test                                                                  # incl
 npm run build                                                             # packaging + declarations
 ```
 
-Two protocol-level smokes worth running against any deployment, because
-neither shows up in a normal render check:
+Two protocol-level smokes worth running against any server built on
+`@widgentic/mcp` (set `URL` to yours), because neither shows up in a normal
+render check:
 
 ```bash
 # 1. The authoring guide is DERIVED from the live validators, so this is
@@ -55,20 +56,21 @@ curl -s -X POST "$URL/mcp" -H 'Content-Type: application/json' \
 
 ## Host registration snippets
 
-**VS Code Copilot** (`.vscode/mcp.json`) — an MCP Apps host; widgets mount inline:
+**VS Code Copilot** (`.vscode/mcp.json`) — an MCP Apps host; widgets mount inline.
+Point `url` at a Streamable HTTP server built with `createWidgenticServer()`
+(`@widgentic/mcp/sdk`); add the `x-api-key` header if that server resolves
+principals from a store:
 
 ```json
-{ "servers": { "widgentic": { "type": "http", "url": "https://mcp.widgentic.dev/mcp", "headers": { "x-api-key": "<api-key>" } } } }
+{ "servers": { "widgentic": { "type": "http", "url": "http://localhost:3001/mcp", "headers": { "x-api-key": "<api-key>" } } } }
 ```
-
-Against a local/tailnet server instead, drop the header and point `url` at
-`http://localhost:3001/mcp` or `https://ubuntu-open-clawn.tailcb1690.ts.net:9444/mcp`.
 
 **claude.ai / Claude Desktop custom connectors** — Settings → Connectors →
-Add custom connector, with the key in the URL (no header support there):
+Add custom connector; connectors accept only a URL, so a per-principal server
+takes the key as a query parameter:
 
 ```
-https://mcp.widgentic.dev/mcp?key=<api-key>
+https://<your-server>/mcp?key=<api-key>
 ```
 
 **Claude Code** (tool results are text; Claude Code does not mount MCP Apps UI):

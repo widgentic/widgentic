@@ -15,7 +15,7 @@ context: |
     - Integration: MCP-first. Treat MCP integration as a convention, not a
       hard SDK dependency, so the contract works outside MCP too.
     - Reference patterns: Azure Functions MCP extension and the fluent MCP
-      SDK (see reference-links.md).
+      SDK.
 
   Conventions:
     - Spec-first: capabilities are defined under openspec/ before implementation.
