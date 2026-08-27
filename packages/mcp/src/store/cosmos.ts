@@ -1,6 +1,6 @@
 /**
  * Cosmos DB adapter for the widgentic store port — the port's first real
- * database implementation. Ships from its own entry (`widgentic/store/cosmos`)
+ * database implementation. Ships from its own entry (`@widgentic/mcp/store/cosmos`)
  * so `@widgentic/mcp/store` keeps its no-network, zero-dependency property;
  * `@azure/cosmos` and `@azure/identity` are optional peer dependencies that
  * only hosts importing this entry install.

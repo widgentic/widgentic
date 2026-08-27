@@ -3,7 +3,7 @@
  * secrets (ciphertext) and API keys.
  *
  * The port plus two reference implementations; the Cosmos adapter ships
- * from `widgentic/store/cosmos`. Composition builds a request-scoped
+ * from `@widgentic/mcp/store/cosmos`. Composition builds a request-scoped
  * catalog and theme registry so one principal's entries can never reach
  * another's session.
  */

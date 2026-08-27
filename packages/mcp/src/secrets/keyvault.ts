@@ -1,7 +1,7 @@
 /**
  * Key Vault cipher: data keys are wrapped and unwrapped by the vault's
  * cryptographic operations (RSA-OAEP-256), so the KEK never exists in this
- * process. Ships from its own entry (`widgentic/secrets/keyvault`) because
+ * process. Ships from its own entry (`@widgentic/mcp/secrets/keyvault`) because
  * `@azure/keyvault-keys` and `@azure/identity` are optional peers.
  *
  * Identity only: the identity needs the wrap/unwrap role on the key
