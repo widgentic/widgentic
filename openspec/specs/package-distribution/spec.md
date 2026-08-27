@@ -87,15 +87,19 @@ The three public packages SHALL be versioned as a linked group: a change that bu
 - **THEN** it SHALL show a provenance attestation linking it to the release workflow run
 
 ### Requirement: Apps and examples consume the public entries
-The repository's own apps and examples SHALL import widgentic only through the published package specifiers, never through source paths, so that moving them to another repository changes only how the packages are resolved. During development the repository SHALL resolve those specifiers to the package sources without a build step (typecheck, tests and the runnable apps), and the packed packages SHALL behave identically.
+The examples in this repository SHALL import widgentic only through the published package specifiers, never through source paths, and during development the repository SHALL resolve those specifiers to the package sources without a build step (typecheck, tests and the runnable examples), with the packed packages behaving identically. Our own apps SHALL NOT live in this repository: they SHALL be maintained in a separate private repository that depends on published `@widgentic/*` versions from the registry, so a package change reaches the apps only through a release and a dependency bump.
 
 #### Scenario: An app reaches into sources
-- **WHEN** a file under `apps/` or `examples/` imports a path under `packages/*/src`
+- **WHEN** a file under `examples/` imports a path under `packages/*/src`
 - **THEN** the boundary check SHALL fail
 
 #### Scenario: Development needs no publish
-- **WHEN** a developer changes a core module and runs the web app or the test suite
+- **WHEN** a developer changes a core module and runs the test suite or the designer example
 - **THEN** the change SHALL be visible immediately, without building or publishing any package
+
+#### Scenario: The apps pin published versions
+- **WHEN** the private apps repository installs its dependencies
+- **THEN** `@widgentic/core`, `@widgentic/designer` and `@widgentic/mcp` SHALL resolve from the npm registry at the declared versions, and no path into this repository's sources SHALL be referenced
 
 ### Requirement: Capabilities map to packages
 Each capability specification SHALL belong to exactly one distribution unit: `widget-contract`, `data-adapters`, `widget-mapper`, `widget-catalog`, `widget-theming`, `template-widgets`, `widget-actions` and `reactive-rendering` to `@widgentic/core`; `widget-designer` to `@widgentic/designer`; `mcp-widget-output`, `mcp-server`, `widget-store` and `widget-secrets` to `@widgentic/mcp`; `widgentic-app` to the private apps. A requirement that changes observable behavior SHALL ship in the package its capability maps to.
