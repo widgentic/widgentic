@@ -17,7 +17,7 @@
 
 - [x] 4.1 `git rm` `apps/`, `infra/`, `Dockerfile`, `.dockerignore`; drop the `apps/*` workspace, the `mcp:http`/`web` scripts, the `apps` vitest project, `apps/**/*.ts` from tsconfig, the apps rules and `@widgentic-apps/` case from `tools/boundaries.test.ts`; regenerate the lockfile
 - [x] 4.2 README: collapse "Hosted endpoint" and "The widgentic.dev app" to a pointer paragraph; TESTING.md: rewrite the Layout section, trim Entries, move Production / app / rig / verification-log sections out with a pointer to `widgentic/apps` RUNBOOK.md
-- [ ] 4.3 Typecheck, full suite (boundary + snapshots included), `npm run build`, `npm run pack:check` green; `openspec validate --strict`; commit and push
+- [x] 4.3 Typecheck, full suite (boundary + snapshots included), `npm run build`, `npm run pack:check` green; `openspec validate --strict`; commit and push
 
 ## 5. Verification and closure
 

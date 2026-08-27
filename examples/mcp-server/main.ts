@@ -13,7 +13,7 @@
  *
  * Everything imports public `widgentic/*` entries only: copy this folder,
  * swap the widgets, and you have your own deployment. The hosted server
- * (apps/mcp-server) is the same assembly fed from a per-principal store
+ * (private repository widgentic/apps) is the same assembly fed from a per-principal store
  * instead of compiled-in modules.
  */
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
