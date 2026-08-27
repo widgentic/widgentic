@@ -41,7 +41,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/diegohoyos/widgentic.git",
+    "url": "git+https://github.com/widgentic/widgentic.git",
     "directory": "packages/mcp"
   },
   "homepage": "https://widgentic.dev",

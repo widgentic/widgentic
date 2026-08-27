@@ -1,11 +1,17 @@
 # Versions and publishes the public packages with Changesets.
 #   - On every push to main with pending changesets: opens/updates the
-#     "Version Packages" PR (versions + CHANGELOGs).
-#   - When that PR merges: publishes to npm with provenance — but only once the
-#     repository variable NPM_PUBLISH is "true". Until then the step builds and
-#     stops, so the pipeline can be exercised end to end without a release.
-# Publishing uses npm trusted publishing (OIDC, id-token: write) configured on
-# the @widgentic scope for this repository/workflow; no long-lived token.
+#     "Version Packages" PR (versions + CHANGELOGs). Requires the org and
+#     repo setting "Allow GitHub Actions to create and approve pull requests".
+#   - When that PR merges: publishes to npm with provenance — only once the
+#     repository variable NPM_PUBLISH is "true". Until then the step runs
+#     pack:check instead, so the pipeline is exercised without a release.
+# Authentication:
+#   - Preferred: npm trusted publishing (OIDC via id-token: write) configured
+#     on each package for widgentic/widgentic + release.yml. Needs npm >= 11.5.
+#   - Bootstrap: trusted publishing can only be configured on a package that
+#     already exists, so the FIRST publish uses a short-lived granular token in
+#     the NPM_TOKEN secret. Delete the secret afterwards; the OIDC path takes
+#     over automatically when it is absent.
 name: Release
 on:
   push:
@@ -15,6 +21,8 @@ permissions:
   pull-requests: write
   id-token: write
 concurrency: release-${{ github.ref }}
+env:
+  NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -24,7 +32,11 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          registry-url: https://registry.npmjs.org
+      - name: npm with trusted-publishing support
+        run: npm install -g npm@latest && npm --version
+      - name: Bootstrap token (first publish only)
+        if: env.NPM_TOKEN != ''
+        run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> ~/.npmrc
       - run: npm ci
       - run: npm run build
       - name: Version or publish
