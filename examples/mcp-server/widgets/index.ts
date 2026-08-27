@@ -1,6 +1,6 @@
-import type { WidgetDescriptorInput } from "widgentic/catalog";
-import type { WidgetTemplate } from "widgentic/templates";
-import type { ActionBinding } from "widgentic/actions";
+import type { WidgetDescriptorInput } from "@widgentic/core";
+import type { WidgetTemplate } from "@widgentic/core";
+import type { ActionBinding } from "@widgentic/core";
 import { invoiceWidget } from "./invoice.js";
 import { xPostWidget } from "./x-post.js";
 import { weatherWidget } from "./weather.js";
@@ -19,3 +19,6 @@ export interface CustomWidget {
 
 /** All custom widgets the demo server registers at startup. */
 export const customWidgets: CustomWidget[] = [invoiceWidget, xPostWidget, weatherWidget];
+
+/** The individual example widgets, for hosts and tests that want one at a time. */
+export { invoiceWidget, xPostWidget, weatherWidget };

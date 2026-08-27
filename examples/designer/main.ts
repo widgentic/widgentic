@@ -14,13 +14,11 @@ import {
   defineActionDesignerElement,
   defineDesignerElement,
   defineThemeDesignerElement
-} from "widgentic/designer";
-import type { ActionDesignerHandle, DesignerHandle, ThemeDesignerHandle } from "widgentic/designer";
-import { createThemeRegistry } from "widgentic/theming";
-import type { ThemeEntry } from "widgentic/theming";
-import { invoiceWidget } from "../mcp-server/widgets/invoice.js";
-import { xPostWidget } from "../mcp-server/widgets/x-post.js";
-import { weatherWidget } from "../mcp-server/widgets/weather.js";
+} from "@widgentic/designer";
+import type { ActionDesignerHandle, DesignerHandle, ThemeDesignerHandle } from "@widgentic/designer";
+import { createThemeRegistry } from "@widgentic/core";
+import type { ThemeEntry } from "@widgentic/core";
+import { invoiceWidget, weatherWidget, xPostWidget } from "@widgentic-examples/mcp-server/widgets";
 
 const DRAFT_KEY = "widgentic-designer-draft";
 const THEMES_KEY = "widgentic-designer-themes";

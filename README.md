@@ -14,17 +14,32 @@ All capabilities are specified under `openspec/specs/` and implemented with zero
 
 | Capability | Package entry | What it does |
 |--|--|--|
-| `widget-contract` | `widgentic/contract` | The normalized payload `{ kind, data, hints?, meta? }` + `validateWidgetPayload` |
-| `data-adapters` | `widgentic/adapters` | `parseJson` / `parseCsv` with structured errors and opt-in type inference |
-| `widget-mapper` | `widgentic/mapper` | `inferKind` / `mapToWidget`: default widget selection from data shape |
-| `widget-catalog` | `widgentic/catalog` | Built-ins (`card`, `table`, `tree`, `custom`, `group` — several widgets in one render with layout hints), registration API, pure `WidgetNode` render tree, `renderToHtml` + `mountNode`, image-aware card fields and table cells (avatars/thumbs/heroes via `hints.images`), `meta` chrome on card/table/tree, `hints.fieldFormat` display formatting (card + table, payload keeps typed values), opt-in `hints.links` anchors behind the URL scheme guard, descriptor data schemas incl. ReDoS-bounded `pattern` |
-| `mcp-widget-output` | `widgentic/mcp` | The MCP convention: emit/extract widget payloads, capability negotiation — no SDK dependency |
-| `reactive-rendering` | `widgentic/reactive` | `mountWidget` handles with in-place DOM patching (identity-preserving updates) |
-| `template-widgets` | `widgentic/templates` | Serializable JSON template DSL (`bind`/`each`/`when`) — the widget-designer runtime, safe for untrusted authors |
-| `widget-theming` | `widgentic/theming` | `--wg-*` token registry (colors, status, scale steps), author-defined `x-*` custom variables, named-theme registry with `extends`, a generated base stylesheet that **defines every registry token at `:root`** so custom widget styles can use bare `var(--wg-*)` safely, themes as validated JSON |
-| `mcp-server` | `widgentic/mcp-server` | The Widgentic MCP server: seven tools — `list_widgets`, `list_schemas`, `list_themes`, `list_theme_tokens` and `get_authoring_guide` (discovery) + `render_widget` (validate → render → HTML + payload) — as SDK-free definitions/handlers, plus the full server assembly behind `widgentic/mcp-server/sdk` (MCP SDK as optional peers) |
-| `widget-store` | `widgentic/store` | Per-principal widgets, themes, and shared data schemas: a persistence-agnostic port (`resolvePrincipal`/`widgets`/`themes`/`schemas`), memory + file reference implementations, hashed constant-time keys, structural limits, and request-scoped `composeCatalog`/`composeThemes` — widgets may reference a shared schema by name (`dataSchemaRef`), resolved at composition so one `person` schema serves every person widget |
-| `widget-designer` | `widgentic/designer` | Three embeddable designers (factories + opt-in custom elements, zero deps): the **widget** designer (template tree/JSON, full descriptor, styles and hints as tree-or-JSON, dataSchema, theme selection with a token reference) and the standalone **theme** designer (tokens, custom variables, named entries, previewing host-supplied widgets) and the standalone **schema** designer (shared data-schema entries) — all with live validation and an optional read-only mode |
+| `widget-contract` | `@widgentic/core/contract` | The normalized payload `{ kind, data, hints?, meta? }` + `validateWidgetPayload` |
+| `data-adapters` | `@widgentic/core/adapters` | `parseJson` / `parseCsv` with structured errors and opt-in type inference |
+| `widget-mapper` | `@widgentic/core/mapper` | `inferKind` / `mapToWidget`: default widget selection from data shape |
+| `widget-catalog` | `@widgentic/core/catalog` | Built-ins (`card`, `table`, `tree`, `custom`, `group` — several widgets in one render with layout hints), registration API, pure `WidgetNode` render tree, `renderToHtml` + `mountNode`, image-aware card fields and table cells (avatars/thumbs/heroes via `hints.images`), `meta` chrome on card/table/tree, `hints.fieldFormat` display formatting (card + table, payload keeps typed values), opt-in `hints.links` anchors behind the URL scheme guard, descriptor data schemas incl. ReDoS-bounded `pattern` |
+| `mcp-widget-output` | `@widgentic/mcp` | The MCP convention: emit/extract widget payloads, capability negotiation — no SDK dependency |
+| `reactive-rendering` | `@widgentic/core/reactive` | `mountWidget` handles with in-place DOM patching (identity-preserving updates) |
+| `template-widgets` | `@widgentic/core/templates` | Serializable JSON template DSL (`bind`/`each`/`when`) — the widget-designer runtime, safe for untrusted authors |
+| `widget-theming` | `@widgentic/core/theming` | `--wg-*` token registry (colors, status, scale steps), author-defined `x-*` custom variables, named-theme registry with `extends`, a generated base stylesheet that **defines every registry token at `:root`** so custom widget styles can use bare `var(--wg-*)` safely, themes as validated JSON |
+| `mcp-server` | `@widgentic/mcp` | The Widgentic MCP server: seven tools — `list_widgets`, `list_schemas`, `list_themes`, `list_theme_tokens` and `get_authoring_guide` (discovery) + `render_widget` (validate → render → HTML + payload) — as SDK-free definitions/handlers, plus the full server assembly behind `@widgentic/mcp/sdk` (MCP SDK as optional peers) |
+| `widget-store` | `@widgentic/mcp/store` | Per-principal widgets, themes, and shared data schemas: a persistence-agnostic port (`resolvePrincipal`/`widgets`/`themes`/`schemas`), memory + file reference implementations, hashed constant-time keys, structural limits, and request-scoped `composeCatalog`/`composeThemes` — widgets may reference a shared schema by name (`dataSchemaRef`), resolved at composition so one `person` schema serves every person widget |
+| `widget-designer` | `@widgentic/designer` | Three embeddable designers (factories + opt-in custom elements, zero deps): the **widget** designer (template tree/JSON, full descriptor, styles and hints as tree-or-JSON, dataSchema, theme selection with a token reference) and the standalone **theme** designer (tokens, custom variables, named entries, previewing host-supplied widgets) and the standalone **schema** designer (shared data-schema entries) — all with live validation and an optional read-only mode |
+
+## Packages
+
+| package | contents | runs in |
+|---|---|---|
+| [`@widgentic/core`](packages/core) | contract, adapters, mapper, catalog, theming, templates, actions, reactive rendering | browser + Node |
+| [`@widgentic/designer`](packages/designer) | widget / theme / schema / action designers, custom elements, browser bundle | browser |
+| [`@widgentic/mcp`](packages/mcp) | tool-output convention, handlers, app template, action execution, official-SDK assembly (`/sdk`), store (`/store`, `/store/cosmos`), secrets (`/secrets`, `/secrets/keyvault`) | Node ≥ 22 |
+| `apps/*` (private) | our MCP server and the widgentic.dev app, plus `infra/` | — |
+| `examples/*` | sample hosts: a stdio MCP server with compiled-in widgets, a designer host page | — |
+
+The repository is an npm workspace: typecheck, tests and the runnable apps
+resolve `@widgentic/*` to package sources (root `tsconfig` `paths`); `npm run
+build` emits each package's `dist`, and `npm run pack:check` verifies the
+tarballs. Releases go through Changesets with npm provenance.
 
 ## Architecture
 
@@ -32,13 +47,13 @@ All capabilities are specified under `openspec/specs/` and implemented with zero
 External API / Agent data
         │
         ▼
-  Data adapter (JSON | CSV | passthrough)      widgentic/adapters
+  Data adapter (JSON | CSV | passthrough)      @widgentic/core/adapters
         │
         ▼
-  Widget mapper ──► { kind, data, hints?, meta? } ◄── widgentic/contract
+  Widget mapper ──► { kind, data, hints?, meta? } ◄── @widgentic/core/contract
         │
         ▼
-  MCP widget output (tool ⇄ host convention)   widgentic/mcp
+  MCP widget output (tool ⇄ host convention)   @widgentic/mcp
         │
         ▼
   Widget catalog → card · table · tree · custom · registered/template kinds
@@ -50,12 +65,12 @@ External API / Agent data
 ## End to end
 
 ```ts
-import { parseCsv } from "widgentic/adapters";
-import { mapToWidget } from "widgentic/mapper";
-import { toWidgetResult, extractWidgetPayload, hostSupportsWidgets } from "widgentic/mcp";
-import { createCatalog } from "widgentic/catalog";
-import { mountWidget } from "widgentic/reactive";
-import { injectBaseStyles, applyTheme, darkTheme } from "widgentic/theming";
+import { parseCsv } from "@widgentic/core/adapters";
+import { mapToWidget } from "@widgentic/core/mapper";
+import { toWidgetResult, extractWidgetPayload, hostSupportsWidgets } from "@widgentic/mcp";
+import { createCatalog } from "@widgentic/core/catalog";
+import { mountWidget } from "@widgentic/core/reactive";
+import { injectBaseStyles, applyTheme, darkTheme } from "@widgentic/core/theming";
 
 // Tool side: parse data, pick a widget, emit an MCP result.
 const parsed = parseCsv(csvText);
@@ -80,7 +95,7 @@ Custom widgets come in two flavors:
 catalog.register("badge", (payload) => ({ tag: "span", attrs: { class: "badge" }, children: [String(payload.data)] }));
 
 // Data (untrusted authors / widget designers): a serializable template
-import { registerTemplate } from "widgentic/templates";
+import { registerTemplate } from "@widgentic/core/templates";
 registerTemplate(catalog, "invoice", {
   tag: "div",
   children: [
@@ -178,7 +193,7 @@ third-party hosts and prompt-injectable contexts, so writes belong to an
 authenticated app session, not to a pasted credential.
 
 In production the store is **Cosmos DB serverless** via the
-`widgentic/store/cosmos` adapter (`@azure/cosmos` + `@azure/identity` are
+`@widgentic/mcp/store/cosmos` adapter (`@azure/cosmos` + `@azure/identity` are
 optional peer dependencies — only hosts importing that entry install
 them). Two containers: `data` partitioned by `/principalId` (a user's
 whole catalog is one single-partition query) and `keys` partitioned by
@@ -272,7 +287,7 @@ via `{ widgets }`, so a theme is judged against the widgets it will
 actually dress (invalid definitions are skipped, never fatal).
 
 ```ts
-import { createDesigner, createSchemaDesigner, createThemeDesigner } from "widgentic/designer";
+import { createDesigner, createSchemaDesigner, createThemeDesigner } from "@widgentic/designer";
 
 const designer = createDesigner(el, {
   themes,             // named entries offered as preview themes
@@ -327,7 +342,7 @@ Execution is gated three ways: the host must proxy app tool calls (`serverTools`
 
 ## Status
 
-All twelve specified capabilities are implemented and tested — the eleven with package entries above, plus `widgentic-app`, the hosted authoring app (`npm test` — 580+ unit, type, DOM, and MCP Apps interop tests — type suites run in the default gate; zero runtime dependencies — the Cosmos adapter's Azure SDKs are optional peers installed only by hosts importing `widgentic/store/cosmos`). Live in production: the MCP server at `https://mcp.widgentic.dev/mcp` serving **per-principal catalogs** from Cosmos DB (keys resolve by digest point read; unknown keys degrade to the anonymous catalog), and the authoring app at [widgentic.dev](https://widgentic.dev) — sign in with email (Entra External ID) or GitHub (and link the two into one account: same widgets, themes, schemas, and keys either way), create revocable API keys, and design widgets/themes that appear in your own catalog on the next tool call. IaC in [infra/](infra/); both container apps scale to zero. Development is spec-first via OpenSpec: see `openspec/specs/` for current behavior and `openspec/changes/archive/` for the full change history. Backlog for the next cycles: the static docs site at `docs.widgentic.dev` and `ontoolinputpartial` streaming previews. (Account linking and the pre-production hardening pass — Key Vault-backed secrets, DNS-pinned image fetching, per-deployment `resourceDomains` — shipped in v40–v43.)
+All twelve specified capabilities are implemented and tested — the eleven with package entries above, plus `widgentic-app`, the hosted authoring app (`npm test` — 580+ unit, type, DOM, and MCP Apps interop tests — type suites run in the default gate; zero runtime dependencies — the Cosmos adapter's Azure SDKs are optional peers installed only by hosts importing `@widgentic/mcp/store/cosmos`). Live in production: the MCP server at `https://mcp.widgentic.dev/mcp` serving **per-principal catalogs** from Cosmos DB (keys resolve by digest point read; unknown keys degrade to the anonymous catalog), and the authoring app at [widgentic.dev](https://widgentic.dev) — sign in with email (Entra External ID) or GitHub (and link the two into one account: same widgets, themes, schemas, and keys either way), create revocable API keys, and design widgets/themes that appear in your own catalog on the next tool call. IaC in [infra/](infra/); both container apps scale to zero. Development is spec-first via OpenSpec: see `openspec/specs/` for current behavior and `openspec/changes/archive/` for the full change history. Backlog for the next cycles: the static docs site at `docs.widgentic.dev` and `ontoolinputpartial` streaming previews. (Account linking and the pre-production hardening pass — Key Vault-backed secrets, DNS-pinned image fetching, per-deployment `resourceDomains` — shipped in v40–v43.)
 
 ## Reference material
 

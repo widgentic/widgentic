@@ -1,0 +1,49 @@
+{
+  "name": "@widgentic/designer",
+  "version": "0.0.0",
+  "description": "Hostable widgentic designers: widget, theme, schema and action designers as functions and custom elements, plus a single-file browser bundle.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "default": "./dist/browser/widgentic-designer.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/diegohoyos/widgentic.git",
+    "directory": "packages/designer"
+  },
+  "homepage": "https://widgentic.dev",
+  "keywords": [
+    "widgentic",
+    "widgets",
+    "mcp",
+    "agents"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node scripts/bundle.mjs",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@widgentic/core": "^0.0.0"
+  }
+}

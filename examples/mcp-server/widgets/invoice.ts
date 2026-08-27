@@ -1,5 +1,5 @@
-import type { WidgetDescriptorInput } from "widgentic/catalog";
-import type { WidgetTemplate } from "widgentic/templates";
+import type { WidgetDescriptorInput } from "@widgentic/core";
+import type { WidgetTemplate } from "@widgentic/core";
 import type { CustomWidget } from "./index.js";
 
 /**

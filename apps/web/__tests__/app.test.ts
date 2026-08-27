@@ -9,8 +9,8 @@ import { generateKeyPairSync, sign } from "node:crypto";
 import { createServer } from "node:http";
 import type { Server } from "node:http";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { composeCatalog, composeThemes, createMemoryStore } from "widgentic/store";
-import type { MemoryStore } from "widgentic/store";
+import { composeCatalog, composeThemes, createMemoryStore } from "@widgentic/mcp/store";
+import type { MemoryStore } from "@widgentic/mcp/store";
 import { createWebAppHandler } from "../app.js";
 import { createAuth } from "../auth.js";
 

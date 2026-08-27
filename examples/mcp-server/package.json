@@ -1,0 +1,15 @@
+{
+  "name": "@widgentic-examples/mcp-server",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Sample host: examples/mcp-server",
+  "dependencies": {
+    "@widgentic/core": "^0.0.0",
+    "@widgentic/mcp": "^0.0.0"
+  },
+  "exports": {
+    ".": "./main.ts",
+    "./widgets": "./widgets/index.ts"
+  }
+}

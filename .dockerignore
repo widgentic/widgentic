@@ -1,9 +1,4 @@
 node_modules
-dist
+**/node_modules
+**/dist
 .git
-openspec
-.claude
-.github
-.vscode
-examples
-*.md

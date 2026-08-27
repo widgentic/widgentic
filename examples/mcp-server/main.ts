@@ -17,9 +17,9 @@
  * instead of compiled-in modules.
  */
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { createWidgenticServer } from "widgentic/mcp-server/sdk";
-import { createCatalog } from "widgentic/catalog";
-import { findActionBinding, registerTemplate } from "widgentic/templates";
+import { createWidgenticServer } from "@widgentic/mcp/sdk";
+import { createCatalog } from "@widgentic/core";
+import { findActionBinding, registerTemplate } from "@widgentic/core";
 import { customWidgets } from "./widgets/index.js";
 
 const catalog = createCatalog();

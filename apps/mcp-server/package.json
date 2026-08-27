@@ -1,0 +1,11 @@
+{
+  "name": "@widgentic-apps/mcp-server",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Private: apps/mcp-server",
+  "dependencies": {
+    "@widgentic/core": "^0.0.0",
+    "@widgentic/mcp": "^0.0.0"
+  }
+}

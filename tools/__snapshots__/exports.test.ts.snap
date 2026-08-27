@@ -1,0 +1,333 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`published export surfaces > @widgentic/core 1`] = `
+[
+  "ACTION_NAME",
+  "ALLOWED_SCHEMES",
+  "CUSTOM_VARIABLE",
+  "DEFAULT_MAX_NODES",
+  "DuplicateKindError",
+  "DuplicateThemeError",
+  "FORBIDDEN_TAGS",
+  "HTTP_METHODS",
+  "InvalidTemplateError",
+  "InvalidThemeEntryError",
+  "MAX_TEMPLATE_DEPTH",
+  "OUTPUT_MODES",
+  "PATTERN_MAX_LENGTH",
+  "PROMPT_TEXT_MAX",
+  "PROPERTY_NAME",
+  "REDACTED",
+  "RESERVED_ATTR",
+  "SECRET_NAME",
+  "THEME_TOKENS",
+  "TOKEN_DEFAULTS",
+  "TOKEN_SPECS",
+  "UNSAFE",
+  "URL_ATTRS",
+  "analyzeHints",
+  "applyOutput",
+  "applyTheme",
+  "baseStylesheet",
+  "buildRequest",
+  "collectActionRefs",
+  "collectInlineActions",
+  "collectSecretRefs",
+  "compileTemplate",
+  "countTemplateNodes",
+  "createCatalog",
+  "createThemeRegistry",
+  "darkTheme",
+  "el",
+  "findActionBinding",
+  "findTemplateNode",
+  "getAtPath",
+  "hasActionBindings",
+  "inferKind",
+  "injectBaseStyles",
+  "isDataPath",
+  "isPlainObject",
+  "isSafeImageSrc",
+  "isSafeTokenValue",
+  "isSafeUrl",
+  "looksLikeImageUrl",
+  "mapToWidget",
+  "mountNode",
+  "mountWidget",
+  "parseCsv",
+  "parseJson",
+  "parsePath",
+  "redactText",
+  "redactValue",
+  "registerTemplate",
+  "renderToHtml",
+  "resolveActionDescriptor",
+  "setAtPath",
+  "themeToCss",
+  "validateActionBinding",
+  "validateActionDefinition",
+  "validateArgs",
+  "validateDataAgainstSchema",
+  "validateLoadBinding",
+  "validateTemplate",
+  "validateTheme",
+  "validateWidgetPayload",
+  "widgetStylesToCss",
+]
+`;
+
+exports[`published export surfaces > @widgentic/core/actions 1`] = `
+[
+  "ACTION_NAME",
+  "HTTP_METHODS",
+  "OUTPUT_MODES",
+  "PROMPT_TEXT_MAX",
+  "REDACTED",
+  "SECRET_NAME",
+  "applyOutput",
+  "buildRequest",
+  "collectSecretRefs",
+  "getAtPath",
+  "isDataPath",
+  "redactText",
+  "redactValue",
+  "setAtPath",
+  "validateActionBinding",
+  "validateActionDefinition",
+  "validateArgs",
+  "validateLoadBinding",
+]
+`;
+
+exports[`published export surfaces > @widgentic/core/adapters 1`] = `
+[
+  "parseCsv",
+  "parseJson",
+]
+`;
+
+exports[`published export surfaces > @widgentic/core/catalog 1`] = `
+[
+  "DuplicateKindError",
+  "PATTERN_MAX_LENGTH",
+  "PROPERTY_NAME",
+  "UNSAFE",
+  "analyzeHints",
+  "createCatalog",
+  "el",
+  "mountNode",
+  "renderToHtml",
+  "validateDataAgainstSchema",
+  "widgetStylesToCss",
+]
+`;
+
+exports[`published export surfaces > @widgentic/core/contract 1`] = `
+[
+  "ALLOWED_SCHEMES",
+  "isSafeImageSrc",
+  "isSafeUrl",
+  "looksLikeImageUrl",
+  "validateWidgetPayload",
+]
+`;
+
+exports[`published export surfaces > @widgentic/core/mapper 1`] = `
+[
+  "inferKind",
+  "mapToWidget",
+]
+`;
+
+exports[`published export surfaces > @widgentic/core/reactive 1`] = `
+[
+  "mountWidget",
+]
+`;
+
+exports[`published export surfaces > @widgentic/core/templates 1`] = `
+[
+  "DEFAULT_MAX_NODES",
+  "FORBIDDEN_TAGS",
+  "InvalidTemplateError",
+  "MAX_TEMPLATE_DEPTH",
+  "RESERVED_ATTR",
+  "URL_ATTRS",
+  "collectActionRefs",
+  "collectInlineActions",
+  "compileTemplate",
+  "countTemplateNodes",
+  "findActionBinding",
+  "findTemplateNode",
+  "hasActionBindings",
+  "parsePath",
+  "registerTemplate",
+  "resolveActionDescriptor",
+  "validateTemplate",
+]
+`;
+
+exports[`published export surfaces > @widgentic/core/theming 1`] = `
+[
+  "CUSTOM_VARIABLE",
+  "DuplicateThemeError",
+  "InvalidThemeEntryError",
+  "THEME_TOKENS",
+  "TOKEN_DEFAULTS",
+  "TOKEN_SPECS",
+  "applyTheme",
+  "baseStylesheet",
+  "createThemeRegistry",
+  "darkTheme",
+  "injectBaseStyles",
+  "isSafeTokenValue",
+  "themeToCss",
+  "validateTheme",
+]
+`;
+
+exports[`published export surfaces > @widgentic/designer 1`] = `
+[
+  "DEFAULT_ACTION_TAG",
+  "DEFAULT_SCHEMA_TAG",
+  "DEFAULT_TAG",
+  "DEFAULT_THEME_TAG",
+  "SEEDABLE_BUILTINS",
+  "checkActionEntry",
+  "checkSchemaEntry",
+  "checkThemeEntry",
+  "createActionDesigner",
+  "createBindingEditor",
+  "createDefinitionEditor",
+  "createDesigner",
+  "createSchemaDesigner",
+  "createThemeDesigner",
+  "defineActionDesignerElement",
+  "defineDesignerElement",
+  "defineSchemaDesignerElement",
+  "defineThemeDesignerElement",
+  "deriveDiagnostics",
+  "exportThemeJson",
+  "exportWidgetJson",
+  "importWidgetJson",
+  "seedThemeEntry",
+  "seedWidgetDraft",
+  "starterDraft",
+  "starterHttpDefinition",
+  "starterPromptDefinition",
+  "toTypeScriptModule",
+]
+`;
+
+exports[`published export surfaces > @widgentic/mcp 1`] = `
+[
+  "ACTION_MAX_BYTES",
+  "ACTION_TIMEOUT_MS",
+  "BodyTooLargeError",
+  "DEFAULT_EXECUTIONS_PER_MINUTE",
+  "DEFAULT_MAX_BODY_BYTES",
+  "EXECUTE_ACTION_TOOL",
+  "GET_AUTHORING_GUIDE_TOOL",
+  "LIST_SCHEMAS_TOOL",
+  "LIST_THEMES_TOOL",
+  "LIST_THEME_TOKENS_TOOL",
+  "LIST_WIDGETS_TOOL",
+  "RENDER_WIDGET_TOOL",
+  "WIDGENTIC_APP_MIME_TYPE",
+  "WIDGENTIC_APP_TEMPLATE_URI",
+  "WIDGENTIC_CAPABILITY",
+  "WIDGENTIC_MIME_TYPE",
+  "WIDGENTIC_UI_URI_PREFIX",
+  "WIDGENTIC_URI",
+  "WIDGENTIC_VERSION",
+  "buildAppTemplate",
+  "buildAuthoringGuide",
+  "clearInlineImageCache",
+  "createExecutionLimiter",
+  "declareWidgetCapability",
+  "extractWidgetPayload",
+  "fetchImageAsDataUri",
+  "guardedJsonFetch",
+  "handleExecuteAction",
+  "handleGetAuthoringGuide",
+  "handleListSchemas",
+  "handleListThemeTokens",
+  "handleListThemes",
+  "handleListWidgets",
+  "handleRenderWidget",
+  "hostSupportsWidgets",
+  "inlineImagesInHtml",
+  "inlineRenderResultImages",
+  "isPrivateAddress",
+  "isWidgetResult",
+  "pinnedHttpsFetch",
+  "positiveIntFromEnv",
+  "readBodyText",
+  "resolvePublicAddress",
+  "testHttpAction",
+  "toTextResult",
+  "toWidgetResult",
+]
+`;
+
+exports[`published export surfaces > @widgentic/mcp/sdk 1`] = `
+[
+  "createWidgenticServer",
+]
+`;
+
+exports[`published export surfaces > @widgentic/mcp/secrets 1`] = `
+[
+  "SECRET_VALUE_MAX_BYTES",
+  "SECRET_VALUE_MIN_BYTES",
+  "SecretError",
+  "checkSecretName",
+  "checkSecretValue",
+  "createLocalCipher",
+  "decryptSecret",
+  "encryptSecret",
+  "generateLocalKek",
+  "rewrapSecret",
+]
+`;
+
+exports[`published export surfaces > @widgentic/mcp/secrets/keyvault 1`] = `
+[
+  "createKeyVaultCipher",
+  "kekVersionOf",
+]
+`;
+
+exports[`published export surfaces > @widgentic/mcp/store 1`] = `
+[
+  "ANONYMOUS_PRINCIPAL",
+  "DEFAULT_LIMITS",
+  "KEY_PREFIX",
+  "KEY_SCOPES",
+  "SAFE_IDENTIFIER",
+  "StoreRejectionError",
+  "checkStoredAction",
+  "checkStoredSchema",
+  "checkStoredTheme",
+  "checkStoredWidget",
+  "composeCatalog",
+  "composeThemes",
+  "createFileStore",
+  "createMemoryStore",
+  "findByKey",
+  "generateKey",
+  "hashKey",
+  "normalizeKeyScopes",
+  "principalIdForSubject",
+  "referencesToSecret",
+  "verifyKey",
+  "widgetsLoadingAction",
+  "widgetsReferencingAction",
+]
+`;
+
+exports[`published export surfaces > @widgentic/mcp/store/cosmos 1`] = `
+[
+  "createCosmosStore",
+]
+`;

@@ -7,12 +7,12 @@
 import { createServer } from "node:http";
 import type { Server } from "node:http";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createMemoryStore } from "widgentic/store";
-import type { MemoryStore } from "widgentic/store";
+import { createMemoryStore } from "@widgentic/mcp/store";
+import type { MemoryStore } from "@widgentic/mcp/store";
 import { handleApiRequest } from "../api.js";
 import type { SessionClaims } from "../auth.js";
-import { seedThemeEntry, seedWidgetDraft } from "../../../src/designer/seed.js";
-import type { WidgetDraft } from "../../../src/designer/store.js";
+import { seedThemeEntry, seedWidgetDraft } from "@widgentic/designer";
+import type { WidgetDraft } from "@widgentic/designer";
 
 let server: Server;
 let base: string;
@@ -331,8 +331,8 @@ describe("shared data schemas through the API", () => {
   });
 
   it("a schema edit propagates through composition without touching the widget", async () => {
-    const { composeCatalog } = await import("widgentic/store");
-    const { principalIdForSubject } = await import("widgentic/store");
+    const { composeCatalog } = await import("@widgentic/mcp/store");
+    const { principalIdForSubject } = await import("@widgentic/mcp/store");
     const alice = principalIdForSubject("alice");
     // Baseline: person requires only 'name'.
     let composed = await composeCatalog(store, alice);
@@ -456,7 +456,7 @@ describe("actions, secrets and key scopes", () => {
 
 describe("secrets over the API with a cipher", () => {
   it("writes are write-only, deletes respect SECRET_IN_USE, and the test call resolves the secret server-side", async () => {
-    const { createLocalCipher, generateLocalKek } = await import("../../../src/secrets/index.js");
+    const { createLocalCipher, generateLocalKek } = await import("@widgentic/mcp/secrets");
     const cipherStore = createMemoryStore([], undefined, { cipher: createLocalCipher(generateLocalKek()) });
     const cipherServer = createServer((req, res) => {
       void handleApiRequest(req, res, { store: cipherStore, readSession, secretsEnabled: true }).then((handled) => {
@@ -512,7 +512,7 @@ describe("hardening: web API", () => {
   });
 
   it("test calls spend the shared execution budget and malformed definitions answer structurally", async () => {
-    const { createExecutionLimiter } = await import("../../../src/mcp-server/index.js");
+    const { createExecutionLimiter } = await import("@widgentic/mcp");
     const limiter = createExecutionLimiter(1); // one bucket for the server, as in production
     const limited = createServer((req, res) => {
       void handleApiRequest(req, res, { store, readSession, limiter }).then((handled) => {

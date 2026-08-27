@@ -10,7 +10,7 @@ import { createServer as createHttpServer } from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
-import { createWidgenticServer } from "widgentic/mcp-server/sdk";
+import { createWidgenticServer } from "@widgentic/mcp/sdk";
 import {
   BodyTooLargeError,
   createExecutionLimiter,
@@ -18,17 +18,17 @@ import {
   DEFAULT_MAX_BODY_BYTES,
   positiveIntFromEnv,
   readBodyText
-} from "widgentic/mcp-server";
+} from "@widgentic/mcp";
 import {
   ANONYMOUS_PRINCIPAL,
   composeCatalog,
   composeThemes,
   createFileStore
-} from "widgentic/store";
-import type { ActionSource, Principal, WidgetStore } from "widgentic/store";
-import type { WidgetCatalog } from "widgentic/catalog";
-import type { ThemeRegistry } from "widgentic/theming";
-import type { SecretCipher } from "widgentic/secrets";
+} from "@widgentic/mcp/store";
+import type { ActionSource, Principal, WidgetStore } from "@widgentic/mcp/store";
+import type { WidgetCatalog } from "@widgentic/core";
+import type { ThemeRegistry } from "@widgentic/core";
+import type { SecretCipher } from "@widgentic/mcp/secrets";
 
 const PORT = Number(process.env.PORT ?? 3001);
 
@@ -46,12 +46,12 @@ const KEK_ID = process.env.WIDGENTIC_KEK_ID;
 const LOCAL_KEK = process.env.WIDGENTIC_LOCAL_KEK;
 let cipher: SecretCipher | undefined;
 if (KEK_ID !== undefined) {
-  const { createKeyVaultCipher } = await import("widgentic/secrets/keyvault");
+  const { createKeyVaultCipher } = await import("@widgentic/mcp/secrets/keyvault");
   const { DefaultAzureCredential } = await import("@azure/identity");
   cipher = await createKeyVaultCipher({ keyId: KEK_ID, credential: new DefaultAzureCredential() });
   console.error("widgentic mcp: secrets unwrap through Key Vault");
 } else if (LOCAL_KEK !== undefined) {
-  const { createLocalCipher } = await import("widgentic/secrets");
+  const { createLocalCipher } = await import("@widgentic/mcp/secrets");
   cipher = createLocalCipher(LOCAL_KEK);
   console.error("widgentic mcp: secrets use the LOCAL development cipher");
 }
@@ -88,7 +88,7 @@ const COSMOS_ENDPOINT = process.env.WIDGENTIC_COSMOS_ENDPOINT;
 const STORE_DIR = process.env.WIDGENTIC_STORE_DIR;
 let store: WidgetStore | undefined;
 if (COSMOS_ENDPOINT !== undefined) {
-  const { createCosmosStore } = await import("widgentic/store/cosmos");
+  const { createCosmosStore } = await import("@widgentic/mcp/store/cosmos");
   const { DefaultAzureCredential } = await import("@azure/identity");
   store = createCosmosStore({
     endpoint: COSMOS_ENDPOINT,

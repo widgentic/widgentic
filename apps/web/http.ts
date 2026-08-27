@@ -31,10 +31,10 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { build } from "esbuild";
-import { createExecutionLimiter, DEFAULT_EXECUTIONS_PER_MINUTE, positiveIntFromEnv } from "widgentic/mcp-server";
-import { createMemoryStore } from "widgentic/store";
-import type { WritableWidgetStore } from "widgentic/store";
-import type { SecretCipher } from "widgentic/secrets";
+import { createExecutionLimiter, DEFAULT_EXECUTIONS_PER_MINUTE, positiveIntFromEnv } from "@widgentic/mcp";
+import { createMemoryStore } from "@widgentic/mcp/store";
+import type { WritableWidgetStore } from "@widgentic/mcp/store";
+import type { SecretCipher } from "@widgentic/mcp/secrets";
 import { createWebAppHandler } from "./app.js";
 import type { StaticAsset } from "./app.js";
 import { createAuth } from "./auth.js";
@@ -47,12 +47,12 @@ const KEK_ID = process.env.WIDGENTIC_KEK_ID;
 const LOCAL_KEK = process.env.WIDGENTIC_LOCAL_KEK;
 let cipher: SecretCipher | undefined;
 if (KEK_ID !== undefined) {
-  const { createKeyVaultCipher } = await import("widgentic/secrets/keyvault");
+  const { createKeyVaultCipher } = await import("@widgentic/mcp/secrets/keyvault");
   const { DefaultAzureCredential } = await import("@azure/identity");
   cipher = await createKeyVaultCipher({ keyId: KEK_ID, credential: new DefaultAzureCredential() });
   console.error("widgentic web: secrets wrap through Key Vault");
 } else if (LOCAL_KEK !== undefined) {
-  const { createLocalCipher } = await import("widgentic/secrets");
+  const { createLocalCipher } = await import("@widgentic/mcp/secrets");
   cipher = createLocalCipher(LOCAL_KEK);
   console.error("widgentic web: secrets use the LOCAL development cipher");
 } else {
@@ -63,7 +63,7 @@ if (KEK_ID !== undefined) {
 const COSMOS_ENDPOINT = process.env.WIDGENTIC_COSMOS_ENDPOINT;
 let store: WritableWidgetStore;
 if (COSMOS_ENDPOINT !== undefined) {
-  const { createCosmosStore } = await import("widgentic/store/cosmos");
+  const { createCosmosStore } = await import("@widgentic/mcp/store/cosmos");
   const { DefaultAzureCredential } = await import("@azure/identity");
   store = createCosmosStore({
     endpoint: COSMOS_ENDPOINT,

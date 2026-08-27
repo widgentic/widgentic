@@ -28,6 +28,13 @@ const FILES: Record<string, { path: string; type: string }> = {
   "/designer.bundle.js": {
     path: join(here, "designer.bundle.js"),
     type: "text/javascript; charset=utf-8"
+  },
+  // Script-tag hosting: the published single-file bundle (`npm run build`
+  // produces it) drives standalone.html with nothing but custom elements.
+  "/standalone.html": { path: join(here, "standalone.html"), type: "text/html; charset=utf-8" },
+  "/widgentic-designer.js": {
+    path: join(here, "..", "..", "packages", "designer", "dist", "browser", "widgentic-designer.js"),
+    type: "text/javascript; charset=utf-8"
   }
 };
 

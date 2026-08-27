@@ -13,11 +13,11 @@
  *     with the rule's name; the store's state is untouched on failure.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import type { ThemeEntry } from "widgentic/theming";
-import { StoreRejectionError, normalizeKeyScopes, principalIdForSubject } from "widgentic/store";
-import type { StoredAction, StoredSchema, StoredWidget, WritableWidgetStore } from "widgentic/store";
-import { testHttpAction } from "widgentic/mcp-server";
-import type { ExecutionLimiter, GuardedFetchDeps } from "widgentic/mcp-server";
+import type { ThemeEntry } from "@widgentic/core";
+import { StoreRejectionError, normalizeKeyScopes, principalIdForSubject } from "@widgentic/mcp/store";
+import type { StoredAction, StoredSchema, StoredWidget, WritableWidgetStore } from "@widgentic/mcp/store";
+import { testHttpAction } from "@widgentic/mcp";
+import type { ExecutionLimiter, GuardedFetchDeps } from "@widgentic/mcp";
 import type { SessionClaims } from "./auth.js";
 
 export interface ApiDeps {

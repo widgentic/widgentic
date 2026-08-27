@@ -1,0 +1,96 @@
+{
+  "name": "@widgentic/mcp",
+  "version": "0.0.0",
+  "description": "Host the widgentic engine over MCP: tool-output convention, handlers, app template, action execution, official-SDK assembly, per-principal store and secrets.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./sdk": {
+      "types": "./dist/server/server.d.ts",
+      "default": "./dist/server/server.js"
+    },
+    "./store": {
+      "types": "./dist/store/index.d.ts",
+      "default": "./dist/store/index.js"
+    },
+    "./store/cosmos": {
+      "types": "./dist/store/cosmos.d.ts",
+      "default": "./dist/store/cosmos.js"
+    },
+    "./secrets": {
+      "types": "./dist/secrets/index.d.ts",
+      "default": "./dist/secrets/index.js"
+    },
+    "./secrets/keyvault": {
+      "types": "./dist/secrets/keyvault.d.ts",
+      "default": "./dist/secrets/keyvault.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/diegohoyos/widgentic.git",
+    "directory": "packages/mcp"
+  },
+  "homepage": "https://widgentic.dev",
+  "keywords": [
+    "widgentic",
+    "widgets",
+    "mcp",
+    "agents"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@widgentic/core": "^0.0.0"
+  },
+  "peerDependencies": {
+    "@modelcontextprotocol/sdk": "^1",
+    "@modelcontextprotocol/ext-apps": "^1",
+    "zod": "^4",
+    "@azure/cosmos": "^4",
+    "@azure/identity": "^4",
+    "@azure/keyvault-keys": "^4"
+  },
+  "peerDependenciesMeta": {
+    "@modelcontextprotocol/sdk": {
+      "optional": true
+    },
+    "@modelcontextprotocol/ext-apps": {
+      "optional": true
+    },
+    "zod": {
+      "optional": true
+    },
+    "@azure/cosmos": {
+      "optional": true
+    },
+    "@azure/identity": {
+      "optional": true
+    },
+    "@azure/keyvault-keys": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@widgentic/designer": "^0.0.0"
+  }
+}

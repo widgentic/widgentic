@@ -6,7 +6,7 @@
  */
 import { generateKeyPairSync, sign } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { createMemoryStore } from "widgentic/store";
+import { createMemoryStore } from "@widgentic/mcp/store";
 import { AuthError, createAuth } from "../auth.js";
 
 const ISSUER = "https://widgentictest.ciamlogin.com/tid/v2.0";

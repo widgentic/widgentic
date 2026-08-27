@@ -1,0 +1,12 @@
+{
+  "name": "@widgentic-examples/designer",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Sample host: examples/designer",
+  "dependencies": {
+    "@widgentic/core": "^0.0.0",
+    "@widgentic/designer": "^0.0.0",
+    "@widgentic-examples/mcp-server": "^0.0.0"
+  }
+}

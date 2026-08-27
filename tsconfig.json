@@ -12,8 +12,50 @@
     "forceConsistentCasingInFileNames": true,
     "isolatedModules": true,
     "resolveJsonModule": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ],
+    "paths": {
+      "@widgentic/core": [
+        "./packages/core/src/index.ts"
+      ],
+      "@widgentic/core/*": [
+        "./packages/core/src/*/index.ts"
+      ],
+      "@widgentic/designer": [
+        "./packages/designer/src/index.ts"
+      ],
+      "@widgentic/designer/browser": [
+        "./packages/designer/src/browser.ts"
+      ],
+      "@widgentic/mcp": [
+        "./packages/mcp/src/index.ts"
+      ],
+      "@widgentic/mcp/sdk": [
+        "./packages/mcp/src/server/server.ts"
+      ],
+      "@widgentic/mcp/store": [
+        "./packages/mcp/src/store/index.ts"
+      ],
+      "@widgentic/mcp/store/cosmos": [
+        "./packages/mcp/src/store/cosmos.ts"
+      ],
+      "@widgentic/mcp/secrets": [
+        "./packages/mcp/src/secrets/index.ts"
+      ],
+      "@widgentic/mcp/secrets/keyvault": [
+        "./packages/mcp/src/secrets/keyvault.ts"
+      ]
+    }
   },
-  "include": ["src/**/*.ts", "apps/**/*.ts", "examples/**/*.ts"],
-  "exclude": ["node_modules", "dist"]
+  "include": [
+    "packages/*/src/**/*.ts",
+    "apps/**/*.ts",
+    "examples/**/*.ts",
+    "tools/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "**/dist"
+  ]
 }

@@ -4,13 +4,13 @@
  * dependencies so tests drive it in-process; `http.ts` is the entry that
  * builds the bundle, wires env configuration, and listens.
  */
-import type { ExecutionLimiter } from "widgentic/mcp-server";
+import type { ExecutionLimiter } from "@widgentic/mcp";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import type { WritableWidgetStore } from "widgentic/store";
+import type { WritableWidgetStore } from "@widgentic/mcp/store";
 import { handleApiRequest } from "./api.js";
 import type { Auth, AuthCallbackResult } from "./auth.js";
 import { AuthError } from "./auth.js";
-import { StoreRejectionError } from "widgentic/store";
+import { StoreRejectionError } from "@widgentic/mcp/store";
 
 export interface StaticAsset {
   body: string | Buffer;

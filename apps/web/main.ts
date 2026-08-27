@@ -12,8 +12,8 @@ import {
   createThemeDesigner,
   seedThemeEntry,
   seedWidgetDraft
-} from "widgentic/designer";
-import type { WidgetDraft } from "widgentic/designer";
+} from "@widgentic/designer";
+import type { WidgetDraft } from "@widgentic/designer";
 import type {
   ActionDesignerHandle,
   ActionEntry,
@@ -21,10 +21,10 @@ import type {
   SchemaDesignerHandle,
   SchemaEntry,
   ThemeDesignerHandle
-} from "widgentic/designer";
-import type { HttpActionDefinition } from "widgentic/actions";
-import { createThemeRegistry } from "widgentic/theming";
-import type { ThemeEntry } from "widgentic/theming";
+} from "@widgentic/designer";
+import type { HttpActionDefinition } from "@widgentic/core";
+import { createThemeRegistry } from "@widgentic/core";
+import type { ThemeEntry } from "@widgentic/core";
 
 interface StoredWidgetJson {
   kind: string;
