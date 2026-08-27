@@ -46,7 +46,6 @@ export default defineConfig({
       project("core", ["packages/core/src/**/__tests__/**/*.test.ts"], ["packages/core/src/**/__tests__/**/*.test-d.ts"]),
       project("designer", ["packages/designer/src/**/__tests__/**/*.test.ts"]),
       project("mcp", ["packages/mcp/src/**/__tests__/**/*.test.ts"], ["packages/mcp/src/**/__tests__/**/*.test-d.ts"]),
-      project("apps", ["apps/**/__tests__/**/*.test.ts"]),
       project("tools", ["tools/**/*.test.ts"])
     ]
   }

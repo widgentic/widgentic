@@ -50,7 +50,6 @@
   },
   "include": [
     "packages/*/src/**/*.ts",
-    "apps/**/*.ts",
     "examples/**/*.ts",
     "tools/**/*.ts"
   ],

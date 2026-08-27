@@ -1,10 +1,10 @@
 /**
  * Package boundaries, enforced at the source (spec: package-distribution).
  *
- * Every import in packages/, apps/ and examples/ is classified and checked:
+ * Every import in packages/ and examples/ is classified and checked:
  *   - relative imports never leave their root (a package, an app, an example)
  *   - `@widgentic/<pkg>[/sub]` must be a declared `exports` entry and an
- *     allowed edge (core → nothing; designer, mcp → core; apps/examples → any)
+ *     allowed edge (core → nothing; designer, mcp → core; examples → any)
  *   - `node:` modules, `Buffer` and `process` stay out of core and designer
  *   - third-party imports in package sources match the package's manifest
  *     (mcp: the MCP SDK and zod only from the `./sdk` assembly)
@@ -54,13 +54,13 @@ function stripComments(source: string): string {
 }
 function rootOf(file: string): string {
   const rel = relative(ROOT, file).split("/");
-  return rel[0] === "packages" || rel[0] === "apps" || rel[0] === "examples" ? `${rel[0]}/${rel[1]}` : rel[0] ?? "";
+  return rel[0] === "packages" || rel[0] === "examples" ? `${rel[0]}/${rel[1]}` : rel[0] ?? "";
 }
 function packageOf(file: string): string | undefined {
   return Object.entries(PACKAGES).find(([, dir]) => relative(ROOT, file).startsWith(dir + "/"))?.[0];
 }
 
-const files = [...walk(join(ROOT, "packages")), ...walk(join(ROOT, "apps")), ...walk(join(ROOT, "examples"))];
+const files = [...walk(join(ROOT, "packages")), ...walk(join(ROOT, "examples"))];
 const violations: string[] = [];
 for (const file of files) {
   const rel = relative(ROOT, file);
@@ -87,12 +87,12 @@ for (const file of files) {
       if (pkg !== undefined && BROWSER_SAFE.has(pkg) && !isTest) violations.push(`${rel}: ${pkg} is browser-safe, no ${spec}`);
       continue;
     }
-    if (spec.startsWith("@widgentic-examples/") || spec.startsWith("@widgentic-apps/")) {
+    if (spec.startsWith("@widgentic-examples/")) {
       if (pkg !== undefined && !isTest) violations.push(`${rel}: package sources may not import ${spec}`);
       continue;
     }
     // bare third-party specifier
-    if (pkg === undefined) continue; // apps and examples choose their own dependencies
+    if (pkg === undefined) continue; // examples choose their own dependencies
     if (isTest && TEST_EXTERNALS.some((re) => re.test(spec))) continue;
     if (SDK.some((re) => re.test(spec))) {
       if (!SDK_ONLY.has(rel)) violations.push(`${rel}: only the sdk assembly may import ${spec}`);

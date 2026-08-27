@@ -4,10 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "license": "MIT",
-  "description": "Widgets for agents \u2014 workspace root: public packages under packages/, our apps under apps/, sample hosts under examples/.",
+  "description": "Widgets for agents \u2014 workspace root: public packages under packages/, sample hosts under examples/.",
   "workspaces": [
     "packages/*",
-    "apps/*",
     "examples/*"
   ],
   "scripts": {
@@ -21,8 +20,6 @@
     "version": "changeset version",
     "release": "npm run build && changeset publish",
     "mcp": "tsx examples/mcp-server/main.ts",
-    "mcp:http": "tsx apps/mcp-server/http.ts",
-    "web": "tsx apps/web/http.ts",
     "designer": "tsx examples/designer/serve.ts"
   },
   "devDependencies": {

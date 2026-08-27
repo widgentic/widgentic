@@ -33,7 +33,7 @@ All capabilities are specified under `openspec/specs/` and implemented with zero
 | [`@widgentic/core`](packages/core) | contract, adapters, mapper, catalog, theming, templates, actions, reactive rendering | browser + Node |
 | [`@widgentic/designer`](packages/designer) | widget / theme / schema / action designers, custom elements, browser bundle | browser |
 | [`@widgentic/mcp`](packages/mcp) | tool-output convention, handlers, app template, action execution, official-SDK assembly (`/sdk`), store (`/store`, `/store/cosmos`), secrets (`/secrets`, `/secrets/keyvault`) | Node ≥ 22 |
-| `apps/*` (private) | our MCP server and the widgentic.dev app, plus `infra/` | — |
+| `widgentic/apps` (private repository) | our MCP server and the widgentic.dev app, Azure infrastructure, runbook — consumes the published packages | — |
 | `examples/*` | sample hosts: a stdio MCP server with compiled-in widgets, a designer host page | — |
 
 The repository is an npm workspace: typecheck, tests and the runnable apps
@@ -111,7 +111,6 @@ widgentic is itself an MCP server: any MCP client can discover the available wid
 
 ```bash
 npm run mcp        # stdio server
-npm run mcp:http   # Streamable HTTP on :3001/mcp (for HTTP hosts and Apps testing)
 # tools: list_widgets, list_schemas, list_themes, list_theme_tokens, render_widget, get_authoring_guide
 ```
 
@@ -126,45 +125,7 @@ npm run mcp:http   # Streamable HTTP on :3001/mcp (for HTTP hosts and Apps testi
 
 ### Hosted endpoint
 
-The server is deployed on Azure Container Apps behind a custom domain:
-
-```
-https://mcp.widgentic.dev/mcp        (Streamable HTTP, API key required)
-https://mcp.widgentic.dev/healthz    (unauthenticated health check)
-```
-
-The API key is accepted two ways: an `x-api-key` header (hosts with header
-support, e.g. VS Code Copilot), or a `?key=` query parameter
-(`https://mcp.widgentic.dev/mcp?key=…`) for hosts whose connector settings
-cannot send custom headers — claude.ai and Claude Desktop remote connectors.
-Keys are personal: sign up at [widgentic.dev](https://widgentic.dev), create
-named keys (shown once, individually revocable), and each key serves **your**
-catalog — the widgets, themes, and shared data schemas you design there. Saved entries open
-**read-only** when selected, with `Edit` and `Delete`; `Edit` swaps those for
-`Save` and `Cancel` (and hides `New` / `Save to my catalog`, which belong to
-a fresh draft), so viewing your catalog can never edit it by accident. The deployment is fully described by [infra/main.bicep](infra/main.bicep)
-(Log Analytics, private ACR pulled via a pre-granted user-assigned identity,
-managed environment, scale-to-zero app with the key as a Container Apps
-secret). To ship a new version:
-
-```bash
-az acr build -r <registry> -t widgentic-mcp:vN .
-az deployment group create -g widgentic-rg -f infra/main.bicep \
-  -p @deploy.params.json     # the STANDING parameter set — see below
-```
-
-**Never deploy with a partial parameter set.** The template owns ingress
-and secrets, so every parameter you omit falls back to a default that
-*changes live state*: `webImage` reverts the app to the Azure quickstart
-image, `mcpCosmosEnabled` drops per-principal mode, empty custom-domain
-arrays unbind the domains, and an empty `sessionSecret` deletes the
-session cookie secret. The standing set is `image`, `webImage`, `apiKey`,
-`mcpCosmosEnabled=true`, `authIssuer`, `authClientId`, `sessionSecret`,
-`githubClientId`, `githubClientSecret`, `mcpCustomDomains` and
-`webCustomDomains` (both with their live managed-certificate ids). Recover
-the secrets from the running apps — never from a scratch file — with
-`az containerapp secret show`. The full contract, with the failures that
-taught it, is in [TESTING.md](TESTING.md#production-azure-container-apps).
+`https://mcp.widgentic.dev/mcp` is OUR hosted instance of the server building blocks in `@widgentic/mcp` — per-principal catalogs, API keys and secrets from a Cosmos-backed store. Its source, Azure infrastructure and runbook live in the private repository `widgentic/apps`. To run your own, start from `examples/mcp-server` or `createWidgenticServer()` from `@widgentic/mcp/sdk`.
 
 ### Serving per-principal catalogs
 
@@ -206,17 +167,7 @@ still selects the file store for local rigs.
 
 ### The widgentic.dev app
 
-`apps/web/` is the authoring surface (`npm run web`, port 3002): sign in,
-create named API keys (shown once, individually revocable), and design
-widgets and themes with the embedded designers — saving writes through
-the session-authenticated API into your store, so the entry is in **your**
-MCP catalog on the next tool call. Sign-in is email via Entra
-External ID (OIDC + PKCE, validated with node `crypto`) and GitHub via
-the app's own OAuth code flow (External ID cannot federate GitHub) —
-both land on the same principal model with namespaced subjects, no new
-runtime dependency; sessions are the app's own HMAC-sealed cookie.
-API keys never authorize writes: presenting one to the authoring API is a
-`401` by design.
+The authoring app at `https://widgentic.dev` hosts `@widgentic/designer` against the same store (`@widgentic/mcp/store`): accounts, the four designers, API keys and write-only secrets. It is our private host (`widgentic/apps`); the designers themselves are the public package, and `examples/designer` shows hosting them in any page.
 
 ### Register with Claude Code
 
