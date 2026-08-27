@@ -500,9 +500,10 @@ export function mountPanels(
   refreshers.push((draft) => {
     if (!loadEditor.element.contains(document.activeElement)) loadEditor.setValue(draft.load);
   });
+  // Same compact chrome as an element's binding editor in the tree.
   const loadPanel = section(
     "Load action (http GET, runs once when the widget first renders in an Apps host)",
-    [loadEditor.element, loadDiag],
+    [h("div", { class: "wgd-compact wgd-load" }, [loadEditor.element]), loadDiag],
     false
   );
   const ioPanel = mountIoPanel(store);

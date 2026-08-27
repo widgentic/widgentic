@@ -233,6 +233,8 @@ export function createActionDesigner(
     const run = h("button", { class: "wgd-button wgd-add wgd-test-run", type: "button" }, ["Test call"]);
     run.addEventListener("click", () => {
       run.disabled = true;
+      run.classList.add("wgd-busy");
+      run.setAttribute("aria-busy", "true");
       output.textContent = "…";
       void testCall(definitionNow, testArgs)
         .then((result) => {
@@ -243,6 +245,8 @@ export function createActionDesigner(
         })
         .finally(() => {
           run.disabled = false;
+          run.classList.remove("wgd-busy");
+          run.removeAttribute("aria-busy");
         });
     });
     testHost.append(h("span", { class: "wgd-field-label" }, ["Arguments"]), form.element, h("div", { class: "wgd-row" }, [run]), output);

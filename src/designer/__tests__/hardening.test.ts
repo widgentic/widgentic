@@ -110,3 +110,41 @@ describe("hardening: template panel and action designer", () => {
     expect((container.querySelector(".wgd-action-test input") as HTMLInputElement).value).toBe("");
   });
 });
+
+describe("closing polish", () => {
+  it("the Test call button is busy while the host call runs", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    let settle: (value: unknown) => void = () => undefined;
+    const designer = createActionDesigner(container, { testCall: () => new Promise((resolve) => { settle = resolve; }) });
+    designer.loadAction({ name: "a", definition: { kind: "http", method: "GET", url: "https://a.example", input: { type: "object", properties: {} }, output: { type: "object" } } });
+    const run = container.querySelector(".wgd-test-run") as HTMLButtonElement;
+    run.click();
+    expect(run.disabled).toBe(true);
+    expect(run.classList.contains("wgd-busy")).toBe(true);
+    expect(run.getAttribute("aria-busy")).toBe("true");
+    settle({ ok: true });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(run.disabled).toBe(false);
+    expect(run.classList.contains("wgd-busy")).toBe(false);
+    expect(run.hasAttribute("aria-busy")).toBe(false);
+  });
+
+  it("the Load section is compact and offers the widget's root data paths", () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const fetchAction = { name: "fetch", definition: { kind: "http" as const, method: "GET" as const, url: "https://a.example", input: { type: "object", properties: { q: { type: "string" } } }, output: { type: "object" } } };
+    const designer = createDesigner(container, { actions: [fetchAction] });
+    expect(designer.loadWidget({
+      kind: "w",
+      template: { tag: "div", children: [{ bind: "place" }] },
+      descriptor: { description: "w", dataShape: "{ place }", dataSchema: { type: "object", properties: { place: { type: "string" } } } },
+      load: { ref: "fetch", input: { q: "place" } }
+    })).toEqual({ ok: true });
+    const load = container.querySelector(".wgd-load") as HTMLElement;
+    expect(load.classList.contains("wgd-compact")).toBe(true);
+    const options = [...load.querySelectorAll(".wgd-binding-input select.wgd-path option")].map((o) => (o as HTMLOptionElement).value);
+    expect(options).toContain("place");
+    expect([...load.querySelectorAll(".wgd-binding-input select.wgd-path option")].some((o) => o.textContent?.includes("off-schema"))).toBe(false);
+  });
+});

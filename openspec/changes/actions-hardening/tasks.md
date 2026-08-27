@@ -67,3 +67,8 @@
 - [x] 9.1 Full suite + typecheck green; `openspec validate --strict`
 - [x] 9.2 Rollout check: compose every production principal's stored widgets and actions with the new validators (one-off read-only script against Cosmos); zero `FORBIDDEN_TAG`/undeclared-arg hits recorded in TESTING.md
 - [x] 9.3 Deploy v56, verify from served bytes (template carries the keyboard/timeout code; `execute_action` schema descriptions derive from the definition); record the review-closure entry in TESTING.md's verification log
+
+## 10. Closing polish (user findings on v56)
+
+- [x] 10.1 The action designer's Test call button shows the busy indicator (`wgd-busy` spinner + `aria-busy`) while the host call runs, not just the "…" output; test
+- [x] 10.2 The widget designer's Load action section renders with the same compact chrome as an element's binding editor (`wgd-compact`), and its input-mapping path options fall back to the widget's root data paths; test

@@ -472,7 +472,9 @@ export function createBindingEditor(
     const binding = current;
     // Input mapping: one row per declared field, each a data path or a constant.
     const properties = isPlainObject(definition.input.properties) ? Object.keys(definition.input.properties) : [];
-    const pathOptions = [...new Set([...(ctx.scopePaths ?? []), ...helperPaths()])];
+    // No element scope supplied (the widget-level `load`): the root data paths ARE the scope.
+    const scopePaths = ctx.scopePaths ?? allPaths(ctx.getDataSchema?.());
+    const pathOptions = [...new Set([...scopePaths, ...helperPaths()])];
     const mapping = inputOf();
     const rows = properties.map((field) => {
       const value = mapping[field];

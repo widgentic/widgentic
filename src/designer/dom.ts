@@ -305,9 +305,17 @@ export function injectDesignerStyles(doc: Document): void {
 .wgd-node-value { flex: 1 1 auto; min-width: 4ch; }
 .wgd-icon { font: inherit; font-size: 11px; line-height: 1.4; padding: 0 5px; border: 1px solid var(--wgd-border); border-radius: 3px; background: var(--wgd-bg); cursor: pointer; color: var(--wgd-muted); }
 .wgd-icon:hover { background: var(--wgd-hover); }
-.wgd-node .wgd-input, .wgd-node .wgd-select { padding: 1px 4px; font-size: 12px; border-color: transparent; background: transparent; }
-.wgd-node .wgd-input:hover, .wgd-node .wgd-select:hover,
-.wgd-node .wgd-input:focus, .wgd-node .wgd-select:focus { border-color: var(--wgd-border); background: var(--wgd-bg); }
+/* Compact controls: inside tree nodes, and wherever a section opts in with
+   .wgd-compact (the Load action editor mirrors an element's binding editor). */
+.wgd-node .wgd-input, .wgd-node .wgd-select,
+.wgd-compact .wgd-input, .wgd-compact .wgd-select { padding: 1px 4px; font-size: 12px; border-color: transparent; background: transparent; }
+.wgd-node .wgd-input:hover, .wgd-node .wgd-select:hover, .wgd-compact .wgd-input:hover, .wgd-compact .wgd-select:hover,
+.wgd-node .wgd-input:focus, .wgd-node .wgd-select:focus, .wgd-compact .wgd-input:focus, .wgd-compact .wgd-select:focus { border-color: var(--wgd-border); background: var(--wgd-bg); }
+.wgd-compact .wgd-binding { border: none; padding: 0; }
+/* Busy controls (the host-supplied Test call): disabled, with a spinner. */
+.wgd-button.wgd-busy { opacity: 0.7; cursor: progress; }
+.wgd-button.wgd-busy::after { content: ""; display: inline-block; width: 10px; height: 10px; margin-left: 6px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; vertical-align: -1px; animation: wgd-spin 0.8s linear infinite; }
+@keyframes wgd-spin { to { transform: rotate(360deg); } }
 .wgd-tagwrap, .wgd-pathwrap { display: contents; }
 /* Collapse chevron: every tree row reserves the column so values align. */
 .wgd-chevron { flex: 0 0 auto; width: 16px; padding: 0; border: none; background: none; color: var(--wgd-muted); font-size: 10px; cursor: pointer; }
