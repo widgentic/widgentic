@@ -15,13 +15,71 @@ import {
   defineDesignerElement,
   defineThemeDesignerElement
 } from "@widgentic/designer";
-import type { ActionDesignerHandle, DesignerHandle, ThemeDesignerHandle } from "@widgentic/designer";
+import type {
+  ActionDesignerHandle,
+  ChromeOptions,
+  DesignerHandle,
+  ThemeDesignerHandle
+} from "@widgentic/designer";
 import { createThemeRegistry } from "@widgentic/core";
 import type { ThemeEntry } from "@widgentic/core";
 import { invoiceWidget, weatherWidget, xPostWidget } from "@widgentic-examples/mcp-server/widgets";
 
 const DRAFT_KEY = "widgentic-designer-draft";
 const THEMES_KEY = "widgentic-designer-themes";
+const CHROME_KEY = "widgentic-designer-chrome";
+
+// --- Host chrome ---------------------------------------------------------
+// The toggle switches the PAGE to its brand look (html[data-host-chrome])
+// and re-mounts every designer with a map covering all 28 chrome tokens,
+// the pattern a real host uses: colours and shadow point at the page's own
+// --host-* properties, so they follow the page's palette and scheme
+// switching through var(); the typefaces come with fallback stacks (never
+// `inherit`); sizes, radii and gap are plain values, one step larger than
+// the defaults. Off, page and designers share the built-in palette.
+const HOST_CHROME: ChromeOptions = {
+  // Surfaces and lines
+  bg: "var(--host-bg)",
+  panel: "var(--host-panel)",
+  hover: "var(--host-hover)",
+  border: "var(--host-border)",
+  line: "var(--host-line)",
+  // Text
+  text: "var(--host-text)",
+  muted: "var(--host-muted)",
+  // Accent and danger
+  accent: "var(--host-accent)",
+  "accent-bg": "var(--host-accent-soft)",
+  "accent-line": "var(--host-accent-line)",
+  danger: "var(--host-danger)",
+  "danger-bg": "var(--host-danger-bg)",
+  "danger-line": "var(--host-danger-line)",
+  // JSON highlighting
+  "hl-key": "var(--host-hl-key)",
+  "hl-str": "var(--host-hl-str)",
+  "hl-num": "var(--host-hl-num)",
+  "hl-bool": "var(--host-hl-bool)",
+  "hl-punct": "var(--host-hl-punct)",
+  // Typography
+  font: "var(--host-font, system-ui, sans-serif)",
+  "font-mono": "var(--host-font-mono, ui-monospace, monospace)",
+  "font-size": "14px",
+  "font-size-sm": "13px",
+  "font-size-xs": "12px",
+  // Shape and elevation
+  "radius-sm": "4px",
+  radius: "8px",
+  "radius-lg": "12px",
+  gap: "24px",
+  shadow: "var(--host-shadow)"
+};
+let hostChrome = localStorage.getItem(CHROME_KEY) === "on";
+const chromeOptions = (): { chrome?: ChromeOptions } => (hostChrome ? { chrome: HOST_CHROME } : {});
+/** The page's own look follows the toggle, so both states are consistent. */
+const applyHostLook = (): void => {
+  document.documentElement.dataset.hostChrome = hostChrome ? "brand" : "default";
+};
+applyHostLook();
 
 defineDesignerElement();
 defineThemeDesignerElement();
@@ -66,7 +124,7 @@ let widgetDesigner: DesignerHandle | undefined;
 function mountWidgetDesigner(): void {
   widgetDesigner?.dispose();
   widgetHost.replaceChildren();
-  widgetDesigner = createDesigner(widgetHost, { themes: loadThemes() });
+  widgetDesigner = createDesigner(widgetHost, { themes: loadThemes(), ...chromeOptions() });
   widgetDesigner.subscribe((draft) => {
     localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
     note(`draft autosaved ${new Date().toLocaleTimeString()}`);
@@ -92,7 +150,8 @@ function mountThemeDesigner(): void {
   // The example widgets join the preview-kind selector, so a theme can be
   // judged against custom widgets and not only the built-ins.
   themeDesigner = createThemeDesigner(themeHost, {
-    widgets: [invoiceWidget, xPostWidget]
+    widgets: [invoiceWidget, xPostWidget],
+    ...chromeOptions()
   });
 }
 
@@ -105,7 +164,7 @@ let actionDesigner: ActionDesignerHandle | undefined;
 function mountActionDesigner(): void {
   actionDesigner?.dispose();
   actionHost.replaceChildren();
-  actionDesigner = createActionDesigner(actionHost);
+  actionDesigner = createActionDesigner(actionHost, chromeOptions());
 }
 
 // --- Tabs ----------------------------------------------------------------
@@ -152,6 +211,26 @@ document.getElementById("load-weather")?.addEventListener("click", () => {
   widgetDesigner?.loadWidget(weatherWidget);
   note("loaded the weather example — see its Refresh (http) and Ask (prompt) bindings");
 });
+
+const chromeToggle = document.getElementById("chrome-toggle");
+const reflectChrome = (): void => {
+  chromeToggle?.classList.toggle("active", hostChrome);
+  applyHostLook();
+};
+chromeToggle?.addEventListener("click", () => {
+  hostChrome = !hostChrome;
+  localStorage.setItem(CHROME_KEY, hostChrome ? "on" : "off");
+  reflectChrome();
+  mountThemeDesigner();
+  mountActionDesigner();
+  mountWidgetDesigner();
+  note(
+    hostChrome
+      ? `page and designers wear the brand look — all ${Object.keys(HOST_CHROME).length} chrome tokens mapped to the page's --host-* palette, serif + Courier, one size step up`
+      : "page and designers wear the built-in look"
+  );
+});
+reflectChrome();
 
 document.getElementById("reset")?.addEventListener("click", () => {
   localStorage.removeItem(DRAFT_KEY);

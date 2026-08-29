@@ -19,7 +19,8 @@ import {
   validateTheme
 } from "@widgentic/core";
 import type { ThemeEntry, WidgetThemeInput } from "@widgentic/core";
-import { diagnosticLine, h, injectDesignerStyles, section, textField, requireChild } from "./dom.js";
+import { applyChrome, diagnosticLine, h, injectDesignerStyles, section, textField, requireChild } from "./dom.js";
+import type { ChromeOptions } from "./dom.js";
 import { createPreview } from "./preview.js";
 import type { PreviewWidget } from "./preview.js";
 import { starterDraft } from "./store.js";
@@ -41,6 +42,13 @@ function toHexInput(value: string): string | undefined {
 export interface ThemeDesignerOptions {
   initialTheme?: ThemeEntry;
   appearance?: "auto" | "light" | "dark";
+  /**
+   * Host chrome: a partial map over `CHROME_TOKENS` applied inline on the
+   * root, winning over the built-in light/dark defaults. Values may be
+   * `var()` references to the host's own properties; CSS-wide keywords are
+   * ignored (pass `var(--host-font, system-ui, sans-serif)`, not `inherit`).
+   */
+  chrome?: ChromeOptions;
   /**
    * Custom widget definitions to offer in the preview-kind selector
    * beside the built-ins — a theme is judged against the widgets it will
@@ -109,6 +117,7 @@ export function createThemeDesigner(
   if (options.appearance === "light" || options.appearance === "dark") {
     root.setAttribute("data-wgd-theme", options.appearance);
   }
+  applyChrome(root, options.chrome);
   container.appendChild(root);
 
   /** A draft carrying only what the preview needs: kind + this theme. */

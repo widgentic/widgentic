@@ -11,6 +11,24 @@ import { createThemeDesigner } from "./theme-designer.js";
 import type { ThemeDesignerHandle } from "./theme-designer.js";
 import { createActionDesigner } from "./action-designer.js";
 import type { ActionDesignerHandle } from "./action-designer.js";
+import { parseChromeAttribute } from "./dom.js";
+import type { ChromeOptions } from "./dom.js";
+
+/**
+ * The attributes every designer element shares, read once at connect:
+ * `appearance` pins the chrome scheme, `chrome` (JSON) hands over the
+ * host's chrome tokens. Anything invalid is ignored, never thrown.
+ */
+function elementOptions(
+  element: Element
+): { appearance?: "light" | "dark"; chrome?: ChromeOptions } {
+  const appearance = element.getAttribute("appearance");
+  const chrome = parseChromeAttribute(element.getAttribute("chrome"));
+  return {
+    ...(appearance === "light" || appearance === "dark" ? { appearance } : {}),
+    ...(chrome === undefined ? {} : { chrome })
+  };
+}
 
 export const DEFAULT_TAG = "widgentic-designer";
 export const DEFAULT_THEME_TAG = "widgentic-theme-designer";
@@ -26,13 +44,7 @@ export function defineDesignerElement(tagName: string = DEFAULT_TAG): void {
 
     connectedCallback(): void {
       if (this.#handle !== undefined) return;
-      // <widgentic-designer appearance="dark"> pins the chrome; omitted
-      // follows the host's prefers-color-scheme.
-      const appearance = this.getAttribute("appearance");
-      this.#handle = createDesigner(
-        this,
-        appearance === "light" || appearance === "dark" ? { appearance } : {}
-      );
+      this.#handle = createDesigner(this, elementOptions(this));
       this.#unsubscribe = this.#handle.subscribe((draft, diagnostics) => {
         this.dispatchEvent(
           new CustomEvent("widgentic-change", {
@@ -69,11 +81,7 @@ export function defineThemeDesignerElement(tagName: string = DEFAULT_THEME_TAG):
 
     connectedCallback(): void {
       if (this.#handle !== undefined) return;
-      const appearance = this.getAttribute("appearance");
-      this.#handle = createThemeDesigner(
-        this,
-        appearance === "light" || appearance === "dark" ? { appearance } : {}
-      );
+      this.#handle = createThemeDesigner(this, elementOptions(this));
       this.#unsubscribe = this.#handle.subscribe((entry) => {
         this.dispatchEvent(
           new CustomEvent("widgentic-change", { detail: { theme: entry }, bubbles: true })
@@ -106,11 +114,7 @@ export function defineSchemaDesignerElement(tagName: string = DEFAULT_SCHEMA_TAG
 
     connectedCallback(): void {
       if (this.#handle !== undefined) return;
-      const appearance = this.getAttribute("appearance");
-      this.#handle = createSchemaDesigner(
-        this,
-        appearance === "light" || appearance === "dark" ? { appearance } : {}
-      );
+      this.#handle = createSchemaDesigner(this, elementOptions(this));
       this.#unsubscribe = this.#handle.subscribe((entry) => {
         this.dispatchEvent(
           new CustomEvent("widgentic-change", { detail: { schema: entry }, bubbles: true })
@@ -143,11 +147,7 @@ export function defineActionDesignerElement(tagName: string = DEFAULT_ACTION_TAG
 
     connectedCallback(): void {
       if (this.#handle !== undefined) return;
-      const appearance = this.getAttribute("appearance");
-      this.#handle = createActionDesigner(
-        this,
-        appearance === "light" || appearance === "dark" ? { appearance } : {}
-      );
+      this.#handle = createActionDesigner(this, elementOptions(this));
       this.#unsubscribe = this.#handle.subscribe((entry) => {
         this.dispatchEvent(
           new CustomEvent("widgentic-change", { detail: { action: entry }, bubbles: true })

@@ -13,7 +13,8 @@ import { ACTION_NAME, validateActionDefinition } from "@widgentic/core";
 import type { DataSchema } from "@widgentic/core";
 import { clone } from "./internal.js";
 import { createDefinitionEditor } from "./action-editor.js";
-import { diagnosticLine, h, injectDesignerStyles, section, textField, requireChild } from "./dom.js";
+import { applyChrome, diagnosticLine, h, injectDesignerStyles, section, textField, requireChild } from "./dom.js";
+import type { ChromeOptions } from "./dom.js";
 import { attachJsonHighlight, repaintHighlight } from "./highlight.js";
 import { createSchemaForm } from "./schema-form.js";
 import type { SchemaEntry } from "./schema-designer.js";
@@ -23,6 +24,13 @@ export type ActionEntry = StoredAction;
 export interface ActionDesignerOptions {
   initialAction?: ActionEntry;
   appearance?: "auto" | "light" | "dark";
+  /**
+   * Host chrome: a partial map over `CHROME_TOKENS` applied inline on the
+   * root, winning over the built-in light/dark defaults. Values may be
+   * `var()` references to the host's own properties; CSS-wide keywords are
+   * ignored (pass `var(--host-font, system-ui, sans-serif)`, not `inherit`).
+   */
+  chrome?: ChromeOptions;
   readOnly?: boolean;
   /** Shared schemas offered as "copy from" sources for input/output. */
   schemas?: SchemaEntry[];
@@ -100,6 +108,7 @@ export function createActionDesigner(
   if (options.appearance === "light" || options.appearance === "dark") {
     root.setAttribute("data-wgd-theme", options.appearance);
   }
+  applyChrome(root, options.chrome);
   container.appendChild(root);
 
   const getEntry = (): ActionEntry => clone(entry);

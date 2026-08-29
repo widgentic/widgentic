@@ -3,31 +3,111 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>widgentic designer — demo host</title>
 <style>
-  /* The host frame mirrors the designer's chrome palette so the page and
-     the embedded designer read as one surface in both schemes. */
+  /* The page has two looks. Default: the designers' own palette and
+     typefaces, so page and untouched designers read as one surface. Brand
+     (html[data-host-chrome="brand"], set by the "Host chrome" button): the
+     widgentic palette — paper, mist, ink, widget blue — with serif and
+     Courier. The button hands the same --host-* properties to the designers
+     through options.chrome, so in both states everything matches; the
+     difference between the states is the point of the demo. */
   :root {
     color-scheme: light dark;
     --host-bg: #ffffff;
     --host-panel: #fbfcfe;
     --host-border: #d5dbe3;
+    --host-line: #e2e8f0;
     --host-text: #1f2430;
     --host-muted: #5b6472;
     --host-hover: #eef2f7;
+    --host-accent: #2563eb;
+    --host-accent-soft: #e8eef9;
+    --host-accent-line: #b9c9e8;
+    --host-danger: #b91c1c;
+    --host-danger-bg: #fdf2f2;
+    --host-danger-line: #f0b4b4;
+    --host-hl-key: #0b5fa5;
+    --host-hl-str: #0a7a3d;
+    --host-hl-num: #b45309;
+    --host-hl-bool: #7c3aed;
+    --host-hl-punct: #7a8494;
+    --host-font: system-ui, sans-serif;
+    --host-font-mono: ui-monospace, monospace;
+    --host-radius: 4px;
+    --host-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --host-bg: #0f131c;
       --host-panel: #161b26;
       --host-border: #2a3140;
+      --host-line: #232a37;
       --host-text: #e5e9f0;
       --host-muted: #96a0b5;
       --host-hover: #1e2532;
+      --host-accent: #7aa2f7;
+      --host-accent-soft: #1c2740;
+      --host-accent-line: #35507f;
+      --host-danger: #f0a3a3;
+      --host-danger-bg: #2a1a1c;
+      --host-danger-line: #5c2b2b;
+      --host-hl-key: #7aa2f7;
+      --host-hl-str: #9ece6a;
+      --host-hl-num: #ff9e64;
+      --host-hl-bool: #bb9af7;
+      --host-hl-punct: #8b94a7;
+    }
+  }
+  :root[data-host-chrome="brand"] {
+    --host-bg: #f6fafc;
+    --host-panel: #ffffff;
+    --host-border: #d3e0e8;
+    --host-line: #e3edf3;
+    --host-text: #0b1b26;
+    --host-muted: #56707f;
+    --host-hover: #e3f1f7;
+    --host-accent: #1e6f92;
+    --host-accent-soft: #e3f1f7;
+    --host-accent-line: #9cc9de;
+    --host-danger: #b42318;
+    --host-danger-bg: #fdecec;
+    --host-danger-line: #f1b3b3;
+    --host-hl-key: #1e6f92;
+    --host-hl-str: #2e7d5b;
+    --host-hl-num: #b7791f;
+    --host-hl-bool: #7a4fbf;
+    --host-hl-punct: #56707f;
+    --host-font: Georgia, "Times New Roman", serif;
+    --host-font-mono: "Courier New", Courier, monospace;
+    --host-radius: 8px;
+    --host-shadow: 0 8px 24px -12px rgba(11, 27, 38, 0.35);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root[data-host-chrome="brand"] {
+      --host-bg: #0b141b;
+      --host-panel: #10202a;
+      --host-border: #22394a;
+      --host-line: #1b2f3c;
+      --host-text: #e6f0f5;
+      --host-muted: #93a9b6;
+      --host-hover: #152a36;
+      --host-accent: #5fb6da;
+      --host-accent-soft: #14303d;
+      --host-accent-line: #2f5f78;
+      --host-danger: #f29a9a;
+      --host-danger-bg: #2a1a1c;
+      --host-danger-line: #5c2b2b;
+      --host-hl-key: #8acbe6;
+      --host-hl-str: #6cc79a;
+      --host-hl-num: #e0b25a;
+      --host-hl-bool: #bb9af7;
+      --host-hl-punct: #93a9b6;
+      --host-shadow: 0 8px 24px -12px rgba(0, 0, 0, 0.7);
     }
   }
   body {
     margin: 0;
     padding: 16px;
-    font-family: system-ui, sans-serif;
+    font-family: var(--host-font);
     background: var(--host-bg);
     color: var(--host-text);
   }
@@ -46,7 +126,7 @@
     font: inherit;
     padding: 4px 10px;
     border: 1px solid var(--host-border);
-    border-radius: 4px;
+    border-radius: var(--host-radius);
     background: var(--host-panel);
     color: var(--host-text);
     cursor: pointer;
@@ -67,6 +147,7 @@
     <button id="load-xpost" type="button">Load x-post</button>
     <button id="load-weather" type="button">Load weather</button>
     <button id="save-theme" type="button">Save theme</button>
+    <button id="chrome-toggle" type="button">Host chrome</button>
     <button id="reset" type="button">Reset all</button>
     <span id="status"></span>
   </header>

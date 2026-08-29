@@ -6,7 +6,8 @@
  */
 import { validateTheme } from "@widgentic/core";
 import type { ThemeEntry, WidgetTheme } from "@widgentic/core";
-import { h, injectDesignerStyles } from "./dom.js";
+import { applyChrome, h, injectDesignerStyles } from "./dom.js";
+import type { ChromeOptions } from "./dom.js";
 import { applyDefinition, checkDefinition } from "./io.js";
 import type { WidgetDefinition } from "./io.js";
 import { mountPanels } from "./panels.js";
@@ -48,6 +49,13 @@ export interface DesignerOptions {
    * designer's own UI — the widget preview uses the draft's theme.
    */
   appearance?: "auto" | "light" | "dark";
+  /**
+   * Host chrome: a partial map over `CHROME_TOKENS` applied inline on the
+   * root, winning over the built-in light/dark defaults. Values may be
+   * `var()` references to the host's own properties; CSS-wide keywords are
+   * ignored (pass `var(--host-font, system-ui, sans-serif)`, not `inherit`).
+   */
+  chrome?: ChromeOptions;
   /**
    * Mount with editing disabled: panels stay visible but inert, only the
    * preview and its theme selector operate. Toggle later via
@@ -95,6 +103,7 @@ export function createDesigner(
   if (options.appearance === "light" || options.appearance === "dark") {
     root.setAttribute("data-wgd-theme", options.appearance);
   }
+  applyChrome(root, options.chrome);
   container.appendChild(root);
 
   const actionContext = {
