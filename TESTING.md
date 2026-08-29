@@ -81,6 +81,34 @@ page and designers match again — Georgia 14px, Courier tags at 12px/4px,
 brand accent and highlight colours, 24px gap, chevron 11px — while the
 preview's widget colours (`--wg-*`) stay put.
 
+## Documentation site (`docs/`)
+
+The Mintlify site at `docs.widgentic.dev` builds from `docs/` on `main`
+(Mintlify GitHub App, "docs are in a subdirectory" → `/docs`). The Reference
+tab is generated, never hand-edited:
+
+```bash
+npm run docs:generate     # tools/docs-generate.ts → docs/reference/**  (22 pages, deterministic)
+npm run docs:dev          # local preview (mint dev in docs/)
+npm run docs:check        # CI gate: generate --check, navigation test, mint validate,
+                          #          mint broken-links --check-anchors, mint a11y
+```
+
+`docs:generate --check` fails when a committed page differs from a fresh
+generation (or a stale page lingers); `tools/docs-nav.test.ts` fails when a
+page is missing from `docs.json` navigation (or a navigation entry has no
+page) — `mint validate` does not flag orphans. `mint` downloads its client
+binary from `releases.mintlify.com` on first run.
+
+Operator steps (generic; the live values live in the apps runbook): connect
+the repository in the Mintlify dashboard (Git settings → subdirectory
+`/docs`, GitHub App with access to this repository only); add the custom
+domain, create its two verification TXT records (`_acme-challenge.<host>`,
+`_cf-custom-hostname.<host>`) FIRST, then the DNS-only CNAME to
+`cname.mintlify.builders` once both show verified; on Cloudflare keep the
+record grey-cloud, SSL/TLS Full (strict), "Always Use HTTPS" off. TLS is
+provisioned by Mintlify within hours of propagation.
+
 ## Host registration snippets
 
 **VS Code Copilot** (`.vscode/mcp.json`) — an MCP Apps host; widgets mount inline.

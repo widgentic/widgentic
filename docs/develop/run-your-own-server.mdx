@@ -1,0 +1,134 @@
+---
+title: "Run your own server"
+description: "Assemble the widgentic MCP server with createWidgenticServer, pick a transport, add a store for per-principal catalogs, and wire secrets."
+---
+
+`@widgentic/mcp/sdk` exports one function, `createWidgenticServer(options?)`, returning a connectable `McpServer` from the official `@modelcontextprotocol/sdk` with the full wiring: the seven tools, the MCP Apps declaration, the app template resource, output slimming and image inlining. The SDK packages are optional peers, so install them alongside:
+
+```bash
+npm install @widgentic/mcp @modelcontextprotocol/sdk @modelcontextprotocol/ext-apps zod
+```
+
+The smallest server serves exactly the built-in kinds and themes over stdio:
+
+```ts
+import { createWidgenticServer } from "@widgentic/mcp/sdk";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+
+await createWidgenticServer().connect(new StdioServerTransport());
+```
+
+## The stdio example
+
+The repository's `examples/mcp-server/main.ts` is the template for a deployment with your own widgets compiled in. Run it from a checkout with `npm run mcp`, or register it with a host:
+
+```bash
+claude mcp add widgentic -- npx tsx /path/to/widgentic/examples/mcp-server/main.ts
+```
+
+Author widgets in the designer, export them as TypeScript (the export matches the example's `widgets/` module shape), register them into a catalog and hand it to the assembly. Compiled-in widgets bind their actions inline, so the action source walks the same definitions:
+
+```ts
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { createWidgenticServer } from "@widgentic/mcp/sdk";
+import { createCatalog, findActionBinding, registerTemplate } from "@widgentic/core";
+import { customWidgets } from "./widgets/index.js";
+
+const catalog = createCatalog();
+for (const widget of customWidgets) {
+  registerTemplate(catalog, widget.kind, widget.template, widget.descriptor);
+}
+
+const byKind = new Map(customWidgets.map((widget) => [widget.kind, widget]));
+const server = createWidgenticServer({
+  catalog,
+  actions: {
+    bindingAt: (kind, id) => {
+      const widget = byKind.get(kind);
+      return widget === undefined ? undefined : findActionBinding(widget.template, id);
+    },
+    load: (kind) => byKind.get(kind)?.load,
+    resolve: () => undefined
+  },
+  scopes: ["read", "execute"]
+});
+await server.connect(new StdioServerTransport());
+```
+
+A stdio server runs on the operator's own machine, which is why the example grants `execute`.
+
+## Options
+
+With no options the assembly serves the built-ins; everything else is your explicit choice.
+
+| Option | What it does |
+|---|---|
+| `catalog` | the composed `WidgetCatalog` to serve; omitted, exactly the built-in kinds |
+| `themes` | the composed `ThemeRegistry`; omitted, the built-in themes |
+| `schemas` | an async source of shared schemas, read only when `list_schemas` is called; omitted, empty |
+| `resourceDomains` | hostnames you trust the app frame to load assets from, declared as `_meta.ui.csp.resourceDomains`; images on them skip inlining. Render inputs can never extend it |
+| `actions` | the action source for the catalog: `bindingAt(kind, id)`, `load(kind)`, `resolve(ref)`; omitted, `execute_action` answers `UNKNOWN_ACTION` |
+| `scopes` | the caller's scopes; `execute` gates `execute_action` and http-bound descriptors |
+| `secrets` | `(name) => Promise<string>` resolving the caller's secret at execution time, `undefined` for an unknown name |
+| `rateLimit` | a `() => boolean` gate for `execute_action`; `false` answers `RATE_LIMITED` |
+| `fetchDeps` | an injectable transport for tests |
+
+Catalog and themes are passed in because the trust decision belongs where the API key is read.
+
+## Transports and environment
+
+The assembly is transport-agnostic; hosts connect it to stdio, Streamable HTTP or in-memory pipes. Over Streamable HTTP, resolve the caller's principal from the presented API key before constructing that request's server and connect a fresh one per request — composition caches nothing, so one principal's widgets never reach another's session. A key that resolves to no principal degrades to the anonymous catalog, never to an error, and is never logged.
+
+Two environment variables are read each time a server is constructed:
+
+- `WIDGENTIC_ASSUME_UI` — `1` or `true` slims the default-format `render_widget` result (a one-line confirmation instead of the full HTML text block) when no UI capability could be negotiated — on stateless HTTP the `tools/call` request builds a server that never saw `initialize`. A negotiated capability overrides it in either direction; explicit `format` values are never slimmed.
+- `WIDGENTIC_INLINE_IMAGES` — `0` or `false` disables server-side image inlining. By default the iframe-facing surfaces of a result (`structuredContent.html`, `structuredContent.tree` and the `ui://widgentic/page/<kind>` resource) get `https` image sources rewritten to `data:` URIs through the guarded fetch, because Apps-host sandboxes block external images.
+
+## Give it a store
+
+`@widgentic/mcp/store` turns an API key into a principal. `createMemoryStore(seed?, limits?, options?)` serves tests and demos; `createFileStore(dir, options?)` reads this layout:
+
+```text
+<dir>/principals.json                     [{ id, scopes, keyDigest }]  # sha256 digests, never raw keys
+<dir>/<principalId>/widgets/<kind>.json   { kind, template, descriptor }
+<dir>/<principalId>/themes/<name>.json    { name, label?, tokens }
+<dir>/<principalId>/schemas/<name>.json   { name, label?, description?, schema }
+<dir>/<principalId>/actions/<name>.json   { name, label?, description?, definition }
+<dir>/<principalId>/secrets/<name>.json   envelope records, ciphertext only
+```
+
+Options carry `limits` (how many widgets, themes, schemas, actions and secrets a principal may hold, the bytes per entry and the template nodes per widget — the defaults are on [Limits](/reference/limits)), an `onDiagnostic` sink and a `cipher` for secrets. Per request:
+
+```ts
+import { ANONYMOUS_PRINCIPAL, composeCatalog, composeThemes, createFileStore } from "@widgentic/mcp/store";
+import { createWidgenticServer } from "@widgentic/mcp/sdk";
+
+const store = createFileStore("./data");
+
+async function serverFor(apiKey: string | undefined) {
+  const resolved = apiKey === undefined ? undefined : await store.resolvePrincipal(apiKey);
+  const { id, scopes } = resolved ?? ANONYMOUS_PRINCIPAL;
+  const catalog = await composeCatalog(store, id, { executeAllowed: scopes.includes("execute") });
+  const themes = await composeThemes(store, id);
+  return createWidgenticServer({
+    catalog: catalog.value,
+    themes: themes.value,
+    actions: catalog.actions,
+    scopes,
+    schemas: () => store.schemas(id),
+    secrets: (name) => store.secretValue(id, name)
+  });
+}
+```
+
+`composeCatalog` and `composeThemes` return fresh instances every time, each with a `diagnostics` array: an invalid, oversized or built-in-shadowing entry is skipped with a diagnostic, never fatal. Keys are stored as `sha256:` digests and compared in constant time (`generateKey`, `hashKey`, `verifyKey`); a key carries `read` and optionally `execute`, fixed at creation.
+
+### Cosmos DB
+
+`@widgentic/mcp/store/cosmos` exports `createCosmosStore(options)`, a `WritableWidgetStore` over two containers: `data`, partitioned by `/principalId` with one document per entry (`profile`, `widget:<kind>`, `theme:<name>`, `schema:<name>`, `action:<name>`, `secret:<name>`), so a principal's catalog is one single-partition query; and `keys`, partitioned by `/digest`, so key resolution is a point read. It takes an `endpoint` and an Azure `credential` (managed identity in deployment) plus optional `databaseId`, `dataContainerId`, `keysContainerId`, `limits`, `cipher` and `log` — deliberately no account-key or connection-string option. Under Cosmos RBAC the serving identity can hold the read-only role, so a write from the MCP server fails at the service. `@azure/cosmos` and `@azure/identity` are optional peers of this entry.
+
+## Secrets
+
+Http actions reference secrets by name; `@widgentic/mcp/secrets` stores them as envelope-encrypted records. `encryptSecret(value, cipher)` generates a fresh 256-bit data key, encrypts the value with AES-256-GCM, wraps the data key through the cipher port and returns `{ alg, kekVersion, wrappedKey, iv, ciphertext, tag }`; `decryptSecret` reverses it and `rewrapSecret` moves a record to a newer key version without decrypting the value. Values are 8 to 4096 bytes.
+
+A `SecretCipher` only wraps and unwraps data keys. `createLocalCipher(hexKey)` keeps a 64-hex-character key in memory (`generateLocalKek()` makes one) — for file-store rigs and tests, never production. `@widgentic/mcp/secrets/keyvault` exports `createKeyVaultCipher({ keyId, credential, previous? })`, which wraps and unwraps through the vault's cryptographic operations so the key-encryption key never enters the process; the identity needs only the wrap/unwrap role on that key, and `previous` maps older key versions to clients until records are re-wrapped. Hand the cipher to the store's `cipher` option; without one the store refuses `putSecret` and `secretValue` with `NO_CIPHER`. Secrets are injected only at execution, never displayed, and redacted from every message the server emits.

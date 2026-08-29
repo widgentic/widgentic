@@ -174,8 +174,10 @@ pack:check`, `openspec validate` — all green.
 
 ## Release
 
-Changesets with a linked group (core, designer, mcp move together), private
-workspaces never versioned. `release.yml` on `main`: opens/updates the
+Changesets with a LINKED group (core, designer, mcp): packages released in
+the same run take the same version, but a package with no changeset is NOT
+bumped — linked is not `fixed`. The 0.2.0 release of `designer` left core
+and mcp at 0.1.0. Private workspaces are never versioned. `release.yml` on `main`: opens/updates the
 "Version Packages" PR; on merge publishes when the repository VARIABLE
 `NPM_PUBLISH` is `true` (npm ≥ 11.5, OIDC trusted publishing, provenance);
 otherwise it runs `pack:check`. After a publish, bump the range in

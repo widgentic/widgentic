@@ -1,0 +1,65 @@
+---
+title: "API reference"
+description: "Where the per-entry export index comes from and how to read it."
+---
+
+The Reference tab carries one page per published package entry — sixteen in all — listing that entry's runtime exports by name. The pages are generated from the packages themselves by the repository's `docs:generate` script, from the same export lists the export-snapshot test pins, and a CI check fails when the committed pages differ from a fresh generation. An index therefore cannot list a symbol that does not exist, and a symbol added or removed in a release shows up here in the same change.
+
+What the index covers and what it does not:
+
+- **Runtime exports** — functions, constants and classes: everything you can import at runtime, exactly as the entry exports it.
+- **Type-only exports** — interfaces and type aliases such as `WidgetPayload`, `DesignerOptions` or `WidgetStore` are erased at build time and are not part of the index. The package READMEs and the `.d.ts` files in each package's `dist` document them, and your editor shows them on import.
+- **Signatures** — the index names symbols; for parameters and return shapes read the declaration files, or the pages in this Develop tab, which describe the signatures that matter for each task.
+
+<CardGroup cols={3}>
+  <Card title="core" href="/reference/api/core">
+    `@widgentic/core` — every subpath below, re-exported from the root.
+  </Card>
+  <Card title="core/contract" href="/reference/api/core-contract">
+    Payload validation and URL guards.
+  </Card>
+  <Card title="core/adapters" href="/reference/api/core-adapters">
+    `parseJson`, `parseCsv`.
+  </Card>
+  <Card title="core/mapper" href="/reference/api/core-mapper">
+    `inferKind`, `mapToWidget`.
+  </Card>
+  <Card title="core/catalog" href="/reference/api/core-catalog">
+    Catalog, built-ins, HTML serialization, hint analysis.
+  </Card>
+  <Card title="core/theming" href="/reference/api/core-theming">
+    Token registry, named themes, base stylesheet.
+  </Card>
+  <Card title="core/templates" href="/reference/api/core-templates">
+    Template DSL validation, compilation and registration.
+  </Card>
+  <Card title="core/actions" href="/reference/api/core-actions">
+    Action definitions, bindings, arguments, redaction.
+  </Card>
+  <Card title="core/reactive" href="/reference/api/core-reactive">
+    `mountWidget`.
+  </Card>
+  <Card title="designer" href="/reference/api/designer">
+    Designers, custom elements, chrome tokens, import and export helpers.
+  </Card>
+  <Card title="mcp" href="/reference/api/mcp">
+    Tool-output convention, tool definitions and handlers, app template, guarded fetch.
+  </Card>
+  <Card title="mcp/sdk" href="/reference/api/mcp-sdk">
+    `createWidgenticServer`.
+  </Card>
+  <Card title="mcp/store" href="/reference/api/mcp-store">
+    Store port, memory and file stores, composition, keys.
+  </Card>
+  <Card title="mcp/store/cosmos" href="/reference/api/mcp-store-cosmos">
+    `createCosmosStore`.
+  </Card>
+  <Card title="mcp/secrets" href="/reference/api/mcp-secrets">
+    Envelope encryption and the local cipher.
+  </Card>
+  <Card title="mcp/secrets/keyvault" href="/reference/api/mcp-secrets-keyvault">
+    `createKeyVaultCipher`, `kekVersionOf`.
+  </Card>
+</CardGroup>
+
+Which entry to import from is a matter of scope, not capability: the root of `@widgentic/core` re-exports every subpath, while `@widgentic/mcp` keeps its SDK, store and secrets behind their own entries so the base entry imports with no optional peer installed. [Packages](/develop/packages) lists the entries with their runtimes and dependencies.

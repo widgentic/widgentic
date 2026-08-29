@@ -1,0 +1,65 @@
+---
+title: "Inline rendering in MCP Apps hosts"
+description: "How render_widget results become widgets inside the conversation, and what hosts without MCP Apps receive instead."
+---
+
+Hosts that implement MCP Apps can display a widget inline in the chat. widgentic follows the official convention (spec version `2026-01-26`, through `@modelcontextprotocol/ext-apps`) and keeps a text path for every other host.
+
+## The app template
+
+`render_widget` is registered with `_meta.ui.resourceUri` pointing at `ui://widgentic/app.html`. That resource is served with mime type `text/html;profile=mcp-app` and is a self-contained document: the widgentic base stylesheet plus a small inline bridge implementing the iframe side of the protocol — the `ui/initialize` handshake, the `ui/notifications/initialized` notification, `ping` and `ui/resource-teardown` responders, and `ui/notifications/size-changed` reports. It references no external resources, contains no imports and declares no CSP domains, so the strictest sandbox a host offers is enough.
+
+The host mounts it in a sandboxed iframe; `buildAppTemplate()` from `@widgentic/mcp` produces the same document for anyone running their own server.
+
+## What each render sends
+
+Every successful `render_widget` result, whatever `format` was requested, carries `structuredContent`:
+
+```json
+{
+  "html": "<div class=\"wg-card\">...</div>",
+  "css": ":root { --wg-accent: #ff5a1f; } .wg-invoice { border: 1px solid var(--wg-border) }",
+  "payload": { "kind": "invoice", "data": { "lines": [] }, "theme": { "accent": "#ff5a1f" } },
+  "tree": { "tag": "div", "attrs": { "class": "wg-card" }, "children": [] }
+}
+```
+
+- `tree` is the render tree and `html` its serialization: two projections of one render, never divergent.
+- `css` holds the theme declarations plus the registered styles of the kind; for a `group`, every item kind's styles exactly once.
+- `payload` is the validated payload, carrying the resolved `theme` as a top-level field when one was given.
+- `diagnostics` appears only when hint analysis found something; `load` (or `loads` for a group) appears only when the kind declares a load binding and the caller holds the `execute` scope.
+
+The bridge listens for `ui/notifications/tool-result` and mounts the tree natively: DOM built with `createElement` and `createTextNode`, tag and attribute names held to the serializer's allowlists, `on*` attributes skipped. When a later result has the same shape, the existing DOM is patched in place and the root element object survives. The `html` fragment is injected into the root only when `tree` is absent.
+
+Two more bridge behaviours:
+
+- **Streaming preview.** On `ui/notifications/tool-input-partial`, built-in kinds (and groups of built-ins) are previewed from the partial input, marked in progress and patched as more arrives; custom and unknown kinds show a skeleton naming the kind, never a guessed render. The tool result replaces the preview.
+- **Host context.** The host's theme is applied as `data-theme` and `color-scheme`, its style variables flow into the `--wg-*` tokens, and safe-area insets become body padding. Unbridged tokens follow the dark preset when the host theme is dark; an explicit widgentic `theme` still wins. Anchor clicks never navigate the frame: the template asks the host to open `http(s)`, `mailto` and `tel` links through `ui/open-link`.
+
+## Formats
+
+`format` picks which content blocks travel; the render itself does not change.
+
+| Value | Content | Use it for |
+|---|---|---|
+| `both` (default) | HTML fragment text block plus the widgentic payload block (`application/vnd.widgentic+json`) | Any host; Apps hosts mount from `structuredContent` |
+| `html` | The fragment only | Embedding the markup yourself |
+| `widget` | The payload block only | Natively mounting hosts |
+| `page` | A self-contained styled document (`<!doctype html>`, inlined base stylesheet, theme declarations, kind styles, body coloured from the tokens) plus the payload block | Opening in a browser |
+| `app` | A one-line text fallback, a `text/html;profile=mcp-app` resource at `ui://widgentic/page/<kind>` holding that same styled page, and the payload block | Legacy embedded-resource hosts (mcp-ui lineage) |
+
+An unrecognized value returns `INVALID_TYPE` at `path: "format"`.
+
+## Hosts without Apps support
+
+A client that does not advertise the Apps capability (`extensions["io.modelcontextprotocol/ui"]`) gets the same tools with the template simply unmounted: the HTML text block and payload block, or a `page` document to open in a browser. Claude Code is the everyday case: its tool results are text and it does not mount MCP Apps UI by design. Hosts that understand the widgentic mime type can mount the payload block natively with `extractWidgetPayload` and `@widgentic/core`; see [Render in your host](/develop/render-in-your-host).
+
+## Model-context slimming
+
+In an Apps host the person already sees the widget, so the model does not need the markup. The default-format result replaces the full-HTML text block with a one-line confirmation naming the kind, stating that the visual is already displayed and instructing the model not to restate the data. The payload block and `structuredContent` are unchanged, and the `Hint notes:` and `Action notes:` tails still reach the model. The signal is the session-negotiated UI capability, or `WIDGENTIC_ASSUME_UI=1` where negotiation cannot happen. Explicit formats are never slimmed.
+
+## Script-free, network-free content
+
+Widget content contains no scripts and no external references. That is by construction — the render tree cannot emit raw HTML, templates reject `script`, `iframe`, `style`, `link` and the other active-content tags, and theme values cannot contain `url(`.
+
+The one external reference a widget can legitimately carry is an image source, and Apps sandboxes block external `img-src` while permitting `data:`. The server therefore inlines images on the iframe-facing surfaces — `structuredContent.html`, `structuredContent.tree` and the `ui://widgentic/page/<kind>` resource — turning each `https` source whose guarded fetch succeeds into a `data:` URI. The fetch refuses private, loopback, link-local and metadata addresses, requires an `image/*` content type, caps each image at 1 MiB and about 4 seconds, and inlines at most 24 images per render; a failure leaves the original URL and its alt text. The model-facing HTML text block and `page` output keep the original URLs. Hostnames passed as `resourceDomains` are declared as `_meta.ui.csp.resourceDomains` and skipped by the inliner; `WIDGENTIC_INLINE_IMAGES=0` disables inlining. Per-host behaviour is in the [Host matrix](/how-it-works/host-matrix).

@@ -1,0 +1,73 @@
+---
+title: "Packages"
+description: "The three published @widgentic packages, their entries, runtimes and dependencies."
+---
+
+widgentic ships as three npm packages under the `@widgentic` scope. All three are ES modules only, publish compiled JavaScript with TypeScript declarations and source maps under `dist`, and are released by the repository's workflow with an npm provenance attestation — never from a developer machine. They are versioned as a linked group: packages released together take the same version, so a release never leaves two of them on confusingly adjacent numbers. A package with no changes in a release keeps its version, so the three numbers can differ — install the latest of each.
+
+| Package | Contents | Runs in | Depends on |
+|---|---|---|---|
+| `@widgentic/core` | contract, adapters, mapper, catalog, theming, templates, actions, reactive rendering | browser and Node | nothing |
+| `@widgentic/designer` | widget, theme, schema and action designers, custom elements, single-file browser bundle | browser | `@widgentic/core` |
+| `@widgentic/mcp` | tool-output convention, tool handlers, app template, action execution, official-SDK assembly, per-principal store, secrets | Node 22 or later | `@widgentic/core` plus optional peers |
+
+Every entry below is a subpath in the package's `exports` map, resolving for both the `types` and the default import condition. The linked pages list each entry's runtime exports; they are generated from the packages themselves (see [API reference](/develop/api-reference)).
+
+## @widgentic/core
+
+```bash
+npm install @widgentic/core
+```
+
+The engine: definitions, validation and rendering only — no designer, server or persistence code, and no Node-only modules (no `node:` imports, no `Buffer`, no `process`), so it runs in browsers and in Node alike. It declares no dependencies and no peer dependencies.
+
+| Entry | What it holds | Exports |
+|---|---|---|
+| `@widgentic/core` | everything below, re-exported | [core](/reference/api/core) |
+| `@widgentic/core/contract` | the `{ kind, data, hints?, meta? }` payload, `validateWidgetPayload`, the URL guards | [core-contract](/reference/api/core-contract) |
+| `@widgentic/core/adapters` | `parseJson`, `parseCsv` | [core-adapters](/reference/api/core-adapters) |
+| `@widgentic/core/mapper` | `inferKind`, `mapToWidget` | [core-mapper](/reference/api/core-mapper) |
+| `@widgentic/core/catalog` | `createCatalog`, the built-in kinds, `renderToHtml`, `mountNode`, hint analysis, data-schema validation | [core-catalog](/reference/api/core-catalog) |
+| `@widgentic/core/theming` | the `--wg-*` token registry, `applyTheme`, `injectBaseStyles`, named themes, `darkTheme` | [core-theming](/reference/api/core-theming) |
+| `@widgentic/core/templates` | the JSON template DSL: `validateTemplate`, `compileTemplate`, `registerTemplate` | [core-templates](/reference/api/core-templates) |
+| `@widgentic/core/actions` | action definitions and bindings, argument validation, redaction | [core-actions](/reference/api/core-actions) |
+| `@widgentic/core/reactive` | `mountWidget` with in-place DOM patching | [core-reactive](/reference/api/core-reactive) |
+
+## @widgentic/designer
+
+```bash
+npm install @widgentic/designer
+```
+
+The hostable designers as factories and opt-in custom elements. Browser only; depends on `@widgentic/core` and nothing else. One entry: [designer](/reference/api/designer).
+
+For pages without a bundler the package also publishes a single-file ES module bundle with core inlined at `dist/browser/widgentic-designer.js` (declared as the `./browser` subpath). Loading it from a module script registers the designer elements, so `<widgentic-designer>` mounts without any other network request for widgentic code. The module build stays the primary entry for bundler users. See [Embed the designers](/develop/embed-the-designers).
+
+## @widgentic/mcp
+
+```bash
+npm install @widgentic/mcp
+```
+
+Requires Node 22 or later (it relies on `net.BlockList`, `AbortSignal.timeout` and the global `fetch`). Depends on `@widgentic/core`. Its other dependencies are optional peers, needed only by the entry that imports them:
+
+| Entry | What it holds | Needs | Exports |
+|---|---|---|---|
+| `@widgentic/mcp` | the tool-output convention (`toWidgetResult`, `extractWidgetPayload`, `hostSupportsWidgets`), the seven tool definitions and their SDK-free handlers, `buildAppTemplate`, action execution with the guarded fetch, the execution limiter and body cap | nothing beyond core | [mcp](/reference/api/mcp) |
+| `@widgentic/mcp/sdk` | `createWidgenticServer()`, the full assembly on the official SDK | `@modelcontextprotocol/sdk`, `@modelcontextprotocol/ext-apps`, `zod` | [mcp-sdk](/reference/api/mcp-sdk) |
+| `@widgentic/mcp/store` | the per-principal store port, `createMemoryStore`, `createFileStore`, `composeCatalog`, `composeThemes`, key hashing | nothing beyond core; no network I/O | [mcp-store](/reference/api/mcp-store) |
+| `@widgentic/mcp/store/cosmos` | `createCosmosStore` | `@azure/cosmos`, `@azure/identity` | [mcp-store-cosmos](/reference/api/mcp-store-cosmos) |
+| `@widgentic/mcp/secrets` | envelope encryption: `encryptSecret`, `decryptSecret`, `rewrapSecret`, `createLocalCipher` | nothing beyond core | [mcp-secrets](/reference/api/mcp-secrets) |
+| `@widgentic/mcp/secrets/keyvault` | `createKeyVaultCipher`, `kekVersionOf` | `@azure/keyvault-keys`, a credential from `@azure/identity` | [mcp-secrets-keyvault](/reference/api/mcp-secrets-keyvault) |
+
+The base entry and `./store` import with none of the peers installed. To run a server, install the SDK peers alongside:
+
+```bash
+npm install @widgentic/mcp @modelcontextprotocol/sdk @modelcontextprotocol/ext-apps zod
+```
+
+Install the Azure clients only if you import the Cosmos or Key Vault entries. See [Run your own server](/develop/run-your-own-server).
+
+## What a tarball contains
+
+Each package publishes `dist/**`, `package.json`, `README.md` and `LICENSE` (MIT) — no TypeScript sources, tests or fixtures — with `sideEffects: false`, an `engines.node` range and a `repository` field pointing at the public repository. The declarations type-check under Node16 and bundler module resolution. Type-only exports (interfaces and type aliases) are not part of the generated export index; the package READMEs and the `.d.ts` files cover them.

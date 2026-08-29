@@ -4,6 +4,8 @@
 
 It is the only UI an agent needs to render data from external services and APIs.
 
+Documentation: [docs.widgentic.dev](https://docs.widgentic.dev) — for people who design widgets and for developers who embed the packages or run a server; its Reference pages are generated from the same validators the packages enforce.
+
 ## Why
 
 Agents call tools and APIs that return structured data. Each tool today reinvents how to present that data in chat or canvas surfaces. widgentic provides one consistent, agent-friendly contract and a small set of generic widgets, so any MCP-aware host can render rich tool output without bespoke UI per tool.
@@ -298,6 +300,8 @@ Development is spec-first via OpenSpec: `openspec/specs/` holds the current
 behavior of every capability and `openspec/changes/archive/` the full change
 history. Our own hosts — the MCP server behind `mcp.widgentic.dev` and the
 widgentic.dev authoring app — live in the private `widgentic/apps` repository
-and consume these packages like any other host. Next on the backlog: the
-static docs site at `docs.widgentic.dev`.
+and consume these packages like any other host. The documentation site
+(`docs/`, served at `docs.widgentic.dev` by Mintlify) is part of this
+repository: `npm run docs:generate` derives its Reference pages from the
+packages and `npm run docs:check` gates it in CI.
 

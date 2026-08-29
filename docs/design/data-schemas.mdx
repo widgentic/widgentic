@@ -1,0 +1,90 @@
+---
+title: "Data schemas"
+description: "Declare the data a widget expects, inline in its descriptor or as a shared schema that many widgets reference by name."
+---
+
+A data schema tells the server what `data` a widget accepts. When a kind has one, `render_widget` validates the payload before rendering and returns a structured, correctable error with a dotted path (`MISSING_FIELD` at `data.lines`, `INVALID_TYPE` at `data.lines.0.qty`) instead of a blank or misleading render. Kinds without a schema render leniently. Descriptors carry their schema verbatim in `list_widgets`, so agents see the shape before they call.
+
+## The supported subset
+
+Schemas use a bounded subset of JSON Schema. Unknown keywords are ignored.
+
+| Keyword | Notes |
+|---|---|
+| `type` | `object`, `array`, `string`, `number`, `integer`, `boolean`, `null`, or an array of those; `["string", "null"]` is a nullable string |
+| `properties`, `required` | object members, and which of them must be present |
+| `items` | the schema of every array element |
+| `enum` | the allowed values |
+| `pattern` | a bounded regular expression, applied only to string values |
+
+`pattern` is guarded against pathological input: patterns over the length cap, patterns the `RegExp` constructor rejects, and patterns with nested quantifiers are ignored rather than enforced, and tested strings are capped in length. A violation reports `INVALID_TYPE` at the value's path. The caps are listed in [Limits](/reference/limits).
+
+## Inline or shared
+
+An inline schema lives in the widget as `descriptor.dataSchema`. It is the right choice when the shape belongs to that one widget.
+
+A shared schema is its own entry, defined once and referenced by many widgets:
+
+```json
+{
+  "name": "person",
+  "label": "Person",
+  "description": "A person with contact details.",
+  "schema": {
+    "type": "object",
+    "required": ["name"],
+    "properties": {
+      "name": { "type": "string" },
+      "email": { "type": ["string", "null"] },
+      "status": { "type": "string", "enum": ["active", "do-not-contact"] }
+    }
+  }
+}
+```
+
+A widget references it with `descriptor.dataSchemaRef` in place of `dataSchema`:
+
+```json
+{
+  "kind": "person-card",
+  "template": {
+    "tag": "div",
+    "attrs": { "class": "wg-card" },
+    "children": [{ "tag": "h2", "attrs": { "class": "wg-card-title" }, "children": [{ "bind": "name" }] }]
+  },
+  "descriptor": {
+    "description": "A person's name as a card.",
+    "dataShape": "{ name: string, email?: string | null, status?: string }",
+    "dataExample": { "name": "Ada Lovelace", "email": null, "status": "active" },
+    "dataSchemaRef": "person"
+  }
+}
+```
+
+The rules:
+
+- **Never both.** A descriptor carrying `dataSchema` and `dataSchemaRef` is refused with `INVALID_SHAPE`.
+- **The reference must exist.** A `dataSchemaRef` naming no saved schema of yours is refused on write with `UNKNOWN_SCHEMA`.
+- **Resolved at composition.** When your catalog is composed for a request, the server copies the shared schema into the referencing descriptor. Downstream (the renderer, `list_widgets`, agents) the reference does not exist; they see a `dataSchema`.
+- **One edit reaches every widget.** Save a change to `person` and the next render of every widget referencing it validates against the new shape, without the widgets being touched.
+- **Deletion is guarded.** Deleting a schema that widgets still reference is refused with `SCHEMA_IN_USE`, naming those widgets.
+
+A schema `name` follows the identifier charset `^[a-zA-Z0-9._-]+$`, the same as widget kinds and theme names.
+
+## The schema builder
+
+Both the widget designer's Data schema section and the standalone designer edit a schema through a structured builder and a JSON pane. They project one value: a property added in the builder appears in the JSON, an edit in the JSON appears in the builder, and invalid JSON keeps the last valid schema with the parse error shown.
+
+The builder reads flat, one slim row per property, with the type select fitted to the selected value and the removal control revealed on hover. A **nullable** toggle handles the `[type, "null"]` form: the row shows the primary type with the toggle set, constraints such as `pattern` and `enum` follow the primary type, and clearing the toggle writes `"type": "string"` back while preserving the constraint. Type arrays beyond that pattern stay JSON-pane territory and survive untouched until the type controls are edited.
+
+In the widget designer, choose **Define inline** to edit `descriptor.dataSchema` in place, or **Use shared** to pick one of your saved schemas, which is then shown read-only while the draft stores the reference. `dataExample` is cross-checked against whichever schema is in effect, with dotted paths in the diagnostic, and a reference to a schema you no longer have is reported at the section. Path completions in the template panel resolve a shared schema exactly like an inline one.
+
+## The Data schemas designer
+
+The **Data schemas** section of the app manages shared schemas under the same regime as widgets and themes: entries are listed, open read-only on selection with **Edit** and **Delete**, and save through your session. The designer edits the entry's identity (`name`, optional `label` and `description`) and its `schema`, validating on every change: the identifier charset for `name`, a plain object for `schema`.
+
+Import and Export are two independent sections, Import first. Import accepts the entry JSON above, the exact shape an agent drafts from the authoring guide, re-validates it, and leaves the working entry untouched when it fails. Export stays operable in read-only mode.
+
+<Tip>
+Save the schema before the widgets that reference it: a `dataSchemaRef` is validated against your saved schemas when the widget is saved. Agents connected with your key can read the saved shape with `list_schemas` and should reference it by name rather than copying it inline, because a copy forks the moment you edit the shared one. See [Authoring with an agent](/design/authoring-with-an-agent).
+</Tip>

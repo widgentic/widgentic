@@ -1,0 +1,229 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "widgentic",
+  "description": "Widgets for agents: design a card, a table, a tree or your own widget once; every MCP host your agents use renders it inline.",
+  "colors": {
+    "primary": "#1E6F92",
+    "light": "#40A0C8",
+    "dark": "#1E6F92"
+  },
+  "logo": {
+    "light": "/images/logo.svg",
+    "dark": "/images/logo.svg",
+    "href": "https://widgentic.dev"
+  },
+  "favicon": "/images/icon-192.png",
+  "fonts": {
+    "heading": {
+      "family": "Montserrat",
+      "weight": 700
+    },
+    "body": {
+      "family": "Source Sans 3"
+    }
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "widgentic.dev",
+        "href": "https://widgentic.dev"
+      },
+      {
+        "type": "github",
+        "href": "https://github.com/widgentic/widgentic"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "Open the app",
+      "href": "https://widgentic.dev"
+    }
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Get started",
+        "icon": "rocket",
+        "groups": [
+          {
+            "group": "Start here",
+            "pages": [
+              "index",
+              "get-started/what-is-widgentic",
+              "get-started/quickstart"
+            ]
+          },
+          {
+            "group": "Connect",
+            "pages": [
+              "get-started/connect-a-host",
+              "get-started/keys-and-scopes"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Design",
+        "icon": "pencil-ruler",
+        "groups": [
+          {
+            "group": "Author widgets",
+            "pages": [
+              "design/widget-designer",
+              "design/template-dsl",
+              "design/data-schemas",
+              "design/groups-and-hints"
+            ]
+          },
+          {
+            "group": "Dress and act",
+            "pages": [
+              "design/themes",
+              "design/actions-and-secrets"
+            ]
+          },
+          {
+            "group": "With an agent",
+            "pages": [
+              "design/authoring-with-an-agent"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "How it works",
+        "icon": "cog",
+        "groups": [
+          {
+            "group": "Rendering",
+            "pages": [
+              "how-it-works/payload-contract",
+              "how-it-works/payload-to-pixels",
+              "how-it-works/inline-rendering"
+            ]
+          },
+          {
+            "group": "Serving",
+            "pages": [
+              "how-it-works/per-principal-catalogs",
+              "how-it-works/trust-model",
+              "how-it-works/host-matrix"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Develop",
+        "icon": "code",
+        "groups": [
+          {
+            "group": "Packages",
+            "pages": [
+              "develop/packages",
+              "develop/render-in-your-host",
+              "develop/embed-the-designers",
+              "develop/run-your-own-server"
+            ]
+          },
+          {
+            "group": "Protocol",
+            "pages": [
+              "develop/mcp-tools",
+              "develop/api-reference"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Reference",
+        "icon": "book-open",
+        "groups": [
+          {
+            "group": "Generated from the validators",
+            "pages": [
+              "reference/index",
+              "reference/authoring-contract",
+              "reference/template-dsl",
+              "reference/limits",
+              "reference/action-definition",
+              "reference/theme-tokens",
+              "reference/mcp-tools"
+            ]
+          },
+          {
+            "group": "API export index",
+            "pages": [
+              "reference/api/core",
+              "reference/api/core-contract",
+              "reference/api/core-adapters",
+              "reference/api/core-mapper",
+              "reference/api/core-catalog",
+              "reference/api/core-theming",
+              "reference/api/core-templates",
+              "reference/api/core-actions",
+              "reference/api/core-reactive",
+              "reference/api/designer",
+              "reference/api/mcp",
+              "reference/api/mcp-sdk",
+              "reference/api/mcp-store",
+              "reference/api/mcp-store-cosmos",
+              "reference/api/mcp-secrets",
+              "reference/api/mcp-secrets-keyvault"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/widgentic"
+    },
+    "links": [
+      {
+        "header": "Product",
+        "items": [
+          {
+            "label": "widgentic.dev",
+            "href": "https://widgentic.dev"
+          },
+          {
+            "label": "MCP endpoint",
+            "href": "https://mcp.widgentic.dev/mcp"
+          }
+        ]
+      },
+      {
+        "header": "Packages",
+        "items": [
+          {
+            "label": "@widgentic/core",
+            "href": "https://www.npmjs.com/package/@widgentic/core"
+          },
+          {
+            "label": "@widgentic/designer",
+            "href": "https://www.npmjs.com/package/@widgentic/designer"
+          },
+          {
+            "label": "@widgentic/mcp",
+            "href": "https://www.npmjs.com/package/@widgentic/mcp"
+          }
+        ]
+      },
+      {
+        "header": "Project",
+        "items": [
+          {
+            "label": "GitHub",
+            "href": "https://github.com/widgentic/widgentic"
+          },
+          {
+            "label": "Specifications",
+            "href": "https://github.com/widgentic/widgentic/tree/main/openspec/specs"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,81 @@
+---
+title: "The payload contract"
+description: "The normalized payload every producer emits and every renderer consumes, and the validator that guards it."
+---
+
+Every widget in widgentic starts as one small JSON object. Adapters, agents and MCP tools produce it; catalog renderers consume it. Nothing else crosses that line, which is what lets a widget designed once render in any host.
+
+```json
+{
+  "kind": "table",
+  "data": [{ "name": "Ada", "email": "ada@example.org" }],
+  "hints": { "columns": ["name", "email"], "links": { "email": "mailto:" } },
+  "meta": { "title": "People" }
+}
+```
+
+## The four fields
+
+| Field | Required | What it is |
+|---|---|---|
+| `kind` | yes | The widget identifier: a built-in (`card`, `table`, `tree`, `custom`, `group`) or a kind registered on the catalog. A `kind` the catalog does not know is a structured error, never a guess. |
+| `data` | yes | The body the renderer reads. Each kind documents its expected shape in its descriptor (`dataShape`, `dataExample`, optional `dataSchema`). Built-in renderers are total: an unexpected shape falls back rather than throws. |
+| `hints` | no | Renderer guidance that changes presentation without touching `data`: `columns`, `expandDepth`, `fieldFormat`, `links`, `images`, and for `group` the `layout`, `gap` and `columns` presets. |
+| `meta` | no | Chrome around the data. `title` and `subtitle` become the card header, the table caption or the tree title; the contract also reserves `meta` for source and timestamps. |
+
+Hints select among author-controlled options; they never inject content. A `fieldFormat` pattern is escaped like any text, a `links` hint only emits an anchor when the composed URL passes the scheme guard, and an `images` hint cannot bypass `isSafeImageSrc`. Misaimed hints — a misspelled key, a column that does not exist — are reported by `analyzeHints` as never-fatal diagnostics; the render still succeeds. See [Groups and hints](/design/groups-and-hints).
+
+## Types and the validator
+
+`@widgentic/core` and its `@widgentic/core/contract` subpath export `WidgetPayload`, `WidgetKind`, `WidgetHints`, `WidgetMeta` and `WidgetContractError`. `hints` and `meta` are typed optional, so a payload without them compiles.
+
+`validateWidgetPayload(input, options?)` never throws. It returns a discriminated result:
+
+```ts
+import { validateWidgetPayload } from "@widgentic/core/contract";
+
+const result = validateWidgetPayload(input, { knownKinds: new Set(catalog.kinds()) });
+if (result.ok) {
+  result.payload; // WidgetPayload
+} else {
+  result.error;   // { code, message, path? }
+}
+```
+
+`knownKinds` is optional. When it is provided and non-empty, a `kind` outside the set fails with `UNKNOWN_KIND`; when it is omitted, the format of `kind` is still checked but membership is not. `catalog.render(payload)` always passes its own registered kinds, so the catalog is the authority on what exists.
+
+### Error codes
+
+`WidgetContractError` is `{ code, message, path? }`, where `path` names the offending field.
+
+| Code | When | Example path |
+|---|---|---|
+| `MISSING_FIELD` | `kind` or `data` is absent; a property the kind's `dataSchema` requires is missing | `kind`, `data.lines` |
+| `INVALID_TYPE` | the input is not an object, `kind` is not a string, or a `dataSchema` type, `enum` or `pattern` check fails | `""`, `kind`, `data.lines.0.qty` |
+| `UNKNOWN_KIND` | `kind` is not in `knownKinds` | `kind` |
+| `RENDER_FAILED` | a registered (non-built-in) renderer threw; the catalog catches it and names the kind in the message | `widget` |
+
+Schema violations reuse the same vocabulary with a dotted path into the data, so an agent can correct a payload from the error alone. The MCP server keeps the codes but speaks the tool's input language: its paths say `widget`, not `kind`, and an unknown-widget error lists the available kinds so recovery needs no extra round trip.
+
+## Forward compatibility
+
+Two rules keep old renderers and new producers compatible:
+
+- Renderers ignore fields they do not know. A payload carrying a field outside the current contract renders without a validation error.
+- The validator preserves unknown top-level fields on the returned payload instead of stripping them. `validateWidgetPayload({ kind: "card", data: {}, futureField: 1 })` returns a payload whose `futureField` is still `1`, and `toWidgetResult` / `extractWidgetPayload` round-trip such fields through an MCP result.
+
+The server relies on this itself: a resolved `theme` rides in the widgentic payload block as a top-level field, so a natively mounting host can honour it while contract validation still passes.
+
+## Format selects transport, never content
+
+`render_widget` accepts `format` (`both`, `html`, `widget`, `page`, `app`). The value decides which content blocks the tool result carries — an HTML fragment, the widgentic payload block, a self-contained page, an Apps resource — not what the widget shows. The render happens once, and `structuredContent` is identical whatever format was requested. The formats are described in [Inline rendering](/how-it-works/inline-rendering).
+
+## The stable surface: classes and tokens
+
+Built-in renderers emit `wg-` prefixed class names — `wg-card`, `wg-card-title`, `wg-table`, `wg-tree-node`, `wg-img wg-img-avatar` — so hosts and custom styles target classes, never markup structure; the base stylesheet adds utilities such as `wg-status-danger` for templates to use. Custom kinds may ship `styles` as data, but every selector must target a `.wg-` class.
+
+Colour, spacing and type come from 32 `--wg-*` custom properties, each with a declared type, a documented use and a light default in `TOKEN_SPECS`. The base stylesheet defines every token at `:root`, so a custom style can reference `var(--wg-spacing-lg)` bare and always resolve; themes override those definitions per container. Authors may add `x-*` custom variables, emitted as `--wg-x-*`. The full registry is in [Theme tokens](/reference/theme-tokens).
+
+<Note>
+The two prefixes are the whole public styling surface. Markup structure inside a widget may change between releases; `wg-*` classes and `--wg-*` tokens are what stays stable.
+</Note>

@@ -1,0 +1,58 @@
+---
+title: "What is widgentic"
+description: "A payload contract, a catalog of generic widgets, an MCP server with seven tools and a set of designers — and what widgentic deliberately is not."
+---
+
+Agents call tools and APIs that return structured data, and every tool reinvents how to present that data in chat. widgentic replaces the per-tool UI with one contract and a small set of generic widgets, so any MCP-aware host can render rich tool output.
+
+## What it is
+
+### A contract
+
+Every widget is one normalized payload:
+
+```json
+{
+  "kind": "table",
+  "data": [{ "name": "Ada", "role": "Engineer" }],
+  "hints": { "columns": ["name", "role"] },
+  "meta": { "title": "People" }
+}
+```
+
+`kind` names the widget, `data` is the value to show, `hints` steer presentation (columns, layout, images, links, display formats) and `meta` carries chrome such as a title. Payloads are validated before anything renders, and renderers ignore fields they do not know, so the contract can grow without breaking hosts. See the [payload contract](/how-it-works/payload-contract).
+
+### A catalog of generic widgets
+
+Five kinds are built in: `card`, `table`, `tree`, `custom`, and `group`, which shows several widgets of mixed kinds in one response with layout hints. On top of them you add your own kinds as **templates**: serializable JSON that binds data into elements with `bind`, `each` and `when`. Templates are data, not code — they contain no expressions and no scripts, which is what makes them safe for untrusted authors. Themes are JSON too: a registry of `--wg-*` tokens plus your own `x-*` variables. See the [template DSL](/design/template-dsl) and [themes](/design/themes).
+
+### An MCP server
+
+widgentic is itself an MCP server. The hosted endpoint is `https://mcp.widgentic.dev/mcp`, and the same assembly ships in `@widgentic/mcp` so you can run your own. It exposes seven tools:
+
+| Tool | Purpose |
+|---|---|
+| `list_widgets` | Every kind in your catalog with its descriptor: purpose, expected `data` shape, an example to imitate and the supported hints |
+| `list_schemas` | Your saved shared data schemas |
+| `list_themes` | The registered themes, usable by name in `render_widget` |
+| `list_theme_tokens` | The theming vocabulary: every token with its type, use and default, plus presets and value rules |
+| `get_authoring_guide` | The complete authoring contract for agents drafting widget, theme and schema JSON |
+| `render_widget` | Validate a payload, render it, return the HTML plus the payload |
+| `execute_action` | Run a widget's `http` action server-side; called by the widget, hidden from agents in MCP Apps hosts |
+
+With an API key the catalog is yours: your saved widgets, themes, schemas and actions are composed on top of the built-ins for every request. See [per-principal catalogs](/how-it-works/per-principal-catalogs).
+
+### Designers
+
+Widgets, themes, schemas and actions are authored in browser-based designers with live validation and a preview mounted through the real render pipeline. They are hosted in the app at [widgentic.dev](https://widgentic.dev), where saving puts the entry straight into your MCP catalog, and they ship as embeddable factories and custom elements in `@widgentic/designer`. See [the widget designer](/design/widget-designer).
+
+## What it is not
+
+- **Not a charting library.** Widgets show records, fields, rows and trees; there is no chart kind.
+- **Not a forms library.** Widgets can carry buttons and links that propose a message or call a declared URL, with arguments resolved from the widget's data at render time; they do not collect input from the reader.
+- **Not a UI framework.** The packages have zero runtime dependencies and render plain DOM from a pure render tree; you bring whatever host you like.
+- **No agent write path.** Agents cannot save anything. They read the catalog through the tools and draft import JSON using `get_authoring_guide`; you import, validate and save in the designer. Registration over MCP deliberately does not exist, because API keys travel into third-party hosts and prompt-injectable contexts. See [authoring with an agent](/design/authoring-with-an-agent) and the [trust model](/how-it-works/trust-model).
+
+## Where widgets appear
+
+Hosts that implement MCP Apps mount widgets inline in the conversation, in a sandboxed iframe fed from the render result; the widget content stays script-free with no external references. Every other host receives the same result as text. See [inline rendering](/how-it-works/inline-rendering) and the [host matrix](/how-it-works/host-matrix).

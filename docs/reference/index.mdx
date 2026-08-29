@@ -1,0 +1,39 @@
+---
+title: "Reference"
+description: "The parts of the documentation that are generated from the packages themselves, plus the changelogs."
+---
+
+Every page in this tab except this one is written by `npm run docs:generate` from the exported constants and validators of the packages — the same code that accepts or refuses an entry in production. A page here can never describe a rule the server does not enforce; when a limit, token or template form changes in the packages, CI fails until the page is regenerated.
+
+<CardGroup cols={2}>
+  <Card title="Authoring contract" icon="file-json" href="/reference/authoring-contract">
+    Entry shapes for widgets, shared schemas and themes; identifier, style and data-schema rules.
+  </Card>
+  <Card title="Template DSL" icon="braces" href="/reference/template-dsl">
+    Every node form a template may use, the safety rules and the structural bounds.
+  </Card>
+  <Card title="Action definition" icon="zap" href="/reference/action-definition">
+    Prompt and http actions, binding forms, execution gates, request limits and the vocabulary.
+  </Card>
+  <Card title="Theme tokens" icon="palette" href="/reference/theme-tokens">
+    All `--wg-*` tokens with type, default and use; the dark preset; custom variables.
+  </Card>
+  <Card title="MCP tools" icon="wrench" href="/reference/mcp-tools">
+    The seven tools with their advertised descriptions and input schemas.
+  </Card>
+  <Card title="Limits" icon="ruler" href="/reference/limits">
+    Per-user and structural limits the server enforces.
+  </Card>
+</CardGroup>
+
+## API export index
+
+One page per published entry lists its runtime exports, generated from the entry itself: [`@widgentic/core`](/reference/api/core) and its subpaths, [`@widgentic/designer`](/reference/api/designer), and [`@widgentic/mcp`](/reference/api/mcp) with its `sdk`, `store` and `secrets` subpaths. [Develop → API reference](/develop/api-reference) explains how to read them.
+
+## Changelogs
+
+The three packages are a linked group: those released together take the same version, while a package with no changes keeps its. Their changelogs are maintained by Changesets in the repository:
+
+- [`@widgentic/core`](https://github.com/widgentic/widgentic/blob/main/packages/core/CHANGELOG.md)
+- [`@widgentic/designer`](https://github.com/widgentic/widgentic/blob/main/packages/designer/CHANGELOG.md)
+- [`@widgentic/mcp`](https://github.com/widgentic/widgentic/blob/main/packages/mcp/CHANGELOG.md)

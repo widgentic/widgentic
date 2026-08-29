@@ -1,0 +1,135 @@
+---
+title: "Connect a host"
+description: "Registration snippets for claude.ai, Claude Desktop, VS Code Copilot Chat, Claude Code, the MCP Apps basic-host and MCP Inspector."
+---
+
+The hosted widgentic server speaks Streamable HTTP at:
+
+```text
+https://mcp.widgentic.dev/mcp
+```
+
+Your API key identifies your catalog. Present it as an `x-api-key` header where the host lets you set headers, or as the `key` query parameter where the host accepts only a URL. Without a key — or with an unknown or revoked one — the server serves the built-in kinds only; it never answers with an error. See [keys and scopes](/get-started/keys-and-scopes).
+
+<Warning>
+A key in a URL is still a secret: anyone who can read the connector settings can use your catalog with it. Create one key per host so you can revoke them individually.
+</Warning>
+
+## claude.ai
+
+claude.ai is an MCP Apps host: widgets mount inline, and `prompt` actions prefill your composer for you to send. Custom connectors accept only a URL, so the key travels as a query parameter.
+
+Go to **Settings → Connectors → Add custom connector** and enter:
+
+```text
+https://mcp.widgentic.dev/mcp?key=<api-key>
+```
+
+## Claude Desktop
+
+Claude Desktop takes the same custom connectors as claude.ai, and Apps-capable versions mount widgets inline in the chat. Add a connector under **Settings → Connectors → Add custom connector** with the same URL:
+
+```text
+https://mcp.widgentic.dev/mcp?key=<api-key>
+```
+
+To run the sample stdio server from a local checkout of the repository instead, add it to `claude_desktop_config.json` with absolute paths — Desktop has no working directory:
+
+```json
+{
+  "mcpServers": {
+    "widgentic": {
+      "command": "npx",
+      "args": ["tsx", "/path/to/widgentic/examples/mcp-server/main.ts"]
+    }
+  }
+}
+```
+
+## VS Code Copilot Chat
+
+VS Code Copilot Chat is an MCP Apps host and lets you set headers. Create `.vscode/mcp.json` in your workspace:
+
+```json
+{
+  "servers": {
+    "widgentic": {
+      "type": "http",
+      "url": "https://mcp.widgentic.dev/mcp",
+      "headers": { "x-api-key": "<api-key>" }
+    }
+  }
+}
+```
+
+Copilot shows six tools in its tool selector: `execute_action` is hidden from the model and called by widgets.
+
+## Claude Code
+
+Claude Code shows tool results as text and does not mount MCP Apps UI. Register the sample stdio server from a checkout of the repository:
+
+```bash
+claude mcp add widgentic -- npx tsx /path/to/widgentic/examples/mcp-server/main.ts
+```
+
+Confirm with `/mcp`, then ask for a render. You receive the HTML and the payload as text; ask for `format: "page"` and open the document in a browser to see the widget.
+
+## MCP Apps basic-host
+
+The reference host from the MCP Apps repository mounts the declared app template — the strictest acceptance surface for inline behaviour. Build it once:
+
+```bash
+git clone --branch v1.7.5 --depth 1 https://github.com/modelcontextprotocol/ext-apps.git /tmp/mcp-ext-apps
+cp -r /tmp/mcp-ext-apps/examples/basic-host ~/widgentic-basic-host
+cd ~/widgentic-basic-host
+npm install && npm install -D @types/cors cross-env concurrently
+NODE_ENV=development INPUT=index.html   ./node_modules/.bin/vite build
+NODE_ENV=development INPUT=sandbox.html ./node_modules/.bin/vite build
+```
+
+Then serve it against the hosted endpoint:
+
+```bash
+SERVERS='["https://mcp.widgentic.dev/mcp?key=<api-key>"]' npx tsx serve.ts
+```
+
+The UI is on `http://localhost:8080`. `SERVERS` defaults to `http://localhost:3001/mcp`, so you can also aim it at a Streamable HTTP server of your own — see [run your own server](/develop/run-your-own-server).
+
+## MCP Inspector
+
+The Inspector is an interactive client without a model: you call tools by hand and read the raw results. Run it against the sample stdio server from a checkout:
+
+```bash
+npx @modelcontextprotocol/inspector npx tsx examples/mcp-server/main.ts
+```
+
+## No host at all
+
+One request proves the endpoint and the key work:
+
+```bash
+curl -s -X POST https://mcp.widgentic.dev/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "x-api-key: <api-key>" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_widgets","arguments":{}}}'
+```
+
+The response lists the built-in kinds plus your saved widgets. Without the header it lists the built-ins only.
+
+## Which hosts render inline
+
+| Host | Widgets | How the key travels |
+|---|---|---|
+| claude.ai | Inline | `?key=` in the connector URL |
+| Claude Desktop | Inline (Apps-capable versions) | `?key=` in the connector URL |
+| VS Code Copilot Chat | Inline | `x-api-key` header in `.vscode/mcp.json` |
+| MCP Apps basic-host | Inline | `?key=` in `SERVERS` |
+| Claude Code | Text | Sample stdio server, no key |
+| MCP Inspector | Raw tool results | Sample stdio server, no key |
+
+<Note>
+MCP Apps hosts cache the widget template per conversation. If a widget looks stale or unstyled right after widgentic ships an update, start a fresh conversation.
+</Note>
+
+For what each host proxies and advertises, see the [host matrix](/how-it-works/host-matrix).

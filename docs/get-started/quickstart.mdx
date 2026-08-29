@@ -1,0 +1,62 @@
+---
+title: "Quickstart"
+description: "Sign in, design a widget, create an API key, connect a host and render your first widget in a conversation."
+---
+
+This walkthrough takes you from a new account to a widget rendered in your chat host. You need an account at [widgentic.dev](https://widgentic.dev) and one MCP host — claude.ai, Claude Desktop, VS Code Copilot Chat or Claude Code.
+
+<Steps>
+  <Step title="Sign in at widgentic.dev">
+    Open [https://widgentic.dev](https://widgentic.dev) and sign in with your email address or your GitHub account. Either method gives you one stable account; widgentic stores no passwords and no provider tokens. After sign-in you land in the app at `/app`, which has sections for Widgets, Themes, Data schemas, Actions, Secrets and API keys.
+
+    If you later want to sign in with the other method, link it from the Identities section instead of creating a second account.
+  </Step>
+
+  <Step title="Design a widget, or use a built-in kind">
+    The built-in kinds — `card`, `table`, `tree` and `group` — are available to every account and every key, so you can skip this step and come back later.
+
+    To create your own kind, open **Widgets**, press **New** and either start fresh or seed the designer from a built-in (`card`, `table` or `tree`). Give the widget a `kind`, edit the template as a tree or as JSON, describe its data in the descriptor, and watch the preview: widgentic's validators run on every edit and the preview goes through the real render pipeline. Press **Save to my catalog** once it validates. The widget is in your MCP catalog on the next tool call — there is no separate publish step. See [the widget designer](/design/widget-designer).
+  </Step>
+
+  <Step title="Create an API key">
+    Open **API keys**, name the key and create it. The raw key is shown exactly once, in the creation response — copy it now. The app stores only a digest and cannot display it again.
+
+    Keys are read-only by default. Tick **Execute** only if your widgets carry `http` actions that should run when a reader clicks them; the scope is fixed for the key's lifetime. See [keys and scopes](/get-started/keys-and-scopes).
+  </Step>
+
+  <Step title="Connect a host">
+    The server is at `https://mcp.widgentic.dev/mcp`. Present the key as an `x-api-key` header where the host lets you set headers, or as a query parameter where the host accepts only a URL:
+
+    ```text
+    https://mcp.widgentic.dev/mcp?key=<api-key>
+    ```
+
+    Exact snippets for claude.ai, Claude Desktop, VS Code Copilot Chat and Claude Code are in [connect a host](/get-started/connect-a-host).
+  </Step>
+
+  <Step title="Ask the agent to render">
+    Start a new conversation and ask:
+
+    ```text
+    List the available widgets.
+    ```
+
+    The agent calls `list_widgets` and sees the built-ins plus your saved kinds, each with a description, the expected data shape and an example. Then ask for a render, naming a kind you saved or a built-in such as `table`:
+
+    ```text
+    Render an invoice widget for the three items we just discussed.
+    ```
+
+    The agent calls `render_widget` with the kind and the data. In an MCP Apps host — claude.ai, Claude Desktop, VS Code Copilot Chat — the widget mounts inline in the conversation. In other hosts, such as Claude Code, the same result arrives as text; ask for `format: "page"` to get a self-contained HTML document you can open in a browser.
+  </Step>
+</Steps>
+
+## What happens on a render
+
+`render_widget` validates the widget id against your catalog and the data against the widget's schema, then returns the rendered HTML together with the validated payload. Invalid input comes back as a structured error the agent can correct in one step: an unknown kind lists the kinds that exist, a missing field names its path. Misspelled or misaimed hints never fail a render — they come back as a `Hint notes:` tail the agent can act on next time. To show several widgets at once, the agent renders one `group` whose items are widgets of mixed kinds.
+
+## Next steps
+
+- [Connect a host](/get-started/connect-a-host) — registration snippets per host, and which hosts render inline.
+- [Keys and scopes](/get-started/keys-and-scopes) — read-only versus execute keys, rotation, and what a key can never do.
+- [Authoring with an agent](/design/authoring-with-an-agent) — let the agent draft the widget JSON from `get_authoring_guide`, then import it in the designer.

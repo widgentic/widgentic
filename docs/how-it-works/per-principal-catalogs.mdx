@@ -1,0 +1,50 @@
+---
+title: "Per-principal catalogs"
+description: "How an API key becomes a principal and why every request gets its own freshly composed catalog."
+---
+
+Without a store, a widgentic server serves one catalog to everyone: the built-ins plus whatever the host compiled in. With a store from `@widgentic/mcp/store`, the API key identifies a **principal** whose saved widgets, themes, schemas, actions and secrets exist only for them.
+
+## Keys as principals
+
+- Stores hold keys as `sha256:<hex>` digests, never in clear text, and compare a presented key against stored digests in constant time over fixed-length buffers.
+- `resolvePrincipal(apiKey)` returns the principal or `undefined` — for an unknown, malformed, empty or revoked key alike. It never errors, never partially matches, and implementations never log key material.
+- A principal carries `scopes`. `read` is always present; `execute` allows http-action execution; `write` is reserved for the app's authenticated path and can never be granted to a key. Scopes are chosen at `createKey` time (default `["read"]`) and fixed for the key's lifetime. See [Keys and scopes](/get-started/keys-and-scopes).
+
+## Composition happens per request
+
+When a request arrives, the server resolves the key **before** constructing the request's MCP server, then calls `composeCatalog(store, principalId)` and `composeThemes(store, principalId)`. Each returns a **new** instance holding the built-in kinds or themes plus that principal's stored entries. Nothing mutable is shared between requests, nothing is cached across principals, and a registration made while serving one request is not observable in another. Two keys see two catalogs: principal B rendering A's `report` kind gets `UNKNOWN_KIND` with `report` absent from the listed kinds; themes resolve per principal the same way. Composing on every request is the price of cross-tenant safety: no cache exists that could hand one tenant another's widget.
+
+## Built-ins cannot be shadowed
+
+A stored widget whose `kind` is `table` is refused on write and skipped on read; rendering `table` always uses the built-in renderer. Themes are guarded symmetrically: `light` and `dark` are reserved (`RESERVED_THEME`), and the reserved names are read from the theme registry rather than restated, so the two cannot drift. Identifiers for kinds, themes and schemas must match `^[a-zA-Z0-9._-]+$` (`INVALID_IDENTIFIER` otherwise) in every adapter.
+
+## Validated on write and on read
+
+A store can be edited out of band, so loaded data is untrusted input. Entries are validated before they are persisted — templates through `validateTemplate`, themes through `validateTheme`, actions through the action validator, and descriptors must carry a string `description` — and re-validated as composition loads them. An entry that fails any check — an `on*` attribute, an unknown token, an oversized entry, a dangling `dataSchemaRef` — is **skipped with a diagnostic** naming it: never thrown, never partially registered, so one bad entry cannot deny a principal their remaining widgets. Nothing is ever "saved but vanished": what the write accepted is what composition serves.
+
+## Limits per principal
+
+`StoreLimits` bound how much one tenant can load — how many widgets, themes, schemas, actions and secrets a principal may hold, how large one serialized entry may be, and how many template nodes a stored widget may carry. Exceeding a limit is a rejection at write time and a skip-with-diagnostic at read time, so a store that grew past its limits still serves what fits. The values are on [Limits](/reference/limits), generated from the same constants `get_authoring_guide` serves.
+
+## Unknown keys degrade, never fail
+
+A key that resolves to no principal falls back to the anonymous catalog — the built-ins plus any entries the deployment supplies — and every tool keeps working over it. The server notes the event on stderr without the key. `list_schemas` returns an empty list for an anonymous or unknown key, and `execute_action` answers `FORBIDDEN_SCOPE`, since the anonymous principal has no `execute` scope.
+
+<Warning>
+A wrong or revoked key looks like "my custom widgets are missing", not like an error. When a saved widget comes back `UNKNOWN_KIND`, check the key the host is sending first.
+</Warning>
+
+## Shared schemas resolve at composition
+
+A widget descriptor may carry `dataSchemaRef: "person"` in place of an inline `dataSchema` (both at once is `INVALID_SHAPE`; a ref to a missing schema is `UNKNOWN_SCHEMA` on write and a skip on read). Composition resolves the reference into the descriptor's `dataSchema`, so downstream of composition the reference does not exist. Editing the stored schema and recomposing validates every referencing widget against the new shape, and `removeSchema` refuses with `SCHEMA_IN_USE` while widgets still point at it. Actions and secrets carry the same guards (`ACTION_IN_USE`, `SECRET_IN_USE`). See [Data schemas](/design/data-schemas).
+
+## The store is a port
+
+`WidgetStore` is the read port: `resolvePrincipal`, `widgets`, `themes`, `schemas`, `actions`, `listSecrets` and `secretValue`. `WritableWidgetStore` is a **separate type** adding the `put` and `remove` methods, `ensurePrincipal`, key management and identity linking, so a read-only handle cannot write and a read-only deployment need not implement the write half. Three implementations ship:
+
+- `createMemoryStore(seed?, limits?)` implements the full writable port; the contract suite runs against it.
+- `createFileStore(dir, options?)` keeps one directory per principal (`widgets/`, `themes/`, `schemas/`, `actions/`, `secrets/`) and a `principals.json` of digests.
+- `createCosmosStore(options)` from `@widgentic/mcp/store/cosmos` uses two containers: `data` partitioned by `/principalId` (a principal's catalog is one single-partition query) and `keys` partitioned by `/digest` (key resolution is a point read). It takes an Azure credential only (no account key or connection string), so the serving identity can hold a read-only role.
+
+All three pass the same contract suite. Wiring one in is covered in [Run your own server](/develop/run-your-own-server).

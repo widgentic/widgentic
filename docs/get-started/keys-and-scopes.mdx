@@ -1,0 +1,65 @@
+---
+title: "Keys and scopes"
+description: "How API keys select your catalog, what the read and execute scopes allow, why keys never write, and how to rotate one without downtime."
+---
+
+An API key is how an MCP host tells the server which catalog to serve. It is created in the app, belongs to your account and carries a fixed set of scopes. It is never a way to change anything.
+
+## Creating a key
+
+Sign in at [widgentic.dev](https://widgentic.dev) and open **API keys**. Every key has a name — use the host it is for, such as `claude-ai` or `vscode-work` — and you can hold several at once.
+
+The raw key is returned exactly once, in the creation response. widgentic persists only its `sha256:` digest, the name, the creation time and the scopes; the app is incapable of showing an existing key again and says so when you create one. The key list shows each key's name, creation time, scopes and a non-reversible identifier.
+
+## Scopes
+
+Scopes are chosen when the key is created and cannot be edited afterwards.
+
+| Scope | Granted | What it allows |
+|---|---|---|
+| `read` | Always | Discovery and rendering: `list_widgets`, `list_schemas`, `list_themes`, `list_theme_tokens`, `get_authoring_guide`, `render_widget` |
+| `execute` | Opt-in at creation | Widgets may run their `http` actions server-side through `execute_action`, using your saved secrets |
+
+With a read-only key, widgets that carry `http` actions still render, but their buttons are disabled with a tooltip explaining that the key lacks the `execute` scope, and widget-level `load` bindings do not fire. `prompt` actions work on every key, because they only propose a message in the reader's composer. The render's `Action notes:` tail tells the agent the same thing, so it can explain a disabled button instead of guessing.
+
+To give an existing integration `execute`, create a new key with the scope and switch the host to it. Executions are rate-limited per account; excess calls return `RATE_LIMITED` without running. See [actions and secrets](/design/actions-and-secrets).
+
+## Keys never write
+
+Saving a widget, theme, schema, action or secret is authorized by your signed-in session only. A request that presents an API key to a write endpoint is refused with `401`, whatever the key's scopes — and there is no registration tool over MCP at all. Agents draft JSON with `get_authoring_guide`; you import and save it in the designer.
+
+The reason is where keys live: in the connector settings of third-party hosts and in conversations an attacker can steer. A leaked key exposes the ability to read and render your catalog, never the ability to change it.
+
+## Unknown keys fall back, they do not fail
+
+The server resolves a key by comparing its digest in constant time. A key that resolves to no account — missing, mistyped, revoked or malformed — is not an error: the request is served the **anonymous catalog**, exactly the built-in kinds and themes, with `list_schemas` returning an empty list and `execute_action` refused with `FORBIDDEN_SCOPE`. Key material never appears in server logs.
+
+If an agent reports that your custom widgets are missing, check the key first: the host is most likely connected without one, or with a key you revoked.
+
+## Presenting the key
+
+Hosts that let you set headers use `x-api-key`; connectors that accept only a URL take the `key` query parameter:
+
+```text
+https://mcp.widgentic.dev/mcp?key=<api-key>
+```
+
+Treat a key in a URL as the secret it is: anyone who can read the connector settings can use your catalog. Per-host snippets are in [connect a host](/get-started/connect-a-host).
+
+## Rotation without downtime
+
+Because several keys can resolve to the same account, rotation is three steps with no gap:
+
+<Steps>
+  <Step title="Create the new key">
+    In **API keys**, create a key with the scopes the host needs. Requests with the old key keep working.
+  </Step>
+  <Step title="Switch your hosts">
+    Update each connector or `mcp.json` to the new key. Both keys serve the same catalog meanwhile.
+  </Step>
+  <Step title="Revoke the old key">
+    Revoke it individually; the others are unaffected. From that moment the old key resolves to nothing and its bearer sees the built-in catalog only.
+  </Step>
+</Steps>
+
+One key per host makes this routine: revoking the key of one host never touches the others.

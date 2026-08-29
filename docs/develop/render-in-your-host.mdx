@@ -1,0 +1,88 @@
+---
+title: "Render in your host"
+description: "Emit widget payloads from a tool, detect them in tool results, and mount them in your own UI with in-place updates."
+---
+
+widgentic's MCP convention needs no SDK on either side: a tool emits a payload as a resource block, a host detects it and mounts it with `@widgentic/core`. This page walks the recipe end to end; every symbol is a runtime export of `@widgentic/core` or `@widgentic/mcp`.
+
+## End to end
+
+```ts
+import { parseCsv } from "@widgentic/core/adapters";
+import { mapToWidget } from "@widgentic/core/mapper";
+import { toWidgetResult, extractWidgetPayload, hostSupportsWidgets } from "@widgentic/mcp";
+import { createCatalog } from "@widgentic/core/catalog";
+import { mountWidget } from "@widgentic/core/reactive";
+import { injectBaseStyles, applyTheme, darkTheme } from "@widgentic/core/theming";
+
+// Tool side: parse data, pick a widget, emit an MCP result.
+const parsed = parseCsv(csvText);
+const payload = mapToWidget({ data: parsed.ok ? parsed.records : [], meta: { title: "People" } });
+const result = hostSupportsWidgets(clientCapabilities) ? toWidgetResult(payload) : /* text */ undefined;
+
+// Host side: extract, mount, theme, and keep updating in place.
+const catalog = createCatalog();
+const extraction = extractWidgetPayload(result, { knownKinds: new Set(catalog.kinds()) });
+if (extraction.found && extraction.ok) {
+  injectBaseStyles(document);
+  applyTheme(container, darkTheme);
+  const mount = mountWidget(extraction.payload, container, { catalog });
+  // later: mount.update(nextPayload) patches the DOM without losing state
+}
+```
+
+`csvText`, `clientCapabilities` and `container` are yours: the CSV your tool received, the capabilities the client sent at `initialize`, and the element you render into.
+
+## Tool side
+
+<Steps>
+  <Step title="Parse the data">
+    `parseCsv(text, { inferTypes? })` returns `{ ok: true, records }` or `{ ok: false, error }` with a structured error for ragged rows and unterminated quotes; `inferTypes` coerces numeric and boolean strings. `parseJson(input)` parses a string with the same result shape (`{ ok: true, value }`) and passes an already-parsed value through unchanged.
+  </Step>
+  <Step title="Pick a widget">
+    `mapToWidget({ data, hints?, meta?, kind? })` returns a complete payload. It never throws: a missing or empty `kind` is filled from `inferKind(data)`, an explicit kind is kept, and unknown top-level fields pass through.
+  </Step>
+  <Step title="Emit the result">
+    `hostSupportsWidgets(capabilities)` is `true` when the client advertised `experimental.widgentic`; any malformed input means `false`. `toWidgetResult(payload)` returns an MCP tool result with a plain-text fallback block (the `meta.title` line plus pretty-printed `data`) followed by a resource block with `uri: "ui://widgentic/widget"` and `mimeType: "application/vnd.widgentic+json"` whose text is the payload JSON; pass `{ uri, text }` to override either. A payload that cannot be serialized degrades to the text-only shape, which `toTextResult(payload)` produces directly for hosts without support.
+  </Step>
+</Steps>
+
+## Host side
+
+<Steps>
+  <Step title="Advertise support">
+    `declareWidgetCapability(capabilities)` returns a new capabilities object with `experimental.widgentic: { version: 1 }` added and your other keys intact. Send it as your client capabilities.
+  </Step>
+  <Step title="Extract the payload">
+    `extractWidgetPayload(result, { knownKinds })` never throws and has three outcomes: `{ found: false }` when the result carries no widgentic block (leave it alone), `{ found: true, ok: true, payload }` for a valid payload, and `{ found: true, ok: false, error }` for a present but malformed block. With `knownKinds` (a catalog's `kinds()`), a payload whose kind you cannot render fails with `UNKNOWN_KIND` instead of reaching the mount. `isWidgetResult(result)` answers only whether a block is present.
+  </Step>
+  <Step title="Style and theme">
+    `injectBaseStyles(document)` injects the base stylesheet once; it defines every `--wg-*` token at `:root`, so custom widget styles can use bare `var(--wg-*)`. `applyTheme(container, theme)` sets the theme as inline `--wg-*` properties on the container — descendants inherit them, siblings are unaffected — with replace semantics: previously applied tokens are removed first, and `applyTheme(el, {})` resets to the stylesheet defaults. `darkTheme` is the built-in dark preset; any validated token map works.
+  </Step>
+  <Step title="Mount and update">
+    `mountWidget(payload, container, { catalog })` renders immediately and returns a handle. `initial` holds the first render's outcome, so an invalid first payload does not cost you the handle. `update(next)` re-renders through the catalog, diffs the render trees and patches minimally: text and attribute changes land in place, unchanged elements keep their DOM identity, and a changed root tag replaces only that subtree. It returns `{ ok: true }` or `{ ok: false, error }` — a failed update leaves the DOM untouched, and the next valid update patches from the last good state. `node()` returns the current render tree; `dispose()` empties the container and is idempotent (calling `update` afterwards throws). Pass `onAction` to receive activations of `[data-wg-action]` elements as parsed descriptors; without it those elements are inert — the mount never executes an action itself.
+  </Step>
+</Steps>
+
+## Register custom kinds
+
+Custom widgets come in two flavors. Both register on a catalog and throw `DuplicateKindError` if the kind already exists (built-ins included), so registration belongs to host setup.
+
+```ts
+// Code (trusted developers): a pure renderer function
+catalog.register("badge", (payload) => ({ tag: "span", attrs: { class: "badge" }, children: [String(payload.data)] }));
+
+// Data (untrusted authors / widget designers): a serializable template
+import { registerTemplate } from "@widgentic/core/templates";
+registerTemplate(catalog, "invoice", {
+  tag: "div",
+  children: [
+    { tag: "h2", children: [{ bind: "$meta.title" }] },
+    { each: "lines", template: { tag: "li", children: [{ bind: "item" }, ": ", { bind: "amount" }] } }
+  ]
+});
+```
+
+`catalog.register(kind, renderer, descriptor?)` takes a function from payload to a `WidgetNode` tree. Without a descriptor a minimal one is generated so the kind stays listable; pass one to give agents a description, `dataShape`, `dataExample`, hints and a `dataSchema`. `registerTemplate(catalog, kind, template, descriptor?)` validates the template first and throws `InvalidTemplateError` when it fails — templates are data with no expressions, so they are safe for untrusted authors. The DSL is described in [Template DSL](/design/template-dsl) and its rules in the [reference](/reference/template-dsl).
+
+Because extraction validates against `knownKinds`, register your custom kinds before extracting: a payload naming a kind the catalog lacks is reported, not rendered.

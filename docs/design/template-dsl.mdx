@@ -1,0 +1,109 @@
+---
+title: "Template DSL"
+description: "The JSON node forms a widget template is built from, how paths resolve against the payload, and what a template can never do."
+---
+
+A widget template is JSON, not code. Five node forms — text, `bind`, element, `each` and `when` — compile into an ordinary renderer, and every value that reaches the output is either one of your literals or payload data rendered as escaped text. There are no expressions: data *selects*, and you supply every literal. This page is the human version of the rules; the generated [Template DSL reference](/reference/template-dsl) and [Limits](/reference/limits) carry the exact lists and numbers.
+
+## Node forms
+
+<Tabs>
+<Tab title="Text and bind">
+A string is a text node. `{ "bind": "path" }` renders the value at that path as text; `"."` binds the current scope itself.
+
+```json
+{ "tag": "span", "children": ["Customer: ", { "bind": "customer.name" }] }
+```
+</Tab>
+<Tab title="Element">
+`{ "tag", "attrs"?, "children"? }`. Attribute values are strings or `{ "bind" }` objects.
+
+```json
+{ "tag": "a", "attrs": { "class": "wg-link", "title": { "bind": "label" } }, "children": [{ "bind": "label" }] }
+```
+</Tab>
+<Tab title="Each">
+Repeats `template` once per array element, with the element as scope. `empty` renders when the array is missing or empty.
+
+```json
+{
+  "each": "lines",
+  "template": { "tag": "li", "children": [{ "bind": "item" }, ": ", { "bind": "amount" }] },
+  "empty": "No line items."
+}
+```
+</Tab>
+<Tab title="When">
+Renders `template` when the path resolves truthy, otherwise `else` (or nothing).
+
+```json
+{
+  "when": "paid",
+  "template": { "tag": "span", "attrs": { "class": "wg-status wg-status-success" }, "children": ["Paid"] },
+  "else": { "tag": "span", "attrs": { "class": "wg-status wg-status-warning" }, "children": ["Open"] }
+}
+```
+</Tab>
+</Tabs>
+
+### Attribute transforms
+
+A bound attribute value may carry one transform, `map` or `prefix`, never both.
+
+`map` lets a data value select one of your literals. A hit emits that key's literal; a miss emits `default`, or an empty value without one. Data never contributes output characters.
+
+```json
+{
+  "tag": "span",
+  "attrs": {
+    "class": {
+      "bind": "status",
+      "map": { "do-not-contact": "wg-status wg-status-danger", "active": "wg-status wg-status-success" },
+      "default": "wg-status"
+    }
+  },
+  "children": [{ "bind": "status" }]
+}
+```
+
+`prefix` emits your literal followed by the bound value, but only when that value is a non-empty string, so an absent email yields no dead `mailto:` link.
+
+```json
+{ "tag": "a", "attrs": { "href": { "bind": "email", "prefix": "mailto:" } }, "children": [{ "bind": "email" }] }
+```
+
+## Paths
+
+Paths are dot notation against `payload.data`: `items.0.name` walks objects and array indices. Inside `each`, the scope is the current element. Four escapes exist:
+
+| Path | Resolves against |
+|---|---|
+| `$meta.title` | `payload.meta` |
+| `$root.owner` | the top-level data, from any `each` depth |
+| `$parent.name` | one enclosing `each` scope out; repeatable as `$parent.$parent.x` |
+| `$index` | the zero-based position in the innermost `each` |
+
+Missing or non-traversable paths are blanks, not errors: empty text for `bind`, no repetitions for `each`, the `else` branch for `when`. Interpretation never throws, whatever shape the data has.
+
+<Tip>
+Bind properties your `dataSchema` declares. Schema-declared data is validated with dotted paths, so an agent gets a correctable error instead of blank output. `$meta.*` is outside schema validation; if the widget needs a heading, declare `title` as an optional property instead. See [Data schemas](/design/data-schemas).
+</Tip>
+
+## What a template cannot do
+
+- **Run code.** There are no expressions, functions or scripts. Bindings only ever produce text and attribute strings; a bound value of `<img onerror=x src=y>` renders as those literal characters, not as an element.
+- **Attach handlers.** Attribute names matching `on*` fail validation with `FORBIDDEN_ATTRIBUTE`, as do `srcdoc` and the renderer-reserved `data-wg-*` names. They are skipped at render time as well.
+- **Embed active content.** `script`, `iframe`, `frame`, `frameset`, `object`, `embed`, `style`, `link`, `meta`, `base`, `template` and `noscript` fail with `FORBIDDEN_TAG`.
+- **Smuggle URL schemes.** On URL-bearing attributes (`href`, `src`, `action`, `formaction`, `xlink:href`, `data`, `poster`, `ping`) only `http`, `https`, `mailto`, `tel` and relative references survive; anything else, `javascript:` included, is dropped at render time. A `prefix` value runs the same guard, so `"prefix": "javascript:"` is dropped like a bound `javascript:` value.
+- **Use `data:` URIs**, with one exception: an `img` element's `src` accepts base64 `data:image/*;base64,` URIs.
+- **Nest without limit or render without bound.** Validation rejects nesting past a fixed depth (`TEMPLATE_TOO_DEEP`); interpretation stops at a node budget and marks the render truncated, because `each` multiplies template nodes by agent-supplied data length. The numbers are in [Limits](/reference/limits).
+
+## Validation errors
+
+`validateTemplate` returns a structured error with a `code` (`INVALID_TEMPLATE_NODE`, `INVALID_PATH`, `FORBIDDEN_ATTRIBUTE`, `FORBIDDEN_TAG`, `TEMPLATE_TOO_DEEP`, `INVALID_ACTION` or `CONFLICTING_ATTRIBUTES`), a message, and a dotted `path` locating the node, such as `children.0`. The designer shows it at the offending node; the store refuses the entry on write.
+
+## Roots and wrapping
+
+When the root interprets to anything but exactly one node (an `each` at the root, for instance), the output is wrapped in a `div` with class `wg-template`. A single element root is emitted as is.
+
+Elements may also carry an `action` binding: a `button` or `a` bound to a `prompt` or `http` action, never together with `href`. That form is covered in [Actions and secrets](/design/actions-and-secrets).

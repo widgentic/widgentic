@@ -20,7 +20,10 @@
     "version": "changeset version",
     "release": "npm run build && changeset publish",
     "mcp": "tsx examples/mcp-server/main.ts",
-    "designer": "tsx examples/designer/serve.ts"
+    "designer": "tsx examples/designer/serve.ts",
+    "docs:generate": "tsx tools/docs-generate.ts",
+    "docs:dev": "cd docs && ../node_modules/.bin/mint dev",
+    "docs:check": "tsx tools/docs-generate.ts --check && vitest run tools/docs-nav.test.ts && cd docs && ../node_modules/.bin/mint validate && ../node_modules/.bin/mint broken-links --check-anchors && ../node_modules/.bin/mint a11y --fail-on-error"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.0",
@@ -33,6 +36,7 @@
     "@types/node": "26.1.2",
     "esbuild": "0.28.1",
     "happy-dom": "20.11.1",
+    "mint": "4.2.842",
     "publint": "^0.3.0",
     "tsx": "4.23.1",
     "typescript": "7.0.2",

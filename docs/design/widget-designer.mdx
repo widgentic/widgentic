@@ -1,0 +1,114 @@
+---
+title: "Widget designer"
+description: "Author a custom widget as data in the hosted designer, with live validation and a preview rendered through the real pipeline."
+---
+
+The widget designer is where you write a custom widget. It runs in the app at [widgentic.dev](https://widgentic.dev) under **Widgets**, and the same component can be mounted in your own pages (see [Embed the designers](/develop/embed-the-designers)). It edits data, not code: the draft is the exact `CustomWidget` shape the server stores, every edit re-runs widgentic's own validators, and the preview is rendered through the real catalog, template and theming pipeline.
+
+## The draft is the stored shape
+
+A widget is one JSON object, `{ kind, template, descriptor }`:
+
+- `kind` — the identifier agents render by. It must match `^[a-zA-Z0-9._-]+$` and may not collide with a built-in kind (`card`, `table`, `tree`, `custom`, `group`).
+- `template` — one node in the [template DSL](/design/template-dsl).
+- `descriptor` — what agents read before they call: a required `description` and `dataShape`, a recommended `dataExample`, optional `hints` and `styles`, and either an inline `dataSchema` or a `dataSchemaRef` naming a [shared schema](/design/data-schemas).
+
+```json
+{
+  "kind": "invoice",
+  "template": {
+    "tag": "div",
+    "attrs": { "class": "wg-invoice" },
+    "children": [
+      { "tag": "p", "children": ["Customer: ", { "bind": "customer" }] },
+      {
+        "tag": "ul",
+        "children": [
+          {
+            "each": "lines",
+            "template": {
+              "tag": "li",
+              "children": [{ "bind": "item" }, " × ", { "bind": "qty" }, " — ", { "bind": "lineTotal" }]
+            },
+            "empty": "No line items."
+          }
+        ]
+      }
+    ]
+  },
+  "descriptor": {
+    "description": "Invoice with customer and priced line items.",
+    "dataShape": "{ customer: string, lines: { item: string, qty: number, lineTotal: string }[] }",
+    "dataExample": {
+      "customer": "Ada Lovelace",
+      "lines": [{ "item": "widgets", "qty": 4, "lineTotal": "$119.96" }]
+    },
+    "dataSchema": {
+      "type": "object",
+      "required": ["customer", "lines"],
+      "properties": {
+        "customer": { "type": "string" },
+        "lines": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["item", "qty", "lineTotal"],
+            "properties": {
+              "item": { "type": "string" },
+              "qty": { "type": "number" },
+              "lineTotal": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "styles": {
+      ".wg-invoice": { "padding": "var(--wg-spacing-lg)", "border": "1px solid var(--wg-border)" }
+    }
+  }
+}
+```
+
+## Panels
+
+### General
+
+`kind`, `description` and `dataShape` are plain fields. `hints` documents the hint keys your widget supports, as flat name-to-doc rows or as JSON; both views project into the same value.
+
+### Template: tree or JSON
+
+The template is editable as a flat node tree and as a JSON source pane. They are two projections of one canonical model, so a change in either shows up in the other. Invalid JSON never destroys the tree: the last valid template stays in force and the parse error is shown beside the pane.
+
+The tree covers every DSL form. Nodes are added through one compact add menu (on elements it also offers an attribute, and on `button` and `a` elements an `action` binding), structural nodes collapse from their row, and a bound attribute row offers the `prefix` and `map` transforms directly, so a status-to-class mapping or a `mailto:` link needs no JSON editing. Every mutation re-runs `validateTemplate`; an `onclick` attribute, for example, shows a `FORBIDDEN_ATTRIBUTE` diagnostic at that node without losing the draft.
+
+### Styles
+
+`descriptor.styles` is a map of selectors to declaration maps, edited as a tree or as JSON with the same last-valid gating. The designer applies the server's guards: a selector that does not target a `.wg-` class, or a value containing `url(`, is flagged as an entry the renderer would skip. Reference theme tokens as `var(--wg-<token>)`; the token reference beside the preview shows what is available.
+
+### Data schema
+
+Two modes. **Define inline** edits `descriptor.dataSchema` through a builder and a JSON pane. **Use shared** picks one of your saved schemas, shows it read-only, and stores `descriptor.dataSchemaRef` on the draft instead — never both. Validation and path completions resolve the reference locally, and a reference to a schema that does not exist is reported at the section.
+
+### Sample data and preview
+
+The preview renders the draft — and only the draft — against `dataExample` or sample data you supply, compiled by the public template compiler and mounted through `mountWidget`, so what you see is what a host receives. `dataExample` is cross-checked against the schema with dotted paths (`data.lines.0.amount`). Valid edits patch the mounted DOM in place. When the draft is invalid the preview freezes the last good render and shows the structured error in a banner; it is never blank, not even when the initial widget fails validation.
+
+### Preview theme and token reference
+
+A selector offers your saved themes plus a **none** choice for the built-in defaults. Beside it, a read-only listing shows the effective tokens — name, value, and a swatch for color-typed tokens — so styles can reach for `var(--wg-…)` by sight. The widget designer does not edit tokens (that is the [theme designer](/design/themes)), and the selected theme never leaks into the export.
+
+## Import, export and copy as TypeScript
+
+Import and Export are two independent sections, Import first. Import accepts the `{ kind, template, descriptor }` JSON an agent drafts (see [Authoring with an agent](/design/authoring-with-an-agent)), re-validates it as untrusted input, and rejects invalid input with structured errors while leaving your current draft untouched. Export produces exactly `{ kind, template, descriptor }`; what you export loads back to a deep-equal draft. **Copy as TypeScript** emits a module body compatible with the example server's `widgets/` folder, for hosts that compile widgets in.
+
+## Read-only mode
+
+Selecting a stored widget in the app opens it read-only: editing surfaces are visible but inert, while the preview, its theme selector and Export stay live. **Edit** switches to edit mode with **Save** and **Cancel**; **Copy** opens a new draft seeded from the entry under a distinct kind; **New** starts from a blank draft or from a `card`, `table` or `tree` starter that renders like the built-in before you touch it.
+
+## Saving is publishing
+
+In the app, designing and publishing are the same act. **Save to my catalog** writes the draft through your signed-in session into your store, and the widget appears in your MCP catalog on the next tool call made with one of your API keys: `list_widgets` lists it, `render_widget` renders it. The write is validated by the same rules the store enforces (template validity, reserved kinds, limits), and a refused entry returns a structured error naming the rule. API keys never write; see [Keys and scopes](/get-started/keys-and-scopes) and [Per-principal catalogs](/how-it-works/per-principal-catalogs).
+
+<Note>
+Bound buttons render in the preview with an inert badge; nothing executes from a preview. See [Actions and secrets](/design/actions-and-secrets).
+</Note>

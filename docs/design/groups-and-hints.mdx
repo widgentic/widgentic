@@ -1,0 +1,84 @@
+---
+title: "Groups and hints"
+description: "Compose several widgets in one render with the group kind, and steer the built-in kinds with hints that never fail a render."
+---
+
+widgentic ships five built-in kinds. Four render data directly; the fifth, `group`, composes the others, your stored custom widgets included, into one render. Hints are per-call presentation advice on top of the data, and a misaimed hint never fails a render.
+
+## The built-in kinds
+
+| Kind | `data` | What renders |
+|---|---|---|
+| `card` | `{ title, subtitle, fields }`, any object, or a primitive | title, subtitle and key/value fields; other objects render each entry as a field; primitives render as the value |
+| `table` | an array of records | one row per record, one column per key in first-seen order, empty cells for missing keys; a non-array is treated as one record |
+| `tree` | nested `{ label, children[] }` nodes | a collapsible tree; nodes without a usable `label` get a JSON-snippet label |
+| `custom` | anything | pretty-printed JSON in a preformatted block |
+| `group` | `{ items: [...] }` | each item rendered inside one layout container |
+
+These names are reserved: a stored widget may not use them. Custom widgets are covered in [Widget designer](/design/widget-designer); the payload shape in [Payload contract](/how-it-works/payload-contract).
+
+## Groups
+
+A `group` renders `data.items`, an array of sub-widgets each shaped `{ kind, data, hints?, meta? }`, through the same render entry as top-level calls, so built-ins and your stored template widgets mix freely and each item renders exactly as it would alone. Use one group render when a response needs several widgets, instead of repeated `render_widget` calls.
+
+```json
+{
+  "widget": "group",
+  "data": {
+    "items": [
+      { "kind": "card", "data": { "title": "Ada Lovelace", "fields": { "role": "eng" } } },
+      { "kind": "table", "data": [{ "a": 1, "b": 2 }, { "a": 3, "c": 4 }] }
+    ]
+  },
+  "hints": { "layout": "grid", "columns": 2, "gap": "lg" }
+}
+```
+
+Group hints select from fixed presets; item data never contributes class characters:
+
+- `layout`: `stack` (default), `row` or `grid`
+- `gap`: `none`, `sm`, `md` (default) or `lg`
+- `columns`: 1 to 4, grid only
+
+Two limits: groups do not nest (an item of kind `group` fails at `data.items[<index>].kind`), and a group holds at most 20 items. An item that fails its own kind's validation fails the render with the underlying code at a path prefixed `data.items[<index>]`. Items bound to actions keep working inside a group; see [Actions and secrets](/design/actions-and-secrets).
+
+## Hints
+
+Hints are advisory keys beside `data`. Each built-in documents the hints it supports; a custom widget documents its own under `descriptor.hints`.
+
+```json
+{
+  "widget": "table",
+  "data": [{ "user": "Ada", "avatar": "https://cdn.example/a/ada.png", "email": "a@b.c", "total": 11471334.78 }],
+  "hints": {
+    "images": { "avatar": "avatar" },
+    "links": { "email": "mailto:" },
+    "fieldFormat": { "total": "${value}" }
+  },
+  "meta": { "title": "Holdings", "subtitle": "as of Q3" }
+}
+```
+
+### Images
+
+`card` and `table` render a string as an image when it is a safe source and either auto-detection or a hint selects image treatment. Auto-detection accepts `data:image/*` URIs and `http(s)` URLs whose path ends in `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.avif` or `.svg`. `hints.images` overrides per field or column: `"avatar"`, `"thumb"` or `"hero"` forces that shape, `true` forces the context default (`avatar` in table cells, `thumb` in card fields), and `false` renders the value as text. Hints never bypass safety: a value that fails the image-source guard renders as text whatever the hint says. Image treatment wins over `fieldFormat` and `links` for the same key.
+
+### Field formatting
+
+`hints.fieldFormat` maps a field (card) or column (table) to a pattern. `{value}` is replaced by the value; a pattern without the placeholder appends it. Formatting is display only. The payload keeps typed values, so `11471334.78` stays a number for the host while the cell shows `$11471334.78`. Output is escaped like any text, so a pattern cannot inject markup.
+
+### Links
+
+`hints.links` turns values into anchors, opt-in. `true` links a string that is itself an explicitly-schemed safe URL (`http`, `https`, `mailto`, `tel`). A string value is a prefix composed with the raw value (`{ "email": "mailto:" }` yields `href="mailto:a@b.c"`), emitted only when the value is a non-empty string and the composed href passes the same scheme guard. In both forms the anchor text is the formatted value, never the composed scheme. Values that fail the guard render as plain text.
+
+### Meta chrome
+
+`meta.title` and `meta.subtitle` supply chrome, not data: the card's title and subtitle when `data` has none, the table's caption, and the title line above a tree. Without `meta`, no caption or title appears.
+
+### Kind-specific hints
+
+`table` honors `hints.columns` as an override of column selection and order. `tree` honors `hints.expandDepth`: nodes shallower than the value are marked expanded, and only nodes with children carry the expansion attribute, so leaves are never mistaken for collapsed branches.
+
+## Hint notes
+
+Hints are analyzed on every successful render without affecting it. Each diagnostic carries a code and a message: `UNKNOWN_HINT` (with a did-you-mean suggestion when a documented key is close, so `colums` suggests `columns`), `NO_MATCH` (a key matching no field or column), `INVALID_VALUE` (an image shape or group layout outside its vocabulary), `UNSAFE_IMAGE_SOURCE` and `UNSAFE_LINK_TARGET`. Diagnostics never set an error and never alter the markup. Agents see them as a compact `Hint notes:` tail on the tool's text and as `structuredContent.diagnostics`, so they can self-correct on the next call; when the hints are coherent, neither appears. See [MCP tools](/develop/mcp-tools).

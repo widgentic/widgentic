@@ -1,0 +1,61 @@
+---
+title: "Themes"
+description: "Design a named theme over the --wg-* token registry, add custom variables, and preview it against the widgets it will dress."
+---
+
+Every widget widgentic renders is styled through `wg-*` classes and `--wg-*` custom properties. A theme is a validated JSON map of those tokens. The theme designer, in the app under **Themes** or embedded in your own page, edits a named theme entry, validates every value, and previews it against the built-in kinds and your own widgets. The full token table lives in the [Theme tokens reference](/reference/theme-tokens).
+
+## The theme entry
+
+A theme is one JSON object, `{ name, label?, description?, tokens }`. `tokens` maps bare token names (no `--wg-` prefix) and `x-*` custom variables to string values.
+
+```json
+{
+  "name": "brand",
+  "label": "Brand",
+  "tokens": {
+    "bg": "#0b0e14",
+    "accent": "#ff5a1f",
+    "font-family": "Inter, sans-serif",
+    "x-badge-gap": "4px"
+  }
+}
+```
+
+`name` follows the identifier charset `^[a-zA-Z0-9._-]+$`. `light` and `dark` are reserved for the built-in entries; saving a theme under either name is refused with `RESERVED_THEME`.
+
+## Registry tokens
+
+Each registry token declares a `type` (`color`, `dimension`, `number`, `font-family`, `font-weight` or `shadow`), a documented `use`, and a light default. The registry covers surfaces and text (`bg`, `surface`, `fg`, `muted`), the accent pair (`accent`, `accent-fg`), borders and radii (`border`, `border-width`, `radius`, `radius-sm`, `radius-lg`), the spacing scale (`spacing`, `spacing-sm`, `spacing-lg`), typography (`font-family`, `font-mono`, `font-size`, `font-size-sm`, `font-size-lg`, `font-weight-bold`, `line-height`), `shadow`, the status families (`danger`, `success`, `warning`, `info`, each with a `-fg` text color), and the image sizes `avatar-size` and `thumb-size`.
+
+The designer renders one control per token, chosen from its declared type: `color` tokens get a picker and a swatch of the effective value, and each token's `use` appears as help text. Every token is consumed by the base stylesheet; a token nothing uses is not added to the registry.
+
+A theme sets only what it changes. Tokens you omit keep their defaults, and `surface` inherits `bg` unless you set it, so a theme that sets only `bg` colors widget surfaces with that value.
+
+## Custom variables
+
+Keys matching `^x-[a-z0-9][a-z0-9-]*$` are author-defined custom variables. `x-badge-gap` is applied as `--wg-x-badge-gap` on the themed scope, and a widget's styles read it as `var(--wg-x-badge-gap, 4px)`. Give custom variables a fallback: they are defined only by themes that set them, whereas every registry token is always defined at render time, so a bare `var(--wg-spacing-lg)` is safe.
+
+The designer lets you add, rename and remove custom variables; they appear in the exported entry's `tokens` beside the registry tokens.
+
+## Value safety
+
+Values are plain CSS values: colors, lengths, font stacks. A value that is not a string, or that contains `;`, `{`, `}`, `<`, `>`, `url(` or `expression(` (case-insensitive, whitespace-tolerant before the parenthesis), fails with `INVALID_TOKEN_VALUE`, custom variables included. A key outside the registry that is not a valid `x-*` name fails with `UNKNOWN_TOKEN`. The guard rejects exfiltration and execution vectors, not invalid CSS: an inert nonsense value passes.
+
+In the designer an unsafe value is flagged inline with the validator's error and excluded from the applied preview, so the preview never shows a theme the server would refuse. The store applies the same validation on write and again on read.
+
+## Light defaults and the dark preset
+
+Two entries exist in every catalog. `light` is the empty token map, which means the registry defaults. `dark` is the built-in dark preset; it sets `surface` to a value distinct from `bg`. When you press **New** in the app you can start from either: the designer seeds a copy of the preset's tokens under a distinct, non-reserved name.
+
+## Previewing
+
+The preview-kind selector offers the built-in kinds and, in the app, your own stored widgets, each rendered from its `dataExample` with its descriptor styles applied, so the theme is judged against the widgets it will actually dress. A stored widget whose template fails validation is skipped; the rest stay selectable. Token edits preview immediately.
+
+The widget designer runs the other direction: your saved themes appear in its preview-theme selector, with a read-only token reference showing the effective values. See [Widget designer](/design/widget-designer).
+
+## Import, export and saving
+
+Import and Export are independent sections, Import first. Import accepts the entry shape above, re-validates it, and rejects an entry whose tokens fail without replacing the working entry; an exported entry re-imports deep-equal.
+
+In the app, saving publishes: the theme appears in `list_themes` for your keys and can be passed to `render_widget` as `theme: "brand"`. Pass the **name**, not the token map. Your saved theme is the server-side source of truth, and a reconstructed map drifts the moment you edit it. Agents draft themes from `list_theme_tokens` and the authoring guide; see [Authoring with an agent](/design/authoring-with-an-agent).

@@ -1,0 +1,130 @@
+---
+title: "Embed the designers"
+description: "Mount the widget, theme, schema and action designers in your own page as functions or custom elements, and theme their chrome."
+---
+
+`@widgentic/designer` ships four designers — widget, theme, schema and action — each as a function taking a container and each as an opt-in custom element. They run in the browser, depend only on `@widgentic/core`, and perform no network I/O: every edit re-runs widgentic's validators and re-renders a live preview through the real pipeline; persistence is yours.
+
+```bash
+npm install @widgentic/designer
+```
+
+## The widget designer
+
+```ts
+import { createDesigner } from "@widgentic/designer";
+
+const designer = createDesigner(document.querySelector("#host")!, { themes: [] });
+designer.subscribe((draft) => save(draft));
+```
+
+`createDesigner(container, options?)` accepts:
+
+| Option | Purpose |
+|---|---|
+| `initialWidget` | a widget definition to open with (otherwise a starter draft) |
+| `initialTheme` | a token map for the preview |
+| `themes` | named theme entries offered as preview themes; theme authoring lives in the theme designer |
+| `schemas` | shared data-schema entries the draft may reference by name (`descriptor.dataSchemaRef`) |
+| `actions` | shared actions the draft may bind by name, for element bindings and the widget-level `load` |
+| `secretNames` | secret names offered when an inline http action needs a header or query secret |
+| `appearance` | `"auto"` (default, follows `prefers-color-scheme`), `"light"` or `"dark"` for the designer's own chrome |
+| `chrome` | host chrome tokens, see below |
+| `readOnly` | mount with every editing surface inert |
+
+The handle is `{ getDraft, loadWidget, loadTheme, setReadOnly, subscribe, dispose }`. `getDraft()` returns a copy of the current draft; `loadWidget(definition)` and `loadTheme(theme)` validate first and return `{ ok: true }` or `{ ok: false, errors }` without touching the draft on failure; `subscribe(listener)` calls `listener(draft, diagnostics)` on every change and returns an unsubscribe function; `dispose()` removes the UI. Read-only mode — `readOnly: true` or `setReadOnly(true)` — leaves editing surfaces visible but inert while the preview, its theme selector and Export keep working: it restricts editing, not looking.
+
+## Theme, schema and action designers
+
+```ts
+import { createActionDesigner, createSchemaDesigner, createThemeDesigner } from "@widgentic/designer";
+
+const themeDesigner = createThemeDesigner(el, { widgets, readOnly });
+// → { getTheme, loadTheme, setReadOnly, subscribe, dispose }
+
+const schemaDesigner = createSchemaDesigner(el, { readOnly });
+// → { getSchema, loadSchema, setReadOnly, subscribe, dispose }
+
+const actionDesigner = createActionDesigner(el, { schemas, secretNames, testCall });
+// → { getAction, loadAction, setReadOnly, subscribe, dispose }
+```
+
+- `createThemeDesigner` edits a named entry `{ name, label?, description?, tokens }`. Its `widgets` option adds custom widget definitions to the preview-kind selector beside the built-ins, so a theme is judged against the widgets it will dress; invalid definitions are skipped. `initialTheme` opens an existing entry.
+- `createSchemaDesigner` edits a shared schema entry `{ name, label?, description?, schema }`; `initialSchema` opens one.
+- `createActionDesigner` edits a stored action `{ name, label?, description?, definition }`; `initialAction` opens one. `schemas` offers shared schemas as copy-from sources for the input and output schemas, and `secretNames` offers names for header and query values. A Test control appears only when you pass `testCall(definition, args)`, which must run through your server's execution path — the library performs no network I/O itself.
+
+All four accept `appearance`, `chrome` and `readOnly`. The widget designer only selects among the themes, schemas and actions you pass; authoring each belongs to its own designer, so a host ships only what it embeds.
+
+## Custom elements
+
+Registration happens only through the explicit calls — importing the module has no registry side effects:
+
+```ts
+import {
+  defineDesignerElement,
+  defineThemeDesignerElement,
+  defineSchemaDesignerElement,
+  defineActionDesignerElement
+} from "@widgentic/designer";
+
+defineDesignerElement();        // <widgentic-designer>
+defineThemeDesignerElement();   // <widgentic-theme-designer>
+defineSchemaDesignerElement();  // <widgentic-schema-designer>
+defineActionDesignerElement();  // <widgentic-action-designer>
+```
+
+Each registrar takes an optional tag name and does nothing if that tag is already defined. The elements wrap their factory and re-emit its subscription as bubbling `widgentic-change` CustomEvents whose `detail` carries `{ draft, diagnostics }`, `{ theme }`, `{ schema }` or `{ action }`. Two attributes are read when the element connects: `appearance` (`light` or `dark`) and `chrome` (the token map as JSON). The wrapped handle is available as the element's `designer` property.
+
+Without a bundler, load the single-file bundle and use the elements directly:
+
+```html
+<script type="module" src="/node_modules/@widgentic/designer/dist/browser/widgentic-designer.js"></script>
+<widgentic-designer></widgentic-designer>
+```
+
+## Theming the chrome
+
+<Note>`chrome` is available from `@widgentic/designer` 0.2.0.</Note>
+
+The designers paint their own UI — panels, inputs, buttons, tags, menus — through 28 `--wgd-*` custom properties, the chrome tokens (exported as `CHROME_TOKENS`). The widget preview inside them is not chrome: it follows the selected theme's `--wg-*` tokens from `@widgentic/core/theming` and is unaffected by `chrome`.
+
+`appearance` picks which built-in defaults the chrome follows. `chrome` layers your values on top of them, applied inline on the designer root, so they win over the light and dark blocks:
+
+```ts
+import { createDesigner } from "@widgentic/designer";
+
+createDesigner(host, {
+  chrome: {
+    bg: "var(--app-bg)",            // var() references follow the host's own scheme switching
+    panel: "var(--app-panel)",
+    accent: "#40a0c8",
+    font: "var(--app-font, system-ui, sans-serif)",
+    radius: "8px"
+  }
+});
+```
+
+The elements take the same map as JSON:
+
+```html
+<widgentic-designer chrome='{"accent":"#40a0c8","font-size":"14px"}'></widgentic-designer>
+```
+
+| Group | Tokens | Default |
+|--|--|--|
+| Surfaces | `bg`, `panel`, `hover` | light/dark palette |
+| Lines | `border`, `line` | light/dark palette |
+| Text | `text`, `muted` | light/dark palette |
+| Accent | `accent`, `accent-bg`, `accent-line` | light/dark palette |
+| Danger | `danger`, `danger-bg`, `danger-line` | light/dark palette |
+| JSON highlight | `hl-key`, `hl-str`, `hl-num`, `hl-bool`, `hl-punct` | light/dark palette |
+| Typeface | `font` (labels, buttons, controls), `font-mono` (code panes, code-like values) | `system-ui, sans-serif` / `ui-monospace, monospace` |
+| Size | `font-size` (base), `font-size-sm` (compact rows), `font-size-xs` (badges, tags, meta) | `13px` / `12px` / `11px` |
+| Shape | `radius-sm`, `radius`, `radius-lg`, `gap` | `3px` / `4px` / `6px` / `16px` |
+| Elevation | `shadow` (menus) | `0 4px 14px rgba(0, 0, 0, 0.25)` |
+
+Rules: values are CSS values; CSS-wide keywords (`inherit`, `initial`, `unset`, `revert`) are ignored — on a custom property they act on the token itself, not on what reads it — so to follow your typeface pass its variable with a fallback stack (`font: "var(--app-font, system-ui, sans-serif)"`). Unknown tokens, non-string values and unparseable attribute JSON are ignored, never thrown. With no `chrome`, nothing changes.
+
+## Helpers
+
+The entry also exports the pieces the designers are built from — `importWidgetJson`, `exportWidgetJson`, `exportThemeJson`, `toTypeScriptModule`, and `checkThemeEntry`, `checkSchemaEntry`, `checkActionEntry`, which validate an untrusted entry and return error strings instead of throwing. The full list is in the [designer export index](/reference/api/designer).

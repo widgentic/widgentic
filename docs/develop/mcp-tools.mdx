@@ -1,0 +1,59 @@
+---
+title: "MCP tools"
+description: "The seven tools the widgentic server exposes, their inputs, result shapes and structured errors."
+---
+
+Any MCP client can discover the widgets a widgentic server knows and ask it to validate and render. Six tools are for agents; the seventh, `execute_action`, is called by the mounted widget. The input schemas are generated from the tool definitions in the [reference](/reference/mcp-tools); this page explains what comes back: `content` blocks (text, or a resource) plus, for renders, `structuredContent` for the MCP Apps template. The hosted server answers at `https://mcp.widgentic.dev/mcp` and serves catalogs, themes and schemas per API key ([Per-principal catalogs](/how-it-works/per-principal-catalogs)).
+
+## Discovery
+
+| Tool | Input | Result text |
+|---|---|---|
+| `list_widgets` | none | JSON array of descriptors: `kind`, `description`, `dataShape`, a `dataExample` to imitate, supported `hints`, `dataSchema` when declared |
+| `list_schemas` | none | `{ schemas, rules }` — the caller's saved shared schemas as `{ name, label?, description?, schema }`; anonymous or unknown keys see an empty list, never an error |
+| `list_themes` | none | `{ themes, rules }` — every registered theme as `{ name, label?, description?, extends?, tokens }` |
+| `list_theme_tokens` | none | `{ tokens, presets, rules }` — each token's `name`, light `default`, value `type` and `use`; the `dark` preset; the value rules, including `x-*` custom variables |
+| `get_authoring_guide` | none | a JSON guide: `workflow`, `widget`, `sharedSchema`, `theme`, `rules` (template, styles, dataSchema, actions) and `limits`, derived from the live validators |
+
+Call `list_widgets` fresh whenever the user asks what is available or mentions saving in the designer: catalogs are per key and change between calls. Reference a saved schema by name (`descriptor.dataSchemaRef`) rather than copying it. Read `get_authoring_guide` before drafting JSON: agents draft, users import and save in the designer — there is no registration tool by design ([Authoring with an agent](/design/authoring-with-an-agent)).
+
+## render_widget
+
+Input: `{ widget, data, hints?, meta?, format?, theme? }`. `widget` is a kind id from `list_widgets`; `data` is a JSON value matching the kind's `dataShape` — a string that encodes a JSON object or array is unwrapped first, so client marshalling artifacts render correctly. The server validates the id, the payload and the data against the kind's `dataSchema`, then renders.
+
+### Result
+
+By default (`format: "both"`) the content is a text block with the rendered HTML fragment followed by a resource block `{ uri: "ui://widgentic/widget", mimeType: "application/vnd.widgentic+json" }` carrying the validated payload for widgentic-aware hosts. The other formats select transport, never content:
+
+| `format` | Content |
+|---|---|
+| `html` | the fragment text only (strands widgentic-aware hosts) |
+| `widget` | the payload resource block only |
+| `page` | a self-contained styled HTML document as text (doctype, base stylesheet, the kind's styles, the theme), plus the payload block |
+| `app` | a one-line text fallback, a `text/html;profile=mcp-app` resource at `ui://widgentic/page/<kind>` holding that page, plus the payload block |
+
+Every successful result also carries `structuredContent: { html, css, payload, tree }` — fragment, generated theme and kind CSS, payload and the render tree the fragment was serialized from — which Apps hosts push into the declared app template to mount natively and patch in place ([Inline rendering](/how-it-works/inline-rendering)). On such hosts the default-format text block shrinks to one line saying the visual is already displayed; explicit formats are never slimmed.
+
+### Tails
+
+Two notes can end the text. Misaimed hints (a misspelled key, a target matching no field or column, an unsafe image source) never fail a render: they come back as a `Hint notes:` tail and as `structuredContent.diagnostics` (for example `UNKNOWN_HINT` with a did-you-mean suggestion). When the widget carries actions, an `Action notes:` tail says how many http and prompt actions it has, how they behave, whether it loads data on first render, and why any are disabled: `scope` (the key lacks `execute`) or `unresolved` (the action is not saved). Renders without actions carry no tail.
+
+### Themes
+
+`theme` takes a registered name (`"dark"`, or any name from `list_themes`) or an inline token map of bare names to CSS strings (`"6px"`, not `6`; `x-*` keys become `--wg-x-*` custom variables). When the user names a saved theme, pass the name — a reconstructed map drifts the moment they edit it. The resolved map rides the payload block as a top-level `theme` field on every format and styles `page` and `app` output.
+
+### Groups
+
+Render the built-in `group` kind to show several widgets in one response instead of calling repeatedly: `data.items` holds sub-widgets of mixed kinds (stored customs included; no nesting; 20 at most) and hints pick the layout — `layout` as `stack`, `row` or `grid`; `gap` as `none`, `sm`, `md` or `lg`; `columns` 1 to 4 ([Groups and hints](/design/groups-and-hints)).
+
+### Errors
+
+Failures return `isError: true` with a text block holding a JSON error `{ code, path, message }` in the tool's input vocabulary: `UNKNOWN_KIND` at `path: "widget"` lists the available kinds; a missing `widget` or `data` is `MISSING_FIELD`; invalid `hints`, `meta` or `format` are `INVALID_TYPE`; a schema violation names its path (`data.lines`); an unknown theme name is `UNKNOWN_THEME` listing the registered names; an unsafe token value is `INVALID_TYPE` at `theme.<token>`. Handlers never throw.
+
+## execute_action
+
+Registered with `_meta.ui.visibility: ["app"]`, so Apps hosts hide it from the model and let the mounted widget call it; non-Apps clients still list it. Agents call `render_widget` instead.
+
+Input: `{ widget, action, args?, payload, at?, item? }` — the rendered kind, a binding identifier (the element's dotted template path, or `"load"`), the descriptor's arguments, the current payload and, inside a group, the item's location (`at: "data.items.2"`) and kind. The server resolves the binding from the caller's composed catalog, never from the request; requires the `execute` scope; validates `args` against the action's input schema; runs the guarded https fetch with secrets injected; validates the response; folds it into `payload.data` under the binding's output mode; and re-renders exactly as `render_widget` would, with the same `structuredContent`.
+
+Errors follow the same contract with `UNKNOWN_KIND`, `UNKNOWN_ACTION`, `ACTION_NOT_HTTP`, `FORBIDDEN_SCOPE`, `INVALID_ACTION_INPUT`, `UNKNOWN_SECRET`, `ACTION_FETCH_FAILED`, `INVALID_ACTION_OUTPUT` and `RATE_LIMITED`; every message is scrubbed of secret values. Declaring actions is covered in [Actions and secrets](/design/actions-and-secrets) and the [action definition reference](/reference/action-definition).

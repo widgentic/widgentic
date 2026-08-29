@@ -1,0 +1,37 @@
+---
+title: "widgentic documentation"
+description: "Turn structured data into agent-friendly widgets and render them inline in MCP Apps hosts."
+hideFooterPagination: true
+---
+
+widgentic is widgets for agents. It turns structured data — JSON, CSV, or anything an agent assembles — into agent-friendly widgets: `card`, `table`, `tree`, `group`, and custom templates you design yourself. Widgets render inline in the conversation on hosts that support MCP Apps and fall back to text everywhere else, so one payload contract serves every MCP client without bespoke UI per tool.
+
+## Choose your path
+
+<CardGroup cols={2}>
+  <Card title="Design widgets" icon="pen-ruler">
+    For people who author widgets in the app at [widgentic.dev](https://widgentic.dev): sign in, design a widget in the browser, create an API key and connect your host. No code required.
+
+    [Quickstart](/get-started/quickstart) · [The widget designer](/design/widget-designer)
+  </Card>
+  <Card title="Develop with the packages" icon="code">
+    For developers embedding `@widgentic/core`, `@widgentic/designer` or `@widgentic/mcp` in their own host, or running a widgentic server with their own widgets.
+
+    [The packages](/develop/packages) · [Render in your host](/develop/render-in-your-host)
+  </Card>
+</CardGroup>
+
+## What you get
+
+- **One contract.** Every widget is a payload `{ kind, data, hints?, meta? }`, validated before it renders. Renderers ignore fields they do not know, so the contract can grow without breaking hosts.
+- **Generic widgets plus your own.** Built-in cards, tables, trees and groups cover most tool output; custom kinds are JSON templates that bind data into elements — data, never code.
+- **An MCP server.** Seven tools let any agent discover your catalog, read the authoring contract and render: `list_widgets`, `list_schemas`, `list_themes`, `list_theme_tokens`, `get_authoring_guide`, `render_widget`, and `execute_action`, which widgets call for their own `http` actions.
+- **Designers.** Widget, theme, schema and action designers with live validation and a preview that runs the real render pipeline, hosted at [widgentic.dev](https://widgentic.dev) and embeddable from `@widgentic/designer`.
+
+## How it works
+
+An agent calls `render_widget` on the widgentic MCP server with a kind and some data. The server validates the payload against the widget's descriptor, renders it, and returns HTML plus the payload. MCP Apps hosts mount the result in a sandboxed iframe from the same render tree, patching it in place on later results; every other host receives the text. Your API key selects which catalog the server composes for the request — the built-ins plus your saved widgets, themes, schemas and actions. Start with the [payload contract](/how-it-works/payload-contract).
+
+## Reference
+
+The [authoring contract](/reference/authoring-contract) lists every entry shape, template form, safety rule and limit. It is generated from the validators the server enforces, so it cannot drift from what the product accepts.

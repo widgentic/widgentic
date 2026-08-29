@@ -1,0 +1,37 @@
+---
+title: "Host matrix"
+description: "How each MCP host connects to widgentic, what it shows inline, and which action kinds work there."
+---
+
+Same server, different hosts. The rows below are generic facts confirmed by probing the hosts; anything not confirmed says so. Registration snippets are in [Connect a host](/get-started/connect-a-host).
+
+| Host | How to connect | Inline widgets | Prompt actions (composer prefill) | http actions (needs `serverTools`) | Notes |
+|---|---|---|---|---|---|
+| claude.ai | Custom connector (Settings, Connectors, Add custom connector). Connectors accept a URL only, so a per-principal key travels as a query parameter: `https://mcp.widgentic.dev/mcp?key=<api-key>` | Yes: mounts the MCP Apps template inline | Yes: `ui/message` prefills the composer and the person sends | Yes: proxies the frame's `tools/call` | Mounts a fresh iframe per render; advertises `message` but honours `ui/message` |
+| Claude Desktop | Custom connector as above, or stdio through `claude_desktop_config.json` with absolute paths | Yes: Apps-capable versions mount the page in chat | Not probed | Not probed | Versions without Apps support receive the text result |
+| VS Code Copilot Chat | `.vscode/mcp.json` with `"type": "http"`, the server URL and an `x-api-key` header | Yes: verified for all four built-in kinds plus a custom template widget | Yes: prefills the composer | Yes: proxies `tools/call` | Live host re-theming flows into the `--wg-*` tokens |
+| Claude Code | `claude mcp add widgentic -- npx tsx /path/to/examples/mcp-server/main.ts` (stdio) | No: tool results are text; no UI mounting by design | Not applicable, no frame | Not applicable, no frame | Ask for `format: "page"` and open the document in a browser |
+| MCP Apps basic-host | The official reference host pointed at a Streamable HTTP server built with `createWidgenticServer()` | Yes: the reference implementation | `ui/message` accepted | Yes: proxies `tools/call` | The cheapest place to probe the frame before a production host |
+| MCP Inspector | `npx @modelcontextprotocol/inspector npx tsx examples/mcp-server/main.ts` | Not part of our verification | Not applicable | Not applicable | Tool listing and raw tool results without any chat host |
+
+## Facts that hold across Apps hosts
+
+- All three Apps hosts we probed — basic-host, claude.ai and VS Code Copilot Chat — honour `ui/message`, but only claude.ai advertises it. The frame therefore never gates prompt actions on the advertised flag; a host that answers with a JSON-RPC error gets an inline alert inside the frame while the widget stays intact.
+- `hostCapabilities.serverTools` in the initialize result is the reliable gate for http actions. Without it the frame renders http descriptors disabled with an explanatory `title`, and prompt actions stay enabled. All three probed hosts advertise it and proxy the frame's `tools/call` to the server.
+- App-side `tools/list` is unsupported everywhere (`-32601`), so the frame never enumerates tools; it calls `execute_action` by name.
+- Hosts cache `ui://` resources per conversation. After a server change, retest the template in a fresh chat.
+- Partial tool input (`tool-input-partial`) is size-gated by the host, so do not count on the streaming preview appearing for every payload; the tool result is always authoritative.
+- The sandbox CSP blocks external images. The server inlines them as `data:` URIs on iframe surfaces; see [Inline rendering](/how-it-works/inline-rendering).
+- claude.ai mounts a fresh iframe per render, so each render is a new widget instance; a `load` binding fires once per instance.
+
+## Connecting to the hosted server
+
+The hosted server answers at `https://mcp.widgentic.dev/mcp`. Hosts that send headers (VS Code Copilot Chat) pass the key as `x-api-key`; hosts that accept only a URL (claude.ai and Claude Desktop connectors) take it as `?key=`. A request without a resolvable key still works over the built-in catalog, as described in [Per-principal catalogs](/how-it-works/per-principal-catalogs).
+
+<Note>
+Registration is never an MCP tool. Whatever host you connect, saving a widget happens in the authenticated app; the key only reads. See the [Trust model](/how-it-works/trust-model).
+</Note>
+
+## Hosts without Apps support
+
+Any client that does not advertise the Apps capability receives the default result — the HTML fragment text block plus the widgentic payload block — with the template unmounted. Hosts that understand the `application/vnd.widgentic+json` block can mount it natively with `@widgentic/core`; see [Render in your host](/develop/render-in-your-host). Everyone else reads the HTML, or asks for `format: "page"`.

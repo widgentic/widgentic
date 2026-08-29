@@ -1,0 +1,76 @@
+---
+title: "Authoring with an agent"
+description: "Let an agent draft widget, theme, schema and action JSON from the live authoring guide, then import, review and save it yourself."
+---
+
+An agent connected to your widgentic catalog can do most of the drafting. It reads the authoring guide and your existing entries over MCP, produces the JSON, and hands it to you; you import it in the matching designer, review what the validators say, and save. The split is deliberate: agents draft, people publish.
+
+## Why there is no registration tool
+
+The MCP server exposes read-only discovery tools and nothing that writes. API keys are read-only credentials that travel into third-party hosts and prompt-injectable contexts, so a write requires your authenticated session in the app. An agent that looks for a registration tool will not find one, and `get_authoring_guide` tells it so. The `execute` scope lets a widget run http actions; it does not let anyone write. See [Trust model](/how-it-works/trust-model) and [Keys and scopes](/get-started/keys-and-scopes).
+
+## What the agent reads
+
+| Tool | What it returns |
+|---|---|
+| `get_authoring_guide` | A structured JSON guide with `workflow`, `widget`, `sharedSchema`, `theme`, `rules` and `limits` sections: the entry shapes, the template DSL forms and safety rules, the identifier charset and reserved kinds, the style and schema constraints, the token registry, and the per-principal limits |
+| `list_widgets` | Every kind in your catalog with its descriptor, so a new kind does not collide with an existing one |
+| `list_schemas` | Your saved shared schemas, each with its `schema` object, so a widget can reference one by name |
+| `list_themes` | Your registered themes by name |
+| `list_theme_tokens` | Every token with its type, use and default, the presets, and the value rules |
+
+The guide is derived from the live validators when it is called: reserved kinds from the catalog, limits from the store defaults, tokens from the registry, patterns from the validators' own constants. It cannot drift from what the store will accept. Catalogs are per key and change between calls, so the agent should call `list_widgets` fresh rather than answer from an earlier listing. The tools are described in [MCP tools](/develop/mcp-tools).
+
+## The workflow
+
+<Steps>
+<Step title="Connect a host with your key">
+Register the server in your MCP host with one of your API keys; a read-only key is enough for drafting. See [Connect a host](/get-started/connect-a-host).
+</Step>
+<Step title="Ask for a draft">
+Describe the widget, theme or schema you want. A prompt that names the tools works well:
+
+```text
+Using the widgentic tools, call get_authoring_guide, list_widgets and list_schemas first.
+Then draft a custom widget with kind "contact-card" that shows one person as a card:
+name as the heading, role, email and status. Reference my saved "person" schema through
+descriptor.dataSchemaRef instead of an inline dataSchema. Map the status value to a
+wg-status class, make the email a mailto: link, and include a dataExample that validates
+against the schema. Return only the JSON, ready to import in the widget designer.
+```
+</Step>
+<Step title="Review the JSON">
+You receive one object in the shape the store persists: `{ kind, template, descriptor }` for a widget, `{ name, label?, description?, tokens }` for a theme, `{ name, label?, description?, schema }` for a shared schema, `{ name, label?, description?, definition }` for an action.
+</Step>
+<Step title="Import in the matching section">
+Sign in at [widgentic.dev](https://widgentic.dev) and open **Widgets**, **Themes**, **Data schemas** or **Actions**. Each designer has an Import section before its Export section. Import treats the JSON as untrusted: it re-validates everything and, if the entry fails, shows the structured errors and leaves your current draft untouched. With a valid import, check the preview against your own sample data and themes.
+</Step>
+<Step title="Save">
+**Save to my catalog** writes the entry through your session. It appears in your MCP catalog on the next tool call made with your key, with no further step. An http action must pass a Test call before it can be saved.
+</Step>
+</Steps>
+
+<Note>
+When a widget references a shared schema, import and save the schema first. The `dataSchemaRef` is validated against your saved schemas when the widget is saved. See [Data schemas](/design/data-schemas).
+</Note>
+
+## What a good draft looks like
+
+The guide steers the agent toward these, and they are what to look for in review:
+
+- **A kind that does not collide.** Built-in kinds are reserved, and existing kinds come from `list_widgets`.
+- **Bindings on schema-declared properties.** Schema-declared data fails fast with dotted paths; `$meta.*` is outside schema validation, so a heading belongs in the schema as an optional `title`.
+- **A `dataExample` that validates.** The designer cross-checks it against the schema and uses it as preview data.
+- **A reference, not a copy, of a saved schema.** A reconstructed inline schema forks the moment you edit the shared one.
+- **Styles on `.wg-` selectors using `var(--wg-<token>)`.** Themes then restyle the widget; custom `x-*` variables get a fallback.
+- **A theme delivered as an importable entry.** An inline token map passed to `render_widget` styles one render; the entry is what you save.
+
+The rules behind each point are in the [Authoring contract](/reference/authoring-contract) and [Template DSL](/design/template-dsl).
+
+## Actions drafted by an agent
+
+The guide documents the action vocabulary too. Inline `action` bindings arrive inside the widget template and import with it; a shared action arrives as its own entry for the Actions section. An http action still has to pass the Test call before **Save** is available, a prompt action asks you to acknowledge that the proposed message is your responsibility, and any `{ "secret": "<name>" }` the definition references must already exist in **Secrets**. See [Actions and secrets](/design/actions-and-secrets).
+
+## After saving
+
+The agent sees the result on its next call: `list_widgets` lists the new kind with its descriptor, `render_widget` renders it, and a saved theme resolves by name. Two tails on `render_widget` output help the agent correct itself without your involvement: `Hint notes:` for misaimed hints and `Action notes:` for what the widget's buttons do and why any are disabled.
