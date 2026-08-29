@@ -23,4 +23,4 @@
 - [x] 4.2 `[USER]` Mintlify: repository connected 2026-08-29 (`widgentic/widgentic`, `main`, subdirectory `/docs`, GitHub App on this repo only); first green deploy on the Mintlify subdomain once `docs/` is on `main`
 - [x] 4.3 `[USER]` Domain: `docs.widgentic.dev` added 2026-08-29 — both TXT records resolve, CNAME → `cname.mintlify.builders` in place, HTTPS answers 200 with a valid certificate
 - [x] 4.4 README: docs link in the header paragraph, remove the "next on the backlog: docs site" sentence; `TESTING.md`: docs section (commands, operator steps in generic form) and a dated entry
-- [ ] 4.5 Downstream in widgentic/apps: the landing's four README hrefs → `https://docs.widgentic.dev`, RUNBOOK DNS facts, deploy
+- [x] 4.5 Downstream in widgentic/apps: the landing's four hrefs point at `https://docs.widgentic.dev`, deployed as v66
