@@ -37,7 +37,7 @@
     "primary": {
       "type": "button",
       "label": "Open the app",
-      "href": "https://widgentic.dev"
+      "href": "https://widgentic.dev/app"
     }
   },
   "navigation": {

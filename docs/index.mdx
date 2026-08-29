@@ -10,7 +10,7 @@ widgentic is widgets for agents. It turns structured data — JSON, CSV, or anyt
 
 <CardGroup cols={2}>
   <Card title="Design widgets" icon="pen-ruler">
-    For people who author widgets in the app at [widgentic.dev](https://widgentic.dev): sign in, design a widget in the browser, create an API key and connect your host. No code required.
+    For people who author widgets in the app at [widgentic.dev/app](https://widgentic.dev/app): sign in, design a widget in the browser, create an API key and connect your host. No code required.
 
     [Quickstart](/get-started/quickstart) · [The widget designer](/design/widget-designer)
   </Card>
@@ -26,7 +26,7 @@ widgentic is widgets for agents. It turns structured data — JSON, CSV, or anyt
 - **One contract.** Every widget is a payload `{ kind, data, hints?, meta? }`, validated before it renders. Renderers ignore fields they do not know, so the contract can grow without breaking hosts.
 - **Generic widgets plus your own.** Built-in cards, tables, trees and groups cover most tool output; custom kinds are JSON templates that bind data into elements — data, never code.
 - **An MCP server.** Seven tools let any agent discover your catalog, read the authoring contract and render: `list_widgets`, `list_schemas`, `list_themes`, `list_theme_tokens`, `get_authoring_guide`, `render_widget`, and `execute_action`, which widgets call for their own `http` actions.
-- **Designers.** Widget, theme, schema and action designers with live validation and a preview that runs the real render pipeline, hosted at [widgentic.dev](https://widgentic.dev) and embeddable from `@widgentic/designer`.
+- **Designers.** Widget, theme, schema and action designers with live validation and a preview that runs the real render pipeline, hosted at [widgentic.dev/app](https://widgentic.dev/app) and embeddable from `@widgentic/designer`.
 
 ## How it works
 
