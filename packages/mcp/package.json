@@ -91,6 +91,6 @@
     }
   },
   "devDependencies": {
-    "@widgentic/designer": "^0.2.0"
+    "@widgentic/designer": "^0.3.0"
   }
 }

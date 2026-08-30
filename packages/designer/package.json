@@ -1,6 +1,6 @@
 {
   "name": "@widgentic/designer",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Hostable widgentic designers: widget, theme, schema and action designers as functions and custom elements, plus a single-file browser bundle.",
   "license": "MIT",
   "type": "module",
