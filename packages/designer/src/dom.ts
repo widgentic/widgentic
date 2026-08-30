@@ -4,6 +4,8 @@
  * Designer chrome classes are prefixed `wgd-` (widget content inside the
  * preview keeps the normal `wg-` classes).
  */
+import { CHROME_DEFAULTS, CHROME_TOKENS, chromeCss } from "./chrome-defaults.js";
+import type { ChromeOptions } from "./chrome-defaults.js";
 
 export type Child = Node | string;
 
@@ -166,24 +168,11 @@ export function diagnosticLine(text: string | undefined): HTMLElement {
   return el;
 }
 
-/**
- * The chrome tokens — every `--wgd-<token>` the stylesheet paints with.
- * Colours (18) follow the light/dark blocks; typography, shape and shadow
- * are scheme-independent. Public API: a rename is a spec change.
- */
-export const CHROME_TOKENS = [
-  "bg", "panel", "border", "line", "text", "muted",
-  "accent", "accent-bg", "accent-line",
-  "danger", "danger-bg", "danger-line", "hover",
-  "hl-key", "hl-str", "hl-num", "hl-bool", "hl-punct",
-  "font", "font-mono", "font-size", "font-size-sm", "font-size-xs",
-  "radius-sm", "radius", "radius-lg", "gap", "shadow"
-] as const;
-
-export type ChromeToken = (typeof CHROME_TOKENS)[number];
-
-/** A host's partial chrome: token → CSS value (`var()` references welcome). */
-export type ChromeOptions = Partial<Record<ChromeToken, string>>;
+// The token list and the palettes live in chrome-defaults.ts, which the
+// stylesheet below is generated from; re-exported here so the modules that
+// already import chrome types from this one keep working.
+export { CHROME_TOKENS } from "./chrome-defaults.js";
+export type { ChromeOptions, ChromeToken } from "./chrome-defaults.js";
 
 const CHROME_TOKEN_SET: ReadonlySet<string> = new Set<string>(CHROME_TOKENS);
 
@@ -227,43 +216,15 @@ export function injectDesignerStyles(doc: Document): void {
   const style = doc.createElement("style");
   style.setAttribute(STYLE_MARKER, "chrome");
   style.textContent = `
-/* Chrome tokens (CHROME_TOKENS): light colours, overridden for dark below;
-   typography, shape and shadow are scheme-independent. A host overrides any
-   of them through options.chrome (inline on the root). Widget content inside
-   the preview keeps its own --wg-* theme tokens. */
-.wgd-root {
-  --wgd-bg: #ffffff; --wgd-panel: #fbfcfe; --wgd-border: #d5dbe3;
-  --wgd-line: #e2e8f0; --wgd-text: #1f2430; --wgd-muted: #5b6472;
-  --wgd-accent: #2563eb; --wgd-accent-bg: #e8eef9; --wgd-accent-line: #b9c9e8;
-  --wgd-danger: #b91c1c; --wgd-danger-bg: #fdf2f2; --wgd-danger-line: #f0b4b4;
-  --wgd-hover: #eef2f7;
-  --wgd-hl-key: #0b5fa5; --wgd-hl-str: #0a7a3d; --wgd-hl-num: #b45309;
-  --wgd-hl-bool: #7c3aed; --wgd-hl-punct: #7a8494;
-  --wgd-font: system-ui, sans-serif; --wgd-font-mono: ui-monospace, monospace;
-  --wgd-font-size: 13px; --wgd-font-size-sm: 12px; --wgd-font-size-xs: 11px;
-  --wgd-radius-sm: 3px; --wgd-radius: 4px; --wgd-radius-lg: 6px; --wgd-gap: 16px;
-  --wgd-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
-}
-@media (prefers-color-scheme: dark) {
-  .wgd-root:not([data-wgd-theme="light"]) {
-    --wgd-bg: #0f131c; --wgd-panel: #161b26; --wgd-border: #2a3140;
-    --wgd-line: #232a37; --wgd-text: #e5e9f0; --wgd-muted: #96a0b5;
-    --wgd-accent: #7aa2f7; --wgd-accent-bg: #1c2740; --wgd-accent-line: #35507f;
-    --wgd-danger: #f0a3a3; --wgd-danger-bg: #2a1a1c; --wgd-danger-line: #5c2b2b;
-    --wgd-hover: #1e2532;
-    --wgd-hl-key: #7aa2f7; --wgd-hl-str: #9ece6a; --wgd-hl-num: #ff9e64;
-    --wgd-hl-bool: #bb9af7; --wgd-hl-punct: #8b94a7;
-  }
-}
-.wgd-root[data-wgd-theme="dark"] {
-  --wgd-bg: #0f131c; --wgd-panel: #161b26; --wgd-border: #2a3140;
-  --wgd-line: #232a37; --wgd-text: #e5e9f0; --wgd-muted: #96a0b5;
-  --wgd-accent: #7aa2f7; --wgd-accent-bg: #1c2740; --wgd-accent-line: #35507f;
-  --wgd-danger: #f0a3a3; --wgd-danger-bg: #2a1a1c; --wgd-danger-line: #5c2b2b;
-  --wgd-hover: #1e2532;
-  --wgd-hl-key: #7aa2f7; --wgd-hl-str: #9ece6a; --wgd-hl-num: #ff9e64;
-  --wgd-hl-bool: #bb9af7; --wgd-hl-punct: #8b94a7;
-}
+/* Chrome tokens (CHROME_TOKENS), generated from CHROME_DEFAULTS so the
+   exported palette IS the applied one. A host overrides any of them through
+   options.chrome (inline on the root, which outranks these rules). Widget
+   content inside the preview keeps its own --wg-* theme tokens. */
+${chromeCss(CHROME_DEFAULTS, {
+  selector: ".wgd-root",
+  darkMediaSelector: '.wgd-root:not([data-wgd-theme="light"])',
+  darkSelector: '.wgd-root[data-wgd-theme="dark"]'
+})}
 .wgd-root { display: flex; gap: var(--wgd-gap); font-family: var(--wgd-font); font-size: var(--wgd-font-size); align-items: flex-start; color: var(--wgd-text); background: var(--wgd-bg); }
 /* Any chrome class that sets display would silently defeat the hidden
    attribute (learned live twice: the add menu, then the styles tree as a

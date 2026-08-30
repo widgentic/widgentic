@@ -188,6 +188,7 @@ exports[`published export surfaces > @widgentic/core/theming 1`] = `
 
 exports[`published export surfaces > @widgentic/designer 1`] = `
 [
+  "CHROME_DEFAULTS",
   "CHROME_TOKENS",
   "DEFAULT_ACTION_TAG",
   "DEFAULT_SCHEMA_TAG",
@@ -197,6 +198,7 @@ exports[`published export surfaces > @widgentic/designer 1`] = `
   "checkActionEntry",
   "checkSchemaEntry",
   "checkThemeEntry",
+  "chromeCss",
   "createActionDesigner",
   "createBindingEditor",
   "createDefinitionEditor",

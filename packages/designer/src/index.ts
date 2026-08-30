@@ -9,8 +9,14 @@
  * performs no network I/O — hosts own persistence via change events.
  */
 export { createDesigner } from "./shell.js";
-export { CHROME_TOKENS } from "./dom.js";
-export type { ChromeOptions, ChromeToken } from "./dom.js";
+export { CHROME_TOKENS, CHROME_DEFAULTS, chromeCss } from "./chrome-defaults.js";
+export type {
+  ChromeCssOptions,
+  ChromeOptions,
+  ChromePalette,
+  ChromeScheme,
+  ChromeToken
+} from "./chrome-defaults.js";
 export type {
   DesignerHandle,
   DesignerOptions,

@@ -57,29 +57,41 @@ curl -s -X POST "$URL/mcp" -H 'Content-Type: application/json' \
 ## Designer chrome: computed-value check
 
 The designers' chrome is painted through the 28 `--wgd-*` tokens
-(`CHROME_TOKENS`); unit tests pin the token blocks and audit the stylesheet
-structurally, but only a browser cascades `var()`. `tools/probe-computed.mjs`
-loads a URL in headless Chrome over the DevTools Protocol (no dependency —
-Node's `fetch` + `WebSocket`) and prints the JSON result of an expression:
+(`CHROME_TOKENS`); unit tests pin the token blocks, gate the palettes for
+contrast and audit the stylesheet structurally, but only a browser cascades
+`var()`. `tools/probe-computed.mjs` loads a URL in headless Chrome over the
+DevTools Protocol (no dependency — Node's `fetch` + `WebSocket`) and prints the
+JSON result of an expression:
 
 ```bash
-npm run designer &                     # the demo host on :8082 — its "Host chrome" button toggles a chrome map
+npm run designer &                     # the demo host on :8082 — its "Host chrome" button hands the designers a chrome map
 node tools/probe-computed.mjs http://localhost:8082/ probe.js
 ```
 
 with `probe.js` reading `getComputedStyle()` of `.wgd-root`, an input, a
 `.wgd-node .wgd-tag`, `.wgd-section`, `.wgd-chevron` and the JSON pane's
 `.wgd-hl-k` before and after `document.getElementById("chrome-toggle").click()`.
-Expected: without `chrome`, `system-ui, sans-serif` / 13px / 16px gap on the
-root, 12px on compact inputs, `ui-monospace, monospace` / 11px / 3px on tags,
-6px on sections, 10px on the chevron, 4px on inputs and buttons — the
-pre-token literals, and the page itself wears the same palette. The toggle
-switches the page to its brand look (`html[data-host-chrome="brand"]`) and
-passes a map covering all 28 tokens (colours and shadow as `var(--host-*)`,
-typefaces with fallback stacks, sizes/radii/gap one step up), so afterwards
-page and designers match again — Georgia 14px, Courier tags at 12px/4px,
-brand accent and highlight colours, 24px gap, chevron 11px — while the
-preview's widget colours (`--wg-*`) stay put.
+
+**Since `@widgentic/designer` 0.3.0 the built-in defaults are the widgentic
+palette** — a regression report that says "the designers changed colour" is
+expected behaviour, not a bug. Without `chrome`, expect on the root
+`--wgd-bg: #f6fafc`, `--wgd-panel: #ffffff`, `--wgd-border: #6e95a6`,
+`--wgd-accent: #1e6f92`, `--wgd-text: #0b1b26`, `system-ui, sans-serif` at
+13px, a 16px gap and 6px radii on inputs and buttons — and the demo page's own
+`body` background computing to the same `rgb(246, 250, 252)` as the root,
+because the page paints itself from `chromeCss(CHROME_DEFAULTS, { prefix:
+"--host" })` rather than a copied palette. Verified 2026-08-30 on this rig.
+
+The toggle switches the page to Dracula (`html[data-host-chrome="dracula"]`,
+written out in `index.html` — the package ships one default and no second
+palette) and passes a map covering all 28 tokens (colours as `var(--host-*)`,
+typefaces with fallback stacks, sizes one step up), so afterwards page and
+designers match again in that look — `--wgd-bg: #282a36`, `--wgd-border:
+#6272a4`, `--wgd-accent: #bd93f9`, monospace at 14px, 4px radii — in BOTH
+schemes, because Dracula is a dark theme, while the preview's widget colours
+(`--wg-*`) stay put. Seven pairs in that mapping measure below the thresholds
+the built-in palette is gated on; that is the theme's own trade and the demo
+says so.
 
 ## Documentation site (`docs/`)
 

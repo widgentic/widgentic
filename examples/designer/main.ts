@@ -8,6 +8,8 @@
  * alone: it performs no network I/O and no persistence, hosts own both.
  */
 import {
+  CHROME_DEFAULTS,
+  chromeCss,
   createActionDesigner,
   createDesigner,
   createThemeDesigner,
@@ -30,13 +32,19 @@ const THEMES_KEY = "widgentic-designer-themes";
 const CHROME_KEY = "widgentic-designer-chrome";
 
 // --- Host chrome ---------------------------------------------------------
-// The toggle switches the PAGE to its brand look (html[data-host-chrome])
-// and re-mounts every designer with a map covering all 28 chrome tokens,
-// the pattern a real host uses: colours and shadow point at the page's own
-// --host-* properties, so they follow the page's palette and scheme
-// switching through var(); the typefaces come with fallback stacks (never
-// `inherit`); sizes, radii and gap are plain values, one step larger than
-// the defaults. Off, page and designers share the built-in palette.
+// The designers wear the widgentic palette by DEFAULT — this page passes no
+// `chrome` at all in its normal state, and paints itself from the same
+// exported palette so page and designers match with nothing configured.
+//
+// The toggle is the demonstration: the page swaps to its OWN palette — Dracula
+// (Zeno Rocha, MIT), written out in index.html, because the package ships one
+// default and no second palette to fall back to — and hands the designers a
+// map covering all 28 chrome tokens pointed at the page's --host-* properties,
+// plus a typeface pair a library can never default to.
+const paletteStyle = document.createElement("style");
+paletteStyle.textContent = chromeCss(CHROME_DEFAULTS, { prefix: "--host", selector: ":root" });
+document.head.appendChild(paletteStyle);
+
 const HOST_CHROME: ChromeOptions = {
   // Surfaces and lines
   bg: "var(--host-bg)",
@@ -49,7 +57,7 @@ const HOST_CHROME: ChromeOptions = {
   muted: "var(--host-muted)",
   // Accent and danger
   accent: "var(--host-accent)",
-  "accent-bg": "var(--host-accent-soft)",
+  "accent-bg": "var(--host-accent-bg)",
   "accent-line": "var(--host-accent-line)",
   danger: "var(--host-danger)",
   "danger-bg": "var(--host-danger-bg)",
@@ -60,16 +68,17 @@ const HOST_CHROME: ChromeOptions = {
   "hl-num": "var(--host-hl-num)",
   "hl-bool": "var(--host-hl-bool)",
   "hl-punct": "var(--host-hl-punct)",
-  // Typography
-  font: "var(--host-font, system-ui, sans-serif)",
-  "font-mono": "var(--host-font-mono, ui-monospace, monospace)",
+  // Typography: the one thing a library cannot default to, so a host with
+  // its own faces passes them with a fallback stack.
+  font: 'ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace',
+  "font-mono": 'ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace',
   "font-size": "14px",
   "font-size-sm": "13px",
   "font-size-xs": "12px",
   // Shape and elevation
-  "radius-sm": "4px",
-  radius: "8px",
-  "radius-lg": "12px",
+  "radius-sm": "3px",
+  radius: "var(--host-radius)",
+  "radius-lg": "8px",
   gap: "24px",
   shadow: "var(--host-shadow)"
 };
@@ -77,7 +86,8 @@ let hostChrome = localStorage.getItem(CHROME_KEY) === "on";
 const chromeOptions = (): { chrome?: ChromeOptions } => (hostChrome ? { chrome: HOST_CHROME } : {});
 /** The page's own look follows the toggle, so both states are consistent. */
 const applyHostLook = (): void => {
-  document.documentElement.dataset.hostChrome = hostChrome ? "brand" : "default";
+  if (hostChrome) document.documentElement.dataset.hostChrome = "dracula";
+  else delete document.documentElement.dataset.hostChrome;
 };
 applyHostLook();
 
@@ -226,8 +236,8 @@ chromeToggle?.addEventListener("click", () => {
   mountWidgetDesigner();
   note(
     hostChrome
-      ? `page and designers wear the brand look — all ${Object.keys(HOST_CHROME).length} chrome tokens mapped to the page's --host-* palette, serif + Courier, one size step up`
-      : "page and designers wear the built-in look"
+      ? `host override — Dracula (MIT) across all ${Object.keys(HOST_CHROME).length} chrome tokens, monospace, one size step up. Seven pairs measure below WCAG AA (its Comment and selection tones): pass your own palette, own its contrast.`
+      : "no chrome passed — designers and page both wear the widgentic palette"
   );
 });
 reflectChrome();

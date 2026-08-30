@@ -239,6 +239,8 @@ const designer = createDesigner(el, {
   themes,             // named entries offered as preview themes
   readOnly: false,    // true mounts every editing surface inert
   appearance: "auto", // designer chrome: auto | light | dark
+  // chrome defaults to the widgentic palette (contrast-checked, both schemes);
+  // pass your own values to override; chromeCss() paints your page to match
   initialWidget, initialTheme
 });
 // → { getDraft, loadWidget, loadTheme, setReadOnly, subscribe, dispose }

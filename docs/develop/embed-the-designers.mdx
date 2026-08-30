@@ -84,11 +84,13 @@ Without a bundler, load the single-file bundle and use the elements directly:
 
 ## Theming the chrome
 
-<Note>`chrome` is available from `@widgentic/designer` 0.2.0.</Note>
+<Note>`chrome` is available from `@widgentic/designer` 0.2.0. From 0.3.0 the built-in defaults are the widgentic palette, and `CHROME_DEFAULTS` and `chromeCss` are exported.</Note>
 
 The designers paint their own UI — panels, inputs, buttons, tags, menus — through 28 `--wgd-*` custom properties, the chrome tokens (exported as `CHROME_TOKENS`). The widget preview inside them is not chrome: it follows the selected theme's `--wg-*` tokens from `@widgentic/core/theming` and is unaffected by `chrome`.
 
-`appearance` picks which built-in defaults the chrome follows. `chrome` layers your values on top of them, applied inline on the designer root, so they win over the light and dark blocks:
+By default the designers wear the **widgentic palette**, light and dark — the same colours the product uses, so an embedded designer looks like widgentic without you configuring anything. Every colour sits on the logo mark's hue, and each one is contrast-checked in both schemes: text pairs at WCAG AA (4.5:1), and the borders that identify an input, a focused tag or a banner at 3:1. Typography is deliberately *not* branded — `font`, `font-mono` and the three sizes stay system values, because a library must never default to a webfont it cannot serve.
+
+`appearance` picks which scheme's defaults the chrome follows. `chrome` layers your values on top of them, applied inline on the designer root, so they win over the light and dark blocks:
 
 ```ts
 import { createDesigner } from "@widgentic/designer";
@@ -120,10 +122,43 @@ The elements take the same map as JSON:
 | JSON highlight | `hl-key`, `hl-str`, `hl-num`, `hl-bool`, `hl-punct` | light/dark palette |
 | Typeface | `font` (labels, buttons, controls), `font-mono` (code panes, code-like values) | `system-ui, sans-serif` / `ui-monospace, monospace` |
 | Size | `font-size` (base), `font-size-sm` (compact rows), `font-size-xs` (badges, tags, meta) | `13px` / `12px` / `11px` |
-| Shape | `radius-sm`, `radius`, `radius-lg`, `gap` | `3px` / `4px` / `6px` / `16px` |
-| Elevation | `shadow` (menus) | `0 4px 14px rgba(0, 0, 0, 0.25)` |
+| Shape | `radius-sm`, `radius`, `radius-lg`, `gap` | `4px` / `6px` / `8px` / `16px` |
+| Elevation | `shadow` (menus) | `0 8px 24px -12px rgba(11, 27, 38, 0.35)` |
 
-Rules: values are CSS values; CSS-wide keywords (`inherit`, `initial`, `unset`, `revert`) are ignored — on a custom property they act on the token itself, not on what reads it — so to follow your typeface pass its variable with a fallback stack (`font: "var(--app-font, system-ui, sans-serif)"`). Unknown tokens, non-string values and unparseable attribute JSON are ignored, never thrown. With no `chrome`, nothing changes.
+### Match your page to the designers
+
+`CHROME_DEFAULTS` is not a description of the defaults — it *is* them; the injected stylesheet is generated from it. Paint your own surfaces from the same object and the two can never drift:
+
+```ts
+import { CHROME_DEFAULTS, chromeCss } from "@widgentic/designer";
+
+const style = document.createElement("style");
+style.textContent = chromeCss(CHROME_DEFAULTS, { prefix: "--app" });
+document.head.appendChild(style);
+// Your page now has --app-bg, --app-panel, --app-accent … in both schemes.
+```
+
+`chromeCss(palette, options?)` takes `prefix` (default `--wgd`), `selector` (default `:root`), `darkMediaSelector` and an optional `darkSelector` for a toggle you control. It returns a string; nothing is injected for you.
+
+### Use your own palette instead
+
+There is one default palette and no second one to fall back to — a host that wants a different look passes its own values, and `chromeCss` will render them for the surrounding page just the same:
+
+```ts
+import { chromeCss, createDesigner } from "@widgentic/designer";
+import type { ChromePalette } from "@widgentic/designer";
+
+const mine: ChromePalette = { light: { /* every token */ }, dark: { /* every token */ } };
+
+createDesigner(container, { chrome: mine.light });
+document.head.appendChild(
+  Object.assign(document.createElement("style"), { textContent: chromeCss(mine, { prefix: "--app" }) })
+);
+```
+
+Contrast is then yours to own: the thresholds the built-in palette is held to are in `chrome-contrast.test.ts` if you want the same gate.
+
+Rules: values are CSS values; CSS-wide keywords (`inherit`, `initial`, `unset`, `revert`) are ignored — on a custom property they act on the token itself, not on what reads it — so to follow your typeface pass its variable with a fallback stack (`font: "var(--app-font, system-ui, sans-serif)"`). Unknown tokens, non-string values and unparseable attribute JSON are ignored, never thrown. With no `chrome`, you get the widgentic palette.
 
 ## Helpers
 
