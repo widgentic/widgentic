@@ -6,7 +6,7 @@
   "description": "Sample host: examples/designer",
   "dependencies": {
     "@widgentic/core": "^0.1.0",
-    "@widgentic/designer": "^0.3.0",
+    "@widgentic/designer": "^0.4.1",
     "@widgentic-examples/mcp-server": "^0.0.0",
     "@widgentic-examples/shared": "^0.0.0"
   }
