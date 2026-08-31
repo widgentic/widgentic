@@ -123,7 +123,8 @@
               "develop/packages",
               "develop/render-in-your-host",
               "develop/embed-the-designers",
-              "develop/run-your-own-server"
+              "develop/run-your-own-server",
+              "develop/self-hosting"
             ]
           },
           {
@@ -166,7 +167,9 @@
               "reference/api/designer",
               "reference/api/mcp",
               "reference/api/mcp-sdk",
+              "reference/api/mcp-authoring",
               "reference/api/mcp-store",
+              "reference/api/mcp-store-sqlite",
               "reference/api/mcp-store-cosmos",
               "reference/api/mcp-secrets",
               "reference/api/mcp-secrets-keyvault"

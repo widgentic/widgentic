@@ -1,0 +1,93 @@
+---
+title: "Self-hosting"
+description: "Run your own widgentic — an authoring app and a per-principal MCP endpoint over one SQLite file — with docker compose, no cloud account and no identity provider."
+---
+
+The repository ships a complete self-hosted deployment in
+[`examples/docker`](https://github.com/widgentic/widgentic/tree/main/examples/docker):
+one container image, two services, one database file.
+
+```sh
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))" > kek.txt && chmod 600 kek.txt
+docker compose up --build
+```
+
+- **`web`** (port 8080) — the authoring app: the widget, theme, schema and
+  action designers over the published authoring surface
+  (`@widgentic/mcp/authoring`), plus write-only secrets and API keys.
+- **`mcp`** (port 8081) — the Streamable HTTP MCP endpoint at `/mcp`. Mint a
+  key under **Keys** and connect any MCP host with an `x-api-key` header (or
+  `?key=` where the host cannot send headers).
+
+An entry you save in the app is served on the MCP endpoint's next tool call —
+same file, no cache, no restart. The store is
+[`createSqliteStore`](/develop/run-your-own-server#sqlite): SQLite compiled
+into the Node runtime, so the whole deployment has no runtime dependency to
+operate.
+
+## The trust shape
+
+The two services mirror the hosted product's split:
+
+| | `web` | `mcp` |
+|---|---|---|
+| store handle | writable | **read-only** (by the type it holds) |
+| authorized by | the deployment's identity (below) | API keys, resolved per request |
+| an API key here | refused, `401 KEY_NOT_A_SESSION` | is the access model |
+| unknown caller | refused | served the built-in catalog, never an error |
+
+## Identity without an identity provider
+
+By default the deployment serves **one principal with no sign-in**. That
+mode belongs on localhost or a trusted network — treat the app like any
+admin panel without a login.
+
+Multi-user comes from the auth proxy you already run, not from widgentic:
+
+```yaml
+environment:
+  WIDGENTIC_TRUSTED_USER_HEADER: x-forwarded-user
+```
+
+Each verified header value (from oauth2-proxy, Cloudflare Access, Authelia,
+Tailscale Serve, …) becomes its own account, stable across restarts. The
+header is **never read while the variable is unset**, so a spoofed header
+changes nothing; once set the app **fails closed** — a request without the
+header is refused rather than served the default account. Your proxy must
+strip the header from inbound client requests.
+
+## Secrets and key custody
+
+Secret values are envelope-encrypted at rest; the database file holds
+ciphertext and key digests only. The key-encryption key is yours to supply —
+generated once, handed to both services as a mounted file
+(`WIDGENTIC_KEK_FILE`, the compose file uses a docker secret) or the
+`WIDGENTIC_KEK` variable, and never generated at boot: a per-boot key would
+write records nothing can read back. With no KEK the Secrets section is off
+and everything else works.
+
+Name the trade honestly: here the KEK lives in the process, which is weaker
+custody than the hosted product's, where the key sits in a managed vault and
+no process ever holds it. Whoever can read your KEK material can decrypt
+every secret this deployment stores, and losing it makes them unreadable
+with no recovery. If your threat model needs vault custody, the same cipher
+port takes `createKeyVaultCipher` from `@widgentic/mcp/secrets/keyvault`.
+
+## Configuration
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `WIDGENTIC_DB` | `/data/widgentic.db` | the SQLite file (keep it on a volume) |
+| `WIDGENTIC_KEK_FILE` / `WIDGENTIC_KEK` | unset | secrets KEK; unset = secrets off |
+| `WIDGENTIC_TRUSTED_USER_HEADER` | unset | multi-user via a trusted proxy header |
+| `WIDGENTIC_WEB_PORT` / `WIDGENTIC_MCP_PORT` | 8080 / 8081 | service ports |
+| `WIDGENTIC_EXECUTE_RATE` | 60 | per-principal executions and test calls per minute |
+
+## What this deployment is not
+
+A single node. The SQLite adapter is deliberately a one-machine design — two
+local processes share the file through WAL, but there is no multi-replica
+story, no migration path to one, and no high availability. When you outgrow
+it, the store port is the seam: the same deployment shape runs against the
+Cosmos adapter, and the [hosted product](https://widgentic.dev) is the same
+assembly operated for you.

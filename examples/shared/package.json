@@ -1,0 +1,16 @@
+{
+  "name": "@widgentic-examples/shared",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Wiring shared by the example hosts: designer mount discipline and the authoring-API client. Palettes are never here \u2014 a page derives its own from @widgentic/designer's chromeCss(CHROME_DEFAULTS).",
+  "dependencies": {
+    "@widgentic/core": "^0.1.0",
+    "@widgentic/designer": "^0.3.0",
+    "@widgentic/mcp": "^0.1.0"
+  },
+  "exports": {
+    "./designers": "./designers.ts",
+    "./client": "./client.ts"
+  }
+}

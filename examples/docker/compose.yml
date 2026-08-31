@@ -1,0 +1,53 @@
+# Self-hosted widgentic: the authoring app (:8080) and the MCP endpoint
+# (:8081) from one image, over one SQLite file on one volume.
+#
+#   1. Generate a KEK once and keep it out of your shell history:
+#        node -e "console.log(require('crypto').randomBytes(32).toString('hex'))" > kek.txt && chmod 600 kek.txt
+#   2. docker compose up --build
+#   3. Author at http://localhost:8080/, mint a key under "Keys", and
+#      connect an agent host to http://localhost:8081/mcp with it.
+#
+# Both services read the same KEK — the app encrypts secret values, the MCP
+# endpoint decrypts them at action execution. Without a KEK everything works
+# except secrets. The KEK is weaker custody than a managed vault: whoever
+# can read kek.txt can decrypt every secret this deployment stores.
+
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    command: ["./node_modules/.bin/tsx", "web.ts"]
+    ports:
+      - "8080:8080"
+    volumes:
+      - widgentic-data:/data
+    secrets:
+      - widgentic-kek
+    environment:
+      WIDGENTIC_KEK_FILE: /run/secrets/widgentic-kek
+      # Multi-user behind an auth proxy (oauth2-proxy, Cloudflare Access,
+      # Authelia, Tailscale Serve): name the header carrying the verified
+      # user and make the proxy STRIP it from inbound client requests.
+      # Once set, requests without the header are refused (fail closed).
+      # WIDGENTIC_TRUSTED_USER_HEADER: x-forwarded-user
+
+  mcp:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8081:8081"
+    volumes:
+      - widgentic-data:/data
+    secrets:
+      - widgentic-kek
+    environment:
+      WIDGENTIC_KEK_FILE: /run/secrets/widgentic-kek
+
+volumes:
+  widgentic-data:
+
+secrets:
+  widgentic-kek:
+    file: ./kek.txt

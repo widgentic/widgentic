@@ -51,7 +51,9 @@ export const API_ENTRIES: ReadonlyArray<{ specifier: string; slug: string; pkg: 
   { specifier: "@widgentic/designer", slug: "designer", pkg: "@widgentic/designer" },
   { specifier: "@widgentic/mcp", slug: "mcp", pkg: "@widgentic/mcp" },
   { specifier: "@widgentic/mcp/sdk", slug: "mcp-sdk", pkg: "@widgentic/mcp" },
+  { specifier: "@widgentic/mcp/authoring", slug: "mcp-authoring", pkg: "@widgentic/mcp" },
   { specifier: "@widgentic/mcp/store", slug: "mcp-store", pkg: "@widgentic/mcp" },
+  { specifier: "@widgentic/mcp/store/sqlite", slug: "mcp-store-sqlite", pkg: "@widgentic/mcp" },
   { specifier: "@widgentic/mcp/store/cosmos", slug: "mcp-store-cosmos", pkg: "@widgentic/mcp" },
   { specifier: "@widgentic/mcp/secrets", slug: "mcp-secrets", pkg: "@widgentic/mcp" },
   { specifier: "@widgentic/mcp/secrets/keyvault", slug: "mcp-secrets-keyvault", pkg: "@widgentic/mcp" }
@@ -69,9 +71,9 @@ const TOOLS = [
 
 // --- MDX helpers ----------------------------------------------------------
 
-/** Prose: escape everything MDX or Markdown would interpret. */
+/** Prose: escape everything MDX or Markdown would interpret — `$` included, which the docs renderer treats as a math delimiter. */
 function md(text: string): string {
-  return text.replace(/[\\`*_{}[\]<>]/g, (match) => `\\${match}`);
+  return text.replace(/[\\`*_{}[\]<>$]/g, (match) => `\\${match}`);
 }
 
 /** Inline code with a fence longer than any backtick run inside. */

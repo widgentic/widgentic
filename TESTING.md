@@ -93,6 +93,40 @@ schemes, because Dracula is a dark theme, while the preview's widget colours
 the built-in palette is gated on; that is the theme's own trade and the demo
 says so.
 
+## Self-host example: compose smoke (`examples/docker`)
+
+The unit gate covers the SQLite adapter (the store contract plus restart,
+two-connection and whole-or-nothing cases), the authoring surface (the ported
+546-line suite) and the example's identity rules; CI builds the image. What
+only a running stack proves — two containers over one volume — is this smoke:
+
+```sh
+cd examples/docker
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))" > kek.txt && chmod 600 kek.txt
+docker compose up --build -d
+```
+
+1. Open http://localhost:8080/ — save a widget under a custom kind; under
+   Keys mint one (shown once). Exercise one refusal: save a schema, reference
+   it from a widget, delete the schema → `SCHEMA_IN_USE` naming the widget.
+2. `curl -s -X POST http://localhost:8081/mcp -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' -H "x-api-key: <key>" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_widgets","arguments":{}}}'`
+   → the widget is in the response, with no restart of either service. The
+   same call WITHOUT the key lists only built-ins.
+3. `docker compose down && docker compose up -d` → everything still resolves
+   (the volume owns the state).
+4. Restart the stack with a different `kek.txt` → widgets still serve;
+   resolving a stored secret fails with a structured error, records intact.
+
+Verified 2026-08-31 on this rig, containerized end to end (the published
+`@widgentic/mcp` predates `./authoring`, so the smoke image installed the
+packed local tarball — the documented pre-release path): both services
+healthy over one volume; save-in-app → visible on `/mcp` next call with no
+restart; anonymous degrades to built-ins; `SCHEMA_IN_USE` names the widget;
+a pasted API key gets `401 KEY_NOT_A_SESSION`; secrets list carries no
+value; both containers recreated → key, widget and secret record all
+resolve; a wrong KEK refuses resolution with `DECRYPTION_FAILED` and leaves
+the record intact (also pinned as a unit test).
+
 ## Documentation site (`docs/`)
 
 The Mintlify site at `docs.widgentic.dev` builds from `docs/` on `main`

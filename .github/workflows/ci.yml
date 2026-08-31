@@ -27,3 +27,13 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run docs:check
+  example-image:
+    # Builds the image against the PUBLISHED @widgentic/* packages and
+    # import-smokes the entries the services need, so a reader's first
+    # `docker compose up` cannot be the first execution. Deliberately RED in
+    # the window between landing a change that adds a package entry and the
+    # release that publishes it — that redness is the signal to release.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f examples/docker/Dockerfile -t widgentic-selfhost examples

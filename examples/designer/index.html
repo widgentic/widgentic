@@ -78,6 +78,8 @@
   button:hover { background: var(--host-hover); }
   button.active { background: var(--host-hover); border-color: currentColor; font-weight: 600; }
   nav { display: flex; gap: 6px; margin-right: 8px; }
+  header > span[id^="controls-"] { display: inline-flex; gap: 6px; }
+  header > span[hidden] { display: none; }
 </style>
 <body>
   <header>
@@ -85,18 +87,34 @@
     <nav>
       <button id="tab-widget" type="button">Widget designer</button>
       <button id="tab-theme" type="button">Theme designer</button>
+      <button id="tab-schema" type="button">Schema designer</button>
       <button id="tab-action" type="button">Action designer</button>
     </nav>
-    <button id="load-invoice" type="button">Load invoice</button>
-    <button id="load-xpost" type="button">Load x-post</button>
-    <button id="load-weather" type="button">Load weather</button>
-    <button id="save-theme" type="button">Save theme</button>
+    <!-- Per-tab controls: seeds belong to the widget designer; every
+         designer has the same Save-to-localStorage action, and what one
+         saves the others consume. -->
+    <span id="controls-widget">
+      <button id="load-invoice" type="button">Load invoice</button>
+      <button id="load-xpost" type="button">Load x-post</button>
+      <button id="load-weather" type="button">Load weather</button>
+      <button id="save-widget" type="button">Save widget</button>
+    </span>
+    <span id="controls-theme" hidden>
+      <button id="save-theme" type="button">Save theme</button>
+    </span>
+    <span id="controls-schema" hidden>
+      <button id="save-schema" type="button">Save schema</button>
+    </span>
+    <span id="controls-action" hidden>
+      <button id="save-action" type="button">Save action</button>
+    </span>
     <button id="chrome-toggle" type="button">Host chrome</button>
     <button id="reset" type="button">Reset all</button>
     <span id="status"></span>
   </header>
   <div id="widget-designer"></div>
   <div id="theme-designer" hidden></div>
+  <div id="schema-designer" hidden></div>
   <div id="action-designer" hidden></div>
   <script type="module" src="./designer.bundle.js"></script>
 </body>

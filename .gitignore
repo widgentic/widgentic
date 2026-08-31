@@ -6,3 +6,5 @@ coverage/
 .DS_Store
 designer.bundle.js
 .vscode/
+examples/docker/kek.txt
+examples/docker/.env

@@ -123,12 +123,33 @@ async function serverFor(apiKey: string | undefined) {
 
 `composeCatalog` and `composeThemes` return fresh instances every time, each with a `diagnostics` array: an invalid, oversized or built-in-shadowing entry is skipped with a diagnostic, never fatal. Keys are stored as `sha256:` digests and compared in constant time (`generateKey`, `hashKey`, `verifyKey`); a key carries `read` and optionally `execute`, fixed at creation.
 
+### SQLite
+
+`@widgentic/mcp/store/sqlite` exports `createSqliteStore(path, options?)`, a `WritableWidgetStore` over a single database file using the Node runtime's built-in SQLite — no dependency, not even an optional peer. It opens the file in WAL mode so a read-only MCP process and a writing authoring app can share it, runs every write in one transaction (a refusal leaves nothing behind), and stores key digests and secret ciphertext only. Options carry `limits`, `onDiagnostic` and a `cipher`, like the other implementations, and the returned store adds `close()`. It is a single-node design: reads and writes are synchronous statements, bounded by the store limits — past that ceiling you want a server database, not this adapter. The [self-hosting example](/develop/self-hosting) runs on it.
+
 ### Cosmos DB
 
 `@widgentic/mcp/store/cosmos` exports `createCosmosStore(options)`, a `WritableWidgetStore` over two containers: `data`, partitioned by `/principalId` with one document per entry (`profile`, `widget:<kind>`, `theme:<name>`, `schema:<name>`, `action:<name>`, `secret:<name>`), so a principal's catalog is one single-partition query; and `keys`, partitioned by `/digest`, so key resolution is a point read. It takes an `endpoint` and an Azure `credential` (managed identity in deployment) plus optional `databaseId`, `dataContainerId`, `keysContainerId`, `limits`, `cipher` and `log` — deliberately no account-key or connection-string option. Under Cosmos RBAC the serving identity can hold the read-only role, so a write from the MCP server fails at the service. `@azure/cosmos` and `@azure/identity` are optional peers of this entry.
+
+## Mount the authoring surface
+
+The write side — how people author the entries the store serves — ships as `@widgentic/mcp/authoring`. `handleAuthoringRequest({ method, path, body, context }, deps)` is a pure core over the writable store: widgets, themes, schemas and shared actions (the path names the entry; the body can never redirect it), the action test call through the guarded fetch, write-only secrets, and API keys minted once with fixed scopes. `createAuthoringHttpHandler(deps, resolveContext)` mounts it on `node:http` under `/api`.
+
+Authentication is yours: the surface begins where it ends. Your `resolveContext(req)` returns `{ principalId, subject?, label? }` however you authenticate — a session cookie, a trusted proxy header, or a fixed principal for a single-user deployment — and identity routes (linked accounts) exist only when you supply a `subject`. Two rules are the surface's own and cannot be dropped by a host: a presented widgentic API key is refused with `401 KEY_NOT_A_SESSION` before any store access (keys travel into prompt-injectable hosts and must never author), and nothing in a request can name a principal other than the one you resolved.
+
+```ts
+import { createAuthoringHttpHandler } from "@widgentic/mcp/authoring";
+
+const handle = createAuthoringHttpHandler({ store, secretsEnabled: true, limiter }, async (req) => {
+  const session = readMySession(req);
+  if (session === undefined) return undefined; // → 401 NO_PRINCIPAL
+  const principal = await store.ensurePrincipal(session.subject, session.label);
+  return { principalId: principal.id, subject: session.subject, label: session.label };
+});
+```
 
 ## Secrets
 
 Http actions reference secrets by name; `@widgentic/mcp/secrets` stores them as envelope-encrypted records. `encryptSecret(value, cipher)` generates a fresh 256-bit data key, encrypts the value with AES-256-GCM, wraps the data key through the cipher port and returns `{ alg, kekVersion, wrappedKey, iv, ciphertext, tag }`; `decryptSecret` reverses it and `rewrapSecret` moves a record to a newer key version without decrypting the value. Values are 8 to 4096 bytes.
 
-A `SecretCipher` only wraps and unwraps data keys. `createLocalCipher(hexKey)` keeps a 64-hex-character key in memory (`generateLocalKek()` makes one) — for file-store rigs and tests, never production. `@widgentic/mcp/secrets/keyvault` exports `createKeyVaultCipher({ keyId, credential, previous? })`, which wraps and unwraps through the vault's cryptographic operations so the key-encryption key never enters the process; the identity needs only the wrap/unwrap role on that key, and `previous` maps older key versions to clients until records are re-wrapped. Hand the cipher to the store's `cipher` option; without one the store refuses `putSecret` and `secretValue` with `NO_CIPHER`. Secrets are injected only at execution, never displayed, and redacted from every message the server emits.
+A `SecretCipher` only wraps and unwraps data keys. `createLocalCipher(hexKey)` keeps a 64-hex-character key in memory (`generateLocalKek()` makes one) — the cipher for development rigs and for [self-hosted single-node deployments](/develop/self-hosting), where the operator supplies the key from a mounted file or an environment variable and protects it like the credentials it encrypts: whoever can read that material can decrypt that deployment's records. Vault-backed custody stays the stronger arrangement and is what widgentic's own deployment uses. `@widgentic/mcp/secrets/keyvault` exports `createKeyVaultCipher({ keyId, credential, previous? })`, which wraps and unwraps through the vault's cryptographic operations so the key-encryption key never enters the process; the identity needs only the wrap/unwrap role on that key, and `previous` maps older key versions to clients until records are re-wrapped. Hand the cipher to the store's `cipher` option; without one the store refuses `putSecret` and `secretValue` with `NO_CIPHER`. Secrets are injected only at execution, never displayed, and redacted from every message the server emits.

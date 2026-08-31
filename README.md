@@ -34,9 +34,9 @@ All capabilities are specified under `openspec/specs/` and implemented with zero
 |---|---|---|
 | [`@widgentic/core`](packages/core) | contract, adapters, mapper, catalog, theming, templates, actions, reactive rendering | browser + Node |
 | [`@widgentic/designer`](packages/designer) | widget / theme / schema / action designers, custom elements, browser bundle | browser |
-| [`@widgentic/mcp`](packages/mcp) | tool-output convention, handlers, app template, action execution, official-SDK assembly (`/sdk`), store (`/store`, `/store/cosmos`), secrets (`/secrets`, `/secrets/keyvault`) | Node ≥ 22 |
+| [`@widgentic/mcp`](packages/mcp) | tool-output convention, handlers, app template, action execution, official-SDK assembly (`/sdk`), authoring surface (`/authoring`), store (`/store`, `/store/sqlite`, `/store/cosmos`), secrets (`/secrets`, `/secrets/keyvault`) | Node ≥ 22 |
 | `widgentic/apps` (private repository) | our MCP server and the widgentic.dev app, Azure infrastructure, runbook — consumes the published packages | — |
-| `examples/*` | sample hosts: a stdio MCP server with compiled-in widgets, a designer host page | — |
+| `examples/*` | sample hosts: a stdio MCP server with compiled-in widgets, a designer host page, a self-hosted docker deployment (authoring app + MCP endpoint over SQLite), and the shared wiring they import | — |
 
 The repository is an npm workspace: typecheck, tests and the runnable apps
 resolve `@widgentic/*` to package sources (root `tsconfig` `paths`); `npm run
@@ -164,6 +164,13 @@ read-only role. Secrets for http actions use `@widgentic/mcp/secrets`
 (envelope encryption; `./secrets/keyvault` wraps data keys in Azure Key
 Vault). How a deployment wires these together is the host's concern — ours
 is the private `widgentic/apps` repository.
+
+To run the whole thing yourself, [`examples/docker`](examples/docker/) is a
+complete self-hosted deployment: one image, an authoring app and an MCP
+endpoint over one SQLite file (`@widgentic/mcp/store/sqlite` — the Node
+runtime's own SQLite, zero dependencies), the authoring surface mounted from
+`@widgentic/mcp/authoring`, single-principal by default with multi-user via
+a trusted auth-proxy header. `docker compose up` and mint a key.
 
 ### Register with Claude Code
 

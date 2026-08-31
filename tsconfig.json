@@ -28,11 +28,17 @@
       "@widgentic/designer/browser": [
         "./packages/designer/src/browser.ts"
       ],
+      "@widgentic/mcp/authoring": [
+        "./packages/mcp/src/authoring/index.ts"
+      ],
       "@widgentic/mcp": [
         "./packages/mcp/src/index.ts"
       ],
       "@widgentic/mcp/sdk": [
         "./packages/mcp/src/server/server.ts"
+      ],
+      "@widgentic/mcp/store/sqlite": [
+        "./packages/mcp/src/store/sqlite.ts"
       ],
       "@widgentic/mcp/store": [
         "./packages/mcp/src/store/index.ts"

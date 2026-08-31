@@ -1,0 +1,6 @@
+# BuildKit reads <Dockerfile>.dockerignore beside the Dockerfile.
+**/node_modules
+**/*.log
+docker/data
+docker/kek.txt
+docker/.env

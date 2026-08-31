@@ -12,6 +12,8 @@ const src = (pkg: string, rest = "index.ts"): string => resolve(root, "packages"
  */
 const alias = [
   { find: /^@widgentic\/mcp\/sdk$/, replacement: src("mcp", "server/server.ts") },
+  { find: /^@widgentic\/mcp\/authoring$/, replacement: src("mcp", "authoring/index.ts") },
+  { find: /^@widgentic\/mcp\/store\/sqlite$/, replacement: src("mcp", "store/sqlite.ts") },
   { find: /^@widgentic\/mcp\/store\/cosmos$/, replacement: src("mcp", "store/cosmos.ts") },
   { find: /^@widgentic\/mcp\/store$/, replacement: src("mcp", "store/index.ts") },
   { find: /^@widgentic\/mcp\/secrets\/keyvault$/, replacement: src("mcp", "secrets/keyvault.ts") },
@@ -46,6 +48,10 @@ export default defineConfig({
       project("core", ["packages/core/src/**/__tests__/**/*.test.ts"], ["packages/core/src/**/__tests__/**/*.test-d.ts"]),
       project("designer", ["packages/designer/src/**/__tests__/**/*.test.ts"]),
       project("mcp", ["packages/mcp/src/**/__tests__/**/*.test.ts"], ["packages/mcp/src/**/__tests__/**/*.test-d.ts"]),
+      // Examples are a guide, not a product: this project is deliberately
+      // narrow (the identity rules, where being wrong is a security bug);
+      // the rest rides on the workspace typecheck and the TESTING.md smoke.
+      project("examples", ["examples/**/__tests__/**/*.test.ts"]),
       project("tools", ["tools/**/*.test.ts"])
     ]
   }

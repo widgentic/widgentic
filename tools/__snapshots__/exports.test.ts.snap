@@ -273,6 +273,14 @@ exports[`published export surfaces > @widgentic/mcp 1`] = `
 ]
 `;
 
+exports[`published export surfaces > @widgentic/mcp/authoring 1`] = `
+[
+  "createAuthoringHttpHandler",
+  "handleAuthoringRequest",
+  "rejectionStatus",
+]
+`;
+
 exports[`published export surfaces > @widgentic/mcp/sdk 1`] = `
 [
   "createWidgenticServer",
@@ -332,5 +340,11 @@ exports[`published export surfaces > @widgentic/mcp/store 1`] = `
 exports[`published export surfaces > @widgentic/mcp/store/cosmos 1`] = `
 [
   "createCosmosStore",
+]
+`;
+
+exports[`published export surfaces > @widgentic/mcp/store/sqlite 1`] = `
+[
+  "createSqliteStore",
 ]
 `;

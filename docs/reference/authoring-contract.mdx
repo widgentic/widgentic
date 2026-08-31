@@ -23,7 +23,7 @@ A widget is one JSON object: \{ kind, template, descriptor \}.
 
 | Field | Meaning |
 | -- | -- |
-| `kind` | String identifier matching ^\[a-zA-Z0-9.\_-\]+$; must not collide with a reserved kind. |
+| `kind` | String identifier matching ^\[a-zA-Z0-9.\_-\]+\$; must not collide with a reserved kind. |
 | `template` | A template DSL node (see rules.template). |
 | `descriptor` | REQUIRED string — what the widget shows, for agents. |
 
@@ -50,7 +50,7 @@ A shared data schema is one JSON object: \{ name, label?, description?, schema \
 
 | Field | Meaning |
 | -- | -- |
-| `name` | String identifier matching ^\[a-zA-Z0-9.\_-\]+$. |
+| `name` | String identifier matching ^\[a-zA-Z0-9.\_-\]+\$. |
 | `label` | OPTIONAL human-readable display name. |
 | `schema` | The schema object itself, in the same subset as descriptor.dataSchema (see rules.dataSchema). |
 
@@ -62,7 +62,7 @@ A theme entry is one JSON object: \{ name, label?, description?, tokens \}.
 
 | Field | Meaning |
 | -- | -- |
-| `name` | String identifier matching ^\[a-zA-Z0-9.\_-\]+$. |
+| `name` | String identifier matching ^\[a-zA-Z0-9.\_-\]+\$. |
 | `label` | OPTIONAL human-readable display name. |
 | `tokens` | Record of registry token names (bare, no --wg- prefix) and/or custom variables to string values. |
 
@@ -84,7 +84,7 @@ Every selector (and every comma-separated part) must target a .wg- class, e.g. '
 
 Selectors, properties, or values matching \[;\{\}\<\>@\\\\\] — or containing 'url(' or 'expression(' — are dropped.
 
-Property names must match ^-?\[a-zA-Z\]\[a-zA-Z-\]\*$ (letters and hyphens, optionally leading '-'); anything else is dropped.
+Property names must match ^-?\[a-zA-Z\]\[a-zA-Z-\]\*\$ (letters and hyphens, optionally leading '-'); anything else is dropped.
 
 Reference theme tokens with var(--wg-\<token\>) and custom variables with var(--wg-x-\<name\>); prefer tokens over literals so themes restyle the widget. Every registry token is always DEFINED at render time (defaults, overridden by the active theme), so bare var(--wg-\<token\>) is safe — no fallback needed. Custom x-\* variables are defined only by themes that set them, so give those a fallback: var(--wg-x-foo, \<value\>).
 
@@ -98,6 +98,6 @@ Kinds with a dataSchema fail fast with dotted paths (e.g. data.lines.0.amount); 
 
 ## Data modeling
 
-PREFER binding only properties declared in descriptor.dataSchema — schema-declared data is validated with dotted paths, so agents get correctable errors instead of silently blank output. A '$meta.x' bind path exists (reads the payload's meta) but meta is NOT covered by dataSchema validation: avoid it, or reserve it for genuinely out-of-band display like a caller-supplied heading. If the widget needs a title, declare \`title\` as an optional schema property instead. When the user names a SAVED schema, set descriptor.dataSchemaRef to its name (shape from list\_schemas) and bind those properties — do NOT reconstruct the schema inline: the copy forks the moment the user edits the shared one.
+PREFER binding only properties declared in descriptor.dataSchema — schema-declared data is validated with dotted paths, so agents get correctable errors instead of silently blank output. A '\$meta.x' bind path exists (reads the payload's meta) but meta is NOT covered by dataSchema validation: avoid it, or reserve it for genuinely out-of-band display like a caller-supplied heading. If the widget needs a title, declare \`title\` as an optional schema property instead. When the user names a SAVED schema, set descriptor.dataSchemaRef to its name (shape from list\_schemas) and bind those properties — do NOT reconstruct the schema inline: the copy forks the moment the user edits the shared one.
 
 The template node forms and safety rules are on [Template DSL](/reference/template-dsl); per-user limits on [Limits](/reference/limits).

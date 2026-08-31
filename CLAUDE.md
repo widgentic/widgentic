@@ -45,10 +45,13 @@ iterating before a release use `npm link` from a built checkout of this repo
 packages/core       @widgentic/core   contract, adapters, mapper, catalog, theming, templates, actions, reactive, shared
 packages/designer   @widgentic/designer   widget/theme/schema/action designers, custom elements, src/browser.ts → single-file bundle
 packages/mcp        @widgentic/mcp    output/ (tool-output convention), server/ (handlers, app template, actions, guarded fetch,
-                                      server.ts = createWidgenticServer behind ./sdk), store/ (./store, ./store/cosmos), secrets/ (./secrets, ./secrets/keyvault)
+                                      server.ts = createWidgenticServer behind ./sdk), authoring/ (./authoring — the hostable write surface),
+                                      store/ (./store, ./store/sqlite, ./store/cosmos), secrets/ (./secrets, ./secrets/keyvault)
 examples/mcp-server  stdio server with compiled-in widgets (`npm run mcp`); also the test-fixture package @widgentic-examples/mcp-server/widgets
 examples/designer    designer demo host (`npm run designer`; /standalone.html uses the published browser bundle)
-tools/               boundaries.test.ts, exports.test.ts (snapshots of all 16 entries), pack-check.mjs
+examples/docker      self-hosted deployment: authoring app + MCP endpoint over one SQLite volume (docker compose)
+examples/shared      wiring the example hosts import (designer mount discipline, authoring client, preview-theme merge)
+tools/               boundaries.test.ts, exports.test.ts (snapshots of all 18 entries), pack-check.mjs, docs-generate.ts
 openspec/            specs/ (current behavior per capability), changes/ (active), changes/archive/ (full history)
 ```
 
@@ -62,7 +65,7 @@ type suites run in the default gate.
 
 ```sh
 npm run typecheck      # tsc --noEmit --noUnusedLocals --noUnusedParameters (whole workspace)
-npm test               # vitest: projects core / designer / mcp / tools (run one: npx vitest run --project core)
+npm test               # vitest: projects core / designer / mcp / examples / tools (run one: npx vitest run --project core)
 ./node_modules/.bin/vitest run <path>   # the rtk shell hook rewrites `npx`; call binaries directly
 npm run build          # core → designer (+ browser bundle) → mcp, in that order (dist resolves siblings via workspace links)
 npm run pack:check     # dist-only tarballs, publint --strict, are-the-types-wrong (esm-only)

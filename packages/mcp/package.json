@@ -13,9 +13,17 @@
       "types": "./dist/server/server.d.ts",
       "default": "./dist/server/server.js"
     },
+    "./authoring": {
+      "types": "./dist/authoring/index.d.ts",
+      "default": "./dist/authoring/index.js"
+    },
     "./store": {
       "types": "./dist/store/index.d.ts",
       "default": "./dist/store/index.js"
+    },
+    "./store/sqlite": {
+      "types": "./dist/store/sqlite.d.ts",
+      "default": "./dist/store/sqlite.js"
     },
     "./store/cosmos": {
       "types": "./dist/store/cosmos.d.ts",

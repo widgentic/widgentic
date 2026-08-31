@@ -13,7 +13,7 @@ Templates are data: they select and arrange values, and the author supplies ever
 
 - **STRING** — a text node: "Hello"
 - **BIND** — \{ "bind": "path.to.value" \} renders the value as text; '.' binds the scope itself
-- **PATHS** — dot paths against the current scope (each item inside EACH). Escapes: '$meta.x' reads payload.meta; '$root.x' reads the top-level data from any depth; '$parent.x' steps out of one enclosing EACH per token ('$parent.$parent.x'); '$index' is the zero-based position in the innermost EACH
+- **PATHS** — dot paths against the current scope (each item inside EACH). Escapes: '\$meta.x' reads payload.meta; '\$root.x' reads the top-level data from any depth; '\$parent.x' steps out of one enclosing EACH per token ('\$parent.\$parent.x'); '\$index' is the zero-based position in the innermost EACH
 - **EACH** — \{ "each": "path.to.array", "template": \<node\>, "empty"?: \<node\> \} repeats template with each item as scope
 - **WHEN** — \{ "when": "path", "template": \<node\>, "else"?: \<node\> \} renders template when the value is truthy
 - **ELEMENT** — \{ "tag": "div", "attrs"?: \{ "class": "x", "src": \{ "bind": "path" \} \}, "children"?: \[\<node\>...\] \}

@@ -1,0 +1,124 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>widgentic — self-hosted authoring</title>
+<!-- The page's palette is served at /palette.css, generated from the designer
+     package's exported CHROME_DEFAULTS: page and designers match with no
+     chrome configured anywhere. No brand assets, no landing page — this is
+     the authoring surface and nothing else. -->
+<link rel="stylesheet" href="/palette.css">
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    margin: 0; padding: 16px;
+    font-family: var(--host-font);
+    font-size: 14px;
+    background: var(--host-bg);
+    color: var(--host-text);
+  }
+  header { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--host-line); }
+  header h1 { font-size: 16px; margin: 0 8px 0 0; }
+  nav { display: flex; gap: 4px; flex-wrap: wrap; }
+  button { font: inherit; padding: 4px 10px; border: 1px solid var(--host-border); border-radius: var(--host-radius); background: var(--host-panel); color: var(--host-text); cursor: pointer; }
+  button:hover { background: var(--host-hover); }
+  button.active { background: var(--host-accent-bg); border-color: var(--host-accent); }
+  button.primary { background: var(--host-accent); border-color: var(--host-accent); color: var(--host-panel); }
+  button.danger { color: var(--host-danger); border-color: var(--host-danger-line); }
+  input { font: inherit; padding: 4px 6px; border: 1px solid var(--host-border); border-radius: var(--host-radius-sm); background: var(--host-panel); color: var(--host-text); }
+  #status { color: var(--host-muted); font-size: 12.5px; margin-left: auto; }
+  #status.error { color: var(--host-danger); }
+  section[hidden] { display: none; }
+  .split { display: grid; grid-template-columns: 240px 1fr; gap: 16px; align-items: start; }
+  .list { display: flex; flex-direction: column; gap: 4px; }
+  .row { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid var(--host-border); border-radius: var(--host-radius); background: var(--host-panel); }
+  .row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+  .row.selected { border-color: var(--host-accent); }
+  .row button { padding: 1px 7px; font-size: 12px; }
+  .muted { color: var(--host-muted); }
+  .controls { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+  form.line { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
+  .reveal { border: 1px solid var(--host-accent-line); background: var(--host-accent-bg); border-radius: var(--host-radius-lg); padding: 8px 10px; margin: 8px 0; font-family: var(--host-font-mono); word-break: break-all; }
+  .reveal[hidden] { display: none; }
+</style>
+<body>
+  <header>
+    <h1>widgentic</h1>
+    <nav>
+      <button id="tab-widgets" type="button">Widgets</button>
+      <button id="tab-themes" type="button">Themes</button>
+      <button id="tab-schemas" type="button">Schemas</button>
+      <button id="tab-actions" type="button">Actions</button>
+      <button id="tab-secrets" type="button">Secrets</button>
+      <button id="tab-keys" type="button">Keys</button>
+    </nav>
+    <span id="status"></span>
+  </header>
+
+  <section id="pane-widgets">
+    <div class="controls">
+      <button id="widget-new" type="button">New widget</button>
+      <button id="widget-example" type="button">Load example</button>
+      <button id="widget-save" type="button" class="primary">Save to my catalog</button>
+    </div>
+    <div class="split">
+      <div id="widget-list" class="list"></div>
+      <div id="widget-designer"></div>
+    </div>
+  </section>
+
+  <section id="pane-themes" hidden>
+    <div class="controls">
+      <button id="theme-new" type="button">New theme</button>
+      <button id="theme-save" type="button" class="primary">Save theme</button>
+    </div>
+    <div class="split">
+      <div id="theme-list" class="list"></div>
+      <div id="theme-designer"></div>
+    </div>
+  </section>
+
+  <section id="pane-schemas" hidden>
+    <div class="controls">
+      <button id="schema-new" type="button">New schema</button>
+      <button id="schema-save" type="button" class="primary">Save schema</button>
+    </div>
+    <div class="split">
+      <div id="schema-list" class="list"></div>
+      <div id="schema-designer"></div>
+    </div>
+  </section>
+
+  <section id="pane-actions" hidden>
+    <div class="controls">
+      <button id="action-new" type="button">New action</button>
+      <button id="action-save" type="button" class="primary">Save action</button>
+    </div>
+    <div class="split">
+      <div id="action-list" class="list"></div>
+      <div id="action-designer"></div>
+    </div>
+  </section>
+
+  <section id="pane-secrets" hidden>
+    <p id="secrets-note" class="muted">Secrets are write-only: set a value, reference it from an http action by name — it is never shown again.</p>
+    <form id="secret-form" class="line">
+      <input id="secret-name" placeholder="name (e.g. weather-token)" required>
+      <input id="secret-value" placeholder="value" type="password" required>
+      <button id="secret-save" type="submit" class="primary">Save secret</button>
+    </form>
+    <div id="secret-list" class="list"></div>
+  </section>
+
+  <section id="pane-keys" hidden>
+    <p class="muted">Keys let agent hosts read your catalog over MCP. The raw key is shown exactly once; <code>execute</code> additionally lets your http actions run.</p>
+    <form id="key-form" class="line">
+      <input id="key-name" placeholder="key name (e.g. laptop)" required>
+      <label><input id="key-execute" type="checkbox"> execute</label>
+      <button id="key-create" type="submit" class="primary">Create key</button>
+    </form>
+    <div id="key-reveal" class="reveal" hidden></div>
+    <div id="key-list" class="list"></div>
+  </section>
+
+  <script type="module" src="/app.bundle.js"></script>
+</body>

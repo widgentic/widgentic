@@ -20,7 +20,9 @@ const ENTRIES = [
   "@widgentic/designer",
   "@widgentic/mcp",
   "@widgentic/mcp/sdk",
+  "@widgentic/mcp/authoring",
   "@widgentic/mcp/store",
+  "@widgentic/mcp/store/sqlite",
   "@widgentic/mcp/store/cosmos",
   "@widgentic/mcp/secrets",
   "@widgentic/mcp/secrets/keyvault"
