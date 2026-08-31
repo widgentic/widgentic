@@ -53,6 +53,9 @@ describe("action designer", () => {
     expect(bad.ok).toBe(false);
     if (!bad.ok) expect(bad.errors.length).toBeGreaterThan(0);
     expect(designer.getAction()).toEqual(refresh);
+    // Kind and Method describe one thing and share one row for http actions.
+    const kindRow = (container.querySelector(".wgd-action-kind") as HTMLElement).closest(".wgd-row") as HTMLElement;
+    expect([...kindRow.querySelectorAll("select")].length).toBe(2);
     // Switching kind through the editor replaces the definition.
     const kind = container.querySelector(".wgd-action-kind") as HTMLSelectElement;
     kind.value = "prompt";

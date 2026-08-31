@@ -102,8 +102,8 @@
   <section id="pane-secrets" hidden>
     <p id="secrets-note" class="muted">Secrets are write-only: set a value, reference it from an http action by name — it is never shown again.</p>
     <form id="secret-form" class="line">
-      <input id="secret-name" placeholder="name (e.g. weather-token)" required>
-      <input id="secret-value" placeholder="value" type="password" required>
+      <input id="secret-name" placeholder="name (e.g. weather-token)" required pattern="[a-z][a-z0-9-]{0,63}" autocapitalize="off" spellcheck="false" title="Lowercase letters, digits and dashes, starting with a letter (max 64).">
+      <input id="secret-value" placeholder="value" type="password" required title="At least 8 characters; stored encrypted, never shown again.">
       <button id="secret-save" type="submit" class="primary">Save secret</button>
     </form>
     <div id="secret-list" class="list"></div>

@@ -32,10 +32,10 @@ export function checkSecretValue(value: unknown): SecretError | undefined {
   }
   const bytes = Buffer.byteLength(value, "utf8");
   if (bytes < SECRET_VALUE_MIN_BYTES) {
-    return new SecretError("INVALID_SECRET_VALUE", `Secret value must be at least ${SECRET_VALUE_MIN_BYTES} bytes.`);
+    return new SecretError("INVALID_SECRET_VALUE", `Secret value must be at least ${SECRET_VALUE_MIN_BYTES} characters (UTF-8 bytes; anything shorter is a guessable token).`);
   }
   if (bytes > SECRET_VALUE_MAX_BYTES) {
-    return new SecretError("SECRET_TOO_LARGE", `Secret value exceeds ${SECRET_VALUE_MAX_BYTES} bytes.`);
+    return new SecretError("SECRET_TOO_LARGE", `Secret value exceeds ${SECRET_VALUE_MAX_BYTES} characters (UTF-8 bytes).`);
   }
   return undefined;
 }

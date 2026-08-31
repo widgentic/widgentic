@@ -138,7 +138,10 @@ export async function testHttpAction(
   if (!fetched.ok) {
     return { ok: false, code: "ACTION_FETCH_FAILED", message: redactText(fetched.reason, built.secretValues) };
   }
-  const folded = applyOutput(http, undefined, {}, fetched.body);
+  // The action's own contract is its output SCHEMA. `mode`/`map` are the
+  // widget BINDING's fold, authored later per widget — absent here, so the
+  // binding default (`merge`, object-shaped) must not fail a standalone test.
+  const folded = applyOutput(http, { mode: "replace" }, {}, fetched.body);
   if (!folded.ok) {
     return { ok: false, code: "INVALID_ACTION_OUTPUT", message: redactText(folded.error.message, built.secretValues), ...(folded.error.path ? { path: folded.error.path } : {}) };
   }

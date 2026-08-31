@@ -309,9 +309,9 @@ export function createDefinitionEditor(
       "wgd-select wgd-action-kind",
       (next) => commit(next === "http" ? starterHttpDefinition() : starterPromptDefinition(), "all")
     );
-    headEl.append(h("div", { class: "wgd-row" }, [label("Kind"), kind]));
     if (current.kind === "prompt") {
       headEl.append(
+        h("div", { class: "wgd-row" }, [label("Kind"), kind]),
         label("Message (literals and bound values; the user reviews and sends it)"),
         segmentsEditor(current.text, (text) => commit({ kind: "prompt", text }, "none"))
       );
@@ -320,9 +320,10 @@ export function createDefinitionEditor(
     const method = select(HTTP_METHODS.map((m) => ({ value: m })), current.method, "wgd-select", (next) =>
       commit({ ...http(), method: next as HttpActionDefinition["method"] }, "none")
     );
+    // Kind and method describe one thing — what call this is — so they share a row.
     const url = textInput(current.url, "wgd-input wgd-action-url", (next) => commit({ ...http(), url: next }, "none"), "https://…");
     headEl.append(
-      h("div", { class: "wgd-row" }, [label("Method"), method]),
+      h("div", { class: "wgd-row" }, [label("Kind"), kind, label("Method"), method]),
       h("label", { class: "wgd-field" }, [label("URL (https, fixed)"), url])
     );
   }

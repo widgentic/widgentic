@@ -275,6 +275,32 @@ describe("hardening: execute_action input and error hygiene", () => {
     expect(errorOf(await missing.run({ widget: "weather", action: "children.1", args: { city: "Oslo" }, payload }, () => jsonResponse(200, {})))).toMatchObject({ code: "UNKNOWN_SECRET", path: "headers.Authorization" });
   });
 
+  it("testHttpAction validates against the action's schema, not a widget's fold", async () => {
+    const { testHttpAction } = await import("../index.js");
+    // A GET whose contract IS an array: no binding exists at action-authoring
+    // time, so the binding-level merge default must not apply.
+    const definition = {
+      kind: "http",
+      method: "GET",
+      url: "https://api.example.com/currencies",
+      input: { type: "object", properties: { currencies: { type: "string" } } },
+      output: { type: "array", items: { type: "object" } }
+    };
+    const respondWith = (body: unknown): GuardedFetchDeps => ({
+      lookupImpl: async () => ["93.184.216.34"],
+      fetchImpl: async () => jsonResponse(200, body)
+    });
+    const ok = await testHttpAction(definition, { currencies: "COP" }, {
+      fetchDeps: respondWith([{ code: "COP" }, { code: "USD" }])
+    });
+    expect(ok).toMatchObject({ ok: true, status: 200 });
+    // The schema still guards: an object where the schema says array fails.
+    const failed = await testHttpAction(definition, { currencies: "COP" }, {
+      fetchDeps: respondWith({ nope: true })
+    });
+    expect(failed).toMatchObject({ ok: false, code: "INVALID_ACTION_OUTPUT" });
+  });
+
   it("testHttpAction validates the definition before doing anything", async () => {
     const { testHttpAction } = await import("../index.js");
     const malformed = await testHttpAction({ kind: "http" }, {}, {});
