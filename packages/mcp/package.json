@@ -1,6 +1,6 @@
 {
   "name": "@widgentic/mcp",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Host the widgentic engine over MCP: tool-output convention, handlers, app template, action execution, official-SDK assembly, per-principal store and secrets.",
   "license": "MIT",
   "type": "module",
@@ -99,6 +99,6 @@
     }
   },
   "devDependencies": {
-    "@widgentic/designer": "^0.3.0"
+    "@widgentic/designer": "^0.4.1"
   }
 }
