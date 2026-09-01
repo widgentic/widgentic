@@ -17,7 +17,7 @@
     "@widgentic-examples/mcp-server": "file:../mcp-server",
     "@widgentic-examples/shared": "file:../shared",
     "@widgentic/core": "^0.1.0",
-    "@widgentic/designer": "^0.4.1",
+    "@widgentic/designer": "^0.6.0",
     "@widgentic/mcp": "^0.5.0",
     "esbuild": "0.28.1",
     "tsx": "4.23.1",
