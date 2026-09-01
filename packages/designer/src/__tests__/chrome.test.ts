@@ -13,6 +13,7 @@ import {
   CHROME_DEFAULTS,
   CHROME_TOKENS,
   chromeCss,
+  chromeReferences,
   createActionDesigner,
   createDesigner,
   createSchemaDesigner,
@@ -306,5 +307,75 @@ describe("chrome stylesheet literals", () => {
       expect(value).toMatch(/^(var\(--wgd-shadow\)|none)$/);
     }
     expect(rules).toMatch(/\.wgd-root \{ display: flex; gap: var\(--wgd-gap\);/);
+  });
+});
+
+describe("chromeReferences — the reference map is derived, not written", () => {
+  it("maps every documented token to a reference under the default and a custom prefix", () => {
+    const defaults = chromeReferences();
+    const custom = chromeReferences("--brand");
+    for (const token of CHROME_TOKENS) {
+      expect(defaults[token]).toBe(`var(--host-${token})`);
+      expect(custom[token]).toBe(`var(--brand-${token})`);
+    }
+    expect(Object.keys(defaults)).toHaveLength(CHROME_TOKENS.length);
+  });
+
+  it("returns a fresh object per call", () => {
+    const first = chromeReferences();
+    first.bg = "mutated";
+    expect(chromeReferences().bg).toBe("var(--host-bg)");
+  });
+
+  it("passes the chrome option untouched — every entry lands inline on the root", () => {
+    const container = host();
+    createDesigner(container, { chrome: chromeReferences() });
+    const root = rootOf(container);
+    for (const token of CHROME_TOKENS) {
+      expect(root.style.getPropertyValue(`--wgd-${token}`)).toBe(`var(--host-${token})`);
+    }
+  });
+
+  it("the full-takeover recipe: derived page blocks plus the reference map", () => {
+    // The cascade itself is the browser's (happy-dom does not resolve
+    // var(); the live toggle is proven by the apps repo's browser matrix).
+    // What is assertable here is the recipe's two halves agreeing: the page
+    // declares every token under the prefix in all three blocks, and the
+    // mounted designer references exactly those properties inline.
+    const page = chromeCss(CHROME_DEFAULTS, {
+      prefix: "--host",
+      selector: ":root",
+      darkMediaSelector: ':root:not([data-theme="light"])',
+      darkSelector: ':root[data-theme="dark"]'
+    });
+    expect(page).toContain(':root[data-theme="dark"] {');
+    for (const token of CHROME_TOKENS) {
+      expect(page).toContain(`--host-${token}: ${CHROME_DEFAULTS.light[token]};`);
+    }
+    const container = host();
+    createDesigner(container, { chrome: chromeReferences() });
+    const root = rootOf(container);
+    expect(root.style.getPropertyValue("--wgd-bg")).toBe("var(--host-bg)");
+    expect(root.style.getPropertyValue("--wgd-text")).toBe("var(--host-text)");
+  });
+});
+
+describe("the recipe's documentation states the no-fallback caveat", () => {
+  // The caveat is behavioral truth a reader cannot recover from the types:
+  // an undefined page property makes the reference invalid rather than
+  // falling back to the defaults. Both documents that teach the recipe
+  // must say so and pair the map with the derived page palette.
+  // vitest runs from the workspace root; happy-dom's URL is not a file: URL,
+  // so the paths are joined rather than resolved from import.meta.url.
+  const docs = ["packages/designer/README.md", "docs/develop/embed-the-designers.mdx"];
+
+  it.each(docs)("%s pairs chromeReferences with chromeCss and warns", async (path) => {
+    const { readFile } = await import("node:fs/promises");
+    const { join } = await import("node:path");
+    const text = await readFile(join(process.cwd(), path), "utf8");
+    expect(text).toContain("chromeReferences");
+    expect(text).toContain("chromeCss");
+    expect(text.toLowerCase()).toContain("does not fall back");
+    expect(text).toContain("computed-value time");
   });
 });

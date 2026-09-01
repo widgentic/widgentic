@@ -199,6 +199,7 @@ exports[`published export surfaces > @widgentic/designer 1`] = `
   "checkSchemaEntry",
   "checkThemeEntry",
   "chromeCss",
+  "chromeReferences",
   "createActionDesigner",
   "createBindingEditor",
   "createDefinitionEditor",

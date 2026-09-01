@@ -91,4 +91,36 @@ one default palette and no second one to fall back to: a host that wants a
 different look passes its own values through `chrome`, and `chromeCss` renders
 them for the surrounding page just the same.
 
+Three shapes of the same recipe:
+
+1. **Partial override** — pass only what differs; every unmapped token keeps
+   the product default: `chrome: { accent: "var(--brand)", font: "Inter, sans-serif" }`.
+2. **Full takeover** — the page owns the palette and the designers follow it
+   by construction. Paint the page with `chromeCss` and hand the designers
+   `chromeReferences()`, the full map of `var()` references under the same
+   prefix:
+
+   ```ts
+   import { CHROME_DEFAULTS, chromeCss, chromeReferences, createDesigner } from "@widgentic/designer";
+
+   // the page: light block, system dark block, and an explicit toggle block
+   style.textContent = chromeCss(CHROME_DEFAULTS, {
+     prefix: "--host",
+     selector: ":root",
+     darkMediaSelector: ':root:not([data-theme="light"])',
+     darkSelector: ':root[data-theme="dark"]'
+   });
+   // the designers: references resolve at the page, so flipping data-theme
+   // repaints MOUNTED designers through the cascade — no remount, no event
+   createDesigner(host, { chrome: { ...chromeReferences(), font: "Inter, sans-serif" } });
+   ```
+
+3. **A scheme toggle** is nothing extra — it is the full takeover's
+   `darkSelector` block plus one attribute your page writes.
+
+One caveat, worth reading twice: a reference to a property the page never
+defines is INVALID at computed-value time — it does not fall back to the
+built-in defaults. Always pair `chromeReferences()` with `chromeCss` under the
+same prefix; use a partial override when you only want to change a few tokens.
+
 MIT © Diego Hoyos

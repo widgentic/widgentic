@@ -13,6 +13,7 @@
 import {
   CHROME_DEFAULTS,
   chromeCss,
+  chromeReferences,
   defineActionDesignerElement,
   defineDesignerElement,
   defineSchemaDesignerElement,
@@ -58,41 +59,20 @@ paletteStyle.textContent = chromeCss(CHROME_DEFAULTS, { prefix: "--host", select
 document.head.appendChild(paletteStyle);
 
 const HOST_CHROME: ChromeOptions = {
-  // Surfaces and lines
-  bg: "var(--host-bg)",
-  panel: "var(--host-panel)",
-  hover: "var(--host-hover)",
-  border: "var(--host-border)",
-  line: "var(--host-line)",
-  // Text
-  text: "var(--host-text)",
-  muted: "var(--host-muted)",
-  // Accent and danger
-  accent: "var(--host-accent)",
-  "accent-bg": "var(--host-accent-bg)",
-  "accent-line": "var(--host-accent-line)",
-  danger: "var(--host-danger)",
-  "danger-bg": "var(--host-danger-bg)",
-  "danger-line": "var(--host-danger-line)",
-  // JSON highlighting
-  "hl-key": "var(--host-hl-key)",
-  "hl-str": "var(--host-hl-str)",
-  "hl-num": "var(--host-hl-num)",
-  "hl-bool": "var(--host-hl-bool)",
-  "hl-punct": "var(--host-hl-punct)",
-  // Typography: the one thing a library cannot default to, so a host with
-  // its own faces passes them with a fallback stack.
+  // The full-takeover recipe: the page paints every --host-* (above), the
+  // designers reference them — flipping [data-host-chrome] repaints mounted
+  // designers through the cascade. Entries the demo wants to differ are
+  // spread-overridden; typography is the one thing a library cannot default
+  // to, so a host with its own faces passes them with a fallback stack.
+  ...chromeReferences(),
   font: 'ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace',
   "font-mono": 'ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace',
   "font-size": "14px",
   "font-size-sm": "13px",
   "font-size-xs": "12px",
-  // Shape and elevation
   "radius-sm": "3px",
-  radius: "var(--host-radius)",
   "radius-lg": "8px",
-  gap: "24px",
-  shadow: "var(--host-shadow)"
+  gap: "24px"
 };
 let hostChrome = localStorage.getItem(CHROME_KEY) === "on";
 const chromeOptions = (): { chrome?: ChromeOptions } => (hostChrome ? { chrome: HOST_CHROME } : {});

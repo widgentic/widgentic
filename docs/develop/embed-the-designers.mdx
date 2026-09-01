@@ -127,7 +127,31 @@ The elements take the same map as JSON:
 
 ### Match your page to the designers
 
-`CHROME_DEFAULTS` is not a description of the defaults — it *is* them; the injected stylesheet is generated from it. Paint your own surfaces from the same object and the two can never drift:
+`CHROME_DEFAULTS` is not a description of the defaults — it *is* them; the injected stylesheet is generated from it. Paint your own surfaces from the same object and the two can never drift — and `chromeReferences()` is the return trip: the full `chrome` map of `var()` references under the same prefix, so the designers follow whatever your page declares. Together they are the full-takeover recipe:
+
+```ts
+import { CHROME_DEFAULTS, chromeCss, chromeReferences, createDesigner } from "@widgentic/designer";
+
+// Your page declares the palette — light, system dark, and an explicit
+// toggle block your own theme switcher drives with one root attribute.
+const style = document.createElement("style");
+style.textContent = chromeCss(CHROME_DEFAULTS, {
+  prefix: "--host",
+  selector: ":root",
+  darkMediaSelector: ':root:not([data-theme="light"])',
+  darkSelector: ':root[data-theme="dark"]'
+});
+document.head.append(style);
+
+// The designers reference those properties inline, so a scheme change
+// repaints MOUNTED designers through the cascade — no remount, no event,
+// and unsaved drafts survive. Spread-override what you want to differ.
+createDesigner(host, { chrome: { ...chromeReferences(), font: "Inter, sans-serif" } });
+```
+
+<Warning>A `var()` reference to a property your page never defines is **invalid at computed-value time** — it does not fall back to the built-in defaults. Pair `chromeReferences()` with `chromeCss` under the same prefix, and use a partial `chrome` map instead when you only want to change a few tokens (unmapped tokens keep the product defaults).</Warning>
+
+Painting the page directly from the exported object also works:
 
 ```ts
 import { CHROME_DEFAULTS, chromeCss } from "@widgentic/designer";

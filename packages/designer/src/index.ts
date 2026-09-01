@@ -9,7 +9,7 @@
  * performs no network I/O — hosts own persistence via change events.
  */
 export { createDesigner } from "./shell.js";
-export { CHROME_TOKENS, CHROME_DEFAULTS, chromeCss } from "./chrome-defaults.js";
+export { CHROME_TOKENS, CHROME_DEFAULTS, chromeCss, chromeReferences } from "./chrome-defaults.js";
 export type {
   ChromeCssOptions,
   ChromeOptions,

@@ -129,3 +129,23 @@ export function chromeCss(palette: ChromePalette, options: ChromeCssOptions = {}
   }
   return blocks.join("\n");
 }
+
+/**
+ * The full `chrome` map of `var()` references to a host page's own
+ * properties under `prefix` — the other half of `chromeCss`: paint the page
+ * with the derived palette, hand the designers these references, and the
+ * two match by construction. Because inline `var()` resolves at the host,
+ * the page's scheme handling (an explicit toggle included) reaches MOUNTED
+ * designers through the cascade — no remount, no event, no API.
+ *
+ * A reference to a property the page never defines is invalid at
+ * computed-value time; it does NOT fall back to the built-in defaults, so
+ * always pair this map with `chromeCss` under the same prefix. Override
+ * individual entries by spreading: `{ ...chromeReferences(), font: "..." }`.
+ */
+export function chromeReferences(prefix = "--host"): Record<ChromeToken, string> {
+  return Object.fromEntries(
+    CHROME_TOKENS.map((token) => [token, `var(${prefix}-${token})`])
+  ) as Record<ChromeToken, string>;
+}
+
