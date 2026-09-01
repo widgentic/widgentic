@@ -59,22 +59,21 @@ describe("in-place patching", () => {
     };
     const mount = mountWidget({ kind: "tree", data }, target);
     const nodes = [...target.querySelectorAll("li.wg-tree-node")];
-    // branches carry the attribute; the leaf episode does not
-    expect(nodes.map((n) => n.getAttribute("data-expanded"))).toEqual([
-      "true",
-      "true",
-      null
-    ]);
+    const branches = [...target.querySelectorAll("details.wg-tree-branch")];
+    // both branches are disclosures; the leaf episode is not
+    expect(nodes).toHaveLength(3);
+    expect(branches.map((b) => b.hasAttribute("open"))).toEqual([true, true]);
 
     mount.update({ kind: "tree", data, hints: { expandDepth: 1 } });
 
     const nodesAfter = [...target.querySelectorAll("li.wg-tree-node")];
-    expect(nodesAfter.map((n) => n.getAttribute("data-expanded"))).toEqual([
-      "true",
-      "false",
-      null
+    const branchesAfter = [...target.querySelectorAll("details.wg-tree-branch")];
+    expect(branchesAfter.map((b) => b.hasAttribute("open"))).toEqual([
+      true,
+      false
     ]);
     nodes.forEach((node, i) => expect(nodesAfter[i]).toBe(node));
+    branches.forEach((branch, i) => expect(branchesAfter[i]).toBe(branch));
   });
 
   it("kind change replaces the root subtree", () => {

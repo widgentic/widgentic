@@ -72,7 +72,7 @@ describe("app template native mounting", () => {
       { kind: "card", data: { title: "T", fields: { price: 9.99, photo: "https://cdn.example/p.jpg" } } },
       { kind: "table", data: [{ user: "Ada", avatar: "https://cdn.example/a.png" }] },
       { kind: "tree", data: { label: "root", children: [{ label: "leaf", children: [] }] } },
-      { kind: "custom", data: { any: ["shape", 42] } },
+      { kind: "group", data: { items: [{ kind: "card", data: { title: "A" } }] } },
       {
         kind: "invoice",
         data: (catalog.describe("invoice")?.dataExample as Record<string, unknown>) ?? {}
@@ -421,6 +421,86 @@ describe("streaming input preview", () => {
   });
 });
 
+describe("tree disclosures through the bridge", () => {
+  const data = {
+    label: "root",
+    children: [{ label: "leaf", children: [] }]
+  };
+
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("previews branches as open disclosures", async () => {
+    const t = bootTemplate();
+    t.dispatch(toolInputPartial({ widget: "tree", data, hints: { expandDepth: 0 } }));
+    await settle();
+
+    const branch = t.root().querySelector("details.wg-tree-branch");
+    expect(branch).not.toBeNull();
+    // Partial input has no meaningful collapse state — expandDepth is
+    // deliberately ignored while streaming.
+    expect(branch?.hasAttribute("open")).toBe(true);
+    expect(branch?.querySelector("summary.wg-tree-label")?.textContent).toBe("root");
+  });
+
+  it("previews a node icon as text before the label", async () => {
+    const t = bootTemplate();
+    t.dispatch(
+      toolInputPartial({
+        widget: "tree",
+        data: { label: "src", icon: "\u{1F4C1}", children: [{ label: "a", children: [] }] }
+      })
+    );
+    await settle();
+
+    const summary = t.root().querySelector("summary.wg-tree-label");
+    expect(summary?.querySelector("span.wg-tree-icon")?.textContent).toBe("\u{1F4C1}");
+    expect(summary?.textContent).toBe("\u{1F4C1}src");
+  });
+
+  it("leaves a visitor's toggle alone when the result re-renders the same tree", () => {
+    const payload = { kind: "tree", data, hints: { expandDepth: 0 } };
+    const t = bootTemplate();
+    t.dispatch(toolResult({ tree: treeOf(payload) }));
+
+    const branch = t.root().querySelector("details.wg-tree-branch");
+    if (!(branch instanceof HTMLDetailsElement)) throw new Error("no branch mounted");
+    expect(branch.open).toBe(false);
+
+    branch.open = true; // the visitor opens it
+
+    // an action folds its result back and re-renders the same tree
+    t.dispatch(toolResult({ tree: treeOf(payload) }));
+
+    const after = t.root().querySelector("details.wg-tree-branch");
+    expect(after).toBe(branch); // patched, not rebuilt
+    expect(branch.open).toBe(true);
+  });
+
+  it("mounts a branch the result newly appends with its computed state", () => {
+    const t = bootTemplate();
+    t.dispatch(toolResult({ tree: treeOf({ kind: "tree", data: [data], hints: { expandDepth: 0 } }) }));
+    const first = t.root().querySelector("details.wg-tree-branch") as HTMLDetailsElement;
+    first.open = true;
+
+    t.dispatch(
+      toolResult({
+        tree: treeOf({
+          kind: "tree",
+          data: [data, { label: "second", children: [{ label: "kid", children: [] }] }],
+          hints: { expandDepth: 0 }
+        })
+      })
+    );
+
+    const branches = t.root().querySelectorAll("details.wg-tree-branch");
+    expect(branches).toHaveLength(2);
+    expect((branches[0] as HTMLDetailsElement).open).toBe(true); // visitor's
+    expect((branches[1] as HTMLDetailsElement).open).toBe(false); // computed
+  });
+});
+
 describe("preview drift pins against the real renderers", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
@@ -447,7 +527,22 @@ describe("preview drift pins against the real renderers", () => {
       name: "tree",
       payload: {
         kind: "tree",
-        data: { label: "root", children: [{ label: "leaf", children: [] }] }
+        data: {
+          label: "root",
+          icon: "\u{1F4C1}",
+          children: [{ label: "leaf", icon: "\u{1F4C4}", children: [] }]
+        }
+      }
+    },
+    {
+      // A labelless node exercises the fallback exclusion in BOTH renderers.
+      name: "tree fallback",
+      payload: {
+        kind: "tree",
+        data: {
+          icon: "\u{1F4C1}",
+          children: [{ label: "leaf", children: [] }]
+        }
       }
     },
     {
@@ -498,4 +593,47 @@ describe("preview drift pins against the real renderers", () => {
       }
     });
   }
+});
+
+describe("the preview's sanctioned divergence from the renderer", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("an image-URL icon previews as TEXT while the result renders an img", async () => {
+    // Sanctioned and pinned by name: the preview never emits images (the
+    // sandbox CSP blocks external sources and inlining runs on the RESULT),
+    // so "fixing" the preview to emit <img> would flash broken images.
+    const payload = {
+      kind: "tree",
+      data: { label: "docs", icon: "https://cdn.example/folder.png", children: [{ label: "leaf", children: [] }] }
+    };
+    const rendered = catalog.render(payload);
+    if (!rendered.ok) throw new Error("fixture failed to render");
+    const real = document.createElement("div");
+    real.innerHTML = renderToHtml(rendered.node);
+    expect(real.querySelector("img.wg-img.wg-img-icon")?.getAttribute("alt")).toBe("");
+
+    const t = bootTemplate();
+    t.dispatch(toolInputPartial({ widget: "tree", data: payload.data }));
+    await settle();
+    expect(t.root().querySelector("img")).toBeNull();
+    expect(t.root().querySelector(".wg-tree-icon")?.textContent).toBe("https://cdn.example/folder.png");
+  });
+
+  it("a deep branch previews as a disclosure with children pending, never as a leaf", async () => {
+    // The preview caps RECURSION at 12, not shape: a deeper branch keeps its
+    // details markup with an empty children list, so the result patch fills
+    // it in place instead of replacing a leaf span with a details subtree.
+    let data: Record<string, unknown> = { label: "bottom", children: [] };
+    for (let i = 0; i < 14; i++) data = { label: `n${i}`, children: [data] };
+    const t = bootTemplate();
+    t.dispatch(toolInputPartial({ widget: "tree", data }));
+    await settle();
+    const branches = t.root().querySelectorAll("details.wg-tree-branch");
+    expect(branches.length).toBeGreaterThan(0);
+    const deepest = branches[branches.length - 1];
+    expect(deepest?.querySelector("ul.wg-tree-children")?.children.length).toBe(0);
+    expect(t.root().textContent).not.toContain("bottom");
+  });
 });

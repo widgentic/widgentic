@@ -42,6 +42,8 @@ The package SHALL export `mountWidget(payload: unknown, container: Element, opti
 ### Requirement: In-place DOM patching
 `update(payload)` SHALL re-render through the catalog, diff the new `WidgetNode` tree against the previous one, and patch the DOM minimally: text changes update text nodes, attribute changes set or remove only the affected attributes, and same-shape elements SHALL keep their DOM identity across updates. A changed tag or node type SHALL replace only that subtree.
 
+The diff SHALL be taken against the PREVIOUS render tree, never against the live DOM, so an attribute the renderer emits unchanged is not rewritten and a change a VISITOR made to it in the DOM survives the patch. This is what keeps a native disclosure's expand/collapse state — a `details` element's `open` attribute — alive across an action's re-render of the same branch: unchanged branches are left alone, while a branch the new data appends mounts with its computed initial state.
+
 #### Scenario: Text update preserves element identity
 - **WHEN** a mounted table payload is updated with one changed cell value
 - **THEN** the cell SHALL show the new value
@@ -54,7 +56,7 @@ The package SHALL export `mountWidget(payload: unknown, container: Element, opti
 
 #### Scenario: Attribute change patches in place
 - **WHEN** a mounted tree payload is updated with a different `hints.expandDepth`
-- **THEN** affected nodes' `data-expanded` attributes SHALL change
+- **THEN** affected branches' `open` attributes SHALL change
 - **AND** those elements SHALL keep their DOM identity
 
 #### Scenario: Shape change replaces only the affected subtree
@@ -64,6 +66,11 @@ The package SHALL export `mountWidget(payload: unknown, container: Element, opti
 #### Scenario: Patched text is inert
 - **WHEN** an update introduces text containing `<b>markup</b>`
 - **THEN** the DOM SHALL contain that string as text content and no `<b>` element
+
+#### Scenario: A visitor's disclosure state survives an unchanged re-render
+- **WHEN** a visitor opens a tree branch the renderer emitted collapsed (or closes one it emitted open), and the SAME payload is then re-rendered through `update`
+- **THEN** the branch element SHALL keep its DOM identity and the visitor's state
+- **AND** a branch the update newly appends SHALL mount with the state its data and hints compute
 
 ### Requirement: Failed updates leave the DOM untouched
 When `update(payload)` fails contract validation or names an unknown kind, it SHALL return `{ ok: false, error }` and SHALL NOT modify the DOM or the retained tree. Rendering SHALL resume from the last good state on the next valid update.

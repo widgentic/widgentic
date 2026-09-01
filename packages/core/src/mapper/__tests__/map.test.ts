@@ -75,7 +75,7 @@ describe("mapToWidget", () => {
         { data: [{ a: 1 }, { a: 2 }] },
         { data: { name: "Ada" }, hints: { density: "compact" } },
         { data: { label: "root", children: [] }, meta: { title: "T" } },
-        { kind: "custom", data: "raw", extra: true },
+        { kind: "invoice", data: "raw", extra: true },
         { data: null }
       ];
       for (const input of inputs) {

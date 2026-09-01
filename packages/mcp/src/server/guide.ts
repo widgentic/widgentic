@@ -216,7 +216,9 @@ export function buildAuthoringGuide(): Record<string, unknown> {
           "\"gap\": \"var(--wg-spacing)\" } }.",
         selectors:
           "Every selector (and every comma-separated part) must target a " +
-          ".wg- class, e.g. '.wg-card .wg-xcard-head'.",
+          ".wg- class, e.g. '.wg-card .wg-xcard-head'. The base stylesheet " +
+          "also ships a wg-code monospace block utility (font-mono, " +
+          "surface, border) any template element can opt into via class.",
         // Derived: the guard's own character class, plus the two
         // function forms the value check rejects on top of it.
         banned:

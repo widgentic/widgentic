@@ -40,7 +40,7 @@ A widget is one JSON object: \{ kind, template, descriptor \}.
 
 ### Reserved kinds
 
-A custom kind must not collide with the built-in kinds: `card`, `table`, `tree`, `custom`, `group`.
+A custom kind must not collide with the built-in kinds: `card`, `table`, `tree`, `group`.
 
 Identifiers match `^[a-zA-Z0-9._-]+$`.
 
@@ -92,7 +92,7 @@ The full token table is on [Theme tokens](/reference/theme-tokens).
 
 descriptor.styles is \{ "\<selector\>": \{ "\<cssProperty\>": "\<value\>" \} \} — each declaration is a separate key/value pair, e.g. \{ ".wg-roster-row": \{ "display": "flex", "gap": "var(--wg-spacing)" \} \}.
 
-Every selector (and every comma-separated part) must target a .wg- class, e.g. '.wg-card .wg-xcard-head'.
+Every selector (and every comma-separated part) must target a .wg- class, e.g. '.wg-card .wg-xcard-head'. The base stylesheet also ships a wg-code monospace block utility (font-mono, surface, border) any template element can opt into via class.
 
 Selectors, properties, or values matching \[;\{\}\<\>@\\\\\] — or containing 'url(' or 'expression(' — are dropped.
 

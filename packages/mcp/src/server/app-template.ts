@@ -530,20 +530,46 @@ function previewTable(data, hints, meta) {
     }) });
   return { tag: "table", attrs: { class: "wg-table" }, children: children };
 }
+// Branches preview as OPEN disclosures: partial input has no meaningful
+// collapse state, and an open branch keeps the shape identical to the result
+// so the result patch lands on matching structure. A node icon previews as
+// text even when it is an image URL - like card fields and table cells, the
+// preview never emits images (server-side inlining runs over the result).
+function previewTreeLabel(node) {
+  if (!isObj(node)) return fmt(node);
+  if (node.label !== undefined) return fmt(node.label);
+  // The renderer's fallback excludes children and icon; mirror it or a
+  // labelless node previews its whole subtree as its own label text.
+  const rest = {};
+  for (const key in node) {
+    if (key !== "children" && key !== "icon") rest[key] = node[key];
+  }
+  return fmt(rest);
+}
 function previewTreeNode(node, depth) {
   const hasChildren = isObj(node) && Array.isArray(node.children) && node.children.length > 0;
-  const label = isObj(node) && node.label !== undefined ? fmt(node.label) : fmt(node);
-  const children = [{ tag: "span", attrs: { class: "wg-tree-label" }, children: [label] }];
-  if (hasChildren && depth < 12) {
-    children.push({ tag: "ul", attrs: { class: "wg-tree-children" },
-      children: node.children.map(function (child) {
-        return previewTreeNode(child, depth + 1);
-      }) });
+  const labelParts = [];
+  if (isObj(node) && typeof node.icon === "string") {
+    labelParts.push({ tag: "span", attrs: { class: "wg-tree-icon" }, children: [node.icon] });
   }
-  const attrs = hasChildren
-    ? { class: "wg-tree-node", "data-expanded": "true" }
-    : { class: "wg-tree-node" };
-  return { tag: "li", attrs: attrs, children: children };
+  labelParts.push(previewTreeLabel(node));
+  if (!hasChildren) {
+    return { tag: "li", attrs: { class: "wg-tree-node" }, children: [
+      { tag: "span", attrs: { class: "wg-tree-label" }, children: labelParts }
+    ] };
+  }
+  // The depth cap bounds only the RECURSION: a deep branch keeps its
+  // disclosure markup (children arrive when the result patches in), so the
+  // preview's shape stays the result's shape as far as it goes.
+  const children = depth < 12
+    ? node.children.map(function (child) { return previewTreeNode(child, depth + 1); })
+    : [];
+  return { tag: "li", attrs: { class: "wg-tree-node" }, children: [
+    { tag: "details", attrs: { class: "wg-tree-branch", open: "" }, children: [
+      { tag: "summary", attrs: { class: "wg-tree-label" }, children: labelParts },
+      { tag: "ul", attrs: { class: "wg-tree-children" }, children: children }
+    ] }
+  ] };
 }
 function previewTree(data, hints, meta) {
   const roots = Array.isArray(data) ? data : data === undefined ? [] : [data];

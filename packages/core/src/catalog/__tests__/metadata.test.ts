@@ -6,9 +6,7 @@ describe("widget metadata", () => {
   it("built-ins ship complete descriptors", () => {
     const list = createCatalog().list();
     const kinds = list.map((d) => d.kind);
-    expect(kinds).toEqual(
-      expect.arrayContaining(["card", "table", "tree", "custom"])
-    );
+    expect(kinds).toEqual(["card", "table", "tree", "group"]);
     for (const descriptor of list) {
       expect(descriptor.description.length).toBeGreaterThan(0);
       expect(descriptor.dataShape.length).toBeGreaterThan(0);

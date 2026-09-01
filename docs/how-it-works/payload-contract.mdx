@@ -18,7 +18,7 @@ Every widget in widgentic starts as one small JSON object. Adapters, agents and 
 
 | Field | Required | What it is |
 |---|---|---|
-| `kind` | yes | The widget identifier: a built-in (`card`, `table`, `tree`, `custom`, `group`) or a kind registered on the catalog. A `kind` the catalog does not know is a structured error, never a guess. |
+| `kind` | yes | The widget identifier: a built-in (`card`, `table`, `tree`, `group`) or a kind registered on the catalog. A `kind` the catalog does not know is a structured error, never a guess. |
 | `data` | yes | The body the renderer reads. Each kind documents its expected shape in its descriptor (`dataShape`, `dataExample`, optional `dataSchema`). Built-in renderers are total: an unexpected shape falls back rather than throws. |
 | `hints` | no | Renderer guidance that changes presentation without touching `data`: `columns`, `expandDepth`, `fieldFormat`, `links`, `images`, and for `group` the `layout`, `gap` and `columns` presets. |
 | `meta` | no | Chrome around the data. `title` and `subtitle` become the card header, the table caption or the tree title; the contract also reserves `meta` for source and timestamps. |

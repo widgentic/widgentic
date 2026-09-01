@@ -68,7 +68,7 @@ export const TOKEN_SPECS = {
   "font-mono": {
     default: "ui-monospace, SFMono-Regular, Menlo, monospace",
     type: "font-family",
-    use: "Monospace family for code and raw JSON (the custom kind)."
+    use: "Monospace family for the wg-code block utility."
   },
   "font-size": { default: "14px", type: "dimension", use: "Body text size." },
   "font-size-sm": { default: "12px", type: "dimension", use: "Small text: captions, stats, pills." },

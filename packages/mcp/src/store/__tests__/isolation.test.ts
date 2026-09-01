@@ -95,7 +95,7 @@ describe("per-principal isolation over the protocol", () => {
     expect(aliceKinds).not.toContain("ticket");
     expect(bobKinds).toContain("ticket");
     expect(bobKinds).not.toContain("report");
-    for (const builtin of ["card", "table", "tree", "custom"]) {
+    for (const builtin of ["card", "table", "tree", "group"]) {
       expect(aliceKinds).toContain(builtin);
       expect(bobKinds).toContain(builtin);
     }
@@ -149,7 +149,7 @@ describe("per-principal isolation over the protocol", () => {
     const store = createMemoryStore(seed());
     const stranger = await connectAs(store, "wgk_not_a_key");
     const kinds = await kindsOf(stranger);
-    expect(kinds).toEqual(expect.arrayContaining(["card", "table", "tree", "custom"]));
+    expect(kinds).toEqual(expect.arrayContaining(["card", "table", "tree", "group"]));
     expect(kinds).not.toContain("report");
     expect(kinds).not.toContain("ticket");
   });
@@ -182,6 +182,6 @@ describe("per-principal isolation over the protocol", () => {
     const kinds = await kindsOf(client);
     // The assembly assumes nothing: compiled-in extras are a host choice
     // (see examples/mcp-server), never a library default.
-    expect(kinds.sort()).toEqual(["card", "custom", "group", "table", "tree"]);
+    expect(kinds.sort()).toEqual(["card", "group", "table", "tree"]);
   });
 });

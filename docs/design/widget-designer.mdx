@@ -9,7 +9,7 @@ The widget designer is where you write a custom widget. It runs in the app at [w
 
 A widget is one JSON object, `{ kind, template, descriptor }`:
 
-- `kind` — the identifier agents render by. It must match `^[a-zA-Z0-9._-]+$` and may not collide with a built-in kind (`card`, `table`, `tree`, `custom`, `group`).
+- `kind` — the identifier agents render by. It must match `^[a-zA-Z0-9._-]+$` and may not collide with a built-in kind (`card`, `table`, `tree`, `group`).
 - `template` — one node in the [template DSL](/design/template-dsl).
 - `descriptor` — what agents read before they call: a required `description` and `dataShape`, a recommended `dataExample`, optional `hints` and `styles`, and either an inline `dataSchema` or a `dataSchemaRef` naming a [shared schema](/design/data-schemas).
 

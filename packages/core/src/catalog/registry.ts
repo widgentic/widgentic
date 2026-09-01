@@ -8,7 +8,6 @@ import { validateDataAgainstSchema } from "./schema.js";
 import { renderCard } from "./widgets/card.js";
 import { renderTable } from "./widgets/table.js";
 import { renderTree } from "./widgets/tree.js";
-import { renderCustom } from "./widgets/custom.js";
 import { checkGroupEnvelope, renderGroupContainer } from "./widgets/group.js";
 
 /**
@@ -89,7 +88,7 @@ export interface WidgetCatalog {
 
 /**
  * Create an independent catalog instance with the built-ins (`card`,
- * `table`, `tree`, `custom`) pre-registered.
+ * `table`, `tree`, `group`) pre-registered.
  */
 export function createCatalog(): WidgetCatalog {
   const renderers = new Map<WidgetKind, WidgetRenderer>();
@@ -201,7 +200,6 @@ export function createCatalog(): WidgetCatalog {
   catalog.register("card", renderCard, BUILTIN_DESCRIPTORS.card);
   catalog.register("table", renderTable, BUILTIN_DESCRIPTORS.table);
   catalog.register("tree", renderTree, BUILTIN_DESCRIPTORS.tree);
-  catalog.register("custom", renderCustom, BUILTIN_DESCRIPTORS.custom);
   // `render()` intercepts 'group' before renderer lookup, so this renderer
   // only serves direct `resolve()` callers (e.g. designer previews); it
   // delegates back through the dispatch so items render for them too.

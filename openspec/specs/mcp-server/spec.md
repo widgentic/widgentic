@@ -17,7 +17,7 @@ The package SHALL export from a `./mcp-server` entry: tool definitions as plain 
 
 #### Scenario: Listing reflects the catalog
 - **WHEN** `handleListWidgets` runs on a catalog with the built-ins and a registered `invoice` template kind
-- **THEN** parsing the result text SHALL yield descriptors for `card`, `table`, `tree`, `custom`, and `invoice`
+- **THEN** parsing the result text SHALL yield descriptors for `card`, `table`, `tree`, `group`, and `invoice`
 
 #### Scenario: Listing carries agent-usable metadata
 - **WHEN** the built-in `table` descriptor is read from the listing

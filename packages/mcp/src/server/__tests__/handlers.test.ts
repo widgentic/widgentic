@@ -110,7 +110,7 @@ describe("handleListWidgets", () => {
     expect(result.isError).toBeUndefined();
     const descriptors = JSON.parse(textOf(result)) as { kind: string }[];
     const kinds = descriptors.map((d) => d.kind);
-    for (const kind of ["card", "table", "tree", "custom", "invoice"]) {
+    for (const kind of ["card", "table", "tree", "group", "invoice"]) {
       expect(kinds).toContain(kind);
     }
   });
@@ -176,7 +176,7 @@ describe("handleRenderWidget", () => {
     const error = JSON.parse(textOf(result));
     expect(error.code).toBe("UNKNOWN_KIND");
     expect(error.path).toBe("widget");
-    expect(error.message).toContain("card, custom, group, table, tree");
+    expect(error.message).toContain("card, group, table, tree");
   });
 
   it("returns MISSING_FIELD with paths for missing inputs", () => {
@@ -404,7 +404,7 @@ describe("handleRenderWidget", () => {
       { widget: "card", data: { title: "T", fields: { price: 9.99 } } },
       { widget: "table", data: [{ a: 1, avatar: "https://cdn.example/a.png" }] },
       { widget: "tree", data: { label: "r", children: [{ label: "l" }] } },
-      { widget: "custom", data: [1, "two"] }
+      { widget: "group", data: { items: [{ kind: "card", data: { title: "T" } }] } }
     ]) {
       const result = handleRenderWidget(catalog, args);
       const tree = result.structuredContent?.tree as WidgetNode;
@@ -660,7 +660,7 @@ describe("handleRenderWidget", () => {
     const circular: Record<string, unknown> = {};
     circular.self = circular;
     const result = handleRenderWidget(catalog, {
-      widget: "custom",
+      widget: "card",
       data: circular
     });
     expect(result.isError).toBe(true);

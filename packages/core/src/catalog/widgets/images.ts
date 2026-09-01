@@ -6,7 +6,14 @@ import { isPlainObject } from "./format.js";
 /** Image presentation variants; each maps to a `wg-img-<shape>` class. */
 export type ImageShape = "avatar" | "thumb" | "hero";
 
-const SHAPES = new Set<string>(["avatar", "thumb", "hero"]);
+/**
+ * Render-only shapes extend the hintable ones: `icon` is the tree's
+ * per-node anchor and is deliberately not accepted by `hints.images`.
+ */
+export type RenderImageShape = ImageShape | "icon";
+
+const HINTABLE_SHAPES: readonly ImageShape[] = ["avatar", "thumb", "hero"];
+const SHAPES = new Set<string>(HINTABLE_SHAPES);
 
 /**
  * Decide whether a card-field / table-cell value renders as an image.
@@ -20,8 +27,8 @@ export function resolveImage(
   key: string,
   value: unknown,
   hints: Record<string, unknown> | undefined,
-  defaultShape: ImageShape
-): { src: string; shape: ImageShape } | null {
+  defaultShape: RenderImageShape
+): { src: string; shape: RenderImageShape } | null {
   if (typeof value !== "string") return null;
   const images = isPlainObject(hints?.images) ? hints.images : undefined;
   const hint = images?.[key];
@@ -37,11 +44,15 @@ export function resolveImage(
   return looksLikeImageUrl(value) ? { src: value, shape: defaultShape } : null;
 }
 
-/** The standard image element: stable classes, key as alt, lazy loading. */
+/**
+ * The standard image element: stable classes, key as alt, lazy loading.
+ * An empty `key` yields an empty `alt` — decorative images whose meaning
+ * the neighbouring text already carries.
+ */
 export function imageNode(
   key: string,
   src: string,
-  shape: ImageShape
+  shape: RenderImageShape
 ): WidgetElementNode {
   return el("img", {
     class: `wg-img wg-img-${shape}`,

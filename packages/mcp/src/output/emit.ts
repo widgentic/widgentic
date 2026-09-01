@@ -27,9 +27,8 @@ function fallbackText(payload: WidgetPayload): string {
 }
 
 /**
- * Text-only tool result for hosts that did not advertise widgentic support.
- * Deliberately the plain-text sibling of the catalog's `custom` widget:
- * predictable, inspectable, never throws.
+ * Text-only tool result for hosts that did not advertise widgentic support:
+ * a pretty-printed JSON fallback — predictable, inspectable, never throws.
  */
 export function toTextResult(payload: WidgetPayload): McpToolResult {
   return { content: [{ type: "text", text: fallbackText(payload) }] };

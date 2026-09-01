@@ -139,16 +139,50 @@ describe("tree renderer", () => {
 
   it("renders nested nodes recursively", () => {
     const output = html({ kind: "tree", data: nested });
-    expect(output).toContain(">root</");
-    expect(output).toContain(">leaf</");
+    expect(output).toContain(">root</summary>");
+    expect(output).toContain(">leaf</span>");
     expect(output.indexOf("root")).toBeLessThan(output.indexOf("leaf"));
-    expect(output).toContain('class="wg-tree-children"');
+    expect(output).toContain('<ul class="wg-tree-children">');
   });
 
-  it("marks all branches expanded by default", () => {
+  it("renders a branch as a native disclosure carrying the label", () => {
     const output = html({ kind: "tree", data: nested });
-    expect(output).not.toContain('data-expanded="false"');
-    expect(output).toContain('data-expanded="true"');
+    expect(output).toContain(
+      '<li class="wg-tree-node"><details class="wg-tree-branch" open="">' +
+        '<summary class="wg-tree-label">root</summary>'
+    );
+  });
+
+  it("opens every branch by default", () => {
+    const output = html({ kind: "tree", data: nested });
+    expect(output).toContain('<details class="wg-tree-branch" open="">');
+    expect(output).not.toContain('<details class="wg-tree-branch">');
+  });
+
+  it("excludes icon and children from the fallback even when they are all there is", () => {
+    const output = html({
+      kind: "tree",
+      data: { icon: "\u{1F4C1}", children: [{ label: "leaf", children: [] }] }
+    });
+    // The whole-node fallback would print the subtree as the label text.
+    expect(output).not.toContain("&quot;children&quot;");
+    expect(output).not.toContain("&quot;icon&quot;");
+    expect(output).toContain(">leaf</span>");
+  });
+
+  it("treats a negative expandDepth as zero, not as unlimited", () => {
+    const output = html({ kind: "tree", data: nested, hints: { expandDepth: -1 } });
+    expect(output).toContain('<details class="wg-tree-branch">');
+    expect(output).not.toContain('open=""');
+  });
+
+  it("renders hostile nesting as leaves past the depth bound, without throwing", () => {
+    let data: Record<string, unknown> = { label: "bottom", children: [] };
+    for (let i = 0; i < 5000; i++) data = { label: `n${i}`, children: [data] };
+    const output = html({ kind: "tree", data });
+    // Total: the render completes, and depth is bounded by leaf-ing out.
+    expect(output).toContain("n4999");
+    expect((output.match(/<details/g) ?? []).length).toBeLessThanOrEqual(64);
   });
 
   it("honors hints.expandDepth on branches", () => {
@@ -163,23 +197,70 @@ describe("tree renderer", () => {
       data: deep,
       hints: { expandDepth: 1 }
     });
-    const flags = [...output.matchAll(/data-expanded="(\w+)"/g)].map(
-      (m) => m[1]
-    );
-    // root (branch, depth 0) expanded; season (branch, depth 1) collapsed;
-    // episode is a leaf and carries no attribute at all.
-    expect(flags).toEqual(["true", "false"]);
+    // root (branch, depth 0) open; season (branch, depth 1) closed;
+    // episode is a leaf and renders no disclosure at all.
+    const branches = [...output.matchAll(/<details class="wg-tree-branch"( open="")?>/g)]
+      .map((m) => m[1] !== undefined);
+    expect(branches).toEqual([true, false]);
     // collapsed children remain in the markup (presentational collapse)
-    expect(output).toContain(">episode</");
+    expect(output).toContain(">episode</span>");
   });
 
-  it("leaves carry no expansion attribute", () => {
+  it("gives leaves a plain label and no disclosure", () => {
+    const output = html({ kind: "tree", data: nested });
+    expect(output).toContain(
+      '<li class="wg-tree-node"><span class="wg-tree-label">leaf</span></li>'
+    );
+    expect((output.match(/<details/g) ?? []).length).toBe(1); // root only
+  });
+
+  it("renders meta.title as a title line above the tree", () => {
     const output = html({
       kind: "tree",
-      data: { label: "root", children: [{ label: "leaf", children: [] }] }
+      data: nested,
+      meta: { title: "Regions" }
     });
-    const attributeCount = (output.match(/data-expanded/g) ?? []).length;
-    expect(attributeCount).toBe(1); // root only — leaf has none
+    expect(output).toContain(
+      '<div class="wg-tree-titled"><div class="wg-tree-title">Regions</div>' +
+        '<ul class="wg-tree">'
+    );
+    expect(html({ kind: "tree", data: nested })).not.toContain("wg-tree-title");
+  });
+
+  it("renders a safe image icon through the shared gate", () => {
+    const output = html({
+      kind: "tree",
+      data: { label: "assets", icon: "https://cdn.example/folder.png", children: [] }
+    });
+    expect(output).toContain(
+      '<span class="wg-tree-label">' +
+        '<img class="wg-img wg-img-icon" src="https://cdn.example/folder.png" ' +
+        'alt="" loading="lazy" decoding="async">assets</span>'
+    );
+  });
+
+  it("renders a non-image icon string as text before the label", () => {
+    const output = html({
+      kind: "tree",
+      data: { label: "src", icon: "\u{1F4C1}", children: [{ label: "a", children: [] }] }
+    });
+    expect(output).toContain(
+      '<summary class="wg-tree-label">' +
+        '<span class="wg-tree-icon">\u{1F4C1}</span>src</summary>'
+    );
+    expect(output).not.toContain("<img");
+  });
+
+  it("never renders an unsafe icon source as an image", () => {
+    for (const icon of [
+      "javascript:alert(1)",
+      "https://cdn.example/extensionless",
+      "data:text/html;base64,PHN2Zz4="
+    ]) {
+      const output = html({ kind: "tree", data: { label: "n", icon, children: [] } });
+      expect(output).not.toContain("<img");
+      expect(output).toContain('<span class="wg-tree-icon">');
+    }
   });
 
   it("falls back to a JSON label for nodes without one", () => {
@@ -190,23 +271,20 @@ describe("tree renderer", () => {
     expect(output).toContain("&quot;id&quot;:7");
   });
 
+  it("excludes icon and children from the JSON fallback label", () => {
+    const output = html({
+      kind: "tree",
+      data: { id: 7, icon: "\u{1F4C1}", children: [{ label: "kid", children: [] }] }
+    });
+    expect(output).toContain("&quot;id&quot;:7");
+    expect(output).not.toContain("&quot;icon&quot;");
+    expect(output).not.toContain("&quot;children&quot;");
+    // the icon still renders in its own slot
+    expect(output).toContain('<span class="wg-tree-icon">\u{1F4C1}</span>');
+  });
+
   it("is total: primitive data renders without throwing", () => {
-    expect(html({ kind: "tree", data: "leafless" })).toContain(">leafless</");
-  });
-});
-
-describe("custom renderer", () => {
-  it("renders pretty-printed JSON in a pre block", () => {
-    const output = html({ kind: "custom", data: { any: ["shape"] } });
-    expect(output).toContain('<pre class="wg-custom">');
-    expect(output).toContain("&quot;any&quot;: [");
-  });
-
-  it("falls back to String(data) when serialization fails", () => {
-    const circular: Record<string, unknown> = {};
-    circular.self = circular;
-    const output = html({ kind: "custom", data: circular });
-    expect(output).toContain("[object Object]");
+    expect(html({ kind: "tree", data: "leafless" })).toContain(">leafless</span>");
   });
 });
 
@@ -289,7 +367,7 @@ describe("render trees are pure data", () => {
       { kind: "card", data: { title: "T", fields: { k: "v" } } },
       { kind: "table", data: [{ a: 1 }, { b: 2 }] },
       { kind: "tree", data: { label: "r", children: [{ label: "l" }] } },
-      { kind: "custom", data: [1, "two", null] }
+      { kind: "tree", data: { label: "r", icon: "\u{1F4C1}", children: [] } }
     ];
     for (const payload of payloads) {
       const tree = node(payload);

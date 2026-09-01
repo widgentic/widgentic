@@ -2,12 +2,13 @@ import { describe, it, expect } from "vitest";
 import { createCatalog, DuplicateKindError, el } from "../index.js";
 
 describe("createCatalog", () => {
-  it("pre-registers the built-ins", () => {
-    const kinds = createCatalog().kinds();
-    expect(kinds).toContain("card");
-    expect(kinds).toContain("table");
-    expect(kinds).toContain("tree");
-    expect(kinds).toContain("custom");
+  it("pre-registers exactly the four built-ins", () => {
+    expect(createCatalog().kinds().sort()).toEqual([
+      "card",
+      "group",
+      "table",
+      "tree"
+    ]);
   });
 
   it("instances are independent", () => {
@@ -79,7 +80,7 @@ describe("render", () => {
       { kind: "card", data: { title: "T" } },
       { kind: "table", data: [{ a: 1 }] },
       { kind: "tree", data: { label: "root", children: [] } },
-      { kind: "custom", data: { any: "shape" } }
+      { kind: "group", data: { items: [{ kind: "card", data: { title: "T" } }] } }
     ];
     for (const payload of payloads) {
       const result = catalog.render(payload);

@@ -34,9 +34,13 @@ ${THEME_TOKENS.map((token) => `  --wg-${token}: ${TOKEN_DEFAULTS[token]};`).join
  * token defaults table, so the light theme lives in exactly one place and
  * every visual knob is overridable by a theme.
  */
+// One em-box for both icon forms, so an emoji and an image align on the
+// same slot by construction rather than by two literals kept equal.
+const ICON_BOX = "1.25em";
+
 export const baseStylesheet = `
 ${tokenDefaultsBlock}
-.wg-card, .wg-table, .wg-tree, .wg-custom, .wg-template {
+.wg-card, .wg-table, .wg-tree, .wg-code, .wg-template {
   font-family: ${v("font-family")};
   font-size: ${v("font-size")};
   line-height: ${v("line-height")};
@@ -105,10 +109,44 @@ ${tokenDefaultsBlock}
 .wg-tree-node {
   padding: ${v("spacing-sm")} 0;
 }
-.wg-tree-node[data-expanded="false"] > .wg-tree-children {
+.wg-tree-label {
+  display: flex;
+  align-items: center;
+  gap: ${v("spacing-sm")};
+}
+.wg-tree-branch > .wg-tree-label {
+  cursor: pointer;
+  list-style: none;
+}
+.wg-tree-branch > .wg-tree-label::-webkit-details-marker {
   display: none;
 }
-.wg-custom {
+.wg-tree-branch > .wg-tree-label::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 0;
+  height: 0;
+  border-left: 0.4em solid ${v("muted")};
+  border-top: 0.3em solid transparent;
+  border-bottom: 0.3em solid transparent;
+}
+.wg-tree-branch[open] > .wg-tree-label::before {
+  transform: rotate(90deg);
+}
+.wg-tree-icon {
+  flex: 0 0 auto;
+  width: ${ICON_BOX};
+  text-align: center;
+}
+.wg-img-icon {
+  flex: 0 0 auto;
+  width: ${ICON_BOX};
+  height: ${ICON_BOX};
+  border-radius: ${v("radius-sm")};
+}
+/* Monospace block utility. No built-in emits it: it is a styling surface
+   template authors opt into, and what keeps the font-mono token consumed. */
+.wg-code {
   font-family: ${v("font-mono")};
   background: var(--wg-surface, ${v("bg")});
   border: ${v("border-width")} solid ${v("border")};

@@ -39,7 +39,7 @@ export type WidgetDescriptorInput = Omit<WidgetDescriptor, "kind">;
  * `dataExample` is asserted by tests to render successfully.
  */
 export const BUILTIN_DESCRIPTORS: Record<
-  "card" | "table" | "tree" | "custom" | "group",
+  "card" | "table" | "tree" | "group",
   WidgetDescriptorInput
 > = {
   card: {
@@ -121,31 +121,32 @@ export const BUILTIN_DESCRIPTORS: Record<
     }
   },
   tree: {
-    description: "Collapsible hierarchy of labeled nodes.",
+    description:
+      "Collapsible hierarchy of labeled nodes — a person can expand and " +
+      "collapse branches by click or keyboard.",
     dataShape:
-      "Nested `{ label, children[] }` nodes — a single root object or an array of " +
-      "them. Nodes without a usable `label` get a JSON fallback label. " +
-      "meta.title renders as a title line above the tree.",
+      "Nested `{ label, icon?, children[] }` nodes — a single root object or an " +
+      "array of them. A node with children renders as a native disclosure that " +
+      "opens and closes; leaves are plain labels. Optional `icon` is ONE string " +
+      "per node, shown before the label: a data:image/* URI or an https URL " +
+      "ending in an image extension (.png, .jpg, .svg, ...) renders as a small " +
+      "decorative image; any other string — an emoji, a glyph, an extensionless " +
+      "URL — renders as text. Nodes without a usable `label` get a JSON fallback label (which " +
+      "excludes `children` and `icon`). meta.title renders as a title line above " +
+      "the tree.",
     dataExample: {
-      label: "root",
-      children: [{ label: "leaf", children: [] }]
+      label: "src",
+      icon: "\u{1F4C1}",
+      children: [{ label: "index.ts", icon: "\u{1F4C4}", children: [] }]
     },
     hints: {
       expandDepth:
-        "number — branches at depth < value start expanded (default: " +
+        "number — branches at depth < value START expanded (default: " +
         "unlimited). Presentational only: the full subtree is always in the " +
-        "markup; `data-expanded` appears only on nodes with children, and " +
-        "the widgentic base stylesheet hides collapsed children via CSS."
+        "markup, and collapsing is the disclosure's own behavior. The value " +
+        "selects only the INITIAL state (the `open` attribute on branches); " +
+        "a visitor's own expand/collapse survives later re-renders."
     }
-  },
-  custom: {
-    description:
-      "Generic escape hatch: renders any data as pretty-printed JSON. Best " +
-      "for raw inspection and debugging — for human-legible output, reshape " +
-      "the data and use card, table, or tree instead (e.g. join values with " +
-      "their units: '24.4 °C').",
-    dataShape: "Any JSON value, rendered verbatim (value-exact, not byte-exact).",
-    dataExample: { anything: ["goes", 42] }
   },
   group: {
     description:

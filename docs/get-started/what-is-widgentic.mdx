@@ -24,7 +24,7 @@ Every widget is one normalized payload:
 
 ### A catalog of generic widgets
 
-Five kinds are built in: `card`, `table`, `tree`, `custom`, and `group`, which shows several widgets of mixed kinds in one response with layout hints. On top of them you add your own kinds as **templates**: serializable JSON that binds data into elements with `bind`, `each` and `when`. Templates are data, not code — they contain no expressions and no scripts, which is what makes them safe for untrusted authors. Themes are JSON too: a registry of `--wg-*` tokens plus your own `x-*` variables. See the [template DSL](/design/template-dsl) and [themes](/design/themes).
+Four kinds are built in: `card`, `table`, `tree`, and `group`, which shows several widgets of mixed kinds in one response with layout hints. On top of them you add your own kinds as **templates**: serializable JSON that binds data into elements with `bind`, `each` and `when`. Templates are data, not code — they contain no expressions and no scripts, which is what makes them safe for untrusted authors. Themes are JSON too: a registry of `--wg-*` tokens plus your own `x-*` variables. See the [template DSL](/design/template-dsl) and [themes](/design/themes).
 
 ### An MCP server
 

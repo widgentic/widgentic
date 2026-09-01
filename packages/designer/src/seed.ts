@@ -197,30 +197,58 @@ function builtinStarter(kind: SeedableBuiltin): Omit<WidgetDraft, "kind"> {
               each: "nodes",
               template: {
                 tag: "li",
-                attrs: { class: "wg-tree-node", "data-expanded": "true" },
+                attrs: { class: "wg-tree-node" },
                 children: [
                   {
-                    tag: "span",
-                    attrs: { class: "wg-tree-label" },
-                    children: [{ bind: "label" }]
-                  },
-                  {
-                    tag: "ul",
-                    attrs: { class: "wg-tree-children" },
+                    // The built-in's branch shape: a native disclosure whose
+                    // summary carries the label, seeded open.
+                    tag: "details",
+                    attrs: { class: "wg-tree-branch", open: "" },
                     children: [
                       {
-                        each: "children",
-                        template: {
-                          tag: "li",
-                          attrs: { class: "wg-tree-node" },
-                          children: [
-                            {
+                        tag: "summary",
+                        attrs: { class: "wg-tree-label" },
+                        children: [
+                          {
+                            when: "icon",
+                            template: {
                               tag: "span",
-                              attrs: { class: "wg-tree-label" },
-                              children: [{ bind: "label" }]
+                              attrs: { class: "wg-tree-icon" },
+                              children: [{ bind: "icon" }]
                             }
-                          ]
-                        }
+                          },
+                          { bind: "label" }
+                        ]
+                      },
+                      {
+                        tag: "ul",
+                        attrs: { class: "wg-tree-children" },
+                        children: [
+                          {
+                            each: "children",
+                            template: {
+                              tag: "li",
+                              attrs: { class: "wg-tree-node" },
+                              children: [
+                                {
+                                  tag: "span",
+                                  attrs: { class: "wg-tree-label" },
+                                  children: [
+                                    {
+                                      when: "icon",
+                                      template: {
+                                        tag: "span",
+                                        attrs: { class: "wg-tree-icon" },
+                                        children: [{ bind: "icon" }]
+                                      }
+                                    },
+                                    { bind: "label" }
+                                  ]
+                                }
+                              ]
+                            }
+                          }
+                        ]
                       }
                     ]
                   }
@@ -234,10 +262,17 @@ function builtinStarter(kind: SeedableBuiltin): Omit<WidgetDraft, "kind"> {
             "Tree seeded from the built-in: two fixed levels of labeled nodes " +
             "(templates cannot recurse; the built-in stays the choice for " +
             "arbitrary depth). Reshape the levels to your data.",
-          dataShape: "{ nodes: { label, children: { label }[] }[] }",
+          dataShape: "{ nodes: { label, icon?, children: { label, icon? }[] }[] }",
           dataExample: {
             nodes: [
-              { label: "root", children: [{ label: "leaf" }, { label: "leaf 2" }] }
+              {
+                label: "root",
+                icon: "\u{1F4C1}",
+                children: [
+                  { label: "leaf", icon: "\u{1F4C4}" },
+                  { label: "leaf 2", icon: "\u{1F4C4}" }
+                ]
+              }
             ]
           },
           dataSchema: {
@@ -251,12 +286,16 @@ function builtinStarter(kind: SeedableBuiltin): Omit<WidgetDraft, "kind"> {
                   required: ["label"],
                   properties: {
                     label: { type: "string" },
+                    icon: { type: "string" },
                     children: {
                       type: "array",
                       items: {
                         type: "object",
                         required: ["label"],
-                        properties: { label: { type: "string" } }
+                        properties: {
+                          label: { type: "string" },
+                          icon: { type: "string" }
+                        }
                       }
                     }
                   }

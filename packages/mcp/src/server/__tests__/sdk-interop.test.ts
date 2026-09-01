@@ -43,7 +43,6 @@ describe("SDK interoperability (in-memory transport, library assembly)", () => {
     const descriptors = JSON.parse(textOf(result)) as { kind: string }[];
     expect(descriptors.map((d) => d.kind).sort()).toEqual([
       "card",
-      "custom",
       "group",
       "table",
       "tree"

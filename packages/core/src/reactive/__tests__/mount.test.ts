@@ -82,10 +82,10 @@ describe("failed updates", () => {
 describe("lifecycle", () => {
   it("node() reflects the latest successful render", () => {
     const target = container();
-    const mount = mountWidget({ kind: "custom", data: 1 }, target);
+    const mount = mountWidget({ kind: "card", data: 1 }, target);
     const first = mount.node();
     expect(first).toBeDefined();
-    mount.update({ kind: "custom", data: 2 });
+    mount.update({ kind: "card", data: 2 });
     expect(mount.node()).not.toBe(first);
     expect(mount.node()).toBeDefined();
   });
@@ -107,5 +107,69 @@ describe("lifecycle", () => {
     expect(() => mount.update({ kind: "card", data: { a: 2 } })).toThrow(
       /disposed/
     );
+  });
+});
+
+describe("in-place patching preserves what a visitor changed", () => {
+  const data = { label: "root", children: [{ label: "leaf", children: [] }] };
+
+  function branchOf(target: Element): HTMLDetailsElement {
+    const branch = target.querySelector("details.wg-tree-branch");
+    if (!(branch instanceof HTMLDetailsElement)) {
+      throw new Error("tree rendered no branch");
+    }
+    return branch;
+  }
+
+  it("keeps a branch the visitor expanded when the same tree re-renders", () => {
+    const target = container();
+    const payload = { kind: "tree", data, hints: { expandDepth: 0 } };
+    const mount = mountWidget(payload, target);
+    const branch = branchOf(target);
+    expect(branch.open).toBe(false);
+
+    branch.open = true; // the visitor opens it
+
+    expect(mount.update(payload)).toEqual({ ok: true });
+    // Same element, still open: the initial state is a pure function of
+    // data + hints, so the prev-vs-next diff wrote nothing here.
+    expect(branchOf(target)).toBe(branch);
+    expect(branch.open).toBe(true);
+  });
+
+  it("keeps a branch the visitor collapsed when the same tree re-renders", () => {
+    const target = container();
+    const payload = { kind: "tree", data };
+    const mount = mountWidget(payload, target);
+    const branch = branchOf(target);
+    expect(branch.open).toBe(true);
+
+    branch.open = false; // the visitor closes it
+
+    expect(mount.update(payload)).toEqual({ ok: true });
+    expect(branchOf(target)).toBe(branch);
+    expect(branch.open).toBe(false);
+  });
+
+  it("mounts a newly appended branch with its computed initial state", () => {
+    const target = container();
+    const mount = mountWidget(
+      { kind: "tree", data: [data], hints: { expandDepth: 0 } },
+      target
+    );
+    branchOf(target).open = true;
+
+    expect(
+      mount.update({
+        kind: "tree",
+        data: [data, { label: "second", children: [{ label: "kid", children: [] }] }],
+        hints: { expandDepth: 0 }
+      })
+    ).toEqual({ ok: true });
+
+    const branches = target.querySelectorAll("details.wg-tree-branch");
+    expect(branches).toHaveLength(2);
+    expect((branches[0] as HTMLDetailsElement).open).toBe(true); // visitor's
+    expect((branches[1] as HTMLDetailsElement).open).toBe(false); // computed
   });
 });

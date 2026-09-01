@@ -44,12 +44,12 @@ describe("seedWidgetDraft", () => {
     const markers: Record<string, string[]> = {
       card: ["wg-card", "wg-card-title", "wg-card-field"],
       table: ["wg-table", "wg-table-header", "wg-table-row"],
-      tree: ["wg-tree", "wg-tree-node", "wg-tree-label"]
+      tree: ["wg-tree", "wg-tree-node", "wg-tree-branch", "wg-tree-label", "wg-tree-icon"]
     };
     const contents: Record<string, string[]> = {
       card: ["Essence Mascara", "9.99", "99"],
       table: ["Ada", "eng", "Lin", "ops"],
-      tree: ["root", "leaf", "leaf 2"]
+      tree: ["root", "leaf", "leaf 2", "\u{1F4C1}", "\u{1F4C4}"]
     };
     for (const builtin of SEEDABLE_BUILTINS) {
       const seeded = seedWidgetDraft(builtin);

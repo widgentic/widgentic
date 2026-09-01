@@ -28,7 +28,7 @@ flowchart TD
 
 ## The catalog
 
-`createCatalog()` from `@widgentic/core/catalog` returns an independent registry pre-loaded with the built-ins — `card`, `table`, `tree`, `custom` and `group` — each with a descriptor (`description`, `dataShape`, `dataExample`, supported `hints`, optional `dataSchema` and `styles`). Two kinds of extension join them:
+`createCatalog()` from `@widgentic/core/catalog` returns an independent registry pre-loaded with the built-ins — `card`, `table`, `tree` and `group` — each with a descriptor (`description`, `dataShape`, `dataExample`, supported `hints`, optional `dataSchema` and `styles`). Two kinds of extension join them:
 
 - **Code renderers**, for trusted developers: `catalog.register(kind, renderer, descriptor?)`, where the renderer is a pure function from payload to render tree.
 - **Templates**, for untrusted authors: `registerTemplate(catalog, kind, template, descriptor?)` validates a JSON template (text, `bind`, elements, `each`, `when`) and compiles it into an ordinary renderer. Interpretation is bounded by a node budget, and templates cannot carry event handlers, active-content tags or unsafe URL schemes. See [Template DSL](/design/template-dsl) and the generated [bounds](/reference/template-dsl).

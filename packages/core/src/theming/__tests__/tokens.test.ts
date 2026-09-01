@@ -87,7 +87,7 @@ describe("baseStylesheet", () => {
       ".wg-card",
       ".wg-table",
       ".wg-tree",
-      ".wg-custom",
+      ".wg-code",
       ".wg-template",
       ".wg-img",
       ".wg-img-avatar",
@@ -138,13 +138,13 @@ describe("baseStylesheet", () => {
 
   it("consumes the new density and mono tokens", () => {
     expect(baseStylesheet).toMatch(/line-height: var\(--wg-line-height,/);
-    expect(baseStylesheet).toMatch(/\.wg-custom \{[^}]*font-family: var\(--wg-font-mono,/);
+    expect(baseStylesheet).toMatch(/\.wg-code \{[^}]*font-family: var\(--wg-font-mono,/);
   });
 
   it("widget surfaces fall back from surface to bg", () => {
     // The nested chain is the back-compat guarantee: themes setting only
     // `bg` color surfaces exactly as before; `surface` overrides when set.
-    for (const cls of ["\\.wg-card", "\\.wg-table", "\\.wg-custom"]) {
+    for (const cls of ["\\.wg-card", "\\.wg-table", "\\.wg-code"]) {
       expect(baseStylesheet).toMatch(
         new RegExp(`${cls} \\{[^}]*background: var\\(--wg-surface, var\\(--wg-bg,`)
       );
@@ -198,9 +198,42 @@ describe("baseStylesheet", () => {
     }
   });
 
-  it("collapses tree children when data-expanded is false", () => {
-    expect(baseStylesheet).toContain(
-      '.wg-tree-node[data-expanded="false"] > .wg-tree-children'
+  it("styles the tree's native disclosure instead of hiding children by CSS", () => {
+    // Collapsing is the details element's own semantics — a CSS rule
+    // hiding children would fight the platform behavior.
+    expect(baseStylesheet).not.toContain("data-expanded");
+    expect(baseStylesheet).toMatch(
+      /\.wg-tree-branch > \.wg-tree-label \{[^}]*cursor: pointer/
     );
+    // one marker, ours: the platform's is suppressed on both engines
+    expect(baseStylesheet).toMatch(
+      /\.wg-tree-branch > \.wg-tree-label \{[^}]*list-style: none/
+    );
+    expect(baseStylesheet).toContain(
+      ".wg-tree-branch > .wg-tree-label::-webkit-details-marker"
+    );
+    // the chevron is token-colored and turns with the open state
+    expect(baseStylesheet).toMatch(
+      /\.wg-tree-branch > \.wg-tree-label::before \{[^}]*var\(--wg-muted,/
+    );
+    expect(baseStylesheet).toMatch(
+      /\.wg-tree-branch\[open\] > \.wg-tree-label::before \{[^}]*rotate/
+    );
+  });
+
+  it("keeps the tree's indent and hairline on the children list", () => {
+    expect(baseStylesheet).toMatch(
+      /\.wg-tree-children \{[^}]*padding-left: var\(--wg-spacing-lg,/
+    );
+    expect(baseStylesheet).toMatch(
+      /\.wg-tree-children \{[^}]*border-left: var\(--wg-border-width,/
+    );
+  });
+
+  it("sizes text and image node icons to the same em box", () => {
+    const box = (cls: string) =>
+      new RegExp(`\\${cls} \\{[^}]*width: ([0-9.]+em)`).exec(baseStylesheet)?.[1];
+    expect(box(".wg-tree-icon")).toBeDefined();
+    expect(box(".wg-img-icon")).toBe(box(".wg-tree-icon"));
   });
 });

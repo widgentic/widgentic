@@ -3,7 +3,7 @@ title: "Groups and hints"
 description: "Compose several widgets in one render with the group kind, and steer the built-in kinds with hints that never fail a render."
 ---
 
-widgentic ships five built-in kinds. Four render data directly; the fifth, `group`, composes the others, your stored custom widgets included, into one render. Hints are per-call presentation advice on top of the data, and a misaimed hint never fails a render.
+widgentic ships four built-in kinds. Three render data directly; the fourth, `group`, composes the others, your stored custom widgets included, into one render. Hints are per-call presentation advice on top of the data, and a misaimed hint never fails a render.
 
 ## The built-in kinds
 
@@ -11,8 +11,7 @@ widgentic ships five built-in kinds. Four render data directly; the fifth, `grou
 |---|---|---|
 | `card` | `{ title, subtitle, fields }`, any object, or a primitive | title, subtitle and key/value fields; other objects render each entry as a field; primitives render as the value |
 | `table` | an array of records | one row per record, one column per key in first-seen order, empty cells for missing keys; a non-array is treated as one record |
-| `tree` | nested `{ label, children[] }` nodes | a collapsible tree; nodes without a usable `label` get a JSON-snippet label |
-| `custom` | anything | pretty-printed JSON in a preformatted block |
+| `tree` | nested `{ label, icon?, children[] }` nodes | a tree whose branches are native disclosures a visitor opens and closes; an optional `icon` string renders before each label (an image URL as a small image, anything else as text); nodes without a usable `label` get a JSON-snippet label |
 | `group` | `{ items: [...] }` | each item rendered inside one layout container |
 
 These names are reserved: a stored widget may not use them. Custom widgets are covered in [Widget designer](/design/widget-designer); the payload shape in [Payload contract](/how-it-works/payload-contract).
@@ -77,7 +76,7 @@ Hints are advisory keys beside `data`. Each built-in documents the hints it supp
 
 ### Kind-specific hints
 
-`table` honors `hints.columns` as an override of column selection and order. `tree` honors `hints.expandDepth`: nodes shallower than the value are marked expanded, and only nodes with children carry the expansion attribute, so leaves are never mistaken for collapsed branches.
+`table` honors `hints.columns` as an override of column selection and order. `tree` honors `hints.expandDepth`: branches shallower than the value start open, and only nodes with children render a disclosure at all, so leaves are never mistaken for collapsed branches. The value selects the INITIAL state only — expanding and collapsing is the platform's own behavior, needs no script, and a visitor's own toggles survive an action's re-render.
 
 ## Hint notes
 

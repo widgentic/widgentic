@@ -59,7 +59,7 @@ describe("toWidgetResult", () => {
   it("degrades to text-only when the payload cannot serialize", () => {
     const circular: Record<string, unknown> = {};
     circular.self = circular;
-    const result = toWidgetResult({ kind: "custom", data: circular });
+    const result = toWidgetResult({ kind: "card", data: circular });
     expect(result.content).toHaveLength(1);
     expect(result.content[0]?.type).toBe("text");
     expect(isWidgetResult(result)).toBe(false);
@@ -93,7 +93,7 @@ describe("toTextResult", () => {
   it("never throws on circular data", () => {
     const circular: Record<string, unknown> = {};
     circular.self = circular;
-    const block = toTextResult({ kind: "custom", data: circular })
+    const block = toTextResult({ kind: "card", data: circular })
       .content[0] as McpTextContent;
     expect(block.text).toBe("[object Object]");
   });

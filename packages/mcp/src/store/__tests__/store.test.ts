@@ -247,7 +247,7 @@ describe("composition", () => {
     expect(alice.value.kinds()).not.toContain("ticket");
     expect(bob.value.kinds()).toContain("ticket");
     expect(bob.value.kinds()).not.toContain("report");
-    for (const builtin of ["card", "table", "tree", "custom"]) {
+    for (const builtin of ["card", "table", "tree", "group"]) {
       expect(alice.value.kinds()).toContain(builtin);
       expect(bob.value.kinds()).toContain(builtin);
     }
@@ -264,7 +264,7 @@ describe("composition", () => {
   it("gives the anonymous principal the built-ins only", async () => {
     const store = createMemoryStore(twoPrincipals());
     const anon = await composeCatalog(store, ANONYMOUS_PRINCIPAL.id);
-    expect(anon.value.kinds().sort()).toEqual(["card", "custom", "group", "table", "tree"]);
+    expect(anon.value.kinds().sort()).toEqual(["card", "group", "table", "tree"]);
     const themes = await composeThemes(store, ANONYMOUS_PRINCIPAL.id);
     expect(themes.value.names().sort()).toEqual(["dark", "light"]);
   });
@@ -459,7 +459,7 @@ describe("composition", () => {
 
   it("composes with no store at all", async () => {
     const { value: catalog } = await composeCatalog(undefined, "anyone");
-    expect(catalog.kinds().sort()).toEqual(["card", "custom", "group", "table", "tree"]);
+    expect(catalog.kinds().sort()).toEqual(["card", "group", "table", "tree"]);
   });
 });
 

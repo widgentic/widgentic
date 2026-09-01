@@ -1,7 +1,7 @@
 # @widgentic/core
 
 The widgentic engine: the `{ kind, data, hints?, meta? }` widget contract, data
-adapters (JSON, CSV), the mapper, the widget catalog (card, table, tree, custom,
+adapters (JSON, CSV), the mapper, the widget catalog (card, table, tree,
 group and template-registered kinds), theming (`--wg-*` tokens), template
 widgets with action bindings, and the reactive DOM renderer. Definitions,
 validation and rendering only — no designer, server or persistence code, no
