@@ -54,6 +54,27 @@ curl -s -X POST "$URL/mcp" -H 'Content-Type: application/json' \
   grep -o 'pass the NAME'   # non-empty = the steering is live
 ```
 
+The listing carries EIGHT tools: `list_widgets`, `list_schemas`,
+`list_actions`, `list_themes`, `list_theme_tokens`, `get_authoring_guide`,
+`render_widget` and `execute_action` (app-only — the SDK lists it; Apps
+hosts hide it from the model).
+
+```sh
+# 3. list_actions serves the CONTRACT, never the transport. Against a key
+#    whose principal owns an http action: FIRST the positive (the action is
+#    named — an unwired sharedActions source lists [] and would pass any
+#    absence check vacuously), THEN the absence of that action's OWN
+#    transport values (its hostname, a fixed header/query value — schema
+#    keywords like "$schema": "https://…" are legitimate content, so a
+#    blanket https:// grep can false-positive).
+curl -s -X POST "$URL/mcp" -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' -H "x-api-key: $KEY" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_actions","arguments":{}}}' \
+  > /tmp/actions.json
+grep -c '"<the action name>"' /tmp/actions.json      # 1+ = the source is wired
+grep -c '<the action's hostname>' /tmp/actions.json  # 0 = the transport stayed on the server
+```
+
 ## Designer chrome: computed-value check
 
 The designers' chrome is painted through the 28 `--wgd-*` tokens
@@ -190,6 +211,7 @@ claude mcp add widgentic -- npx tsx /path/to/widgentic/examples/mcp-server/main.
 
 Deployment entries (every vNN, production checks, claude.ai/Copilot legs against the hosted server) moved to `widgentic/apps` RUNBOOK.md on 2026-08-27; package-level entries stay here.
 
+- **Agent-visible shared actions (2026-08-31, change `agent-visible-actions`)** — `list_actions` joins the discovery tools (eighth overall) and the authoring guide gains the `sharedAction` section, closing the gap found live on v70: the template DSL bound `{ "ref": "<name>" }` while nothing told an agent what the referenced entry was, what arguments it took, or where a person imports one. The listing is the action's CONTRACT — `name`, `label?`, `description?`, `kind`, and for http the `method` and the input/output schemas — and deliberately withholds `url`, `headers` and `query`: a binding needs none of them, and a read-only key travels into prompt-injectable hosts where an author's literal header or query value (a bare token, for an author who did not know better) would otherwise be readable. The projection lives in the handler, not at each host's wiring, so no deployment can leak by forgetting; the protocol test asserts the ABSENCE of the URL, the header name and value, and the secret's name from the serialized result. Also derived rather than restated: the guide quotes `ACTION_NAME` (`^[a-z][a-z0-9-]{0,63}$`), which is STRICTER than the `SAFE_IDENTIFIER` widgets, themes and schemas use — a guide that had restated the wrong one would have taught names the store then refuses. Two adjacent gaps closed: the guide's `limits` published four caps but neither `maxSchemas` nor `maxActions`, and the Node authoring adapter awaited the host's `resolveContext` outside its try/catch, so a host whose store was unreachable got an escaped rejection (a bodyless 500 at best) instead of the surface's own structured `INTERNAL` with the trace on the log sink. Gates: typecheck clean, full suite green, build and pack:check green; the export snapshot gained exactly `LIST_ACTIONS_TOOL` and `handleListActions`. An 8-angle review on the diff then hardened it: a prompt entry carries `binds` (its text's data paths — a prompt ref takes NO input mapping, and every steering text now says so), the adapter's containment keeps a store rejection's mapped status/code instead of flattening it to 500 (the production resolver IS `ensurePrincipal`), one malformed source entry is dropped rather than failing the whole listing, and the smoke above asserts the action's PRESENCE before the absence of its own transport values — an unwired source would pass a blanket absence check vacuously, and `"$schema"` URLs false-positive a bare `https://` grep.
 - **First npm publish (2026-08-27, `@widgentic/core|designer|mcp@0.1.0`, Release workflow)** — repository transferred to the `widgentic` GitHub organization (`widgentic/widgentic`, public); the Release workflow opened and merged the Version Packages PR (0.0.0 → 0.1.0 for the linked group) and published with a bootstrap `NPM_TOKEN`. Verified from an anonymous client: all three at 0.1.0 with npm **provenance attestations**, MIT, `repository` → `widgentic/widgentic`, core with no dependencies, designer/mcp depending on core, mcp's SDK/zod/Azure clients as optional peers; `npm install @widgentic/core @widgentic/designer @widgentic/mcp` in a clean project resolves and every entry imports. Two operational lessons: the `NPM_PUBLISH` gate must be a repository **variable** (a secret of the same name reads empty and the workflow silently falls back to `pack:check` — green, but no publish); and a freshly published package can 404 from the registry document endpoint for several minutes while the search index already lists it — wait, do not assume restricted access.
 - **Claude Code 2.1.220** — graceful degradation confirmed (text results, no UI mounting by design).
 - **Linked-group release semantics (2026-08-29, change `linked-release-versions`)** — the first release after 0.1.0 carried a designer-only changeset and published `@widgentic/designer@0.2.0` while core and mcp stayed at 0.1.0; both published dependents declare `@widgentic/core: ^0.1.0`, which the unchanged core satisfies (verified on the registry). The same run rewrote `packages/mcp/package.json`'s devDependency on designer to `^0.2.0` without bumping mcp, so the published `@widgentic/mcp@0.1.0` keeps the older devDependency range — harmless, consumers never install devDeps. `package-distribution`'s "Versions move together and are attested" now records the linked semantics, the range guarantee, the highest-version rule and this manifest-without-release case; the release configuration was deliberately left alone (`linked`, not `fixed`).

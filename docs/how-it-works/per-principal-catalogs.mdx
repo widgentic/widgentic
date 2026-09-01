@@ -29,7 +29,7 @@ A store can be edited out of band, so loaded data is untrusted input. Entries ar
 
 ## Unknown keys degrade, never fail
 
-A key that resolves to no principal falls back to the anonymous catalog — the built-ins plus any entries the deployment supplies — and every tool keeps working over it. The server notes the event on stderr without the key. `list_schemas` returns an empty list for an anonymous or unknown key, and `execute_action` answers `FORBIDDEN_SCOPE`, since the anonymous principal has no `execute` scope.
+A key that resolves to no principal falls back to the anonymous catalog — the built-ins plus any entries the deployment supplies — and every tool keeps working over it. The server notes the event on stderr without the key. `list_schemas` and `list_actions` return empty lists for an anonymous or unknown key, and `execute_action` answers `FORBIDDEN_SCOPE`, since the anonymous principal has no `execute` scope.
 
 <Warning>
 A wrong or revoked key looks like "my custom widgets are missing", not like an error. When a saved widget comes back `UNKNOWN_KIND`, check the key the host is sending first.

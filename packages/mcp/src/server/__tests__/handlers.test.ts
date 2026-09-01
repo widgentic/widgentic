@@ -5,6 +5,7 @@ import {
   handleListThemeTokens,
   handleListThemes,
   GET_AUTHORING_GUIDE_TOOL,
+  LIST_ACTIONS_TOOL,
   LIST_SCHEMAS_TOOL,
   LIST_THEMES_TOOL,
   LIST_WIDGETS_TOOL,
@@ -64,7 +65,7 @@ describe("handleListThemeTokens", () => {
 
 describe("tool definitions", () => {
   it("are serializable data with the documented names", () => {
-    for (const tool of [LIST_WIDGETS_TOOL, RENDER_WIDGET_TOOL, LIST_THEME_TOKENS_TOOL, LIST_THEMES_TOOL, LIST_SCHEMAS_TOOL, GET_AUTHORING_GUIDE_TOOL]) {
+    for (const tool of [LIST_WIDGETS_TOOL, RENDER_WIDGET_TOOL, LIST_THEME_TOKENS_TOOL, LIST_THEMES_TOOL, LIST_SCHEMAS_TOOL, LIST_ACTIONS_TOOL, GET_AUTHORING_GUIDE_TOOL]) {
       expect(JSON.parse(JSON.stringify(tool))).toEqual(tool);
       expect(tool.description.length).toBeGreaterThan(0);
     }

@@ -53,7 +53,7 @@ Requires Node 22 or later (it relies on `net.BlockList`, `AbortSignal.timeout` a
 
 | Entry | What it holds | Needs | Exports |
 |---|---|---|---|
-| `@widgentic/mcp` | the tool-output convention (`toWidgetResult`, `extractWidgetPayload`, `hostSupportsWidgets`), the seven tool definitions and their SDK-free handlers, `buildAppTemplate`, action execution with the guarded fetch, the execution limiter and body cap | nothing beyond core | [mcp](/reference/api/mcp) |
+| `@widgentic/mcp` | the tool-output convention (`toWidgetResult`, `extractWidgetPayload`, `hostSupportsWidgets`), the eight tool definitions and their SDK-free handlers, `buildAppTemplate`, action execution with the guarded fetch, the execution limiter and body cap | nothing beyond core | [mcp](/reference/api/mcp) |
 | `@widgentic/mcp/sdk` | `createWidgenticServer()`, the full assembly on the official SDK | `@modelcontextprotocol/sdk`, `@modelcontextprotocol/ext-apps`, `zod` | [mcp-sdk](/reference/api/mcp-sdk) |
 | `@widgentic/mcp/store` | the per-principal store port, `createMemoryStore`, `createFileStore`, `composeCatalog`, `composeThemes`, key hashing | nothing beyond core; no network I/O | [mcp-store](/reference/api/mcp-store) |
 | `@widgentic/mcp/store/cosmos` | `createCosmosStore` | `@azure/cosmos`, `@azure/identity` | [mcp-store-cosmos](/reference/api/mcp-store-cosmos) |

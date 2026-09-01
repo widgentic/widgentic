@@ -24,7 +24,7 @@ All capabilities are specified under `openspec/specs/` and implemented with zero
 | `reactive-rendering` | `@widgentic/core/reactive` | `mountWidget` handles with in-place DOM patching (identity-preserving updates) |
 | `template-widgets` | `@widgentic/core/templates` | Serializable JSON template DSL (`bind`/`each`/`when`) — the widget-designer runtime, safe for untrusted authors |
 | `widget-theming` | `@widgentic/core/theming` | `--wg-*` token registry (colors, status, scale steps), author-defined `x-*` custom variables, named-theme registry with `extends`, a generated base stylesheet that **defines every registry token at `:root`** so custom widget styles can use bare `var(--wg-*)` safely, themes as validated JSON |
-| `mcp-server` | `@widgentic/mcp` | The Widgentic MCP server: seven tools — `list_widgets`, `list_schemas`, `list_themes`, `list_theme_tokens` and `get_authoring_guide` (discovery) + `render_widget` (validate → render → HTML + payload) — as SDK-free definitions/handlers, plus the full server assembly behind `@widgentic/mcp/sdk` (MCP SDK as optional peers) |
+| `mcp-server` | `@widgentic/mcp` | The Widgentic MCP server: eight tools — `list_widgets`, `list_schemas`, `list_actions`, `list_themes`, `list_theme_tokens` and `get_authoring_guide` (discovery) + `render_widget` (validate → render → HTML + payload) and `execute_action` (app-only) — as SDK-free definitions/handlers, plus the full server assembly behind `@widgentic/mcp/sdk` (MCP SDK as optional peers) |
 | `widget-store` | `@widgentic/mcp/store` | Per-principal widgets, themes, and shared data schemas: a persistence-agnostic port (`resolvePrincipal`/`widgets`/`themes`/`schemas`), memory + file reference implementations, hashed constant-time keys, structural limits, and request-scoped `composeCatalog`/`composeThemes` — widgets may reference a shared schema by name (`dataSchemaRef`), resolved at composition so one `person` schema serves every person widget |
 | `widget-designer` | `@widgentic/designer` | Three embeddable designers (factories + opt-in custom elements, zero deps): the **widget** designer (template tree/JSON, full descriptor, styles and hints as tree-or-JSON, dataSchema, theme selection with a token reference) and the standalone **theme** designer (tokens, custom variables, named entries, previewing host-supplied widgets) and the standalone **schema** designer (shared data-schema entries) — all with live validation and an optional read-only mode |
 
@@ -113,11 +113,12 @@ widgentic is itself an MCP server: any MCP client can discover the available wid
 
 ```bash
 npm run mcp        # stdio server
-# tools: list_widgets, list_schemas, list_themes, list_theme_tokens, render_widget, get_authoring_guide
+# tools: list_widgets, list_schemas, list_actions, list_themes, list_theme_tokens, render_widget, get_authoring_guide, execute_action
 ```
 
 - `get_authoring_guide` — the complete authoring contract for agents drafting custom widget/theme JSON: entry shapes, template DSL forms and safety rules, identifier rules, style/schema constraints, tokens, and limits — derived from the live validators. Agents draft; users import, validate, and save in the designer at [widgentic.dev](https://widgentic.dev) (registration over MCP deliberately does not exist).
 - `list_schemas` — the user's saved shared data schemas (name, label, and the schema object), served per API key. Asked for a widget built on a saved schema, agents read the shape here and reference it by name (`descriptor.dataSchemaRef`) instead of copying it inline — the copy forks the moment the user edits the shared one.
+- `list_actions` — the user's saved shared actions as their CONTRACT (name, label, kind, and for http the method and input/output schemas; a prompt's `binds`). The URL, headers and query stay on the server: a binding is `action: { "ref": "<name>" }` and needs none of them.
 - `list_theme_tokens` — the theming vocabulary: every token with its type, documented use and light default, plus ready-made presets and the value rules. Call it before building a theme.
 - `execute_action` — called by the WIDGET, not by agents (registered with `_meta.ui.visibility: ["app"]`, so Apps hosts hide it from the model): runs a bound http action server-side — the stored definition, the caller's `execute` scope, SSRF-guarded fetch, secrets injected by name, response validated — and returns the re-rendered widget.
 - `list_themes` — the server's registered themes (`name`, `label`, `tokens`); pass any name as `render_widget`'s `theme` instead of composing tokens.

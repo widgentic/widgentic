@@ -63,7 +63,12 @@ export interface AuthoringDeps {
   log?: (line: string) => void;
 }
 
-/** The node adapter's host callback: authenticate however you do, or refuse by returning undefined. */
+/**
+ * The node adapter's host callback: authenticate however you do. "Not
+ * signed in" is `undefined` (→ the surface's 401), never a throw — a
+ * throw is treated as the host FAILING (a store rejection keeps its
+ * mapped refusal; anything else answers INTERNAL and is logged).
+ */
 export type ResolvePrincipalContext = (
   req: IncomingMessage
 ) => PrincipalContext | undefined | Promise<PrincipalContext | undefined>;

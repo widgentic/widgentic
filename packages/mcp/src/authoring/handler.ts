@@ -31,6 +31,23 @@ function refusal(status: number, code: string, message: string): AuthoringRespon
   return { status, body: { error: { code, message } } };
 }
 
+/** The surface's unexpected-failure answer; adapters reuse it verbatim. */
+export function internalRefusal(): AuthoringResponse {
+  return refusal(500, "INTERNAL", "Unexpected error.");
+}
+
+/** A store rejection keeps its mapped status and code wherever it surfaces. */
+export function storeRefusal(error: unknown): AuthoringResponse | undefined {
+  return error instanceof StoreRejectionError
+    ? refusal(rejectionStatus(error.code), error.code, error.detail)
+    : undefined;
+}
+
+/** The deps' log sink with its documented stderr default — defined once. */
+export function logSink(deps: AuthoringDeps): (line: string) => void {
+  return deps.log ?? ((line: string) => console.error(line));
+}
+
 /** The store's rule → the transport's word for it. */
 export function rejectionStatus(code: string): number {
   if (code === "UNKNOWN_PRINCIPAL" || code === "UNKNOWN_KEY") return 404;
@@ -269,14 +286,11 @@ export async function handleAuthoringRequest(
 
     return refusal(404, "NOT_FOUND", "No such authoring route.");
   } catch (error) {
-    if (error instanceof StoreRejectionError) {
-      return refusal(rejectionStatus(error.code), error.code, error.detail);
-    }
+    const mapped = storeRefusal(error);
+    if (mapped !== undefined) return mapped;
     // The client gets nothing but INTERNAL; the operator gets a trace.
-    (deps.log ?? ((line: string) => console.error(line)))(
-      `widgentic authoring: unexpected failure on ${method} ${resource} — ${String(error)}`
-    );
-    return refusal(500, "INTERNAL", "Unexpected error.");
+    logSink(deps)(`widgentic authoring: unexpected failure on ${method} ${resource} — ${String(error)}`);
+    return internalRefusal();
   }
 }
 

@@ -14,7 +14,7 @@ import { seedThemeEntry, seedWidgetDraft } from "@widgentic/designer";
 import type { WidgetDraft } from "@widgentic/designer";
 import { createExecutionLimiter } from "../../server/index.js";
 import { createLocalCipher, generateLocalKek } from "../../secrets/index.js";
-import { composeCatalog, createMemoryStore, principalIdForSubject } from "../../store/index.js";
+import { composeCatalog, createMemoryStore, principalIdForSubject, StoreRejectionError } from "../../store/index.js";
 import type { MemoryStore, WritableWidgetStore } from "../../store/index.js";
 import { handleAuthoringRequest } from "../handler.js";
 import { createAuthoringHttpHandler } from "../node.js";
@@ -38,8 +38,12 @@ function makeResolver(target: WritableWidgetStore) {
   };
 }
 
-async function listen(deps: AuthoringDeps, target: WritableWidgetStore): Promise<{ server: Server; base: string }> {
-  const handle = createAuthoringHttpHandler(deps, makeResolver(target));
+async function listen(
+  deps: AuthoringDeps,
+  target: WritableWidgetStore,
+  resolve?: Parameters<typeof createAuthoringHttpHandler>[1]
+): Promise<{ server: Server; base: string }> {
+  const handle = createAuthoringHttpHandler(deps, resolve ?? makeResolver(target));
   const created = createServer((req, res) => {
     void handle(req, res).then((handled) => {
       if (!handled) res.writeHead(404).end();
@@ -585,5 +589,62 @@ describe("hardening", () => {
     const viaHttp = await fetch(`${base}/api/widgets/table`, asAlice({ method: "PUT", body: WIDGET_BODY }));
     expect(viaHttp.status).toBe(direct.status);
     expect(await viaHttp.json()).toEqual(direct.body);
+  });
+});
+
+describe("a failing host callback is contained by the adapter", () => {
+  it("answers the surface's own refusal, logs once, and lets nothing escape", async () => {
+    const lines: string[] = [];
+    // A host whose identity store is unreachable.
+    const rig = await listen({ store, log: (line) => lines.push(line) }, store, () =>
+      Promise.reject(new Error("identity store unreachable"))
+    );
+    try {
+      const res = await fetch(`${rig.base}/api/widgets`);
+      expect(res.status).toBe(500);
+      expect(await res.json()).toEqual({
+        error: { code: "INTERNAL", message: "Unexpected error." }
+      });
+      expect(lines).toHaveLength(1);
+      // The operator gets the trace; the client is told nothing about it.
+      expect(lines[0]).toContain("identity store unreachable");
+    } finally {
+      rig.server.close();
+    }
+  });
+
+  it("a store rejection thrown by the host keeps its mapped refusal, unlogged", async () => {
+    const lines: string[] = [];
+    // The same rejection raised inside the core answers its mapped code;
+    // raised during principal resolution it must answer identically.
+    const rig = await listen({ store, log: (line) => lines.push(line) }, store, () =>
+      Promise.reject(new StoreRejectionError("STORE_ERROR", "write failed."))
+    );
+    try {
+      const res = await fetch(`${rig.base}/api/widgets`);
+      expect(res.status).toBe(502);
+      expect(((await res.json()) as { error: { code: string } }).error.code).toBe("STORE_ERROR");
+      expect(lines).toEqual([]);
+    } finally {
+      rig.server.close();
+    }
+  });
+
+  it("a presented key is still refused without ever asking the host", async () => {
+    let asked = 0;
+    const rig = await listen({ store }, store, () => {
+      asked++;
+      return Promise.reject(new Error("never reached"));
+    });
+    try {
+      const res = await fetch(`${rig.base}/api/widgets`, {
+        headers: { "x-api-key": `wgk_${"a".repeat(64)}` }
+      });
+      expect(res.status).toBe(401);
+      expect(((await res.json()) as { error: { code: string } }).error.code).toBe("KEY_NOT_A_SESSION");
+      expect(asked).toBe(0);
+    } finally {
+      rig.server.close();
+    }
   });
 });

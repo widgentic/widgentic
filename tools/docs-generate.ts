@@ -26,6 +26,7 @@ import {
 import {
   EXECUTE_ACTION_TOOL,
   GET_AUTHORING_GUIDE_TOOL,
+  LIST_ACTIONS_TOOL,
   LIST_SCHEMAS_TOOL,
   LIST_THEMES_TOOL,
   LIST_THEME_TOKENS_TOOL,
@@ -62,6 +63,7 @@ export const API_ENTRIES: ReadonlyArray<{ specifier: string; slug: string; pkg: 
 const TOOLS = [
   LIST_WIDGETS_TOOL,
   LIST_SCHEMAS_TOOL,
+  LIST_ACTIONS_TOOL,
   LIST_THEMES_TOOL,
   LIST_THEME_TOKENS_TOOL,
   GET_AUTHORING_GUIDE_TOOL,
@@ -151,6 +153,8 @@ function authoringContractPage(guide: Dict): string {
   const descriptor = dict(widgetShape.descriptor, "widget.shape.descriptor");
   const shared = dict(guide.sharedSchema, "sharedSchema");
   const sharedShape = dict(shared.shape, "sharedSchema.shape");
+  const action = dict(guide.sharedAction, "sharedAction");
+  const actionShape = dict(action.shape, "sharedAction.shape");
   const theme = dict(guide.theme, "theme");
   const themeShape = dict(theme.shape, "theme.shape");
   const custom = dict(theme.customVariables, "theme.customVariables");
@@ -187,6 +191,10 @@ function authoringContractPage(guide: Dict): string {
     md(str(sharedShape.description, "sharedSchema.shape.description")),
     fields(sharedShape, "sharedSchema.shape"),
     md(str(shared.workflow, "sharedSchema.workflow")),
+    "## Shared action entry",
+    md(str(actionShape.description, "sharedAction.shape.description")),
+    fields(actionShape, "sharedAction.shape"),
+    md(str(action.workflow, "sharedAction.workflow")),
     "## Theme entry",
     md(str(themeShape.description, "theme.shape.description")),
     fields(themeShape, "theme.shape"),
@@ -236,6 +244,8 @@ function limitsPage(guide: Dict): string {
   const rows: string[][] = [
     ["Widgets per user", code(str(limits.maxWidgetsPerUser, "limits.maxWidgetsPerUser"))],
     ["Themes per user", code(str(limits.maxThemesPerUser, "limits.maxThemesPerUser"))],
+    ["Shared schemas per user", code(str(limits.maxSchemasPerUser, "limits.maxSchemasPerUser"))],
+    ["Shared actions per user", code(str(limits.maxActionsPerUser, "limits.maxActionsPerUser"))],
     ["Bytes per stored entry", code(str(limits.maxEntryBytes, "limits.maxEntryBytes"))],
     ["Template nodes per stored widget", code(str(limits.maxTemplateNodes, "limits.maxTemplateNodes"))],
     ["Template nesting depth", code(str(bounds.maxDepth, "rules.template.bounds.maxDepth"))],
@@ -319,7 +329,7 @@ function mcpToolsPage(): string {
     "```json\n" + JSON.stringify(tool.inputSchema, null, 2) + "\n```"
   ]);
   return [
-    frontmatter("MCP tools", "The seven tools of a widgentic MCP server — name, description as the model sees it, and the JSON Schema of each input — derived from the tool definitions."),
+    frontmatter("MCP tools", `The ${TOOLS.length} tools of a widgentic MCP server — name, description as the model sees it, and the JSON Schema of each input — derived from the tool definitions.`),
     generatedNote("the `*_TOOL` definitions in `packages/mcp/src/server/definitions.ts` (`@widgentic/mcp`)"),
     "Descriptions are the exact text advertised to agents over `tools/list`; they carry the steering, so they are longer than a reference usually is.",
     ...sections

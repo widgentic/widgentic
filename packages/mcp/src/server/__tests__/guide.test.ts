@@ -11,8 +11,9 @@ import {
   UNSAFE,
   createCatalog
 } from "@widgentic/core";
-import { CUSTOM_VARIABLE, TOKEN_SPECS, validateTheme } from "@widgentic/core";
+import { ACTION_NAME, CUSTOM_VARIABLE, TOKEN_SPECS, validateTheme } from "@widgentic/core";
 import {
+  checkStoredAction,
   checkStoredTheme,
   checkStoredWidget,
   DEFAULT_LIMITS,
@@ -29,13 +30,21 @@ describe("authoring guide content", () => {
     limits: Record<string, number | string>;
   };
 
-  it("carries the five sections as parseable JSON through the handler", () => {
+  it("carries every top-level section as parseable JSON through the handler", () => {
     const result = handleGetAuthoringGuide();
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse(
       (result.content[0] as { text?: string })?.text ?? ""
     ) as Record<string, unknown>;
-    for (const section of ["workflow", "widget", "theme", "rules", "limits"]) {
+    for (const section of [
+      "workflow",
+      "widget",
+      "sharedSchema",
+      "sharedAction",
+      "theme",
+      "rules",
+      "limits"
+    ]) {
       expect(parsed[section], section).toBeDefined();
     }
   });
@@ -338,5 +347,118 @@ describe("a guide-only agent using the attr transforms", () => {
     expect(forms).toContain("ATTR PREFIX");
     expect(forms).toContain("never both");
     expect(forms).toContain("mailto:");
+  });
+});
+
+describe("guide teaches standalone shared actions", () => {
+  const guide = buildAuthoringGuide() as {
+    sharedAction: {
+      shape: { description: string; name: string; definition: string };
+      workflow: string;
+    };
+    rules: { template: { forms: string[]; actions: { binding: string } } };
+    workflow: { related: string };
+    limits: Record<string, number | string>;
+  };
+
+  it("documents the entry shape, the name rule and the import path", () => {
+    // The DSL binds { ref }; this section is where an agent learns what
+    // the referenced entry IS and where it comes from.
+    expect(guide.sharedAction.shape.description).toContain("{ name, label?");
+    expect(guide.sharedAction.shape.description).toContain("Actions section");
+    expect(guide.sharedAction.shape.definition).toContain('"kind": "prompt"');
+    expect(guide.sharedAction.shape.definition).toContain('"kind": "http"');
+    expect(guide.sharedAction.workflow).toContain("list_actions");
+  });
+
+  it("quotes the action name pattern from the constant that enforces it", () => {
+    expect(guide.sharedAction.shape.name).toContain(ACTION_NAME.source);
+    // Stricter than the identifier every other entry uses — a guide that
+    // restated the wrong one would teach names the store then refuses.
+    expect(ACTION_NAME.test("Weather_1")).toBe(false);
+    expect(SAFE_IDENTIFIER.test("Weather_1")).toBe(true);
+  });
+
+  it("steers to list_actions and forbids inventing one", () => {
+    expect(guide.workflow.related).toContain("list_actions");
+    expect(guide.rules.template.actions.binding).toContain("list_actions");
+    expect(guide.rules.template.actions.binding).toContain("DESCRIBE");
+    expect(guide.sharedAction.workflow).toContain("do NOT");
+    expect(guide.rules.template.forms.join("\n")).toContain('"ref"');
+    // The widget-level load is part of the binding vocabulary being taught.
+    expect(guide.rules.template.actions.binding).toContain('"load"');
+    expect(guide.rules.template.actions.binding).toContain("GET only");
+  });
+
+  it("publishes the caps on every entry an agent drafts", () => {
+    expect(guide.limits.maxSchemasPerUser).toBe(DEFAULT_LIMITS.maxSchemas);
+    expect(guide.limits.maxActionsPerUser).toBe(DEFAULT_LIMITS.maxActions);
+  });
+});
+
+describe("a guide-only agent binding a saved action", () => {
+  /**
+   * Drafted from the guide alone: the shared entry the user imports, and a
+   * widget that BINDS it by ref rather than inlining a definition.
+   */
+  const refreshAction = {
+    name: "weather-current",
+    label: "Current weather",
+    definition: {
+      kind: "http" as const,
+      method: "GET" as const,
+      url: "https://api.example.com/v1/current.json",
+      input: {
+        type: "object",
+        required: ["city"],
+        properties: { city: { type: "string" } }
+      },
+      output: {
+        type: "object",
+        properties: { temp_c: { type: "number" } }
+      }
+    }
+  };
+  const weatherCard = {
+    kind: "weather-card",
+    template: {
+      tag: "div",
+      attrs: { class: "wg-card" },
+      children: [
+        { tag: "h3", attrs: { class: "wg-card-title" }, children: [{ bind: "city" }] },
+        { tag: "p", children: [{ bind: "reading.temp_c" }, " °C"] },
+        {
+          tag: "button",
+          action: {
+            ref: "weather-current",
+            input: { city: "city" },
+            output: { mode: "patch" as const, path: "reading" }
+          },
+          children: ["Refresh"]
+        }
+      ]
+    },
+    descriptor: {
+      description: "A city's current reading with a refresh.",
+      dataShape: "{ city, reading }",
+      dataExample: { city: "Vancouver", reading: { temp_c: 23 } },
+      dataSchema: {
+        type: "object",
+        required: ["city"],
+        properties: {
+          city: { type: "string" },
+          reading: { type: "object", properties: { temp_c: { type: "number" } } }
+        }
+      }
+    }
+  };
+
+  it("both entries pass the store's write validation unchanged", () => {
+    expect(checkStoredAction(refreshAction, DEFAULT_LIMITS)).toBeUndefined();
+    expect(checkStoredWidget(weatherCard)).toBeUndefined();
+  });
+
+  it("the drafted name obeys the pattern the guide published", () => {
+    expect(ACTION_NAME.test(refreshAction.name)).toBe(true);
   });
 });

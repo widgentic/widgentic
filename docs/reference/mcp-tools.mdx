@@ -1,6 +1,6 @@
 ---
 title: "MCP tools"
-description: "The seven tools of a widgentic MCP server — name, description as the model sees it, and the JSON Schema of each input — derived from the tool definitions."
+description: "The 8 tools of a widgentic MCP server — name, description as the model sees it, and the JSON Schema of each input — derived from the tool definitions."
 ---
 
 
@@ -24,6 +24,18 @@ List the available widget kinds with their purpose, expected data shape, an exam
 ## list_schemas
 
 List the user's saved shared data schemas — name, label, description, and the schema object itself. Call this when the user asks for a widget built on one of their schemas ('use my person schema'): bind the schema's actual properties and set the widget's descriptor.dataSchemaRef to the schema's NAME instead of copying the schema inline — an inline copy forks the moment the user edits the shared one. Served per API key, like list\_widgets; anonymous keys see an empty list.
+
+```json
+{
+  "type": "object",
+  "properties": {},
+  "additionalProperties": false
+}
+```
+
+## list_actions
+
+List the user's saved shared actions — name, label, description, kind, and for http actions the method and the input/output schemas. Call this when the user wants a widget to DO something ('add a refresh button using my weather action'): bind a listed action by name with "action": \{ "ref": "\<name\>" \}, mapping an http action's input from the widget's data (a prompt action takes no input mapping — its binds list the data paths its text needs). The listing is the action's contract, not its transport — the URL, headers and query stay on the server. If nothing listed fits, DESCRIBE the action the user should create in the designer; never draft an inline definition with a URL or credentials you cannot know. Served per API key, like list\_widgets; anonymous keys see an empty list.
 
 ```json
 {

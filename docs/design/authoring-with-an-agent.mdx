@@ -13,9 +13,10 @@ The MCP server exposes read-only discovery tools and nothing that writes. API ke
 
 | Tool | What it returns |
 |---|---|
-| `get_authoring_guide` | A structured JSON guide with `workflow`, `widget`, `sharedSchema`, `theme`, `rules` and `limits` sections: the entry shapes, the template DSL forms and safety rules, the identifier charset and reserved kinds, the style and schema constraints, the token registry, and the per-principal limits |
+| `get_authoring_guide` | A structured JSON guide with `workflow`, `widget`, `sharedSchema`, `sharedAction`, `theme`, `rules` and `limits` sections: the entry shapes, the template DSL forms and safety rules, the identifier charset and reserved kinds, the style and schema constraints, the token registry, and the per-principal limits |
 | `list_widgets` | Every kind in your catalog with its descriptor, so a new kind does not collide with an existing one |
 | `list_schemas` | Your saved shared schemas, each with its `schema` object, so a widget can reference one by name |
+| `list_actions` | Your saved shared actions as their contract — kind, method, input and output schemas — so a widget can bind one by name. The URL, headers and query stay on the server |
 | `list_themes` | Your registered themes by name |
 | `list_theme_tokens` | Every token with its type, use and default, the presets, and the value rules |
 

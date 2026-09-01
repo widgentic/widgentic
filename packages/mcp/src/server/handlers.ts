@@ -6,7 +6,7 @@ import type { McpToolResult, McpContentBlock } from "../output/index.js";
 import { WIDGENTIC_MIME_TYPE, WIDGENTIC_URI } from "../output/index.js";
 import type { ThemeRegistry, WidgetTheme } from "@widgentic/core";
 import type { WidgetPayload } from "@widgentic/core";
-import type { ActionBinding, ActionDefinition } from "@widgentic/core";
+import type { ActionBinding, ActionDefinition, StoredAction } from "@widgentic/core";
 import { resolveActionDescriptor } from "@widgentic/core";
 import {
   THEME_TOKENS,
@@ -193,6 +193,76 @@ export async function handleListSchemas(
       "dataExample satisfy it. Copying the schema inline forks it — the " +
       "copy goes stale the moment the user edits the shared one (see " +
       "get_authoring_guide)."
+  };
+  return {
+    content: [{ type: "text", text: JSON.stringify(listing, null, 2) }]
+  };
+}
+
+/**
+ * The entry `list_actions` serves: an action's CONTRACT. The stored
+ * definition's `url`, `headers` and `query` are deliberately absent — a
+ * binding needs none of them, and a read-only key travels into
+ * prompt-injectable hosts where an author's literal header or query value
+ * would otherwise be readable. `method` stays: only an http GET can be a
+ * widget's `load`, so an agent that cannot see it has to guess.
+ */
+export interface StoredActionEntry {
+  name: string;
+  label?: string;
+  description?: string;
+  kind: ActionDefinition["kind"];
+  method?: "GET" | "POST";
+  input?: DataSchema;
+  output?: DataSchema;
+  /** A prompt's contract: the data paths its text binds (it takes no input mapping). */
+  binds?: string[];
+}
+
+/** Reduce a stored action to its contract. The only place transport is dropped. */
+function actionContract(action: StoredAction): StoredActionEntry {
+  const { definition } = action;
+  return {
+    name: action.name,
+    ...(action.label === undefined ? {} : { label: action.label }),
+    ...(action.description === undefined ? {} : { description: action.description }),
+    kind: definition.kind,
+    ...(definition.kind === "http"
+      ? { method: definition.method, input: definition.input, output: definition.output }
+      : // A prompt takes no input mapping; its text binds the widget's own
+        // data paths, and those paths ARE what a binder must satisfy.
+        { binds: definition.text.flatMap((segment) => (typeof segment === "string" ? [] : [segment.bind])) })
+  };
+}
+
+/**
+ * `list_actions`: the principal's saved shared actions, so an agent asked to
+ * wire "my weather action" binds it by `ref` and maps its input instead of
+ * inventing a definition. Takes the STORED entries and projects them here —
+ * no host can leak a URL by forgetting to. Lazy like `list_schemas`: the
+ * read happens when the tool is called.
+ */
+export async function handleListActions(
+  source: (() => Promise<StoredAction[]>) | undefined
+): Promise<McpToolResult> {
+  const stored = source === undefined ? [] : await source();
+  // The source is typed, but discovery must degrade like the store layer
+  // does: one malformed entry is dropped, the rest still list.
+  const listing = {
+    actions: stored.filter((action) => isPlainObject(action?.definition)).map(actionContract),
+    rules:
+      "Bind a listed action from a widget draft by NAME. An http action: " +
+      '"action": { "ref": "<name>", "input": { <field>: "<data path>" } } on ' +
+      "a button or link, or as the widget's \"load\" for a first-render fetch " +
+      "(http GET only) — map every field the input schema declares and shape " +
+      "the output binding against the output schema. A prompt action takes " +
+      "NO input mapping: bind it as { \"ref\": \"<name>\" } alone and make " +
+      "sure the widget's data provides the paths in binds. This listing is " +
+      "the contract, not the transport — the URL, headers and query stay on " +
+      "the server, and the designer shows them to the user. If nothing here " +
+      "fits, DESCRIBE the action the user should create and test in the " +
+      "Actions section at widgentic.dev; never draft an inline definition " +
+      "with a URL or credentials you cannot know (see get_authoring_guide)."
   };
   return {
     content: [{ type: "text", text: JSON.stringify(listing, null, 2) }]

@@ -54,7 +54,7 @@ describe("docs generator", () => {
   it("derives content from the live constants", async () => {
     const pages = await generateReference();
     const tools = pages.get("reference/mcp-tools.mdx") ?? "";
-    for (const name of ["list_widgets", "list_schemas", "list_themes", "list_theme_tokens", "get_authoring_guide", "render_widget", "execute_action"]) {
+    for (const name of ["list_widgets", "list_schemas", "list_actions", "list_themes", "list_theme_tokens", "get_authoring_guide", "render_widget", "execute_action"]) {
       expect(tools).toContain(`## ${name}`);
     }
     const tokens = pages.get("reference/theme-tokens.mdx") ?? "";

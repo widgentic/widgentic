@@ -110,6 +110,7 @@ const httpServer = createHttpServer(async (req: IncomingMessage, res: ServerResp
       themes: themeResult.value,
       ...(catalogResult.actions === undefined ? {} : { actions: catalogResult.actions }),
       schemas: () => store.schemas(principalRef.id),
+      sharedActions: () => store.actions(principalRef.id),
       secrets: (name: string) => store.secretValue(principalRef.id, name),
       scopes: principal.scopes,
       rateLimit: () => limiter.take(principalRef.id)

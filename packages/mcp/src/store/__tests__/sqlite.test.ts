@@ -231,4 +231,47 @@ describe("sqlite adapter", () => {
     expect(diagnostics.join("\n")).toContain("evil".slice(0, 0) + "skipped a widget");
     reopened.close();
   });
+
+  it("an unreadable action is skipped on read, so listings serve the rest", async () => {
+    const path = freshPath();
+    const store = open(path);
+    const p = await store.ensurePrincipal("sqlite:bad-action");
+    await store.putAction(p.id, {
+      name: "weather",
+      definition: {
+        kind: "http",
+        method: "GET",
+        url: "https://api.example.com/weather",
+        input: { type: "object", properties: { city: { type: "string" } } },
+        output: { type: "object", properties: { temp_c: { type: "number" } } }
+      }
+    });
+    store.close();
+    // A definition the validator refuses (http: URL) reaching the table by
+    // a manual edit or an older writer.
+    const raw = new DatabaseSync(path);
+    raw
+      .prepare("INSERT INTO entries (principal_id, kind, name, json) VALUES (?, 'action', 'insecure', ?)")
+      .run(
+        p.id,
+        JSON.stringify({
+          name: "insecure",
+          definition: {
+            kind: "http",
+            method: "GET",
+            url: "http://api.example.com/x",
+            input: { type: "object" },
+            output: { type: "object" }
+          }
+        })
+      );
+    raw.close();
+    const reopened = createSqliteStore(path, {
+      limits: LIMITS,
+      cipher: createLocalCipher(KEK),
+      onDiagnostic: () => {}
+    });
+    expect((await reopened.actions(p.id)).map((a) => a.name)).toEqual(["weather"]);
+    reopened.close();
+  });
 });

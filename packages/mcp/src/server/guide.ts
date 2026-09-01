@@ -23,7 +23,7 @@ import {
   MAX_TEMPLATE_DEPTH,
   URL_ATTRS
 } from "@widgentic/core";
-import { CUSTOM_VARIABLE, TOKEN_SPECS } from "@widgentic/core";
+import { ACTION_NAME, CUSTOM_VARIABLE, TOKEN_SPECS } from "@widgentic/core";
 import { DEFAULT_LIMITS, SAFE_IDENTIFIER } from "../store/index.js";
 import type { McpToolResult } from "../output/index.js";
 
@@ -45,7 +45,8 @@ export function buildAuthoringGuide(): Record<string, unknown> {
       related:
         "Call list_widgets to see what already exists (avoid kind " +
         "collisions), list_schemas for the user's saved shared data " +
-        "schemas, list_themes for registered themes, and " +
+        "schemas, list_actions for the user's saved shared actions, " +
+        "list_themes for registered themes, and " +
         "list_theme_tokens for token semantics and presets."
     },
     widget: {
@@ -95,6 +96,32 @@ export function buildAuthoringGuide(): Record<string, unknown> {
         "reference validates against the saved schema when the user saves " +
         "the widget."
     },
+    sharedAction: {
+      shape: {
+        description:
+          "A shared action is one JSON object: { name, label?, " +
+          "description?, definition } — defined once, bound by many " +
+          "widgets via \"action\": { \"ref\": \"<name>\" }. The user imports " +
+          "it in the Actions section at widgentic.dev, where an http " +
+          "action must pass a live test call before it can be saved.",
+        name: `String identifier matching ${ACTION_NAME.source} — stricter than widget, theme and schema names.`,
+        label: "OPTIONAL human-readable display name.",
+        definition:
+          "The action itself: { \"kind\": \"prompt\", \"text\": [...] } or " +
+          "{ \"kind\": \"http\", \"method\": \"GET\"|\"POST\", \"url\", \"input\": " +
+          "<schema>, \"output\": <schema>, \"headers\"?, \"query\"? } — see " +
+          "rules.template.actions."
+      },
+      workflow:
+        "Call list_actions first: it lists what the user already has, as " +
+        "the CONTRACT (name, kind, method, input and output schemas) — the " +
+        "url, headers and query stay on the server, and you never need " +
+        "them to bind one. Bind a listed action by name, THEN hand the " +
+        "widget to your user. When nothing listed fits, DESCRIBE the " +
+        "action they should create and test in the Actions section; do NOT " +
+        "draft an inline http definition with a URL or credentials you " +
+        "cannot know."
+    },
     theme: {
       shape: {
         description:
@@ -141,7 +168,7 @@ export function buildAuthoringGuide(): Record<string, unknown> {
             "prompt — proposes a message the user reviews and sends from their composer (works with any key); " +
             "http — a server-side GET/POST to a fixed https URL with an input schema (GET → query, POST → JSON body) and an output schema the response must satisfy; headers/query values may reference the user's secrets by name ({ \"secret\": \"<name>\" }).",
           binding:
-            "Put \"action\": { \"ref\": \"<shared action name>\" } or { \"definition\": <inline definition> } on a button or link (never together with href), plus \"input\": { \"<field>\": \"<data path>\" | { \"const\": <value> } } resolved at render time in the element's scope ($root/$parent/$index available) and \"output\": { \"mode\": \"merge\"|\"replace\"|\"patch\", \"path\"?, \"map\"? }. Arguments must be declared in the action's input schema and must not share a name with a fixed query parameter.",
+            "Put \"action\": { \"ref\": \"<shared action name>\" } or { \"definition\": <inline definition> } on a button or link (never together with href), plus \"input\": { \"<field>\": \"<data path>\" | { \"const\": <value> } } resolved at render time in the element's scope ($root/$parent/$index available) and \"output\": { \"mode\": \"merge\"|\"replace\"|\"patch\", \"path\"?, \"map\"? }. Arguments must be declared in the action's input schema and must not share a name with a fixed query parameter. Discover the user's saved actions with list_actions and prefer a ref to an inline definition — when nothing listed fits, DESCRIBE the action for the user to create instead of inventing one (the why and the hand-off: see sharedAction.workflow). A widget-level \"load\" accepts http GET only.",
           limits:
             "http targets must be public https hosts (no private/loopback/link-local, no redirects); the whole request has an 8 s deadline and a 256 KiB response cap; the response must be application/json (or application/*+json); a 204/empty body arrives as null. Design the output schema for exactly that response.",
           execution:
@@ -227,6 +254,8 @@ export function buildAuthoringGuide(): Record<string, unknown> {
     limits: {
       maxWidgetsPerUser: DEFAULT_LIMITS.maxWidgets,
       maxThemesPerUser: DEFAULT_LIMITS.maxThemes,
+      maxSchemasPerUser: DEFAULT_LIMITS.maxSchemas,
+      maxActionsPerUser: DEFAULT_LIMITS.maxActions,
       maxEntryBytes: DEFAULT_LIMITS.maxEntryBytes,
       maxTemplateNodes: DEFAULT_LIMITS.maxTemplateNodes,
       note:

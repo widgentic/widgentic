@@ -1,9 +1,9 @@
 ---
 title: "MCP tools"
-description: "The seven tools the widgentic server exposes, their inputs, result shapes and structured errors."
+description: "The eight tools the widgentic server exposes, their inputs, result shapes and structured errors."
 ---
 
-Any MCP client can discover the widgets a widgentic server knows and ask it to validate and render. Six tools are for agents; the seventh, `execute_action`, is called by the mounted widget. The input schemas are generated from the tool definitions in the [reference](/reference/mcp-tools); this page explains what comes back: `content` blocks (text, or a resource) plus, for renders, `structuredContent` for the MCP Apps template. The hosted server answers at `https://mcp.widgentic.dev/mcp` and serves catalogs, themes and schemas per API key ([Per-principal catalogs](/how-it-works/per-principal-catalogs)).
+Any MCP client can discover the widgets a widgentic server knows and ask it to validate and render. Seven tools are for agents; the eighth, `execute_action`, is called by the mounted widget. The input schemas are generated from the tool definitions in the [reference](/reference/mcp-tools); this page explains what comes back: `content` blocks (text, or a resource) plus, for renders, `structuredContent` for the MCP Apps template. The hosted server answers at `https://mcp.widgentic.dev/mcp` and serves catalogs, themes and schemas per API key ([Per-principal catalogs](/how-it-works/per-principal-catalogs)).
 
 ## Discovery
 
@@ -11,11 +11,12 @@ Any MCP client can discover the widgets a widgentic server knows and ask it to v
 |---|---|---|
 | `list_widgets` | none | JSON array of descriptors: `kind`, `description`, `dataShape`, a `dataExample` to imitate, supported `hints`, `dataSchema` when declared |
 | `list_schemas` | none | `{ schemas, rules }` — the caller's saved shared schemas as `{ name, label?, description?, schema }`; anonymous or unknown keys see an empty list, never an error |
+| `list_actions` | none | `{ actions, rules }` — the caller's saved shared actions as their CONTRACT: `{ name, label?, description?, kind, method?, input?, output? }`. The `url`, `headers` and `query` stay on the server; anonymous or unknown keys see an empty list |
 | `list_themes` | none | `{ themes, rules }` — every registered theme as `{ name, label?, description?, extends?, tokens }` |
 | `list_theme_tokens` | none | `{ tokens, presets, rules }` — each token's `name`, light `default`, value `type` and `use`; the `dark` preset; the value rules, including `x-*` custom variables |
-| `get_authoring_guide` | none | a JSON guide: `workflow`, `widget`, `sharedSchema`, `theme`, `rules` (template, styles, dataSchema, actions) and `limits`, derived from the live validators |
+| `get_authoring_guide` | none | a JSON guide: `workflow`, `widget`, `sharedSchema`, `sharedAction`, `theme`, `rules` (template, styles, dataSchema, actions) and `limits`, derived from the live validators |
 
-Call `list_widgets` fresh whenever the user asks what is available or mentions saving in the designer: catalogs are per key and change between calls. Reference a saved schema by name (`descriptor.dataSchemaRef`) rather than copying it. Read `get_authoring_guide` before drafting JSON: agents draft, users import and save in the designer — there is no registration tool by design ([Authoring with an agent](/design/authoring-with-an-agent)).
+Call `list_widgets` fresh whenever the user asks what is available or mentions saving in the designer: catalogs are per key and change between calls. Reference a saved schema by name (`descriptor.dataSchemaRef`) rather than copying it, and bind a saved action by name (`action: { "ref": "<name>" }`) rather than drafting an inline definition. Read `get_authoring_guide` before drafting JSON: agents draft, users import and save in the designer — there is no registration tool by design ([Authoring with an agent](/design/authoring-with-an-agent)).
 
 ## render_widget
 

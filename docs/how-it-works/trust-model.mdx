@@ -30,7 +30,7 @@ flowchart LR
 
 ## Who can write
 
-- **There is no agent write path.** No MCP tool registers a widget, theme, schema, action or secret. Agents learn the contract through `get_authoring_guide`, `list_widgets`, `list_schemas` and `list_theme_tokens` and draft import JSON; a person imports, validates and saves it in an authenticated session in the designer at [widgentic.dev/app](https://widgentic.dev/app). See [Authoring with an agent](/design/authoring-with-an-agent).
+- **There is no agent write path.** No MCP tool registers a widget, theme, schema, action or secret. Agents learn the contract through `get_authoring_guide`, `list_widgets`, `list_schemas`, `list_actions` and `list_theme_tokens` and draft import JSON; a person imports, validates and saves it in an authenticated session in the designer at [widgentic.dev/app](https://widgentic.dev/app). See [Authoring with an agent](/design/authoring-with-an-agent).
 - **API keys are read-only by default** because they travel into third-party hosts and prompt-injectable contexts. The `write` scope can never be granted to a key.
 - **`execute` is an opt-in scope fixed at key creation.** A read-only key still renders widgets that carry http actions, but their descriptors are marked `disabled: "scope"` and no `load` descriptor is emitted; `execute_action` answers `FORBIDDEN_SCOPE`. See [Keys and scopes](/get-started/keys-and-scopes).
 

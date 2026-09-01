@@ -17,7 +17,7 @@ Scopes are chosen when the key is created and cannot be edited afterwards.
 
 | Scope | Granted | What it allows |
 |---|---|---|
-| `read` | Always | Discovery and rendering: `list_widgets`, `list_schemas`, `list_themes`, `list_theme_tokens`, `get_authoring_guide`, `render_widget` |
+| `read` | Always | Discovery and rendering: `list_widgets`, `list_schemas`, `list_actions`, `list_themes`, `list_theme_tokens`, `get_authoring_guide`, `render_widget` |
 | `execute` | Opt-in at creation | Widgets may run their `http` actions server-side through `execute_action`, using your saved secrets |
 
 With a read-only key, widgets that carry `http` actions still render, but their buttons are disabled with a tooltip explaining that the key lacks the `execute` scope, and widget-level `load` bindings do not fire. `prompt` actions work on every key, because they only propose a message in the reader's composer. The render's `Action notes:` tail tells the agent the same thing, so it can explain a disabled button instead of guessing.
@@ -32,7 +32,7 @@ The reason is where keys live: in the connector settings of third-party hosts an
 
 ## Unknown keys fall back, they do not fail
 
-The server resolves a key by comparing its digest in constant time. A key that resolves to no account — missing, mistyped, revoked or malformed — is not an error: the request is served the **anonymous catalog**, exactly the built-in kinds and themes, with `list_schemas` returning an empty list and `execute_action` refused with `FORBIDDEN_SCOPE`. Key material never appears in server logs.
+The server resolves a key by comparing its digest in constant time. A key that resolves to no account — missing, mistyped, revoked or malformed — is not an error: the request is served the **anonymous catalog**, exactly the built-in kinds and themes, with `list_schemas` and `list_actions` returning empty lists and `execute_action` refused with `FORBIDDEN_SCOPE`. Key material never appears in server logs.
 
 If an agent reports that your custom widgets are missing, check the key first: the host is most likely connected without one, or with a key you revoked.
 

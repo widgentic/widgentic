@@ -15,7 +15,7 @@ You (the agent) draft the JSON; your user publishes it. Produce a widget or them
 
 <Warning>There is deliberately NO MCP tool to register widgets or themes: API keys are read-only credentials that travel into third-party hosts, so writes require the user's authenticated session in the designer. Do not look for or request a registration tool.</Warning>
 
-Call list\_widgets to see what already exists (avoid kind collisions), list\_schemas for the user's saved shared data schemas, list\_themes for registered themes, and list\_theme\_tokens for token semantics and presets.
+Call list\_widgets to see what already exists (avoid kind collisions), list\_schemas for the user's saved shared data schemas, list\_actions for the user's saved shared actions, list\_themes for registered themes, and list\_theme\_tokens for token semantics and presets.
 
 ## Widget entry
 
@@ -55,6 +55,18 @@ A shared data schema is one JSON object: \{ name, label?, description?, schema \
 | `schema` | The schema object itself, in the same subset as descriptor.dataSchema (see rules.dataSchema). |
 
 Draft the entry, hand it to your user for Import in the Data schemas section, THEN draft widgets referencing it by name — the reference validates against the saved schema when the user saves the widget.
+
+## Shared action entry
+
+A shared action is one JSON object: \{ name, label?, description?, definition \} — defined once, bound by many widgets via "action": \{ "ref": "\<name\>" \}. The user imports it in the Actions section at widgentic.dev, where an http action must pass a live test call before it can be saved.
+
+| Field | Meaning |
+| -- | -- |
+| `name` | String identifier matching ^\[a-z\]\[a-z0-9-\]\{0,63\}\$ — stricter than widget, theme and schema names. |
+| `label` | OPTIONAL human-readable display name. |
+| `definition` | The action itself: \{ "kind": "prompt", "text": \[...\] \} or \{ "kind": "http", "method": "GET"\|"POST", "url", "input": \<schema\>, "output": \<schema\>, "headers"?, "query"? \} — see rules.template.actions. |
+
+Call list\_actions first: it lists what the user already has, as the CONTRACT (name, kind, method, input and output schemas) — the url, headers and query stay on the server, and you never need them to bind one. Bind a listed action by name, THEN hand the widget to your user. When nothing listed fits, DESCRIBE the action they should create and test in the Actions section; do NOT draft an inline http definition with a URL or credentials you cannot know.
 
 ## Theme entry
 

@@ -74,6 +74,28 @@ export const LIST_SCHEMAS_TOOL: McpToolDefinition = {
   }
 };
 
+export const LIST_ACTIONS_TOOL: McpToolDefinition = {
+  name: "list_actions",
+  description:
+    "List the user's saved shared actions — name, label, description, kind, " +
+    "and for http actions the method and the input/output schemas. Call " +
+    "this when the user wants a widget to DO something ('add a refresh " +
+    "button using my weather action'): bind a listed action by name with " +
+    "\"action\": { \"ref\": \"<name>\" }, mapping an http action's input " +
+    "from the widget's data (a prompt action takes no input mapping — its " +
+    "binds list the data paths its text needs). The listing is the " +
+    "action's contract, not its transport — the " +
+    "URL, headers and query stay on the server. If nothing listed fits, " +
+    "DESCRIBE the action the user should create in the designer; never " +
+    "draft an inline definition with a URL or credentials you cannot know. " +
+    "Served per API key, like list_widgets; anonymous keys see an empty list.",
+  inputSchema: {
+    type: "object",
+    properties: {},
+    additionalProperties: false
+  }
+};
+
 export const LIST_THEMES_TOOL: McpToolDefinition = {
   name: "list_themes",
   description:

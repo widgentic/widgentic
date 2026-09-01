@@ -1,6 +1,6 @@
 ---
 title: "What is widgentic"
-description: "A payload contract, a catalog of generic widgets, an MCP server with seven tools and a set of designers — and what widgentic deliberately is not."
+description: "A payload contract, a catalog of generic widgets, an MCP server with eight tools and a set of designers — and what widgentic deliberately is not."
 ---
 
 Agents call tools and APIs that return structured data, and every tool reinvents how to present that data in chat. widgentic replaces the per-tool UI with one contract and a small set of generic widgets, so any MCP-aware host can render rich tool output.
@@ -28,12 +28,13 @@ Five kinds are built in: `card`, `table`, `tree`, `custom`, and `group`, which s
 
 ### An MCP server
 
-widgentic is itself an MCP server. The hosted endpoint is `https://mcp.widgentic.dev/mcp`, and the same assembly ships in `@widgentic/mcp` so you can run your own. It exposes seven tools:
+widgentic is itself an MCP server. The hosted endpoint is `https://mcp.widgentic.dev/mcp`, and the same assembly ships in `@widgentic/mcp` so you can run your own. It exposes eight tools:
 
 | Tool | Purpose |
 |---|---|
 | `list_widgets` | Every kind in your catalog with its descriptor: purpose, expected `data` shape, an example to imitate and the supported hints |
 | `list_schemas` | Your saved shared data schemas |
+| `list_actions` | Your saved shared actions as their contract — kind, method and schemas — so a widget can bind one by name |
 | `list_themes` | The registered themes, usable by name in `render_widget` |
 | `list_theme_tokens` | The theming vocabulary: every token with its type, use and default, plus presets and value rules |
 | `get_authoring_guide` | The complete authoring contract for agents drafting widget, theme and schema JSON |

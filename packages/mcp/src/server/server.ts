@@ -19,13 +19,14 @@ import {
 } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
 import { createCatalog } from "@widgentic/core";
-import type { WidgetCatalog } from "@widgentic/core";
+import type { StoredAction, WidgetCatalog } from "@widgentic/core";
 import {
   LIST_WIDGETS_TOOL,
   RENDER_WIDGET_TOOL,
   LIST_THEME_TOKENS_TOOL,
   LIST_THEMES_TOOL,
   LIST_SCHEMAS_TOOL,
+  LIST_ACTIONS_TOOL,
   GET_AUTHORING_GUIDE_TOOL,
   EXECUTE_ACTION_TOOL,
   WIDGENTIC_UI_URI_PREFIX,
@@ -36,7 +37,8 @@ import {
   handleRenderWidget,
   handleListThemeTokens,
   handleListThemes,
-  handleListSchemas
+  handleListSchemas,
+  handleListActions
 } from "./handlers.js";
 import type { RenderActionOptions, StoredSchemaEntry } from "./handlers.js";
 import { handleExecuteAction } from "./actions.js";
@@ -63,6 +65,14 @@ export interface WidgenticServerOptions {
    * tool serves an empty list (anonymous callers, storeless deployments).
    */
   schemas?: () => Promise<StoredSchemaEntry[]>;
+  /**
+   * Lazy source for the principal's saved shared actions, yielding the
+   * STORED entries — the handler reduces each to its contract, so no host
+   * can leak a URL or a header by wiring this wrong. Read only when
+   * `list_actions` is CALLED. Omitted: the tool serves an empty list.
+   * Distinct from `actions` below, which resolves BINDINGS for execution.
+   */
+  sharedActions?: () => Promise<StoredAction[]>;
   /**
    * Hostnames the OPERATOR trusts the app frame to load assets from:
    * declared as `_meta.ui.resourceDomains` on the app resource, and image
@@ -149,6 +159,12 @@ export function createWidgenticServer(
     LIST_SCHEMAS_TOOL.name,
     { description: LIST_SCHEMAS_TOOL.description },
     async () => (await handleListSchemas(options.schemas)) as CallToolResult
+  );
+
+  server.registerTool(
+    LIST_ACTIONS_TOOL.name,
+    { description: LIST_ACTIONS_TOOL.description },
+    async () => (await handleListActions(options.sharedActions)) as CallToolResult
   );
 
   server.registerTool(

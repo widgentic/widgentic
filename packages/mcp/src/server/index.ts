@@ -4,6 +4,7 @@ export {
   LIST_THEME_TOKENS_TOOL,
   LIST_THEMES_TOOL,
   LIST_SCHEMAS_TOOL,
+  LIST_ACTIONS_TOOL,
   GET_AUTHORING_GUIDE_TOOL,
   EXECUTE_ACTION_TOOL,
   WIDGENTIC_UI_URI_PREFIX,
@@ -16,9 +17,10 @@ export {
   handleRenderWidget,
   handleListThemeTokens,
   handleListThemes,
-  handleListSchemas
+  handleListSchemas,
+  handleListActions
 } from "./handlers.js";
-export type { StoredSchemaEntry } from "./handlers.js";
+export type { StoredSchemaEntry, StoredActionEntry } from "./handlers.js";
 export { buildAppTemplate } from "./app-template.js";
 export { buildAuthoringGuide, handleGetAuthoringGuide } from "./guide.js";
 export {

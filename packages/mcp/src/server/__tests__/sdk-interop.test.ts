@@ -10,6 +10,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { extractWidgetPayload } from "../../output/index.js";
 import { createWidgenticServer } from "../server.js";
+import type { StoredAction } from "@widgentic/core";
 
 interface DeliveredResult {
   isError?: boolean;
@@ -165,6 +166,7 @@ describe("SDK interoperability (in-memory transport, library assembly)", () => {
     expect(names).toEqual([
       "execute_action",
       "get_authoring_guide",
+      "list_actions",
       "list_schemas",
       "list_theme_tokens",
       "list_themes",
@@ -327,5 +329,120 @@ describe("resourceDomains declaration", () => {
     const app = listed.resources.find((r) => r.uri.startsWith("ui://"));
     const ui = app?._meta?.ui as { csp?: unknown } | undefined;
     expect(ui?.csp).toBeUndefined();
+  });
+});
+
+describe("list_actions over the protocol", () => {
+  // A stored action as the store holds it: contract AND transport. The
+  // listing must serve the first and withhold the second.
+  const weather = {
+    name: "weather-current",
+    label: "Current weather",
+    description: "Reading for a city",
+    definition: {
+      kind: "http" as const,
+      method: "GET" as const,
+      url: "https://api.weatherapi.example/v1/current.json",
+      input: { type: "object", properties: { city: { type: "string" } } },
+      output: { type: "object", properties: { temp_c: { type: "number" } } },
+      query: { key: { secret: "weather-token" }, lang: "en" },
+      headers: { "x-tenant": "acme-42" }
+    }
+  };
+  const askAbout = {
+    name: "ask-about-city",
+    definition: { kind: "prompt" as const, text: ["What should I wear in ", { bind: "city" }, "?"] }
+  };
+
+  async function connectWith(sharedActions?: () => Promise<StoredAction[]>) {
+    const server = createWidgenticServer(sharedActions === undefined ? {} : { sharedActions });
+    const client = new Client({ name: "widgentic-test-client", version: "0.0.0" });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+    return client;
+  }
+
+  const listingOf = async (client: Client) => {
+    const result = (await client.callTool({
+      name: "list_actions",
+      arguments: {}
+    })) as DeliveredResult;
+    expect(result.isError).toBeFalsy();
+    return {
+      text: textOf(result),
+      parsed: JSON.parse(textOf(result)) as {
+        actions: {
+          name: string;
+          label?: string;
+          kind: string;
+          method?: string;
+          input?: unknown;
+          output?: unknown;
+        }[];
+        rules: string;
+      }
+    };
+  };
+
+  it("serves the contract of the supplied source's entries", async () => {
+    const { parsed } = await listingOf(await connectWith(async () => [weather, askAbout]));
+    expect(parsed.actions.map((a) => a.name)).toEqual(["weather-current", "ask-about-city"]);
+    const [http, prompt] = parsed.actions;
+    expect(http).toMatchObject({
+      kind: "http",
+      method: "GET",
+      label: "Current weather",
+      description: "Reading for a city"
+    });
+    expect(http?.input).toEqual(weather.definition.input);
+    expect(http?.output).toEqual(weather.definition.output);
+    // A prompt has no transport and takes no input mapping; its contract
+    // is the data paths its text binds.
+    expect(prompt).toEqual({ name: "ask-about-city", kind: "prompt", binds: ["city"] });
+    expect(parsed.rules).toContain("NO input mapping");
+    // The bind-by-name steering rides the RESULT too, not only the wire.
+    expect(parsed.rules).toContain('"ref"');
+  });
+
+  it("never lets the transport leave the server", async () => {
+    const { text } = await listingOf(await connectWith(async () => [weather]));
+    for (const secret of [
+      "api.weatherapi.example",
+      "https://",
+      "weather-token",
+      "acme-42",
+      "x-tenant"
+    ]) {
+      expect(text).not.toContain(secret);
+    }
+  });
+
+  it("an absent source lists nothing — anonymous callers, storeless hosts", async () => {
+    const { parsed } = await listingOf(await connectWith());
+    expect(parsed.actions).toEqual([]);
+  });
+
+  it("the wire description steers to binding by name, not inventing", async () => {
+    const client = await connectWith(async () => [weather]);
+    const tools = await client.listTools();
+    const tool = tools.tools.find((t) => t.name === "list_actions");
+    expect(tool?.description).toContain('"ref"');
+    expect(tool?.description).toContain("DESCRIBE");
+  });
+
+  it("renders never read the action source — it is lazy by contract", async () => {
+    let reads = 0;
+    const client = await connectWith(async () => {
+      reads++;
+      return [weather];
+    });
+    await client.callTool({
+      name: "render_widget",
+      arguments: { widget: "card", data: { title: "T" } }
+    });
+    await client.callTool({ name: "list_widgets", arguments: {} });
+    expect(reads).toBe(0);
+    await client.callTool({ name: "list_actions", arguments: {} });
+    expect(reads).toBe(1);
   });
 });

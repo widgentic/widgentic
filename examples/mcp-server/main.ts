@@ -45,5 +45,5 @@ const server = createWidgenticServer({
 });
 await server.connect(new StdioServerTransport());
 console.error(
-  "widgentic MCP server ready on stdio (tools: list_widgets, list_schemas, list_themes, list_theme_tokens, render_widget, get_authoring_guide, execute_action)"
+  "widgentic MCP server ready on stdio (tools: list_widgets, list_schemas, list_actions, list_themes, list_theme_tokens, render_widget, get_authoring_guide, execute_action)"
 );

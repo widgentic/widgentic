@@ -3,7 +3,7 @@ title: "Run your own server"
 description: "Assemble the widgentic MCP server with createWidgenticServer, pick a transport, add a store for per-principal catalogs, and wire secrets."
 ---
 
-`@widgentic/mcp/sdk` exports one function, `createWidgenticServer(options?)`, returning a connectable `McpServer` from the official `@modelcontextprotocol/sdk` with the full wiring: the seven tools, the MCP Apps declaration, the app template resource, output slimming and image inlining. The SDK packages are optional peers, so install them alongside:
+`@widgentic/mcp/sdk` exports one function, `createWidgenticServer(options?)`, returning a connectable `McpServer` from the official `@modelcontextprotocol/sdk` with the full wiring: the eight tools, the MCP Apps declaration, the app template resource, output slimming and image inlining. The SDK packages are optional peers, so install them alongside:
 
 ```bash
 npm install @widgentic/mcp @modelcontextprotocol/sdk @modelcontextprotocol/ext-apps zod
@@ -66,6 +66,7 @@ With no options the assembly serves the built-ins; everything else is your expli
 | `catalog` | the composed `WidgetCatalog` to serve; omitted, exactly the built-in kinds |
 | `themes` | the composed `ThemeRegistry`; omitted, the built-in themes |
 | `schemas` | an async source of shared schemas, read only when `list_schemas` is called; omitted, empty |
+| `sharedActions` | an async source of the STORED shared actions, read only when `list_actions` is called — the handler reduces each entry to its contract, so the URL, headers and query never leave the server; omitted, empty |
 | `resourceDomains` | hostnames you trust the app frame to load assets from, declared as `_meta.ui.csp.resourceDomains`; images on them skip inlining. Render inputs can never extend it |
 | `actions` | the action source for the catalog: `bindingAt(kind, id)`, `load(kind)`, `resolve(ref)`; omitted, `execute_action` answers `UNKNOWN_ACTION` |
 | `scopes` | the caller's scopes; `execute` gates `execute_action` and http-bound descriptors |
@@ -116,6 +117,7 @@ async function serverFor(apiKey: string | undefined) {
     actions: catalog.actions,
     scopes,
     schemas: () => store.schemas(id),
+    sharedActions: () => store.actions(id),
     secrets: (name) => store.secretValue(id, name)
   });
 }
