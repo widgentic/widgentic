@@ -5,9 +5,9 @@
   "type": "module",
   "description": "Wiring shared by the example hosts: designer mount discipline and the authoring-API client. Palettes are never here — a page derives its own from @widgentic/designer's chromeCss(CHROME_DEFAULTS).",
   "dependencies": {
-    "@widgentic/core": "^0.1.0",
-    "@widgentic/designer": "^0.6.0",
-    "@widgentic/mcp": "^0.5.0"
+    "@widgentic/core": "^0.7.0",
+    "@widgentic/designer": "^0.7.0",
+    "@widgentic/mcp": "^0.7.0"
   },
   "exports": {
     "./designers": "./designers.ts",

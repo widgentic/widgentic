@@ -1,5 +1,48 @@
 # @widgentic/mcp
 
+## 0.7.0
+
+### Minor Changes
+
+- c07dcb9: The authoring guide teaches the `format` transform and per-item array projection.
+
+  `rules.template.forms` gains a `FORMAT` line documenting `{ bind, format }` with its number,
+  currency and date specs and the currency recipe that motivated it (a numeric-string price as
+  COP with 0 decimals), plus an explicit one-transform-per-value line. The recipe's example outputs
+  are rendered by the engine at guide-build time, never typed. Every
+  bound in that text — the decimals range, the currency-display vocabulary, the date tokens, the
+  pattern length cap and the default locale — is READ from the constants the validator enforces,
+  so a change to the engine cannot leave the guide lying.
+
+  The action-output rules now state that a `map` over an ARRAY response resolves against each
+  item and projects the array of per-item results (pair it with `replace` or `patch`), that a `"."`
+  target selects first (alone it is the projection; beside other entries it names the value they
+  map, so an enveloped list projects per item), that index-addressed sources still address the
+  response root, and — on the BIND line — that a text bind may carry `map` (value → label) or
+  `format`, never `prefix`.
+
+- 3e84d9e: The app template's streaming preview mirrors the tree's new markup: branches render
+  as always-open `details.wg-tree-branch` disclosures (partial input has no meaningful
+  collapse state, and an open branch keeps the preview's shape identical to the
+  result, so the result patch lands on matching structure), and a node's `icon`
+  previews as text before the label — like card fields and table cells, the preview
+  never emits images, since server-side inlining runs over the result.
+
+  A visitor's expand/collapse survives an action's re-render of the branches it
+  leaves in place: the bridge's inline patcher diffs the previous render tree, never
+  the live DOM, so an unchanged branch's `open` attribute is never rewritten while a
+  newly appended branch mounts with its computed initial state. The diff is
+  positional — a reordering result re-pairs states by index.
+
+  `list_widgets` and the authoring guide's `reservedKinds` follow the catalog, which
+  no longer carries the removed `custom` kind.
+
+### Patch Changes
+
+- Updated dependencies [c07dcb9]
+- Updated dependencies [3e84d9e]
+  - @widgentic/core@0.7.0
+
 ## 0.5.0
 
 ### Minor Changes
