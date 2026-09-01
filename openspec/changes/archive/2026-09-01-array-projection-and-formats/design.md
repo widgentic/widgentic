@@ -93,6 +93,82 @@ assertion goes through rendered DOM.
 that enforce them, per "derived, never restated"; the recipe is the ticker itself —
 a numeric-string price as `COP` with 0 decimals.
 
+**D7 — `currencyDisplay`, defaulting to `narrowSymbol` (owner decision during apply).** The
+Why section names `$3,207` as the goal, but `Intl.NumberFormat("en-US", { style: "currency",
+currency: "COP" })` defaults to `currencyDisplay: "symbol"`, which yields `COP 3,207` — only
+`narrowSymbol` gives `$3,207`. The spec's scenario did not settle it. Resolved by exposing one
+optional field, `currencyDisplay?: "narrowSymbol" | "symbol" | "code"`, defaulting to
+`narrowSymbol`: the ticker reads `$3,207` out of the box, and an author showing two
+dollar-denominated currencies side by side has the disambiguated form. Hard-coding
+`narrowSymbol` would have left that author no escape; keeping Intl's default would have
+contradicted the stated goal.
+
+**D8 — The enumerator descends a ROOT array only, not every array (found during apply).**
+D1 called for `collectPaths` to mirror `schemaAt`, which steps through an array into its item
+schema for a NAMED segment too. Mirroring it literally would have offered `lines.qty` in the
+outer scope's bind dropdown — and neither reader that matters resolves it: the template
+resolver (`resolvePath`) and the projection's `getAtPath` both require an INDEX segment on an
+array (`lines.qty` renders empty; `lines.0.qty` renders `2` — verified against the compiled
+renderer). `schemaAt`'s named-array step is the anomaly, not the contract. So the descent is
+scoped to the collection ROOT, where every consumer's context IS the item: a template inside
+`each: "."`, an output map projecting a list response. A nested array is still offered as
+itself for `each`, and its item's properties arrive through that each's own scope — which is
+exactly what the spec's two completion scenarios describe.
+
+**D9 — Two defects the live designer surfaced during apply.** Both were found by the user
+driving the running designer:
+
+- *`map`/`prefix` on a text bind validated and did nothing.* Apply first REFUSED them; the
+  review reversed that (D10): the refusal was a persisted-shape tightening — stores re-validate
+  on read, so a stored widget carrying one dead key would have vanished from every host — and
+  the invariant is "nothing is ever saved but vanished". They stay accepted and ignored; the
+  confusion is resolved where it arose, in the designer, whose text rows offer `format` only.
+- *The `map` button was present but permanently invisible on every attribute row.* Its
+  hover-revealed group had reveal rules only for other row types. One `:is()` rule now names
+  every hosting row type, and the row wraps instead of clipping. Verified by computed value in
+  headless Chrome; the unit test pins that the single rule lists every row type.
+
+**D10 — Review closure (8-angle review on the implementation).** Behavior: per-item projection
+hijacked INDEX-addressed sources (`0.ask` used to resolve at the root and is a valid, working
+binding shape) — a source starting with an index now keeps root semantics; the root-array
+descent lived in the SHARED enumerator and so advertised item properties at the template ROOT,
+in `load` input mappings and in `$root.` helpers, where they resolve to nothing — the enumerator
+is context-free again and each item-scoped consumer (`each`, both output-map columns) asks for
+the item schema, while an array scope offers only `"."`; `schemaAt` stepped into an array by a
+NAMED segment (D8 called it the anomaly and left it) — it now steps by index only, so the
+mismatch check and the enumerator agree; the default `merge` mode over a per-item projection is
+flagged in the editor instead of failing at execution; a date pattern with no token or a stray
+letter (`d/M/yy`) rendered a constant — refused; epoch numbers were read as milliseconds only —
+seconds below 1e11; a well-formed but unknown locale rendered raw — the validator asks the
+runtime; numeric output normalizes no-break spaces so ICU builds agree. Reuse: the format
+vocabulary is narrowed ONCE (`parseFormatSpec`, guards instead of casts) and compiled once per
+spec object (`compileFormat`, `Intl.NumberFormat` and the tokenized pattern built per spec, not
+per cell); the guide renders its example outputs through the engine; `select()` lives in `dom.ts`;
+`activeTransform` decides both validation exclusivity and what a row shows. One finder claim
+was refuted: prompt-text segments carrying `format` are already refused (`Prompt segments are
+strings or { bind } objects`).
+
+**D11 — Two backlog items pulled into scope (owner decision).** *Select-then-map:* a `"."`
+target used to be valid only alone; it now SELECTS first — alone, the selection is the
+projection (unchanged); beside other entries, those entries map the selected value, per item
+when it is a list. Backward-compatible by construction: the shape was forbidden before, so no
+stored binding changes meaning, and an enveloped list (`{ data: [...] }`) becomes reachable
+without touching the output schema. *Text-bind `map`:* the value → authored-label select now
+WORKS on text binds (a status becomes its wording), with the attribute form's exact
+semantics; `prefix` stays attribute-only — it composes a scheme, which has no text meaning —
+and remains accepted-and-inert there so nothing stored is refused. The designer's text rows
+offer `format` and `map`, never `prefix`. Both land in this change because their vocabulary is
+the vocabulary this change introduces.
+
+**D12 — Live findings on the select-then-map build, routed in.** The `"."` selection row
+rendered as off-schema because the target column enumerated only the widget's paths — `"."`
+is always a valid target and is now offered first. Two unrelated designer findings from the
+same session ride along as polish: the widget designer's Export section carried a theme-JSON
+button (themes export from the theme designer; the function stays public for hosts) and its
+entry button is now labelled `Export widget entry` like the other designers'; and the styles
+section's legend "(.wg- selectors, guarded like the server)" said nothing a user could act on —
+it now reads "(.wg- selectors only)", the inline diagnostics carrying the rest.
+
 ## Risks / Trade-offs
 
 - [Intl output drifts across ICU versions] → the gated assertions use en-US integer
@@ -100,9 +176,11 @@ a numeric-string price as `COP` with 0 decimals.
   our own tokens, fully deterministic. If an ICU drift ever bites, the changeset that
   bumps Node pins the affected assertion.
 - [Per-item map surprises an author who wanted root paths against an array] → root
-  paths against an array were `undefined`-projections before (never useful), the `"."`
-  escape keeps index addressing, and the designer's dropdowns teach the item
-  vocabulary.
+  vocabulary is preserved: the `"."` escape and any index-addressed source keep root
+  semantics; only index-free entries — which resolved to `undefined` before — go per item,
+  and the designer's dropdowns teach the item vocabulary.
+- [Select-then-map makes `"."` mean two things] → one thing, stated once: `"."` selects;
+  whether the selection IS the projection depends only on whether other entries exist.
 - [Format on attr values could build hrefs] → formats produce text and the existing
   URL-scheme allowlist on URL attributes is unchanged and runs after; `prefix` remains
   the sanctioned scheme-building transform, and `format` is mutually exclusive with it.

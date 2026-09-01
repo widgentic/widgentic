@@ -260,9 +260,7 @@ export function validateActionBinding(
       if (entries.length === 0) return fail("'map' must not be empty (omit it to take the whole response).", join(outPath, "map"));
       for (const [key, value] of entries) {
         const entryPath = join(outPath, `map.${key}`);
-        if (key === ".") {
-          if (entries.length > 1) return fail("A '.' target takes the whole projection and must be the only entry.", entryPath);
-        } else if (!isDataPath(key)) {
+        if (key !== "." && !isDataPath(key)) {
           return fail(`'${key}' is not a valid data path.`, entryPath);
         }
         if (typeof value !== "string" || (value !== "." && !isDataPath(value))) {

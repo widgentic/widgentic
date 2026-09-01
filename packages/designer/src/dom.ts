@@ -95,6 +95,22 @@ export function section(title: string, children: Child[], open = true): HTMLElem
  * term covers the UA's caret region, which does NOT scale with font size
  * (11px selects clip under a pure em term). Re-fits on change.
  */
+/** A fitted select over `options`: value set, width fitted, `onChange` on change. */
+export function select(
+  options: { value: string; label?: string }[],
+  value: string,
+  className: string,
+  onChange: (value: string) => void,
+  title?: string
+): HTMLSelectElement {
+  const el = h("select", { class: className, ...(title === undefined ? {} : { title }) });
+  for (const option of options) el.append(h("option", { value: option.value }, [option.label ?? option.value]));
+  el.value = value;
+  fitSelect(el);
+  el.addEventListener("change", () => onChange(el.value));
+  return el;
+}
+
 export function fitSelect(select: HTMLSelectElement): void {
   const fit = (): void => {
     const label = select.options[select.selectedIndex]?.text ?? select.value;
@@ -321,7 +337,9 @@ ${chromeCss(CHROME_DEFAULTS, {
 .wgd-node-row:hover { background: var(--wgd-hover); }
 .wgd-node-badge { font-family: var(--wgd-font-mono); font-size: var(--wgd-font-size-xs); color: var(--wgd-accent); background: var(--wgd-accent-bg); border-radius: var(--wgd-radius-sm); padding: 0 5px; flex: 0 0 auto; }
 .wgd-node-icons { display: flex; gap: 2px; margin-left: auto; flex: 0 0 auto; visibility: hidden; }
-.wgd-node-row:hover > .wgd-node-icons, .wgd-node-row:focus-within > .wgd-node-icons { visibility: visible; }
+/* One reveal rule for every row type that hosts the icon group: a row that
+   is not listed here would carry present-but-invisible controls. */
+:is(.wgd-node-row, .wgd-st-row, .wgd-attr-row):is(:hover, :focus-within) > .wgd-node-icons { visibility: visible; }
 .wgd-node-value { flex: 1 1 auto; min-width: 4ch; }
 .wgd-icon { font: inherit; font-size: var(--wgd-font-size-xs); line-height: 1.4; padding: 0 5px; border: 1px solid var(--wgd-border); border-radius: var(--wgd-radius-sm); background: var(--wgd-bg); cursor: pointer; color: var(--wgd-muted); }
 .wgd-icon:hover { background: var(--wgd-hover); }
@@ -344,16 +362,19 @@ ${chromeCss(CHROME_DEFAULTS, {
 /* Attrs vs children: attributes group under a dotted muted rail with
    key-colored names; children keep the solid accent rail. */
 .wgd-attrs { margin-left: 14px; padding-left: 8px; border-left: 2px dotted var(--wgd-border); display: flex; flex-direction: column; gap: 1px; }
-.wgd-attr-row { display: flex; gap: 4px; align-items: center; flex-wrap: nowrap; padding: 0; }
+.wgd-attr-row { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; padding: 0; }
 .wgd-attr-row > .wgd-icon { visibility: hidden; }
-.wgd-attr-row:hover > .wgd-icon, .wgd-attr-row:focus-within > .wgd-icon { visibility: visible; }
+.wgd-attr-row:is(:hover, :focus-within) > .wgd-icon { visibility: visible; }
 .wgd-attr-name { font-family: var(--wgd-font-mono); color: var(--wgd-hl-key); flex: 0 1 auto; min-width: 5ch; }
 .wgd-attr-prefix { flex: 0 1 auto; min-width: 6ch; max-width: 10ch; font-family: var(--wgd-font-mono); color: var(--wgd-hl-str); }
 .wgd-attr { display: flex; flex-direction: column; gap: 1px; }
 /* Transform block under a bind attr: one more dotted level in. */
 .wgd-attr-map { margin-left: 24px; padding-left: 8px; border-left: 2px dotted var(--wgd-border); display: flex; flex-direction: column; gap: 1px; }
 .wgd-attr-map-default { flex: 1 1 auto; min-width: 8ch; }
-.wgd-attr-mode { flex: 0 0 auto; color: var(--wgd-muted); font-size: var(--wgd-font-size-xs); }
+.wgd-attr-mode, .wgd-format-type, .wgd-format-display { flex: 0 0 auto; color: var(--wgd-muted); font-size: var(--wgd-font-size-xs); }
+.wgd-format-decimals { flex: 0 0 auto; width: 4ch; min-width: 4ch; text-align: right; font-family: var(--wgd-font-mono); }
+.wgd-format-currency { flex: 0 0 auto; width: 5ch; min-width: 5ch; text-transform: uppercase; font-family: var(--wgd-font-mono); }
+.wgd-format-pattern { flex: 0 1 auto; min-width: 8ch; max-width: 16ch; font-family: var(--wgd-font-mono); color: var(--wgd-hl-str); }
 .wgd-children { margin-left: 14px; padding-left: 8px; border-left: 2px solid var(--wgd-accent-line); gap: 1px; }
 .wgd-slot { display: flex; flex-direction: column; gap: 1px; }
 .wgd-slot-label { color: var(--wgd-muted); font-size: var(--wgd-font-size-xs); font-style: italic; padding-left: 4px; }
@@ -374,7 +395,6 @@ ${chromeCss(CHROME_DEFAULTS, {
 .wgd-styles { display: flex; flex-direction: column; gap: 2px; }
 .wgd-st-row { display: flex; gap: 4px; align-items: center; border-radius: var(--wgd-radius-sm); }
 .wgd-st-row:hover { background: var(--wgd-hover); }
-.wgd-st-row:hover > .wgd-node-icons, .wgd-st-row:focus-within > .wgd-node-icons { visibility: visible; }
 .wgd-styles .wgd-input { padding: 1px 4px; font-size: var(--wgd-font-size-sm); font-family: var(--wgd-font-mono); border-color: transparent; background: transparent; }
 .wgd-styles .wgd-input:hover, .wgd-styles .wgd-input:focus { border-color: var(--wgd-border); background: var(--wgd-bg); }
 .wgd-st-selector { flex: 1 1 auto; min-width: 8ch; color: var(--wgd-accent); }

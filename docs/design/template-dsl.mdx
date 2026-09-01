@@ -46,9 +46,9 @@ Renders `template` when the path resolves truthy, otherwise `else` (or nothing).
 </Tab>
 </Tabs>
 
-### Attribute transforms
+### Value transforms
 
-A bound attribute value may carry one transform, `map` or `prefix`, never both.
+A bound attribute value may carry one transform — `map`, `prefix` or `format`, never two. A text bind may carry `format`.
 
 `map` lets a data value select one of your literals. A hit emits that key's literal; a miss emits `default`, or an empty value without one. Data never contributes output characters.
 
@@ -71,6 +71,21 @@ A bound attribute value may carry one transform, `map` or `prefix`, never both.
 ```json
 { "tag": "a", "attrs": { "href": { "bind": "email", "prefix": "mailto:" } }, "children": [{ "bind": "email" }] }
 ```
+
+`format` presents a value at render time while the payload keeps its typed value — the same placement rule the built-ins' `hints.fieldFormat` follows. The vocabulary is closed and data-only: `number` and `currency` (bounded decimals, an ISO-4217 code, an optional `currencyDisplay` and `locale`) and `date` (a pattern of the tokens `yyyy MM dd HH mm ss` plus separators). Numeric strings parse, so the ten-decimal price strings a JSON API returns present as money; a value the format cannot parse renders raw, so a format never hides data.
+
+```json
+{
+  "tag": "li",
+  "children": [
+    { "bind": "ask", "format": { "type": "currency", "currency": "COP", "decimals": 0 } },
+    " @ ",
+    { "bind": "date", "format": { "type": "date", "pattern": "dd-MM-yyyy HH:mm" } }
+  ]
+}
+```
+
+Against `{ "ask": "3206.9905920000", "date": "2026-09-01T02:04:47.257871358" }` that renders `$3,207 @ 01-09-2026 02:04`. An unzoned timestamp is read as UTC and formatted in UTC, and the default locale is fixed at `en-US`, so a server render, a designer preview and an action's re-render agree byte for byte — anything else would make the in-place patcher see phantom text changes.
 
 ## Paths
 

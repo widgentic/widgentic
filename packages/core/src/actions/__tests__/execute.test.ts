@@ -119,3 +119,131 @@ describe("hardening: argument policy and path safety", () => {
     expect(applyOutput({ ...weather, output: { type: "array" } }, { mode: "replace" }, data, [1, 2])).toEqual({ ok: true, data: [1, 2] });
   });
 });
+
+describe("applyOutput over an array response", () => {
+  /** The currency ticker that motivated per-item projection. */
+  const ticker: HttpActionDefinition = {
+    kind: "http",
+    method: "GET",
+    url: "https://api.example.com/ticker",
+    input: { type: "object", properties: {} },
+    output: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          ask: { type: "string" },
+          bid: { type: "string" },
+          book: { type: "string" },
+          date: { type: "string" }
+        }
+      }
+    }
+  };
+  const response = [
+    { ask: "3206.99", bid: "3179.43", book: "usdc_cop", date: "2026-09-01T02:04:47" },
+    { ask: "4100.00", bid: "4090.00", book: "usdt_cop", date: "2026-09-01T02:05:00" }
+  ];
+
+  it("projects each item and drops unmapped fields", () => {
+    const result = applyOutput(ticker, { mode: "replace", map: { ask: "ask", when: "date" } }, {}, response);
+    expect(result).toEqual({
+      ok: true,
+      data: [
+        { ask: "3206.99", when: "2026-09-01T02:04:47" },
+        { ask: "4100.00", when: "2026-09-01T02:05:00" }
+      ]
+    });
+  });
+
+  it("renames into nested item targets", () => {
+    const result = applyOutput(ticker, { mode: "replace", map: { "price.ask": "ask" } }, {}, response);
+    expect(result).toEqual({
+      ok: true,
+      data: [{ price: { ask: "3206.99" } }, { price: { ask: "4100.00" } }]
+    });
+  });
+
+  it("a source absent from an item projects undefined, as it would for an object", () => {
+    const result = applyOutput(ticker, { mode: "replace", map: { ask: "ask", nope: "missing" } }, {}, [response[0]]);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const [item] = result.data as Record<string, unknown>[];
+      expect(item).toHaveProperty("nope", undefined);
+      expect(item?.ask).toBe("3206.99");
+    }
+  });
+
+  it("an empty array response projects an empty array", () => {
+    expect(applyOutput(ticker, { mode: "replace", map: { ask: "ask" } }, {}, [])).toEqual({
+      ok: true,
+      data: []
+    });
+  });
+
+  it("the '.' target keeps addressing the response root by index", () => {
+    expect(applyOutput(ticker, { mode: "replace", map: { ".": "0" } }, {}, response)).toEqual({
+      ok: true,
+      data: response[0]
+    });
+  });
+
+  it("an enveloped list projects per item after the \".\" selection", () => {
+    const enveloped: HttpActionDefinition = {
+      ...ticker,
+      output: {
+        type: "object",
+        properties: {
+          data: ticker.output,
+          next: { type: "string" }
+        }
+      }
+    };
+    const envelope = { data: [{ ask: "3206.99", bid: "3179.43" }, { ask: "4100.00", bid: "4090.00" }], next: "cursor" };
+    expect(applyOutput(enveloped, { mode: "replace", map: { ".": "data", price: "ask" } }, {}, envelope)).toEqual({
+      ok: true,
+      data: [{ price: "3206.99" }, { price: "4100.00" }]
+    });
+    // a "." selection of an OBJECT maps that object at its root
+    expect(applyOutput(enveloped, { mode: "replace", map: { ".": "data.0", price: "ask" } }, {}, envelope)).toEqual({
+      ok: true,
+      data: { price: "3206.99" }
+    });
+  });
+
+  it("index-addressed sources keep the response root — a positional pick still works", () => {
+    const response = [{ ask: "3206.99" }, { ask: "3179.43" }];
+    expect(applyOutput(ticker, { mode: "merge", map: { latest: "0.ask" } }, { city: "c" }, response)).toEqual({
+      ok: true,
+      data: { city: "c", latest: "3206.99" }
+    });
+    expect(applyOutput(ticker, { mode: "replace", map: { first: "0.ask", second: "1.ask" } }, {}, response)).toEqual({
+      ok: true,
+      data: { first: "3206.99", second: "3179.43" }
+    });
+  });
+
+  it("an object response still projects at the root", () => {
+    const result = applyOutput(weather, { mode: "replace", map: { "current.celsius": "temp" } }, {}, { temp: 7 });
+    expect(result).toEqual({ ok: true, data: { current: { celsius: 7 } } });
+  });
+
+  it("merge still refuses a projected array", () => {
+    const result = applyOutput(ticker, { mode: "merge", map: { ask: "ask" } }, { a: 1 }, response);
+    expect(result).toEqual({
+      ok: false,
+      error: { code: "INVALID_ACTION_OUTPUT", message: expect.stringContaining("merge needs an object"), path: "response" }
+    });
+  });
+
+  it("patch writes the projected array at its path", () => {
+    const result = applyOutput(ticker, { mode: "patch", path: "rates", map: { ask: "ask" } }, { city: "Bogota" }, [response[0]]);
+    expect(result).toEqual({ ok: true, data: { city: "Bogota", rates: [{ ask: "3206.99" }] } });
+  });
+
+  it("the response is still schema-checked before any projection", () => {
+    const result = applyOutput(ticker, { mode: "replace", map: { ask: "ask" } }, {}, { ask: "3206.99" });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("INVALID_ACTION_OUTPUT");
+  });
+});

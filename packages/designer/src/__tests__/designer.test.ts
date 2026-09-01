@@ -360,7 +360,7 @@ describe("read-only mode", () => {
     const container = host();
     createDesigner(container, { readOnly: true });
     const exportButton = [...container.querySelectorAll("button")].find(
-      (b) => b.textContent === "Export widget JSON"
+      (b) => b.textContent === "Export widget entry"
     ) as HTMLButtonElement;
     expect(exportButton.closest("[inert]")).toBeNull();
     exportButton.click();

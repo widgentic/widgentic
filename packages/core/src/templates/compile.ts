@@ -26,6 +26,7 @@ import {
 import { parsePath } from "./paths.js";
 import { InvalidTemplateError, validateTemplate } from "./validate.js";
 import { formatValue } from "../catalog/widgets/format.js";
+import { formatBoundValue } from "../catalog/widgets/value-format.js";
 import { isPlainObject } from "../shared/plain-object.js";
 
 function join(path: string, segment: string): string {
@@ -177,7 +178,18 @@ function interpretNode(
 
   if (typeof node.bind === "string") {
     budget.remaining--;
-    return [formatValue(resolvePath(node.bind, frames, meta))];
+    const resolved = resolvePath(node.bind, frames, meta);
+    if (isPlainObject(node.map)) {
+      // The value, as a string, SELECTS an authored label: a hit emits that
+      // literal, a miss falls to `default` or empty text — data chooses
+      // among the author's words and never contributes characters.
+      const key = formatValue(resolved);
+      const hit = Object.prototype.hasOwnProperty.call(node.map, key) ? node.map[key] : undefined;
+      return [typeof hit === "string" ? hit : typeof node.default === "string" ? node.default : ""];
+    }
+    // The payload keeps the typed value; only the render gets the unit.
+    // (`prefix` is an attribute-value transform and is ignored here.)
+    return [formatBoundValue(resolved, node.format)];
   }
 
   if (typeof node.each === "string") {
@@ -243,6 +255,10 @@ function interpretNode(
             // The composed value still faces the URL guard below.
             const text = formatValue(resolved);
             value = text === "" ? "" : raw.prefix + text;
+          } else if (raw.format !== undefined) {
+            // Formats produce TEXT; a URL attribute's scheme guard still
+            // runs below, so a format can never build a scheme.
+            value = formatBoundValue(resolved, raw.format);
           } else {
             value = formatValue(resolved);
           }

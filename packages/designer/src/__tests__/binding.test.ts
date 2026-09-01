@@ -125,6 +125,224 @@ describe("schema-driven completions and type checks", () => {
     designer.dispose();
   });
 
+  it("a root-array widget offers NO item property to root-level input mappings or the load", () => {
+    // The element sits at the template ROOT and the load resolves against
+    // payload.data — both are the ARRAY, where only an index resolves. The
+    // item's properties belong to a binding INSIDE each ".", never here.
+    const lookup: StoredAction = {
+      name: "lookup",
+      definition: {
+        kind: "http",
+        method: "GET",
+        url: "https://api.example.com/lookup",
+        input: { type: "object", properties: { book: { type: "string" } } },
+        output: { type: "array", items: { type: "object", properties: { ask: { type: "string" } } } }
+      }
+    };
+    const container = host();
+    const designer = createDesigner(container, { actions: [lookup] });
+    designer.loadWidget({
+      kind: "rates",
+      template: {
+        tag: "button",
+        action: { ref: "lookup", input: { book: "$index" } },
+        children: ["Look up"]
+      },
+      descriptor: {
+        description: "r",
+        dataShape: "[{ ask, book }]",
+        dataSchema: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: { ask: { type: "string" }, book: { type: "string" } }
+          }
+        }
+      },
+      load: { ref: "lookup", input: { book: "$index" } }
+    });
+    const optionsOf = (root: Element) => {
+      const select = root.querySelector(".wgd-rec-row .wgd-path") as HTMLSelectElement | null;
+      return select === null ? [] : [...select.options].map((o) => o.value);
+    };
+    const nodeOptions = optionsOf(container.querySelector(".wgd-node-action") as HTMLElement);
+    expect(nodeOptions).not.toContain("ask");
+    expect(nodeOptions).not.toContain("book");
+    expect(nodeOptions).not.toContain("$root.ask");
+    const loadSection = [...container.querySelectorAll(".wgd-section")].find((sec) =>
+      sec.querySelector(".wgd-section-title")?.textContent?.startsWith("Load action")
+    ) as HTMLElement;
+    expect(optionsOf(loadSection)).not.toContain("book");
+    designer.dispose();
+  });
+
+  it("an enveloped list: the \".\" row selects, and the other rows complete from the selection's items", () => {
+    const envelope: StoredAction = {
+      name: "envelope",
+      definition: {
+        kind: "http",
+        method: "GET",
+        url: "https://api.example.com/rates",
+        input: { type: "object", properties: {} },
+        output: {
+          type: "object",
+          properties: {
+            data: { type: "array", items: { type: "object", properties: { ask: { type: "string" }, bid: { type: "string" } } } },
+            next: { type: "string" }
+          }
+        }
+      }
+    };
+    const container = host();
+    const designer = createDesigner(container, { actions: [envelope] });
+    designer.loadWidget({
+      kind: "rates",
+      template: { tag: "button", action: { ref: "envelope", output: { mode: "replace", map: { ".": "data", price: "ask" } } }, children: ["Go"] },
+      descriptor: {
+        description: "r",
+        dataShape: "[{ price }]",
+        dataSchema: { type: "array", items: { type: "object", properties: { price: { type: "string" } } } }
+      }
+    });
+    const targets = [...container.querySelectorAll(".wgd-node-action .wgd-map-target select")] as HTMLSelectElement[];
+    // the "." selection row is an on-schema target, whatever the widget's shape
+    expect([...(targets[0]?.options ?? [])].map((o) => o.value)).toContain(".");
+    expect([...(targets[0]?.options ?? [])].find((o) => o.value === ".")?.textContent).not.toContain("off-schema");
+    const sources = [...container.querySelectorAll(".wgd-node-action .wgd-map-source select")] as HTMLSelectElement[];
+    // row 0 is the "." selection: it completes from the response ROOT
+    expect([...(sources[0]?.options ?? [])].map((o) => o.value)).toEqual(expect.arrayContaining([".", "data", "next"]));
+    // row 1 maps the selected list's ITEMS
+    expect([...(sources[1]?.options ?? [])].map((o) => o.value)).toEqual(expect.arrayContaining(["ask", "bid"]));
+    expect([...(sources[1]?.options ?? [])].map((o) => o.value)).not.toContain("next");
+    const mismatch = container.querySelector(".wgd-node-action .wgd-type-mismatch") as HTMLElement;
+    expect(mismatch.hidden).toBe(true);
+    designer.dispose();
+  });
+
+  it("a per-item projection under the default merge mode is flagged before execution", () => {
+    const ticker: StoredAction = {
+      name: "ticker",
+      definition: {
+        kind: "http",
+        method: "GET",
+        url: "https://api.example.com/ticker",
+        input: { type: "object", properties: {} },
+        output: { type: "array", items: { type: "object", properties: { ask: { type: "string" } } } }
+      }
+    };
+    const container = host();
+    const designer = createDesigner(container, { actions: [ticker] });
+    designer.loadWidget({
+      kind: "rates",
+      template: { tag: "button", action: { ref: "ticker", output: { map: { price: "ask" } } }, children: ["Go"] },
+      descriptor: {
+        description: "r",
+        dataShape: "[{ price }]",
+        dataSchema: { type: "array", items: { type: "object", properties: { price: { type: "string" } } } }
+      }
+    });
+    const mismatch = container.querySelector(".wgd-node-action .wgd-type-mismatch") as HTMLElement;
+    expect(mismatch.hidden).toBe(false);
+    expect(mismatch.textContent).toContain("replace or patch");
+    designer.dispose();
+  });
+
+  it("array schemas complete on both sides of the projection, by ITEM properties", () => {
+    // A list-shaped response folded into a list-shaped widget: the map is
+    // per item, so both columns offer the item's properties.
+    const ticker: StoredAction = {
+      name: "ticker",
+      definition: {
+        kind: "http",
+        method: "GET",
+        url: "https://api.example.com/ticker",
+        input: { type: "object", properties: {} },
+        output: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              ask: { type: "string" },
+              bid: { type: "string" },
+              book: { type: "string" },
+              date: { type: "string" }
+            }
+          }
+        }
+      }
+    };
+    const container = host();
+    const designer = createDesigner(container, { actions: [ticker] });
+    designer.loadWidget({
+      kind: "rates",
+      template: {
+        tag: "button",
+        action: { ref: "ticker", output: { mode: "replace", map: { price: "ask" } } },
+        children: ["Refresh"]
+      },
+      descriptor: {
+        description: "r",
+        dataShape: "[{ price, when }]",
+        dataSchema: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: { price: { type: "string" }, when: { type: "string" } }
+          }
+        }
+      }
+    });
+    const targetSelect = container.querySelector(".wgd-node-action .wgd-map-target select") as HTMLSelectElement;
+    expect([...targetSelect.options].map((o) => o.value)).toEqual(["", ".", "price", "when", "__custom__"]);
+    const sourceSelect = container.querySelector(".wgd-node-action .wgd-map-source select") as HTMLSelectElement;
+    expect([...sourceSelect.options].map((o) => o.value)).toEqual(
+      expect.arrayContaining([".", "ask", "bid", "book", "date", "__custom__"])
+    );
+    // matching item types agree, so nothing is flagged
+    const mismatch = container.querySelector(".wgd-node-action .wgd-type-mismatch") as HTMLElement;
+    expect(mismatch.hidden).toBe(true);
+    designer.dispose();
+  });
+
+  it("two array sides are compared by their item types, not by 'array' vs 'array'", () => {
+    const rows: StoredAction = {
+      name: "rows",
+      definition: {
+        kind: "http",
+        method: "GET",
+        url: "https://api.example.com/rows",
+        input: { type: "object", properties: {} },
+        output: {
+          type: "object",
+          properties: { values: { type: "array", items: { type: "string" } } }
+        }
+      }
+    };
+    const container = host();
+    const designer = createDesigner(container, { actions: [rows] });
+    designer.loadWidget({
+      kind: "counts",
+      template: {
+        tag: "button",
+        action: { ref: "rows", output: { mode: "merge", map: { counts: "values" } } },
+        children: ["Refresh"]
+      },
+      descriptor: {
+        description: "c",
+        dataShape: "{ counts }",
+        dataSchema: {
+          type: "object",
+          properties: { counts: { type: "array", items: { type: "number" } } }
+        }
+      }
+    });
+    const mismatch = container.querySelector(".wgd-node-action .wgd-type-mismatch") as HTMLElement;
+    expect(mismatch.hidden).toBe(false);
+    expect(mismatch.textContent).toContain("'values' is string");
+    expect(mismatch.textContent).toContain("'counts' is number");
+    designer.dispose();
+  });
+
   it("the output map flags a source/target type mismatch and completes from both schemas", () => {
     const container = host();
     const designer = createDesigner(container, { actions: [weatherCurrent] });
@@ -147,7 +365,7 @@ describe("schema-driven completions and type checks", () => {
     expect(mismatch.textContent).toContain("'reading.temperature' is string");
     // Real dropdowns (not datalists): known paths plus the custom escape.
     const targetSelect = container.querySelector(".wgd-node-action .wgd-map-target select") as HTMLSelectElement;
-    expect([...targetSelect.options].map((o) => o.value)).toEqual(["", "temperature", "__custom__"]);
+    expect([...targetSelect.options].map((o) => o.value)).toEqual(["", ".", "temperature", "__custom__"]);
     const sourceSelect = container.querySelector(".wgd-node-action .wgd-map-source select") as HTMLSelectElement;
     expect([...sourceSelect.options].map((o) => o.value)).toEqual(expect.arrayContaining([".", "current", "current.temp_c", "current.condition.text", "__custom__"]));
     expect(sourceSelect.value).toBe("current.temp_c");

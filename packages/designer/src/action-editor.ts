@@ -26,10 +26,10 @@ import type {
 import { HTTP_METHODS, OUTPUT_MODES } from "@widgentic/core";
 import { clone } from "./internal.js";
 import { isPlainObject } from "@widgentic/core";
-import { diagnosticLine, fitSelect, h } from "./dom.js";
+import { diagnosticLine, fitSelect, h, select } from "./dom.js";
 import { createSchemaBuilder } from "./schema-builder.js";
 import type { SchemaEntry } from "./schema-designer.js";
-import { allPaths, schemaAt, schemaType, typesConflict } from "./schema-paths.js";
+import { allPaths, itemSchema, schemaAt, schemaMismatch, schemaType } from "./schema-paths.js";
 
 /** The path select's escape hatch to free text. */
 const CUSTOM_PATH = "__custom__";
@@ -70,14 +70,6 @@ function textInput(value: string, className: string, onCommit: (value: string) =
   return el;
 }
 
-function select(options: { value: string; label?: string }[], value: string, className: string, onChange: (value: string) => void): HTMLSelectElement {
-  const el = h("select", { class: className });
-  for (const option of options) el.append(h("option", { value: option.value }, [option.label ?? option.value]));
-  el.value = value;
-  fitSelect(el);
-  el.addEventListener("change", () => onChange(el.value));
-  return el;
-}
 
 function label(text: string): HTMLElement {
   return h("span", { class: "wgd-field-label" }, [text]);
@@ -549,10 +541,23 @@ export function createBindingEditor(
     let map: Record<string, string> = clone(output.map ?? {});
     const pending: { source: string }[] = [];
     const widgetSchema = ctx.getDataSchema?.();
-    const base = (output.mode ?? "merge") === "patch" && output.path ? output.path : "";
-    const targetRoot = base === "" ? widgetSchema : schemaAt(widgetSchema, base);
-    const targetOptions = allPaths(targetRoot);
-    const sourceOptions = [".", ...allPaths(definition.output)];
+    const mode = output.mode ?? "merge";
+    const base = mode === "patch" && output.path ? output.path : "";
+    // A list on either side is spoken to per ITEM: the projection maps each
+    // element of a list response, and lands each in a list target — so the
+    // columns and the type check work over the item schemas.
+    const targetSide = base === "" ? widgetSchema : schemaAt(widgetSchema, base);
+    const targetRoot = itemSchema(targetSide);
+    // "." is always a valid target — the selection row — whatever the widget's shape.
+    const targetOptions = [".", ...allPaths(targetRoot)];
+    // A "." row SELECTS a sub-value the other rows then map (an enveloped
+    // list: { ".": "data", ask: "ask" }); the source column and the type
+    // check follow that selection.
+    const selectedSchema = (): unknown =>
+      map["."] === undefined ? definition.output : schemaAt(definition.output, map["."]);
+    const perItemResponse = (): boolean => schemaType(selectedSchema()) === "array";
+    const sourceRoot = (): unknown => itemSchema(selectedSchema());
+    const selectOptions = [".", ...allPaths(definition.output)];
     const mismatch = diagnosticLine(undefined);
     mismatch.classList.add("wgd-type-mismatch");
 
@@ -573,11 +578,22 @@ export function createBindingEditor(
     function render(): void {
       container.replaceChildren();
       const problems: string[] = [];
+      // A per-item projection yields a LIST; merge needs an object on both
+      // sides and would only fail at execution.
+      const mapped = Object.keys(map).filter((key) => key !== ".");
+      if (perItemResponse() && mode === "merge" && mapped.length > 0) {
+        problems.push("a list projects per item — use replace or patch; merge needs an object.");
+      }
+      const sourceOptions = [".", ...allPaths(sourceRoot())];
       for (const [target, source] of Object.entries(map)) {
-        const targetType = schemaType(schemaAt(targetRoot, target));
-        const sourceType = schemaType(schemaAt(definition.output, source));
-        if (typesConflict(sourceType, targetType)) {
-          problems.push(`'${source}' is ${sourceType} in the response but '${base ? `${base}.` : ""}${target}' is ${targetType} in the widget schema`);
+        // The "." row selects against the response root; other rows map the selection.
+        const options = target === "." ? selectOptions : sourceOptions;
+        const conflict =
+          target === "."
+            ? undefined
+            : schemaMismatch(schemaAt(sourceRoot(), source), schemaAt(targetRoot, target));
+        if (conflict) {
+          problems.push(`'${source}' is ${conflict.source} in the response but '${base ? `${base}.` : ""}${target}' is ${conflict.target} in the widget schema`);
         }
         const targetInput = targetControl(target, (next) => {
           if (next === target) return;
@@ -585,7 +601,7 @@ export function createBindingEditor(
           const entries = Object.entries(map).map(([k, v]) => (k === target ? [next, v] : [k, v]));
           commitMap(Object.fromEntries(entries));
         });
-        const sourceInput = pathSelect(source, sourceOptions, (next) => commitMap({ ...map, [target]: next }), "response path");
+        const sourceInput = pathSelect(source, options, (next) => commitMap({ ...map, [target]: next }), "response path");
         sourceInput.classList.add("wgd-map-source");
         const remove = removeButton(() => {
           const { [target]: _gone, ...rest } = map;

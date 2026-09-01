@@ -9,9 +9,19 @@ import {
   PATTERN_MAX_LENGTH,
   PROPERTY_NAME,
   UNSAFE,
-  createCatalog
+  createCatalog,
+  formatBoundValue
 } from "@widgentic/core";
 import { ACTION_NAME, CUSTOM_VARIABLE, TOKEN_SPECS, validateTheme } from "@widgentic/core";
+import {
+  CURRENCY_DISPLAYS,
+  DATE_PATTERN_MAX,
+  DATE_TOKENS,
+  DEFAULT_FORMAT_LOCALE,
+  FORMAT_DECIMALS_MAX,
+  FORMAT_DECIMALS_MIN,
+  FORMAT_TYPES
+} from "@widgentic/core";
 import {
   checkStoredAction,
   checkStoredTheme,
@@ -345,8 +355,117 @@ describe("a guide-only agent using the attr transforms", () => {
     const forms = guide.rules.template.forms.join("\n");
     expect(forms).toContain("ATTR MAP");
     expect(forms).toContain("ATTR PREFIX");
-    expect(forms).toContain("never both");
     expect(forms).toContain("mailto:");
+    // the mutual-exclusion rule states itself, rather than riding on the
+    // ACTION line's unrelated "never both href and action"
+    expect(forms).toContain("ONE TRANSFORM PER VALUE");
+    expect(forms).toMatch(/map, prefix and format are mutually exclusive/);
+  });
+});
+
+describe("guide teaches the format transform", () => {
+  const guide = buildAuthoringGuide() as {
+    rules: { template: { forms: string[]; actions: { binding: string } } };
+  };
+  const forms = guide.rules.template.forms.join("\n");
+
+  it("derives the vocabulary and bounds from the validator's own constants", () => {
+    expect(forms).toContain("FORMAT");
+    for (const type of FORMAT_TYPES) expect(forms).toContain(type);
+    for (const display of CURRENCY_DISPLAYS) expect(forms).toContain(display);
+    for (const token of DATE_TOKENS) expect(forms).toContain(token);
+    expect(forms).toContain(`${FORMAT_DECIMALS_MIN}-${FORMAT_DECIMALS_MAX}`);
+    expect(forms).toContain(String(DATE_PATTERN_MAX));
+    expect(forms).toContain(DEFAULT_FORMAT_LOCALE);
+    // The example outputs are RENDERED by the engine, not typed by hand.
+    expect(forms).toContain(
+      formatBoundValue("3206.9905920000", { type: "currency", currency: "COP", decimals: 0 })
+    );
+    expect(forms).toContain(
+      formatBoundValue("2026-09-01T02:04:47", { type: "date", pattern: "dd-MM-yyyy HH:mm" })
+    );
+    // the currency recipe that motivated it
+    expect(forms).toContain("$3,207");
+    expect(forms).toContain("dd-MM-yyyy HH:mm");
+  });
+
+  it("teaches that a list response projects per item", () => {
+    expect(guide.rules.template.actions.binding).toContain("per ITEM");
+    expect(forms).toContain("EACH ITEM");
+  });
+
+  /** A ticker widget an agent could draft from the guide alone. */
+  const ticker = {
+    kind: "usdc-cop-ticker",
+    template: {
+      tag: "ul",
+      children: [
+        {
+          each: ".",
+          template: {
+            tag: "li",
+            children: [
+              { bind: "book" },
+              " ",
+              { bind: "ask", format: { type: "currency", currency: "COP", decimals: 0 } },
+              " @ ",
+              { bind: "date", format: { type: "date", pattern: "dd-MM-yyyy HH:mm" } }
+            ]
+          }
+        }
+      ]
+    },
+    descriptor: {
+      description: "A currency ticker: one row per book with its ask price and time.",
+      dataShape: "[{ ask, bid, book, date }]",
+      dataExample: [
+        {
+          ask: "3206.9905920000",
+          bid: "3179.4300000000",
+          book: "usdc_cop",
+          date: "2026-09-01T02:04:47.257871358"
+        }
+      ],
+      dataSchema: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            ask: { type: "string" },
+            bid: { type: "string" },
+            book: { type: "string" },
+            date: { type: "string" }
+          }
+        }
+      }
+    }
+  };
+
+  it("a widget drafted with a currency and a date format passes store validation", () => {
+    expect(checkStoredWidget(ticker)).toBeUndefined();
+  });
+
+  it("and renders the formatted values", async () => {
+    const { registerTemplate, renderToHtml } = await import("@widgentic/core");
+    const catalog = createCatalog();
+    registerTemplate(catalog, ticker.kind, ticker.template, ticker.descriptor);
+    const rendered = catalog.render({ kind: ticker.kind, data: ticker.descriptor.dataExample });
+    expect(rendered.ok).toBe(true);
+    if (!rendered.ok) return;
+    const html = renderToHtml(rendered.node);
+    expect(html).toContain("$3,207");
+    expect(html).toContain("01-09-2026 02:04");
+    // the payload keeps the typed value
+    expect(ticker.descriptor.dataExample[0]?.ask).toBe("3206.9905920000");
+  });
+
+  it("the designer imports it unchanged", async () => {
+    const { createDesigner } = await import("@widgentic/designer");
+    const host = document.createElement("div");
+    document.body.append(host);
+    const designer = createDesigner(host);
+    expect(designer.loadWidget(ticker).ok).toBe(true);
+    designer.dispose();
   });
 });
 

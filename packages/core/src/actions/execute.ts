@@ -197,6 +197,23 @@ export function setAtPath(target: unknown, path: string, value: unknown): unknow
   return assign(cursor, segments[segments.length - 1] as string, value) ? root : target;
 }
 
+/** A source that addresses the response by index (`0.ask`) speaks to the array ROOT. */
+const startsWithIndex = (source: string): boolean => /^\d+(?:\.|$)/.test(source);
+
+/**
+ * Build one projected value from `entries` ([target, source] pairs): every
+ * source resolves against `value` and lands at its target. Unmapped fields
+ * are dropped, and a source the value does not carry writes `undefined` —
+ * the projection states exactly what the widget receives.
+ */
+function projectWith(entries: [string, string][], value: unknown): unknown {
+  let built: unknown = {};
+  for (const [target, source] of entries) {
+    built = setAtPath(built, target, getAtPath(value, source));
+  }
+  return built;
+}
+
 /**
  * Fold a response into widget data: validate it against the output schema,
  * project it through `map` when present, then apply the mode — `replace`,
@@ -222,18 +239,23 @@ export function applyOutput(
   }
   let projected: unknown = response;
   if (output?.map !== undefined) {
-    // "." as the target means the projection IS that source value (the
-    // common "take this sub-object" case) and is valid only alone —
-    // validation enforces it; other targets build an object.
-    const whole = output.map["."];
-    if (whole !== undefined) {
-      projected = getAtPath(response, whole);
+    const map = output.map;
+    // "." SELECTS a source value first — alone it IS the projection (the
+    // common "take this sub-object" case); beside other entries it names
+    // the value those entries map, so an enveloped list ({ data: [...] })
+    // projects per item after selection.
+    const { ".": whole, ...rest } = map;
+    const selected = whole === undefined ? response : getAtPath(response, whole);
+    const entries = Object.entries(rest);
+    if (entries.length === 0) {
+      projected = selected;
     } else {
-      let built: unknown = {};
-      for (const [target, source] of Object.entries(output.map)) {
-        built = setAtPath(built, target, getAtPath(response, source));
-      }
-      projected = built;
+      // A list projects PER ITEM — unless the author addresses it by index
+      // (`0.ask`), which is root vocabulary.
+      projected =
+        Array.isArray(selected) && !entries.some(([, source]) => startsWithIndex(source))
+          ? selected.map((item) => projectWith(entries, item))
+          : projectWith(entries, selected);
     }
   }
   const mode = output?.mode ?? "merge";

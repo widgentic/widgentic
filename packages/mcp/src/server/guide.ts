@@ -15,7 +15,8 @@ import {
   PATTERN_MAX_LENGTH,
   PROPERTY_NAME,
   UNSAFE,
-  createCatalog
+  createCatalog,
+  formatBoundValue
 } from "@widgentic/core";
 import { ALLOWED_SCHEMES } from "@widgentic/core";
 import {
@@ -24,8 +25,28 @@ import {
   URL_ATTRS
 } from "@widgentic/core";
 import { ACTION_NAME, CUSTOM_VARIABLE, TOKEN_SPECS } from "@widgentic/core";
+// The format vocabulary is DERIVED from the constants the validator
+// enforces, so a change to the engine cannot leave the guide lying.
+import {
+  CURRENCY_DISPLAYS,
+  DATE_PATTERN_MAX,
+  DATE_TOKENS,
+  DEFAULT_FORMAT_LOCALE,
+  FORMAT_DECIMALS_MAX,
+  FORMAT_DECIMALS_MIN,
+  FORMAT_TYPES
+} from "@widgentic/core";
 import { DEFAULT_LIMITS, SAFE_IDENTIFIER } from "../store/index.js";
 import type { McpToolResult } from "../output/index.js";
+
+/**
+ * The recipe's outputs are RENDERED by the engine, not typed: the guide can
+ * never teach a result the server does not produce.
+ */
+const FORMAT_EXAMPLES = {
+  currency: formatBoundValue("3206.9905920000", { type: "currency", currency: "COP", decimals: 0 }),
+  date: formatBoundValue("2026-09-01T02:04:47", { type: "date", pattern: "dd-MM-yyyy HH:mm" })
+};
 
 export function buildAuthoringGuide(): Record<string, unknown> {
   return {
@@ -154,21 +175,23 @@ export function buildAuthoringGuide(): Record<string, unknown> {
       template: {
         forms: [
           "STRING — a text node: \"Hello\"",
-          "BIND — { \"bind\": \"path.to.value\" } renders the value as text; '.' binds the scope itself",
+          "BIND — { \"bind\": \"path.to.value\" } renders the value as text; '.' binds the scope itself. A text bind may carry \"map\": { \"<value>\": \"<authored label>\" } with an optional \"default\" — the value SELECTS a label (status → wording) — or a \"format\" (below), never both; \"prefix\" is an attribute-value transform and is ignored in a text position",
           "PATHS — dot paths against the current scope (each item inside EACH). Escapes: '$meta.x' reads payload.meta; '$root.x' reads the top-level data from any depth; '$parent.x' steps out of one enclosing EACH per token ('$parent.$parent.x'); '$index' is the zero-based position in the innermost EACH",
           "EACH — { \"each\": \"path.to.array\", \"template\": <node>, \"empty\"?: <node> } repeats template with each item as scope",
           "WHEN — { \"when\": \"path\", \"template\": <node>, \"else\"?: <node> } renders template when the value is truthy",
           "ELEMENT — { \"tag\": \"div\", \"attrs\"?: { \"class\": \"x\", \"src\": { \"bind\": \"path\" } }, \"children\"?: [<node>...] }",
           "ATTR MAP — { \"bind\": \"status\", \"map\": { \"do-not-contact\": \"wg-status wg-status-danger\", \"active\": \"wg-status wg-status-success\" }, \"default\": \"wg-status\" } — the bound value SELECTS one of your literals (semantic classes from data values); a miss emits default, or empty without one",
-          "ATTR PREFIX — { \"bind\": \"email\", \"prefix\": \"mailto:\" } — emits prefix+value only when the value is non-empty (mailto:/tel: links; both schemes are allowed on href). One transform per attr value: map OR prefix, never both",
-          "ACTION — an element may carry \"action\": { \"ref\": \"<shared action name>\" } or an inline { \"definition\": { \"kind\": \"prompt\", \"text\": [\"Show the forecast for \", { \"bind\": \"city\" }] } } / { \"definition\": { \"kind\": \"http\", \"method\": \"GET\", \"url\": \"https://…\", \"input\": <schema>, \"output\": <schema> } }, plus \"input\": { \"<field>\": \"<path>\" | { \"const\": <value> } } and \"output\": { \"mode\"?: \"replace\"|\"merge\"|\"patch\", \"path\"?, \"map\"? }. Bindings resolve at render time; buttons and links (never both href and action) become activatable in Apps hosts. A widget-level \"load\" (http GET only) runs once when the widget first renders"
+          "ATTR PREFIX — { \"bind\": \"email\", \"prefix\": \"mailto:\" } — emits prefix+value only when the value is non-empty (mailto:/tel: links; both schemes are allowed on href)",
+          `FORMAT — { "bind": "ask", "format": { "type": "currency", "currency": "COP", "decimals": 0 } } presents the value at render time while the payload keeps its typed value: a numeric STRING like "3206.9905920000" renders as ${FORMAT_EXAMPLES.currency}. Types: ${FORMAT_TYPES.join(" | ")}. number/currency take decimals (integer ${FORMAT_DECIMALS_MIN}-${FORMAT_DECIMALS_MAX}) and an optional locale (default ${DEFAULT_FORMAT_LOCALE}); currency takes a three-letter uppercase ISO-4217 code and an optional currencyDisplay (${CURRENCY_DISPLAYS.join(" | ")}, default ${CURRENCY_DISPLAYS[0]}). date takes a pattern of the tokens ${DATE_TOKENS.join(" ")} plus separators, at most ${DATE_PATTERN_MAX} characters — { "bind": "date", "format": { "type": "date", "pattern": "dd-MM-yyyy HH:mm" } } turns "2026-09-01T02:04:47" into ${FORMAT_EXAMPLES.date} (an unzoned value is read as UTC and formatted in UTC, so every surface agrees). A value the format cannot parse renders raw — a format never hides data. Works on a text bind and on an attr value alike`,
+          "ONE TRANSFORM PER VALUE — map, prefix and format are mutually exclusive on a single attr value; none of them may appear without bind",
+          "ACTION — an element may carry \"action\": { \"ref\": \"<shared action name>\" } or an inline { \"definition\": { \"kind\": \"prompt\", \"text\": [\"Show the forecast for \", { \"bind\": \"city\" }] } } / { \"definition\": { \"kind\": \"http\", \"method\": \"GET\", \"url\": \"https://…\", \"input\": <schema>, \"output\": <schema> } }, plus \"input\": { \"<field>\": \"<path>\" | { \"const\": <value> } } and \"output\": { \"mode\"?: \"replace\"|\"merge\"|\"patch\", \"path\"?, \"map\"? }. An output map projects the response before the mode applies; when the response is an ARRAY the map entries resolve against EACH ITEM and the projection is the array of per-item results, so a list response can be reshaped without replacing it raw — a per-item projection is a LIST, so pair it with mode replace or patch (merge needs an object). A \".\" target SELECTS first: alone it is the whole projection (e.g. { \".\": \"0\" }); beside other entries it names the value they map, so an enveloped list projects per item ({ \".\": \"data\", \"ask\": \"ask\" }). Any source that starts with an index (\"0.ask\") addresses the list itself, not its items. Bindings resolve at render time; buttons and links (never both href and action) become activatable in Apps hosts. A widget-level \"load\" (http GET only) runs once when the widget first renders"
         ],
         actions: {
           kinds:
             "prompt — proposes a message the user reviews and sends from their composer (works with any key); " +
             "http — a server-side GET/POST to a fixed https URL with an input schema (GET → query, POST → JSON body) and an output schema the response must satisfy; headers/query values may reference the user's secrets by name ({ \"secret\": \"<name>\" }).",
           binding:
-            "Put \"action\": { \"ref\": \"<shared action name>\" } or { \"definition\": <inline definition> } on a button or link (never together with href), plus \"input\": { \"<field>\": \"<data path>\" | { \"const\": <value> } } resolved at render time in the element's scope ($root/$parent/$index available) and \"output\": { \"mode\": \"merge\"|\"replace\"|\"patch\", \"path\"?, \"map\"? }. Arguments must be declared in the action's input schema and must not share a name with a fixed query parameter. Discover the user's saved actions with list_actions and prefer a ref to an inline definition — when nothing listed fits, DESCRIBE the action for the user to create instead of inventing one (the why and the hand-off: see sharedAction.workflow). A widget-level \"load\" accepts http GET only.",
+            "Put \"action\": { \"ref\": \"<shared action name>\" } or { \"definition\": <inline definition> } on a button or link (never together with href), plus \"input\": { \"<field>\": \"<data path>\" | { \"const\": <value> } } resolved at render time in the element's scope ($root/$parent/$index available) and \"output\": { \"mode\": \"merge\"|\"replace\"|\"patch\", \"path\"?, \"map\"? } whose map projects per ITEM when the response is an array. Arguments must be declared in the action's input schema and must not share a name with a fixed query parameter. Discover the user's saved actions with list_actions and prefer a ref to an inline definition — when nothing listed fits, DESCRIBE the action for the user to create instead of inventing one (the why and the hand-off: see sharedAction.workflow). A widget-level \"load\" accepts http GET only.",
           limits:
             "http targets must be public https hosts (no private/loopback/link-local, no redirects); the whole request has an 8 s deadline and a 256 KiB response cap; the response must be application/json (or application/*+json); a 204/empty body arrives as null. Design the output schema for exactly that response.",
           execution:

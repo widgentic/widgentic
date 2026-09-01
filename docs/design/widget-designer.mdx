@@ -79,7 +79,7 @@ A widget is one JSON object, `{ kind, template, descriptor }`:
 
 The template is editable as a flat node tree and as a JSON source pane. They are two projections of one canonical model, so a change in either shows up in the other. Invalid JSON never destroys the tree: the last valid template stays in force and the parse error is shown beside the pane.
 
-The tree covers every DSL form. Nodes are added through one compact add menu (on elements it also offers an attribute, and on `button` and `a` elements an `action` binding), structural nodes collapse from their row, and a bound attribute row offers the `prefix` and `map` transforms directly, so a status-to-class mapping or a `mailto:` link needs no JSON editing. Every mutation re-runs `validateTemplate`; an `onclick` attribute, for example, shows a `FORBIDDEN_ATTRIBUTE` diagnostic at that node without losing the draft.
+The tree covers every DSL form. Nodes are added through one compact add menu (on elements it also offers an attribute, and on `button` and `a` elements an `action` binding), structural nodes collapse from their row, and a bound row offers the `prefix`, `map` and `format` transforms directly, so a status-to-class mapping, a `mailto:` link or a price shown as `$3,207` needs no JSON editing. Every mutation re-runs `validateTemplate`; an `onclick` attribute, for example, shows a `FORBIDDEN_ATTRIBUTE` diagnostic at that node without losing the draft.
 
 ### Styles
 

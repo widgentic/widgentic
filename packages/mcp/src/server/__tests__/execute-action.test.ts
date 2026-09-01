@@ -327,3 +327,136 @@ describe("hardening: execute_action input and error hygiene", () => {
     expect(text).not.toContain("20 http");
   });
 });
+
+describe("a list-shaped action response folds per item", () => {
+  const ticker: StoredAction = {
+    name: "ticker",
+    definition: {
+      kind: "http",
+      method: "GET",
+      url: "https://api.example.com/ticker",
+      input: { type: "object", properties: {} },
+      output: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            ask: { type: "string" },
+            bid: { type: "string" },
+            book: { type: "string" },
+            date: { type: "string" }
+          }
+        }
+      }
+    }
+  };
+
+  /** A root-array widget rendering each item, with formats on the binds. */
+  const rates = (map: Record<string, string>): StoredWidget => ({
+    kind: "rates",
+    template: {
+      tag: "div",
+      children: [
+        {
+          tag: "ul",
+          children: [
+            {
+              each: ".",
+              template: {
+                tag: "li",
+                children: [
+                  { bind: "ask", format: { type: "currency", currency: "COP", decimals: 0 } },
+                  " @ ",
+                  { bind: "when", format: { type: "date", pattern: "dd-MM-yyyy HH:mm" } }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          tag: "button",
+          action: { ref: "ticker", output: { mode: "replace", map } },
+          children: ["Refresh"]
+        }
+      ]
+    },
+    descriptor: {
+      description: "rates",
+      dataShape: "[{ ask, when }]",
+      dataSchema: {
+        type: "array",
+        items: { type: "object", properties: { ask: { type: "string" }, when: { type: "string" } } }
+      }
+    }
+  });
+
+  const response = [
+    { ask: "3206.9905920000", bid: "3179.43", book: "usdc_cop", date: "2026-09-01T02:04:47.257871358" },
+    { ask: "4100.0000000000", bid: "4090.00", book: "usdt_cop", date: "2026-09-01T02:05:00" }
+  ];
+
+  async function tickerRig(widget: StoredWidget) {
+    const store = createMemoryStore([
+      { principal: { id: "alice", scopes: ["read", "execute"] }, widgets: [widget], actions: [ticker] }
+    ]);
+    const composed = await composeCatalog(store, "alice", { executeAllowed: true });
+    return (input: unknown) =>
+      handleExecuteAction(composed.value, input, {
+        actions: composed.actions,
+        scopes: ["read", "execute"],
+        secrets: async () => undefined,
+        fetchDeps: {
+          lookupImpl: async () => ["93.184.216.34"],
+          fetchImpl: async () => jsonResponse(200, response)
+        }
+      });
+  }
+
+  it("projects each item, re-validates it, and renders the formatted values", async () => {
+    const run = await tickerRig(rates({ ask: "ask", when: "date" }));
+    const result = await run({
+      widget: "rates",
+      action: "children.1",
+      payload: { kind: "rates", data: [{ ask: "1", when: "2026-01-01T00:00:00" }] }
+    });
+    expect(result.isError).toBeFalsy();
+    const html = renderToHtml(result.structuredContent?.tree as WidgetNode);
+    // one li per projected item, each carrying the formatted values
+    expect(html).toContain("<li");
+    expect(html).toContain("$3,207");
+    expect(html).toContain("01-09-2026 02:04");
+    expect(html).toContain("$4,100");
+    // unmapped source fields never reach the payload
+    const data = (result.structuredContent?.payload as { data: unknown }).data;
+    expect(data).toEqual([
+      { ask: "3206.9905920000", when: "2026-09-01T02:04:47.257871358" },
+      { ask: "4100.0000000000", when: "2026-09-01T02:05:00" }
+    ]);
+  });
+
+  it("a per-item projection the widget's schema refuses is an output failure", async () => {
+    // `ask` is declared a string; project the numeric-typed `bid` into it
+    // through a target the schema types differently.
+    const widget = rates({ ask: "ask", when: "date" });
+    const strict: StoredWidget = {
+      ...widget,
+      descriptor: {
+        ...widget.descriptor,
+        dataSchema: {
+          type: "array",
+          items: { type: "object", properties: { ask: { type: "number" } } }
+        }
+      }
+    };
+    const run = await tickerRig(strict);
+    const result = await run({
+      widget: "rates",
+      action: "children.1",
+      payload: { kind: "rates", data: [{ ask: 1 }] }
+    });
+    expect(result.isError).toBe(true);
+    expect(errorOf(result as { content: { type: string; text?: string }[] }).code).toBe(
+      "INVALID_ACTION_OUTPUT"
+    );
+  });
+});

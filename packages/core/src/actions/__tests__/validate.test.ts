@@ -82,7 +82,6 @@ describe("hardening: names and output grammar", () => {
       [{ mode: "patch", path: "$root.x" }, "b.output.path"],
       [{ mode: "patch", path: "reading", map: { "__proto__.x": "y" } }, "b.output.map.__proto__.x"],
       [{ map: {} }, "b.output.map"],
-      [{ map: { ".": "a", b: "c" } }, "b.output.map.."],
       [{ mode: "merge", path: "x" }, "b.output.path"],
       [{ map: { ok: "a..b" } }, "b.output.map.ok"]
     ];

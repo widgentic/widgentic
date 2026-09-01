@@ -168,8 +168,9 @@ export function mountIoPanel(store: DraftStore): {
   // operable: the mode restricts editing, not looking.
   const exportSection = section("Export", [
     h("div", { class: "wgd-row" }, [
-      button("Export widget JSON", () => exportWidgetJson(store.get())),
-      button("Export theme JSON", () => exportThemeJson(store.get())),
+      // The entry the store persists — named like the other designers'
+      // export buttons. Themes export from the theme designer.
+      button("Export widget entry", () => exportWidgetJson(store.get())),
       button("Copy as TypeScript", () => toTypeScriptModule(store.get()))
     ]),
     output

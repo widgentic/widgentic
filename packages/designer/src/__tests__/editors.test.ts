@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from "vitest";
 import { createDesigner } from "../index.js";
+import { validateTemplate } from "@widgentic/core";
 import { createJsonTreeEditor } from "../json-tree-editor.js";
 import { createSchemaBuilder } from "../schema-builder.js";
 import { createSchemaForm } from "../schema-form.js";
@@ -627,6 +628,66 @@ describe("schema-driven path pickers", () => {
     expect(marked?.textContent).toContain("off-schema");
   });
 
+  it("a root-array schema completes inside each \".\"", () => {
+    // The shape most list APIs return — a currency ticker here. Before the
+    // enumerator descended a root array, this produced zero candidates and
+    // every path input degraded to free text.
+    const tickerSchema = {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          ask: { type: "string" },
+          bid: { type: "string" },
+          book: { type: "string" },
+          date: { type: "string" }
+        }
+      }
+    };
+    const container = document.createElement("div");
+    document.body.append(container);
+    const designer = createDesigner(container);
+    designer.loadWidget({
+      kind: "ticker",
+      template: { each: ".", template: { tag: "li", children: [{ bind: "ask" }] } },
+      descriptor: { description: "d", dataShape: "s", dataSchema: tickerSchema }
+    });
+    // [0] is the each path, [1] is the bind inside the item scope.
+    expect(optionsOf(container, 0)).toContain(".");
+    const inner = optionsOf(container, 1);
+    expect(inner).toContain("ask");
+    expect(inner).toContain("bid");
+    expect(inner).toContain("book");
+    expect(inner).toContain("date");
+    // a schema is present, so this is NOT the free-text fallback
+    expect(container.querySelectorAll(".wgd-path").length).toBeGreaterThan(1);
+  });
+
+  it("a bind at the ROOT of a root-array schema offers only \".\" — no item property resolves there", () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const designer = createDesigner(container);
+    designer.loadWidget({
+      kind: "ticker-root",
+      template: { tag: "h1", children: [{ bind: "." }] },
+      descriptor: {
+        description: "d",
+        dataShape: "s",
+        dataSchema: { type: "array", items: { type: "object", properties: { ask: { type: "string" } } } }
+      }
+    });
+    const options = optionsOf(container, 0);
+    expect(options).toContain(".");
+    expect(options).not.toContain("ask");
+    designer.dispose();
+  });
+
+  it("offers \".\" for each only when the scope itself is an array", () => {
+    // The invoice root is an object: "." is not a list to walk.
+    const container = designerWithSchema({ each: "lines", template: "x" });
+    expect(optionsOf(container)).not.toContain(".");
+  });
+
   it("falls back to free text when the draft has no schema", () => {
     const container = document.createElement("div");
     document.body.append(container);
@@ -641,6 +702,268 @@ describe("schema-driven path pickers", () => {
       (r) => r.querySelector(".wgd-node-badge")?.textContent === "bind"
     );
     expect((bindRow?.querySelector("input") as HTMLInputElement).value).toBe("anything");
+  });
+});
+
+describe("which transforms each bind row offers", () => {
+  function load(template: unknown) {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const designer = createDesigner(container);
+    designer.loadWidget({
+      kind: "probe",
+      template,
+      descriptor: {
+        description: "d",
+        dataShape: "s",
+        dataExample: { book: "usdc_cop", email: "a@b.c" },
+        dataSchema: {
+          type: "object",
+          properties: { book: { type: "string" }, email: { type: "string" } }
+        }
+      }
+    });
+    return { container, designer };
+  }
+  const mapButtons = (c: Element) =>
+    [...c.querySelectorAll(".wgd-icon")].filter((b) => b.textContent === "map").length;
+
+  it("a TEXT bind offers format and map, never prefix; map hides format once set", () => {
+    const { container, designer } = load({ tag: "span", children: [{ bind: "status" }] });
+    // The only bind in this template is the text child, so container-level
+    // queries address its row.
+    expect(container.querySelectorAll(".wgd-format-type")).toHaveLength(1);
+    expect(container.querySelectorAll(".wgd-attr-prefix")).toHaveLength(0);
+    const mapButton = [...container.querySelectorAll(".wgd-icon")].find((b) => b.textContent === "map") as HTMLButtonElement;
+    expect(mapButton).toBeDefined();
+    mapButton.click();
+    const child = (designer.getDraft().template as unknown as { children: unknown[] }).children[0];
+    expect(child).toEqual({ bind: "status", map: {} });
+    expect(container.querySelectorAll(".wgd-format-type")).toHaveLength(0);
+    expect(container.querySelector(".wgd-attr-map")).not.toBeNull();
+    designer.dispose();
+  });
+
+  it("a bound ATTR offers all three, and the map button is REACHABLE", () => {
+    const { container, designer } = load({ tag: "span", attrs: { class: { bind: "book" } } });
+    const row = container.querySelector(".wgd-attr-row") as HTMLElement;
+    expect(row.querySelectorAll(".wgd-format-type")).toHaveLength(1);
+    expect(row.querySelectorAll(".wgd-attr-prefix")).toHaveLength(1);
+    expect(mapButtons(row)).toBe(1);
+    // The button lives in a .wgd-node-icons group hidden until its row is
+    // hovered or focused. ONE reveal rule names every hosting row type, so a
+    // row left out of it cannot ship present-but-invisible controls.
+    const group = row.querySelector(".wgd-node-icons");
+    expect(group).not.toBeNull();
+    const styles = document.head.textContent ?? "";
+    const reveal = /:is\(([^)]*)\):is\(:hover, :focus-within\) > \.wgd-node-icons/.exec(styles);
+    expect(reveal).not.toBeNull();
+    for (const rowType of [".wgd-node-row", ".wgd-st-row", ".wgd-attr-row"]) {
+      expect(reveal?.[1]).toContain(rowType);
+    }
+    expect(group?.querySelectorAll(".wgd-icon")).toHaveLength(2); // map + remove
+    designer.dispose();
+  });
+
+  it("clicking map commits the transform and hides the other two", () => {
+    const { container, designer } = load({ tag: "span", attrs: { class: { bind: "book" } } });
+    const button = [...container.querySelectorAll(".wgd-icon")].find(
+      (b) => b.textContent === "map"
+    ) as HTMLButtonElement;
+    button.click();
+    expect(
+      (designer.getDraft().template as unknown as { attrs: Record<string, unknown> }).attrs.class
+    ).toEqual({ bind: "book", map: {} });
+    const row = container.querySelector(".wgd-attr-row") as HTMLElement;
+    expect(row.querySelectorAll(".wgd-format-type")).toHaveLength(0);
+    expect(row.querySelectorAll(".wgd-attr-prefix")).toHaveLength(0);
+    designer.dispose();
+  });
+
+  it("the row wraps rather than clipping its trailing controls", () => {
+    // Structural smoke only — the real guarantee is a computed-visibility
+    // check in a browser (see TESTING.md); this catches an accidental
+    // deletion of the rule.
+    const { designer } = load({ tag: "span", attrs: { class: { bind: "book" } } });
+    expect(document.head.textContent ?? "").toMatch(/\.wgd-attr-row \{[^}]*flex-wrap: wrap/);
+    designer.dispose();
+  });
+
+  it("no per-attribute or per-element restriction on the transforms", () => {
+    for (const [tag, attr] of [
+      ["span", "title"],
+      ["div", "class"],
+      ["img", "alt"],
+      ["a", "href"],
+      ["p", "id"]
+    ] as const) {
+      const { container, designer } = load({ tag, attrs: { [attr]: { bind: "book" } } });
+      const row = container.querySelector(".wgd-attr-row") as HTMLElement;
+      expect(row.querySelectorAll(".wgd-format-type"), `${tag}/${attr}`).toHaveLength(1);
+      expect(row.querySelectorAll(".wgd-attr-prefix"), `${tag}/${attr}`).toHaveLength(1);
+      expect(mapButtons(row), `${tag}/${attr}`).toBe(1);
+      designer.dispose();
+    }
+  });
+
+  it("a LITERAL attr offers none of them until its mode becomes bind", () => {
+    const { container, designer } = load({ tag: "span", attrs: { class: "static" } });
+    const row = container.querySelector(".wgd-attr-row") as HTMLElement;
+    expect(row.querySelectorAll(".wgd-format-type")).toHaveLength(0);
+    expect(row.querySelectorAll(".wgd-attr-prefix")).toHaveLength(0);
+    expect(mapButtons(row)).toBe(0);
+    const mode = row.querySelector(".wgd-attr-mode") as HTMLSelectElement;
+    mode.value = "bind";
+    mode.dispatchEvent(new Event("change"));
+    const bound = container.querySelector(".wgd-attr-row") as HTMLElement;
+    expect(bound.querySelectorAll(".wgd-format-type")).toHaveLength(1);
+    expect(mapButtons(bound)).toBe(1);
+    designer.dispose();
+  });
+});
+
+describe("bind format editor", () => {
+  const tickerSchema = {
+    type: "array",
+    items: {
+      type: "object",
+      properties: { ask: { type: "string" }, date: { type: "string" } }
+    }
+  };
+
+  function tickerDesigner(template: unknown) {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const designer = createDesigner(container);
+    designer.loadWidget({
+      kind: "ticker",
+      template,
+      descriptor: {
+        description: "d",
+        dataShape: "s",
+        dataSchema: tickerSchema,
+        dataExample: [{ ask: "3206.9905920000", date: "2026-09-01T02:04:47.257871358" }]
+      }
+    });
+    return { container, designer };
+  }
+
+  it("authoring a currency format on a text bind reaches the draft and the preview", () => {
+    const { container, designer } = tickerDesigner({
+      each: ".",
+      template: { tag: "li", children: [{ bind: "ask" }] }
+    });
+    // The bind row starts raw.
+    const type = container.querySelector(".wgd-format-type") as HTMLSelectElement;
+    expect(type.value).toBe("none");
+    expect([...type.options].map((o) => o.value)).toEqual(["none", "number", "currency", "date"]);
+
+    type.value = "currency";
+    type.dispatchEvent(new Event("change"));
+
+    // A complete spec is committed — the draft is never momentarily invalid.
+    const bindOf = () =>
+      (designer.getDraft().template as unknown as {
+        template: { children: { bind: string; format?: Record<string, unknown> }[] };
+      }).template.children[0];
+    expect(bindOf()?.format).toEqual({
+      type: "currency",
+      currency: "USD",
+      decimals: 2
+    });
+
+    const code = container.querySelector(".wgd-format-currency") as HTMLInputElement;
+    code.value = "cop";
+    code.dispatchEvent(new Event("change"));
+    const decimals = container.querySelector(".wgd-format-decimals") as HTMLInputElement;
+    decimals.value = "0";
+    decimals.dispatchEvent(new Event("change"));
+
+    expect(bindOf()?.format).toEqual({
+      type: "currency",
+      currency: "COP", // upper-cased for the author
+      decimals: 0
+    });
+    // and the live preview renders the formatted amount
+    expect(container.textContent).toContain("$3,207");
+    designer.dispose();
+  });
+
+  it("a date pattern round-trips and previews", () => {
+    const { container, designer } = tickerDesigner({
+      each: ".",
+      template: { tag: "li", children: [{ bind: "date" }] }
+    });
+    const type = container.querySelector(".wgd-format-type") as HTMLSelectElement;
+    type.value = "date";
+    type.dispatchEvent(new Event("change"));
+    const pattern = container.querySelector(".wgd-format-pattern") as HTMLInputElement;
+    expect(pattern.value).toBe("yyyy-MM-dd");
+    pattern.value = "dd-MM-yyyy HH:mm";
+    pattern.dispatchEvent(new Event("change"));
+    expect(container.textContent).toContain("01-09-2026 02:04");
+    designer.dispose();
+  });
+
+  it("switching back to raw drops the transform entirely", () => {
+    const { container, designer } = tickerDesigner({
+      each: ".",
+      template: {
+        tag: "li",
+        children: [{ bind: "ask", format: { type: "currency", currency: "COP", decimals: 0 } }]
+      }
+    });
+    expect(container.textContent).toContain("$3,207");
+    const type = container.querySelector(".wgd-format-type") as HTMLSelectElement;
+    expect(type.value).toBe("currency");
+    type.value = "none";
+    type.dispatchEvent(new Event("change"));
+    const bind = (designer.getDraft().template as unknown as {
+      template: { children: Record<string, unknown>[] };
+    }).template.children[0];
+    expect(bind).toEqual({ bind: "ask" });
+    expect(container.textContent).toContain("3206.9905920000");
+    designer.dispose();
+  });
+
+  it("an attribute bind carries a format, and it is mutually exclusive with map and prefix", () => {
+    const { container, designer } = tickerDesigner({
+      each: ".",
+      template: { tag: "span", attrs: { title: { bind: "ask" } } }
+    });
+    const type = container.querySelector(".wgd-attr-row .wgd-format-type") as HTMLSelectElement;
+    type.value = "number";
+    type.dispatchEvent(new Event("change"));
+    const attrOf = () =>
+      (designer.getDraft().template as unknown as {
+        template: { attrs: Record<string, unknown> };
+      }).template.attrs.title;
+    expect(attrOf()).toEqual({
+      bind: "ask",
+      format: { type: "number", decimals: 2 }
+    });
+    // with a format set, the map button and the prefix input are gone —
+    // one transform per value, mirroring the validator
+    expect(container.querySelector(".wgd-attr-prefix")).toBeNull();
+    expect(
+      [...container.querySelectorAll(".wgd-attr-row .wgd-icon")].some(
+        (b) => b.textContent === "map"
+      )
+    ).toBe(false);
+    designer.dispose();
+  });
+
+  it("a format authored in the designer passes template validation", () => {
+    const { container, designer } = tickerDesigner({
+      each: ".",
+      template: { tag: "li", children: [{ bind: "ask" }] }
+    });
+    const type = container.querySelector(".wgd-format-type") as HTMLSelectElement;
+    type.value = "currency";
+    type.dispatchEvent(new Event("change"));
+    const draft = designer.getDraft();
+    expect(validateTemplate(draft.template).ok).toBe(true);
+    designer.dispose();
   });
 });
 

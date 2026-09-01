@@ -445,7 +445,7 @@ export function mountPanels(
     })
   );
   refreshers.push((draft) => stylesEditor.setValue(draft.descriptor.styles));
-  const stylesPanel = section("Styles (.wg- selectors, guarded like the server)", [
+  const stylesPanel = section("Styles (.wg- selectors only)", [
     tabs([
       { label: "Tree", element: stylesEditor.element },
       {

@@ -3,6 +3,22 @@ import type { TemplateError, WidgetTemplate } from "./types.js";
 import { FORBIDDEN_ATTR, FORBIDDEN_TAGS, MAX_TEMPLATE_DEPTH, RESERVED_ATTR } from "./guards.js";
 import { parsePath } from "./paths.js";
 import { validateActionBinding } from "../actions/validate.js";
+import {
+  CURRENCY_CODE,
+  CURRENCY_DISPLAYS,
+  DATE_PATTERN_ALLOWED,
+  DATE_PATTERN_MAX,
+  DATE_TOKENS,
+  FORMAT_DECIMALS_MAX,
+  FORMAT_DECIMALS_MIN,
+  FORMAT_TYPES,
+  LOCALE_TAG,
+  isCurrencyDisplay,
+  isFormatType,
+  isKnownLocale,
+  parseFormatSpec,
+  tokenizeDatePattern
+} from "../catalog/widgets/value-format.js";
 
 export type ValidateTemplateResult =
   | { ok: true; template: WidgetTemplate }
@@ -33,6 +49,79 @@ function nodeError(message: string, path: string): TemplateError {
   return { code: "INVALID_TEMPLATE_NODE", message, path };
 }
 
+/**
+ * The `format` spec: a closed vocabulary of author literals. Every bound
+ * comes from the engine's own exported constants, so a change to the
+ * engine cannot leave the validator (or the guide) behind.
+ */
+function checkFormat(
+  spec: unknown,
+  label: string,
+  path: string
+): TemplateError | undefined {
+  const bad = (message: string): TemplateError => nodeError(`${label}: ${message}`, path);
+  if (!isPlainObject(spec)) return bad("'format' must be an object.");
+  if (!isFormatType(spec.type)) {
+    return bad(`'format.type' must be one of ${FORMAT_TYPES.join(", ")}.`);
+  }
+  if (spec.type === "date") {
+    if (typeof spec.pattern !== "string") {
+      return bad("'format.pattern' must be a string.");
+    }
+    if (spec.pattern.length === 0 || spec.pattern.length > DATE_PATTERN_MAX) {
+      return bad(`'format.pattern' must be 1-${DATE_PATTERN_MAX} characters.`);
+    }
+    if (!DATE_PATTERN_ALLOWED.test(spec.pattern)) {
+      return bad("'format.pattern' may contain only the date tokens and separators.");
+    }
+    if (tokenizeDatePattern(spec.pattern) === undefined) {
+      return bad(
+        `'format.pattern' must use at least one of ${DATE_TOKENS.join(", ")} and no stray letters.`
+      );
+    }
+    return undefined;
+  }
+  if (spec.decimals !== undefined) {
+    if (
+      typeof spec.decimals !== "number" ||
+      !Number.isInteger(spec.decimals) ||
+      spec.decimals < FORMAT_DECIMALS_MIN ||
+      spec.decimals > FORMAT_DECIMALS_MAX
+    ) {
+      return bad(
+        `'format.decimals' must be an integer ${FORMAT_DECIMALS_MIN}-${FORMAT_DECIMALS_MAX}.`
+      );
+    }
+  }
+  if (spec.locale !== undefined) {
+    if (typeof spec.locale !== "string" || !LOCALE_TAG.test(spec.locale) || !isKnownLocale(spec.locale)) {
+      return bad("'format.locale' must be a BCP-47 language tag this runtime knows.");
+    }
+  }
+  if (spec.type === "currency") {
+    if (typeof spec.currency !== "string" || !CURRENCY_CODE.test(spec.currency)) {
+      return bad("'format.currency' must be a three-letter uppercase ISO-4217 code.");
+    }
+    if (spec.currencyDisplay !== undefined && !isCurrencyDisplay(spec.currencyDisplay)) {
+      return bad(`'format.currencyDisplay' must be one of ${CURRENCY_DISPLAYS.join(", ")}.`);
+    }
+  }
+  // The engine narrows the same shape; a spec it would degrade never passes.
+  return parseFormatSpec(spec) === undefined ? bad("'format' is not a spec the engine accepts.") : undefined;
+}
+
+/** The value transforms a bind may carry — at most one of them per value. */
+export const TRANSFORM_KEYS = ["map", "prefix", "format"] as const;
+
+export type TransformKey = (typeof TRANSFORM_KEYS)[number];
+
+/** Which transform a bind value carries, or `undefined`; `"conflict"` when more than one. */
+export function activeTransform(value: Record<string, unknown>): TransformKey | "conflict" | undefined {
+  const present = TRANSFORM_KEYS.filter((key) => value[key] !== undefined);
+  if (present.length > 1) return "conflict";
+  return present[0];
+}
+
 /** Path syntax per paths.ts: ".", "$index", "$meta."/"$root."/"$parent."-prefixed, or dot segments. */
 function checkPathSyntax(value: string, path: string): TemplateError | undefined {
   if (parsePath(value) !== undefined) return undefined;
@@ -60,7 +149,30 @@ function check(node: unknown, path: string, depth: number): TemplateError | unde
     if (typeof node.bind !== "string") {
       return nodeError("'bind' must be a string path.", path);
     }
-    return checkPathSyntax(node.bind, path);
+    const pathError = checkPathSyntax(node.bind, path);
+    if (pathError) return pathError;
+    // A text bind takes `map` (value → authored label) or `format`, never
+    // both. `prefix` is an attribute-value transform: ignored here and kept
+    // valid, so no stored template is refused on read for carrying it.
+    if (node.map !== undefined && node.format !== undefined) {
+      return nodeError("A text bind carries either 'map' or 'format' — one transform per value.", path);
+    }
+    if (node.map !== undefined) {
+      if (!isPlainObject(node.map) || Object.values(node.map).some((entry) => typeof entry !== "string")) {
+        return nodeError("Bind: 'map' must be an object of string values.", path);
+      }
+      if (node.default !== undefined && typeof node.default !== "string") {
+        return nodeError("Bind: 'default' must be a string.", path);
+      }
+      return undefined;
+    }
+    if (node.default !== undefined) {
+      return nodeError("Bind: 'default' requires 'map'.", path);
+    }
+    if (node.format !== undefined) {
+      return checkFormat(node.format, "Bind", path);
+    }
+    return undefined;
   }
 
   if ("each" in node) {
@@ -133,13 +245,16 @@ function check(node: unknown, path: string, depth: number): TemplateError | unde
           const pathError = checkPathSyntax(value.bind, attrPath);
           if (pathError) return pathError;
           // One transform per value: map selects an authored literal,
-          // prefix glues one in front — combining them has no use case
-          // and every combination would need teaching forever.
-          const hasMap = value.map !== undefined;
-          const hasPrefix = value.prefix !== undefined;
-          if (hasMap && hasPrefix) {
+          // prefix glues one in front, format presents the value —
+          // combining them has no use case and every combination would
+          // need teaching forever.
+          const transform = activeTransform(value);
+          const hasMap = transform === "map";
+          const hasPrefix = transform === "prefix";
+          const hasFormat = transform === "format";
+          if (transform === "conflict") {
             return nodeError(
-              `Attribute '${name}' carries both 'map' and 'prefix' — one transform per value.`,
+              `Attribute '${name}' carries more than one of 'map', 'prefix' and 'format' — one transform per value.`,
               attrPath
             );
           }
@@ -171,10 +286,14 @@ function check(node: unknown, path: string, depth: number): TemplateError | unde
               attrPath
             );
           }
+          if (hasFormat) {
+            const formatError = checkFormat(value.format, `Attribute '${name}'`, attrPath);
+            if (formatError) return formatError;
+          }
           continue;
         }
         return nodeError(
-          `Attribute '${name}' must be a string, { bind }, { bind, map, default? } or { bind, prefix } value.`,
+          `Attribute '${name}' must be a string, { bind }, { bind, map, default? }, { bind, prefix } or { bind, format } value.`,
           attrPath
         );
       }

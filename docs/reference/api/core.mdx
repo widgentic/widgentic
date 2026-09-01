@@ -19,14 +19,26 @@ import { ACTION_NAME } from "@widgentic/core";
 
 - `ACTION_NAME`
 - `ALLOWED_SCHEMES`
+- `CURRENCY_CODE`
+- `CURRENCY_DISPLAYS`
 - `CUSTOM_VARIABLE`
+- `DATE_PATTERN_ALLOWED`
+- `DATE_PATTERN_MAX`
+- `DATE_PATTERN_SEPARATORS`
+- `DATE_TOKENS`
+- `DEFAULT_FORMAT_LOCALE`
 - `DEFAULT_MAX_NODES`
 - `DuplicateKindError`
 - `DuplicateThemeError`
+- `EPOCH_SECONDS_BELOW`
 - `FORBIDDEN_TAGS`
+- `FORMAT_DECIMALS_MAX`
+- `FORMAT_DECIMALS_MIN`
+- `FORMAT_TYPES`
 - `HTTP_METHODS`
 - `InvalidTemplateError`
 - `InvalidThemeEntryError`
+- `LOCALE_TAG`
 - `MAX_TEMPLATE_DEPTH`
 - `OUTPUT_MODES`
 - `PATTERN_MAX_LENGTH`
@@ -38,8 +50,10 @@ import { ACTION_NAME } from "@widgentic/core";
 - `THEME_TOKENS`
 - `TOKEN_DEFAULTS`
 - `TOKEN_SPECS`
+- `TRANSFORM_KEYS`
 - `UNSAFE`
 - `URL_ATTRS`
+- `activeTransform`
 - `analyzeHints`
 - `applyOutput`
 - `applyTheme`
@@ -48,6 +62,7 @@ import { ACTION_NAME } from "@widgentic/core";
 - `collectActionRefs`
 - `collectInlineActions`
 - `collectSecretRefs`
+- `compileFormat`
 - `compileTemplate`
 - `countTemplateNodes`
 - `createCatalog`
@@ -56,11 +71,15 @@ import { ACTION_NAME } from "@widgentic/core";
 - `el`
 - `findActionBinding`
 - `findTemplateNode`
+- `formatBoundValue`
 - `getAtPath`
 - `hasActionBindings`
 - `inferKind`
 - `injectBaseStyles`
+- `isCurrencyDisplay`
 - `isDataPath`
+- `isFormatType`
+- `isKnownLocale`
 - `isPlainObject`
 - `isSafeImageSrc`
 - `isSafeTokenValue`
@@ -70,6 +89,7 @@ import { ACTION_NAME } from "@widgentic/core";
 - `mountNode`
 - `mountWidget`
 - `parseCsv`
+- `parseFormatSpec`
 - `parseJson`
 - `parsePath`
 - `redactText`
@@ -79,6 +99,7 @@ import { ACTION_NAME } from "@widgentic/core";
 - `resolveActionDescriptor`
 - `setAtPath`
 - `themeToCss`
+- `tokenizeDatePattern`
 - `validateActionBinding`
 - `validateActionDefinition`
 - `validateArgs`

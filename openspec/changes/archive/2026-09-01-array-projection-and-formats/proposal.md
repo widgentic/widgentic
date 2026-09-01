@@ -28,7 +28,9 @@ renders raw, and neither a projection nor a bind can present them as `$3,207` or
   its unit"): `{ bind, format }` on text binds and attr values, with a CLOSED,
   data-only vocabulary — `number` (bounded decimals), `currency` (ISO code + bounded
   decimals — the scenario's C0 is `{ type: "currency", currency: "COP", decimals: 0 }`),
-  and `date` (an allowlisted-token pattern such as `dd-MM-yyyy HH:mm`). Numeric
+  and `date` (an allowlisted-token pattern such as `dd-MM-yyyy HH:mm`). Currency naming
+  is an optional `currencyDisplay` defaulting to `narrowSymbol`, so the scenario's C0
+  reads `$3,207` (design D7). Numeric
   strings parse; unparseable values render raw rather than hiding data; no expressions,
   no author code — the author supplies literals, data selects. Formatting in the
   PROJECTION was considered and rejected: it bakes display strings into `payload.data`,

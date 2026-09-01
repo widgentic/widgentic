@@ -36,7 +36,7 @@ flowchart LR
 
 ## Templates are data
 
-- A template has no expressions. Data **selects** — `bind` emits a value as text, `map` picks an author-written literal, `prefix` composes an author-written prefix with a value — and the author supplies every literal. Bindings only ever produce text and attribute strings, never markup.
+- A template has no expressions. Data **selects** — `bind` emits a value as text, `map` picks an author-written literal, `prefix` composes an author-written prefix with a value, `format` presents a value through a closed number/currency/date vocabulary — and the author supplies every literal. Bindings only ever produce text and attribute strings, never markup.
 - Tags on the denylist fail validation with `FORBIDDEN_TAG` and render as nothing if validation was bypassed: `script`, `iframe`, `frame`, `frameset`, `object`, `embed`, `style`, `link`, `meta`, `base`, `template`, `noscript`.
 - `on*` and `srcdoc` attributes are rejected (`FORBIDDEN_ATTRIBUTE`) and skipped at render time; so are hand-written `data-wg-*` attributes — only a validated `action` binding produces a descriptor.
 - URL-bearing attributes (`href`, `src`, `action`, `formaction`, `xlink:href`, `data`, `poster`, `ping`) keep only `http`, `https`, `mailto`, `tel` or relative references. `data:` is accepted solely for base64 `data:image/*` on an `img` `src`. A `prefix`-composed value faces the same guard.

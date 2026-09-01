@@ -51,7 +51,7 @@ Input mappings SHALL be resolved when the widget renders, against the scope of t
 - **THEN** the rendered descriptor SHALL be `{ id, disabled: "unresolved", widget: <kind> }`
 
 ### Requirement: Output flows back through an explicit mode
-An http binding's `output` SHALL declare how the validated response merges into the widget's data: `mode` is `"replace"` (the response becomes `data`), `"merge"` (a shallow merge of the response's top-level keys over `data` — the default when `mode` is absent) or `"patch"` (the response is written at `path`, a required dotted data path). An optional `map` (a record of target data path → source response path) SHALL project the response before the mode applies. The result SHALL be re-validated as a payload of the widget's kind before rendering. `path` and every `map` key and value SHALL follow the dotted-path grammar — non-empty segments, no reserved `$` tokens, no `__proto__`, `constructor` or `prototype` segments — and SHALL be rejected otherwise; a `map` target of `"."` (the whole projection) SHALL be valid only as the sole entry; `path` SHALL be accepted only with `mode: "patch"`; an empty `map` SHALL be rejected. Writes into arrays SHALL address elements by index only. A `merge` whose response (or target data) is not an object SHALL fail with `INVALID_ACTION_OUTPUT` rather than silently replacing.
+An http binding's `output` SHALL declare how the validated response merges into the widget's data: `mode` is `"replace"` (the response becomes `data`), `"merge"` (a shallow merge of the response's top-level keys over `data` — the default when `mode` is absent) or `"patch"` (the response is written at `path`, a required dotted data path). An optional `map` (a record of target data path → source response path) SHALL project the response before the mode applies. When `map` has no `"."` entry, the response is an ARRAY and no source path begins with an index segment, the entries SHALL resolve against EACH ITEM and the projection SHALL be the array of per-item results — selecting and renaming fields out of a list response without replacing it raw; a source path absent from an item projects that item's target as it would for an object response. A source that begins with an index (`0.ask`) addresses the array ROOT, so a map that picks elements by position keeps its meaning. A `map` target of `"."` SHALL SELECT a source value at the response root first: alone, that value IS the projection (so an element of an array response is still addressable by index); beside other entries, it names the value those entries map — an enveloped list (`{ ".": "data", ask: "ask" }`) therefore projects per item after selection, and a selected object maps at its root. The result SHALL be re-validated as a payload of the widget's kind before rendering. `path` and every `map` key and value SHALL follow the dotted-path grammar — non-empty segments, no reserved `$` tokens, no `__proto__`, `constructor` or `prototype` segments — and SHALL be rejected otherwise; `path` SHALL be accepted only with `mode: "patch"`; an empty `map` SHALL be rejected. Writes into arrays SHALL address elements by index only. A `merge` whose response (or target data) is not an object SHALL fail with `INVALID_ACTION_OUTPUT` rather than silently replacing.
 
 #### Scenario: Merge keeps fields the response did not return
 - **WHEN** data `{ city: "Vancouver", temp: 12 }` receives response `{ temp: 18, asOf: "…" }` under the default mode
@@ -66,12 +66,28 @@ An http binding's `output` SHALL declare how the validated response merges into 
 - **THEN** execution SHALL fail with `INVALID_ACTION_OUTPUT` and the widget's previous data SHALL stand
 
 #### Scenario: Output paths follow the grammar
-- **WHEN** a binding declares `output: { mode: "patch", path: "a..b" }`, `map: { "__proto__.x": "y" }`, `map: {}`, `map: { ".": "a", "b": "c" }`, or `mode: "merge"` with a `path`
+- **WHEN** a binding declares `output: { mode: "patch", path: "a..b" }`, `map: { "__proto__.x": "y" }`, `map: {}`, or `mode: "merge"` with a `path`
 - **THEN** validation SHALL fail with `INVALID_ACTION` at the offending field
 
 #### Scenario: Merge needs objects on both sides
 - **WHEN** a `merge` binding's response is an array
 - **THEN** execution SHALL fail with `INVALID_ACTION_OUTPUT` and the widget's data SHALL stand
+
+#### Scenario: An array response projects per item
+- **WHEN** `output: { mode: "replace", map: { ask: "ask", when: "date" } }` receives `[{ "ask": "3206.99", "bid": "3179.43", "date": "2026-09-01T02:04:47" }]`
+- **THEN** the new data SHALL be `[{ "ask": "3206.99", "when": "2026-09-01T02:04:47" }]` — each item projected, unmapped fields dropped
+
+#### Scenario: The whole-projection target still addresses the response root
+- **WHEN** `output: { mode: "replace", map: { ".": "0" } }` receives that same array response
+- **THEN** the projection SHALL be the array's first element, not a per-item result
+
+#### Scenario: Index-addressed sources keep the response root
+- **WHEN** `output: { mode: "merge", map: { latest: "0.ask" } }` receives `[{ "ask": "3206.99" }, { "ask": "3179.43" }]` over object data
+- **THEN** the projection SHALL be `{ latest: "3206.99" }` — one object built at the root, exactly as before per-item projection existed
+
+#### Scenario: An enveloped list projects per item after selection
+- **WHEN** `output: { mode: "replace", map: { ".": "data", price: "ask" } }` receives `{ "data": [{ "ask": "3206.99" }, { "ask": "4100.00" }], "next": "cursor" }`
+- **THEN** the new data SHALL be `[{ "price": "3206.99" }, { "price": "4100.00" }]` — the selection walked, each item mapped, the envelope's other fields dropped
 
 ### Requirement: Execution is server-side and principal-scoped
 Only the principal's own stored definitions SHALL ever execute: an execution request names a widget kind and a binding identifier, and the server SHALL resolve the definition from that principal's stored template or shared action — a request SHALL NOT be able to supply a URL, method, headers or schema of its own. Arguments SHALL be validated against the input schema before any network activity; the response SHALL be required to be `application/json`, to parse, and to satisfy the output schema. Outbound requests SHALL be `https` only, SHALL refuse targets that resolve to private, loopback, link-local or metadata addresses (validated per connection, with the connection pinned to the validated address), SHALL NOT follow redirects, and SHALL be bounded by an 8-second TOTAL deadline (covering connection, headers and body streaming — a slow-drip body cannot extend it) and a 256 KiB response cap; the content type SHALL be checked before the body is read, `application/json` and `application/*+json` SHALL be accepted, and a `204` or empty body SHALL be delivered as `null` for the output schema to judge. Executing an http action SHALL require the caller's `execute` scope; `prompt` actions need no server call and no scope. Arguments SHALL be accepted only for fields the input schema declares (`INVALID_ACTION_INPUT` otherwise, including when the schema declares none), SHALL NOT share a name with a fixed `query` parameter, and fixed `headers`/`query` SHALL be applied AFTER the arguments so the author's values always win.

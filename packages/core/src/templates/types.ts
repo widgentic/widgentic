@@ -5,6 +5,7 @@
  * evaluate for untrusted authors (see guards.ts). Directive nodes are
  * discriminated by their unique key (`bind` / `each` / `when`).
  */
+import type { FormatSpec } from "../catalog/widgets/value-format.js";
 import type { ActionBinding } from "../actions/types.js";
 
 /**
@@ -13,17 +14,26 @@ import type { ActionBinding } from "../actions/types.js";
  * literal (data chooses, it never contributes characters — the safe route
  * to status→class styling); `prefix` glues an author literal in front of
  * the bound value (`mailto:`/`tel:` links), emitted only when the value
- * is non-empty. One transform per value — never both.
+ * is non-empty; `format` presents the value through the closed
+ * number/currency/date vocabulary. One transform per value — never two.
  */
 export type TemplateAttrValue =
   | string
   | { bind: string }
   | { bind: string; map: Record<string, string>; default?: string }
-  | { bind: string; prefix: string };
+  | { bind: string; prefix: string }
+  | { bind: string; format: FormatSpec };
 
-/** Renders the value at `bind` as text. */
+/**
+ * Renders the value at `bind` as text, optionally through a presentation
+ * `format` — the payload keeps the typed value.
+ */
 export interface TemplateBind {
   bind: string;
+  /** Value → authored label; a miss emits `default` or empty text. Exclusive with `format`. */
+  map?: Record<string, string>;
+  default?: string;
+  format?: FormatSpec;
 }
 
 /**

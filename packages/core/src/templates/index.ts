@@ -29,3 +29,5 @@ export {
   DEFAULT_MAX_NODES
 } from "./compile.js";
 export type { CompileOptions } from "./compile.js";
+export { TRANSFORM_KEYS, activeTransform } from "./validate.js";
+export type { TransformKey } from "./validate.js";

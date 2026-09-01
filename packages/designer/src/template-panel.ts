@@ -8,14 +8,24 @@
  */
 import { errorMessage } from "./internal.js";
 import { collectActionRefs } from "@widgentic/core";
+import {
+  CURRENCY_DISPLAYS,
+  DATE_TOKENS,
+  FORMAT_DECIMALS_MAX,
+  FORMAT_DECIMALS_MIN,
+  FORMAT_TYPES,
+  activeTransform,
+  isCurrencyDisplay,
+  isFormatType
+} from "@widgentic/core";
 import { isPlainObject } from "@widgentic/core";
 import type { WidgetTemplate } from "@widgentic/core";
 import type { ActionBinding, StoredAction } from "@widgentic/core";
 import { createBindingEditor } from "./action-editor.js";
 import type { SchemaEntry } from "./schema-designer.js";
-import { collectPaths, schemaType } from "./schema-paths.js";
+import { collectPaths, itemSchema, schemaAt, schemaType } from "./schema-paths.js";
 import { effectiveDataSchema } from "./validate.js";
-import { diagnosticLine, fitSelect, h, menuButton } from "./dom.js";
+import { diagnosticLine, fitSelect, h, menuButton, select } from "./dom.js";
 import { createRecordEditor } from "./record-editor.js";
 import { attachJsonHighlight, repaintHighlight } from "./highlight.js";
 import type { DraftStore, WidgetDraft } from "./store.js";
@@ -28,6 +38,9 @@ type PathUse = "bind" | "each" | "when";
 
 /** Paths worth offering for a given use. */
 function pathOptions(scope: unknown, use: PathUse): string[] {
+  // An ARRAY scope offers only itself: nothing but an index resolves inside
+  // it, and its item's properties belong to the each that walks it.
+  if (schemaType(scope) === "array") return ["."];
   const entries: { path: string; schema: unknown }[] = [];
   collectPaths(scope, "", entries);
   const scalars = new Set([
@@ -50,17 +63,14 @@ function pathOptions(scope: unknown, use: PathUse): string[] {
   return paths;
 }
 
-/** Schema in effect inside `each: <path>` — the array's item schema. */
+/**
+ * Schema in effect inside `each: <path>` — the item schema of the array
+ * that path resolves to. `schemaAt` does the walking, so `each: "."` over
+ * a root-array schema scopes to its item like any other each.
+ */
 function itemScope(scope: unknown, eachPath: string): unknown {
-  if (!isPlainObject(scope) || eachPath === ".") return undefined;
-  let current: unknown = scope;
-  for (const segment of eachPath.split(".")) {
-    if (!isPlainObject(current) || !isPlainObject(current.properties)) return undefined;
-    current = current.properties[segment];
-  }
-  return isPlainObject(current) && schemaType(current) === "array"
-    ? current.items
-    : undefined;
+  const target = schemaAt(scope, eachPath);
+  return schemaType(target) === "array" ? itemSchema(target) : undefined;
 }
 
 const REMOVE = Symbol("remove");
@@ -147,6 +157,7 @@ type AttrBind = {
   prefix?: string;
   map?: Record<string, string>;
   default?: string;
+  format?: Record<string, unknown>;
 };
 
 export function mountTemplatePanel(
@@ -228,6 +239,78 @@ export function mountTemplatePanel(
     input.addEventListener("change", () => onCommit(input.value));
     return input;
   }
+
+  /**
+   * The compact format editor shared by text binds and attribute binds:
+   * a type select revealing that type's fields. Switching type commits a
+   * COMPLETE spec (a real currency code, a real pattern) so the draft is
+   * never momentarily invalid — the same discipline the binding editor's
+   * unnamed rows follow.
+   */
+  function formatEditor(
+    spec: Record<string, unknown> | undefined,
+    onCommit: (next: Record<string, unknown> | undefined) => void
+  ): HTMLElement[] {
+    const active = spec !== undefined && isFormatType(spec.type) ? spec : undefined;
+    const typeSelect = select(
+      [{ value: "none", label: "raw" }, ...FORMAT_TYPES.map((value) => ({ value }))],
+      active === undefined ? "none" : (active.type as string),
+      "wgd-select wgd-format-type",
+      (next) => {
+        // Switching type commits a COMPLETE spec, so the draft is never
+        // momentarily invalid.
+        if (next === "number") onCommit({ type: "number", decimals: 2 });
+        else if (next === "currency") onCommit({ type: "currency", currency: "USD", decimals: 2 });
+        else if (next === "date") onCommit({ type: "date", pattern: "yyyy-MM-dd" });
+        else onCommit(undefined);
+      },
+      "Present the bound value as a number, a currency amount or a date"
+    );
+    if (active === undefined) return [typeSelect];
+
+    const decimalsInput = (): HTMLInputElement => {
+      const input = changeInput(
+        active.decimals === undefined ? "" : String(active.decimals),
+        (next) => {
+          const { decimals: _gone, ...rest } = active;
+          const parsed = Number(next);
+          onCommit(next === "" ? rest : { ...rest, decimals: Number.isFinite(parsed) ? parsed : next });
+        },
+        "wgd-input wgd-format-decimals"
+      );
+      input.placeholder = "dec";
+      input.title = `Decimal places (${FORMAT_DECIMALS_MIN}-${FORMAT_DECIMALS_MAX})`;
+      return input;
+    };
+
+    if (active.type === "currency") {
+      const code = changeInput(
+        typeof active.currency === "string" ? active.currency : "",
+        (next) => onCommit({ ...active, currency: next.toUpperCase() }),
+        "wgd-input wgd-format-currency"
+      );
+      code.placeholder = "CUR";
+      code.title = "ISO-4217 currency code, e.g. COP";
+      const display = select(
+        CURRENCY_DISPLAYS.map((value) => ({ value })),
+        isCurrencyDisplay(active.currencyDisplay) ? active.currencyDisplay : CURRENCY_DISPLAYS[0],
+        "wgd-select wgd-format-display",
+        (next) => onCommit({ ...active, currencyDisplay: next }),
+        "How the currency names itself"
+      );
+      return [typeSelect, code, decimalsInput(), display];
+    }
+    if (active.type === "number") return [typeSelect, decimalsInput()];
+    const pattern = changeInput(
+      typeof active.pattern === "string" ? active.pattern : "",
+      (next) => onCommit({ ...active, pattern: next }),
+      "wgd-input wgd-format-pattern"
+    );
+    pattern.placeholder = "pattern";
+    pattern.title = `Date pattern from ${DATE_TOKENS.join(" ")} plus separators, e.g. dd-MM-yyyy HH:mm`;
+    return [typeSelect, pattern];
+  }
+
 
   /**
    * Collapse state, keyed by node path so it survives the full re-render
@@ -470,19 +553,53 @@ export function mountTemplatePanel(
       );
     }
     if (typeof node.bind === "string") {
-      return nodeShell(
-        "bind",
-        path,
-        [
-          pathControl(node.bind, scope, "bind", (value) =>
-            commitAt(path, { bind: value })
-          )
-        ],
-        [],
-        errorHere,
-        removable,
-        moves
-      );
+      const bind = node.bind;
+      const transform = activeTransform(node);
+      const bindFormat = isPlainObject(node.format) ? node.format : undefined;
+      const bindMap = isPlainObject(node.map) ? (node.map as Record<string, string>) : undefined;
+      // A text bind carries `map` (value → authored label) or `format`; the
+      // other control hides while one is active, mirroring the validator.
+      // `prefix` is attribute-only and is not offered here.
+      const withBind = (extra: Record<string, unknown>): Record<string, unknown> => ({ bind, ...extra });
+      const inline: (Node | string)[] = [
+        pathControl(bind, scope, "bind", (value) => commitAt(path, { ...node, bind: value }))
+      ];
+      if (transform === undefined || transform === "format") {
+        inline.push(
+          ...formatEditor(bindFormat, (next) => commitAt(path, next === undefined ? { bind } : withBind({ format: next })))
+        );
+      }
+      const icons: (Node | string)[] = [];
+      if (transform === undefined) {
+        const addMap = h(
+          "button",
+          { class: "wgd-icon", type: "button", title: "Map values to authored labels (e.g. status → text)" },
+          ["map"]
+        );
+        addMap.addEventListener("click", () => commitAt(path, withBind({ map: {} })));
+        icons.push(addMap);
+      }
+      const body: (Node | string)[] = [];
+      if (transform === "map") {
+        const mapEditor = createRecordEditor(
+          bindMap,
+          { key: "data value", value: "authored label", add: "+ mapping" },
+          (nextMap) => commitAt(path, nextMap === undefined ? { bind } : withBind({ map: nextMap, ...(typeof node.default === "string" ? { default: node.default } : {}) }))
+        );
+        const defaultInput = changeInput(
+          typeof node.default === "string" ? node.default : "",
+          (next) => commitAt(path, withBind({ map: bindMap ?? {}, ...(next === "" ? {} : { default: next }) })),
+          "wgd-input wgd-attr-map-default"
+        );
+        defaultInput.placeholder = "default (on miss)";
+        body.push(
+          h("div", { class: "wgd-attr-map" }, [
+            mapEditor.element,
+            h("div", { class: "wgd-rec-row" }, [h("span", { class: "wgd-st-colon" }, ["↳"]), defaultInput])
+          ])
+        );
+      }
+      return nodeShell("bind", path, inline, body, errorHere, removable, moves, icons.length > 0 ? { icons } : undefined);
     }
     if (typeof node.each === "string") {
       return nodeShell(
@@ -555,8 +672,10 @@ export function mountTemplatePanel(
           prefix?: string | undefined;
           map?: Record<string, string> | undefined;
           default?: string | undefined;
+          format?: Record<string, unknown> | undefined;
         }): Record<string, unknown> => {
           const out: Record<string, unknown> = { bind: fields.bind };
+          // One transform per value, in the validator's own precedence.
           if (fields.map !== undefined) {
             out.map = fields.map;
             if (fields.default !== undefined && fields.default !== "") {
@@ -564,6 +683,8 @@ export function mountTemplatePanel(
             }
           } else if (fields.prefix !== undefined && fields.prefix !== "") {
             out.prefix = fields.prefix;
+          } else if (fields.format !== undefined) {
+            out.format = fields.format;
           }
           return out;
         };
@@ -608,30 +729,33 @@ export function mountTemplatePanel(
         });
 
         const row: (Node | string)[] = [nameInput, mode, valueInput];
-        const hasMap = bindValue?.map !== undefined;
-        const hasPrefix =
-          bindValue?.prefix !== undefined && bindValue.prefix !== "";
-        if (isBind && !hasMap) {
-          // Literal prefix (mailto:/tel: links). Hidden while a map is
-          // active — one transform per value, mirroring the validator.
+        const transform = bindValue === undefined ? undefined : activeTransform(bindValue);
+        const attrFormat = isPlainObject(bindValue?.format) ? bindValue.format : undefined;
+        // One transform per value, mirroring the validator: each editor shows
+        // while nothing else is active (or it is the active one).
+        const showFormat = isBind && (transform === undefined || transform === "format");
+        const showPrefix = isBind && (transform === undefined || transform === "prefix");
+        const showAddMap = isBind && transform === undefined;
+        if (showFormat) {
+          row.push(...formatEditor(attrFormat, (next) => setAttr(rebuild({ ...bound, format: next }))));
+        }
+        if (showPrefix) {
           const prefixInput = changeInput(
             bindValue?.prefix ?? "",
-            (next) => setAttr(rebuild({ ...bound, map: undefined, prefix: next })),
+            (next) => setAttr(rebuild({ ...bound, prefix: next })),
             "wgd-input wgd-attr-prefix"
           );
           prefixInput.placeholder = "prefix";
           prefixInput.title = "Literal prefix, e.g. mailto: — emitted only when the bound value is non-empty";
           row.push(prefixInput);
         }
-        if (isBind && !hasMap && !hasPrefix) {
+        if (showAddMap) {
           const addMap = h(
             "button",
             { class: "wgd-icon", type: "button", title: "Map values to authored literals (e.g. status → class)" },
             ["map"]
           );
-          addMap.addEventListener("click", () =>
-            setAttr(rebuild({ ...bound, prefix: undefined, map: {} }))
-          );
+          addMap.addEventListener("click", () => setAttr(rebuild({ ...bound, map: {} })));
           row.push(h("span", { class: "wgd-node-icons" }, [addMap, removeAttr]));
         } else {
           row.push(removeAttr);
@@ -639,7 +763,7 @@ export function mountTemplatePanel(
 
         const attrRow = h("div", { class: "wgd-attr-row" }, row);
         const parts: (Node | string)[] = [attrRow];
-        if (isBind && hasMap) {
+        if (isBind && transform === "map") {
           // The map block: data value → authored literal rows, plus the
           // miss default. Emptying the record drops the transform.
           const mapEditor = createRecordEditor(
