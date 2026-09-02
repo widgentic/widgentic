@@ -1,6 +1,6 @@
 ---
 title: "Host matrix"
-description: "How each MCP host connects to widgentic, what it shows inline, and which action kinds work there."
+description: "How each MCP host connects to widgentic, what it shows inline, which action kinds work there — and which browsers run the authoring page's WebMCP tools."
 ---
 
 Same server, different hosts. The rows below are generic facts confirmed by probing the hosts; anything not confirmed says so. Registration snippets are in [Connect a host](/get-started/connect-a-host).
@@ -11,6 +11,7 @@ Same server, different hosts. The rows below are generic facts confirmed by prob
 | Claude Desktop | Custom connector as above, or stdio through `claude_desktop_config.json` with absolute paths | Yes: Apps-capable versions mount the page in chat | Not probed | Not probed | Versions without Apps support receive the text result |
 | VS Code Copilot Chat | `.vscode/mcp.json` with `"type": "http"`, the server URL and an `x-api-key` header | Yes: verified for all four built-in kinds plus a custom template widget | Yes: prefills the composer | Yes: proxies `tools/call` | Live host re-theming flows into the `--wg-*` tokens |
 | Claude Code | `claude mcp add widgentic -- npx tsx /path/to/examples/mcp-server/main.ts` (stdio) | No: tool results are text; no UI mounting by design | Not applicable, no frame | Not applicable, no frame | Ask for `format: "page"` and open the document in a browser |
+| ChatGPT (connectors) | Custom connector by URL, so the key travels as `?key=` | Not probed. widgentic serves the MCP Apps `ui://` template, not ChatGPT's Apps SDK `openai/outputTemplate` convention, so expect the text result until probed | Not probed | Not probed | Its desktop app's browser runs the authoring page's WebMCP tools — see below |
 | MCP Apps basic-host | The official reference host pointed at a Streamable HTTP server built with `createWidgenticServer()` | Yes: the reference implementation | `ui/message` accepted | Yes: proxies `tools/call` | The cheapest place to probe the frame before a production host |
 | MCP Inspector | `npx @modelcontextprotocol/inspector npx tsx examples/mcp-server/main.ts` | Not part of our verification | Not applicable | Not applicable | Tool listing and raw tool results without any chat host |
 
@@ -23,6 +24,17 @@ Same server, different hosts. The rows below are generic facts confirmed by prob
 - Partial tool input (`tool-input-partial`) is size-gated by the host, so do not count on the streaming preview appearing for every payload; the tool result is always authoritative.
 - The sandbox CSP blocks external images. The server inlines them as `data:` URIs on iframe surfaces; see [Inline rendering](/how-it-works/inline-rendering).
 - claude.ai mounts a fresh iframe per render, so each render is a new widget instance; a `load` binding fires once per instance.
+
+## Browser agents on the authoring page (WebMCP)
+
+A different axis from the table above: not a host rendering widgets, but a browser whose agent can use the designers on the authoring page as tools, through `@widgentic/webmcp` (beta). See [Co-author with a browser agent](/develop/co-author-with-an-agent).
+
+| Browser | How WebMCP is enabled | Status |
+|---|---|---|
+| ChatGPT Desktop (built-in browser) | Native, per OpenAI's WebMCP documentation; the address bar lists "Available site tools" | Documented by OpenAI; not yet probed by us — the check runs on the deployed self-host instance and will be recorded here |
+| Chrome 149+ / Edge 150 | Origin trial (a token on the page enables it for that origin), or `chrome://flags/#enable-webmcp-testing` | Verified 2026-09-02 on Chrome 151 with the testing flag against both example hosts: twelve tools listed on `document.modelContext`, `readOnlyHint` intact on the five read tools, a draft-load call changed the designer visibly |
+| Chromium with an extension agent | A polyfill the host page loads (nothing is bundled), e.g. `@mcp-b/webmcp-polyfill` | Not probed |
+| Firefox, Safari | No implementation (standards positions open) | Not available: a polyfill supplies the API, not the agent |
 
 ## Connecting to the hosted server
 

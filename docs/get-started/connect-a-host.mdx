@@ -1,6 +1,6 @@
 ---
 title: "Connect a host"
-description: "Registration snippets for claude.ai, Claude Desktop, VS Code Copilot Chat, Claude Code, the MCP Apps basic-host and MCP Inspector."
+description: "Registration snippets for claude.ai, Claude Desktop, ChatGPT connectors, VS Code Copilot Chat, Claude Code, the MCP Apps basic-host and MCP Inspector."
 ---
 
 The hosted widgentic server speaks Streamable HTTP at:
@@ -45,6 +45,10 @@ To run the sample stdio server from a local checkout of the repository instead, 
   }
 }
 ```
+
+## ChatGPT
+
+ChatGPT's connectors take a URL only, so the key travels as a query parameter, the same shape as claude.ai's: `https://mcp.widgentic.dev/mcp?key=<api-key>`. Inline widgets there are **not probed**: widgentic serves the MCP Apps `ui://` template, not ChatGPT's Apps SDK `openai/outputTemplate` convention, so expect the text result (the HTML fragment plus the payload block) until a probe says otherwise. Where ChatGPT does take part today is the other direction — its desktop app's browser runs the authoring page's WebMCP tools, so an agent drafts into the designer you have open and you save; see [Co-author with a browser agent](/develop/co-author-with-an-agent).
 
 ## VS Code Copilot Chat
 
@@ -123,6 +127,7 @@ The response lists the built-in kinds plus your saved widgets. Without the heade
 |---|---|---|
 | claude.ai | Inline | `?key=` in the connector URL |
 | Claude Desktop | Inline (Apps-capable versions) | `?key=` in the connector URL |
+| ChatGPT (connectors) | Text (not probed; MCP Apps template, not the Apps SDK convention) | `?key=` in the connector URL |
 | VS Code Copilot Chat | Inline | `x-api-key` header in `.vscode/mcp.json` |
 | MCP Apps basic-host | Inline | `?key=` in `SERVERS` |
 | Claude Code | Text | Sample stdio server, no key |
