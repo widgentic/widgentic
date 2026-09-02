@@ -38,9 +38,14 @@ export function designerSources(host: DesignerSourceHost): DesignerSources {
   };
 }
 
-/** What a page tells the person about its agent tools — the same words in every example. */
+/**
+ * What a page tells the person about its agent tools: a sentence ONLY when an
+ * agent-capable browser registered them — everyone else sees nothing and
+ * the page is unchanged. (A "no agent-capable browser" line read as a
+ * fault to people who had never heard of WebMCP.)
+ */
 export function describeAgentTools(result: RegisterResult): string {
-  if (!result.supported) return "no agent-capable browser";
-  const failed = result.failed.length === 0 ? "" : `, ${result.failed.length} refused`;
-  return `agent tools: ${result.registered.length} registered${failed}`;
+  if (!result.supported || result.registered.length === 0) return "";
+  const refused = result.failed.length === 0 ? "" : ` (${result.failed.length} refused)`;
+  return `WebMCP tools are available in this browser${refused} — your agent can draft into these designers; you save.`;
 }

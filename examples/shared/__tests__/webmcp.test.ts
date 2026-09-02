@@ -31,14 +31,17 @@ describe("designerSources", () => {
 
 describe("describeAgentTools", () => {
   const dispose = (): void => {};
-  it("says when the browser has no model context", () => {
-    expect(describeAgentTools({ supported: false, registered: [], failed: [], dispose })).toBe("no agent-capable browser");
+  it("says nothing without an agent-capable browser", () => {
+    expect(describeAgentTools({ supported: false, registered: [], failed: [], dispose })).toBe("");
+    expect(describeAgentTools({ supported: true, registered: [], failed: [{ name: "t", message: "x" }], dispose })).toBe("");
   });
-  it("counts what registered, and what was refused", () => {
+  it("tells the person the tools are available, and how many were refused", () => {
     const names = Array.from({ length: 12 }, (_, i) => `t${i}`);
-    expect(describeAgentTools({ supported: true, registered: names, failed: [], dispose })).toBe("agent tools: 12 registered");
+    expect(describeAgentTools({ supported: true, registered: names, failed: [], dispose })).toBe(
+      "WebMCP tools are available in this browser — your agent can draft into these designers; you save."
+    );
     expect(describeAgentTools({ supported: true, registered: names.slice(1), failed: [{ name: "t0", message: "dup" }], dispose })).toBe(
-      "agent tools: 11 registered, 1 refused"
+      "WebMCP tools are available in this browser (1 refused) — your agent can draft into these designers; you save."
     );
   });
 });

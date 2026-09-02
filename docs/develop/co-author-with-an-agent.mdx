@@ -25,9 +25,8 @@ const agentTools = await exposeDesigners({
   action: () => actionDesigner
 });
 
-status.textContent = agentTools.supported
-  ? `agent tools: ${agentTools.registered.length} registered`
-  : "no agent-capable browser";
+// Tell the person only when it matters; everyone else sees the page unchanged.
+if (agentTools.supported) status.textContent = "WebMCP tools are available in this browser — your agent can draft into these designers; you save.";
 ```
 
 Sources are **getters**, resolved on every tool call, because hosts remount designers when the person switches tabs. A getter may bring its section on screen first — then "the agent asked for the theme designer" is something the person watches happen. In a browser without a model context the call resolves with `supported: false`, registers nothing and throws nothing.

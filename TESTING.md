@@ -23,7 +23,7 @@ runnable hosts here.
 | Command | Transport | Use for |
 |--|--|--|
 | `npm run mcp` | stdio | Claude Desktop, Claude Code, any stdio client |
-| `npm run designer` | HTTP on `:8082` | The designers in a demo host (widget + theme + schema + action tabs) with their WebMCP tools registered (header shows `agent tools: 12 registered` in an agent-capable browser); `/standalone.html` uses the published browser bundle |
+| `npm run designer` | HTTP on `:8082` | The designers in a demo host (widget + theme + schema + action tabs) with their WebMCP tools registered (the header says `WebMCP tools are available in this browser` in an agent-capable browser, nothing otherwise); `/standalone.html` uses the published browser bundle |
 
 Quick checks without any host:
 

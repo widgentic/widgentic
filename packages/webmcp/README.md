@@ -28,9 +28,8 @@ const agentTools = await exposeDesigners({
   action: () => actionDesigner
 });
 
-status.textContent = agentTools.supported
-  ? `agent tools: ${agentTools.registered.length} registered`
-  : "no agent-capable browser";
+// Tell the person only when it matters; everyone else sees the page unchanged.
+if (agentTools.supported) status.textContent = "WebMCP tools are available in this browser — your agent can draft into these designers; you save.";
 
 // Later, e.g. on sign-out: every tool disappears together.
 agentTools.dispose();

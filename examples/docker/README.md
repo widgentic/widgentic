@@ -35,7 +35,7 @@ The authoring page registers its four designers as [WebMCP](https://github.com/w
 tools through `@widgentic/webmcp` (beta). Open it in **ChatGPT Desktop's
 browser**, or in Chrome 149+ / Edge 150 with `chrome://flags/#enable-webmcp-testing`
 (or with an origin-trial token for your origin — see below), and the header
-reads `agent tools: 12 registered`. Then the loop is:
+says `WebMCP tools are available in this browser`. Then the loop is:
 
 1. Ask the agent for a widget ("a card for these support tickets"). It calls
    `widgentic_widget_draft_load` and the definition lands in the designer you
@@ -45,8 +45,8 @@ reads `agent tools: 12 registered`. Then the loop is:
 3. **You** click *Save to my catalog*. On the MCP endpoint's next `render_widget`
    the agent — any agent with your key — renders the widget you co-authored.
 
-In a browser without WebMCP the header reads `no agent-capable browser` and
-everything else is unchanged. No polyfill is bundled: a polyfill supplies the
+In a browser without WebMCP nothing is shown and everything else is
+unchanged. No polyfill is bundled: a polyfill supplies the
 API, not the agent. If you want extension-based agents, load one such as
 `@mcp-b/webmcp-polyfill` in `index.html` before the app bundle; the package
 picks up whatever the page has.
