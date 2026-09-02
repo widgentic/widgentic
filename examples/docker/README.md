@@ -18,7 +18,11 @@ docker compose up --build
 #    http://localhost:8081/mcp on the next tool call, no restart.
 ```
 
-Mint a key under **Keys** (shown exactly once), then connect a host:
+Mint a key under **Keys** (shown exactly once, together with the ready-to-paste
+`…/mcp?key=…` form). The Keys section also names the endpoint hosts connect
+to — `http://<host>:8081/mcp` by default, this origin's `/mcp` when the web
+service forwards it, or `WIDGENTIC_MCP_PUBLIC_URL` when you front it with
+something else. Then connect a host:
 
 ```sh
 claude mcp add --transport http widgentic-self http://localhost:8081/mcp --header "x-api-key: <your key>"

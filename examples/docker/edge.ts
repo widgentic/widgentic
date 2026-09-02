@@ -3,7 +3,9 @@
  * else: forward `/mcp` to the MCP service when the environment names one
  * (one public origin, one certificate — a Container App with two containers,
  * a reverse-proxy-less VPS), and carry a Chrome origin-trial token into the
- * page when the environment supplies one. Both are inert when unset.
+ * page when the environment supplies one, and tell the page where its MCP
+ * endpoint is so the Keys section can show hosts what to connect to. All
+ * inert when unset.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { request as httpRequest } from "node:http";
@@ -47,6 +49,29 @@ export function createMcpProxy(upstream: string | undefined): McpProxy {
 export function withOriginTrial(html: string, token: string | undefined): string {
   if (token === undefined || token.trim() === "") return html;
   const meta = `<meta http-equiv="origin-trial" content="${token.trim()}">`;
+  const at = html.indexOf("<title>");
+  return at === -1 ? `${meta}\n${html}` : `${html.slice(0, at)}${meta}\n${html.slice(at)}`;
+}
+
+/**
+ * Where hosts reach this deployment's MCP endpoint, for the page to show:
+ * the operator's explicit public URL wins; a deployment that forwards /mcp
+ * serves it on its own origin (relative, the page resolves it); otherwise
+ * nothing is known here and the page falls back to the compose default —
+ * the MCP service's port on the app's host.
+ */
+export function mcpEndpointHint(env: { WIDGENTIC_MCP_PUBLIC_URL?: string | undefined; WIDGENTIC_MCP_UPSTREAM?: string | undefined }): string | undefined {
+  const explicit = env.WIDGENTIC_MCP_PUBLIC_URL?.trim();
+  if (explicit !== undefined && explicit !== "") return explicit;
+  const upstream = env.WIDGENTIC_MCP_UPSTREAM?.trim();
+  if (upstream !== undefined && upstream !== "") return "/mcp";
+  return undefined;
+}
+
+/** The page with the endpoint hint as a meta tag; unchanged when nothing is known. */
+export function withMcpEndpoint(html: string, endpoint: string | undefined): string {
+  if (endpoint === undefined) return html;
+  const meta = `<meta name="widgentic-mcp-endpoint" content="${endpoint.replace(/"/g, "&quot;")}">`;
   const at = html.indexOf("<title>");
   return at === -1 ? `${meta}\n${html}` : `${html.slice(0, at)}${meta}\n${html.slice(at)}`;
 }

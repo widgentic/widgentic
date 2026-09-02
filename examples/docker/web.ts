@@ -7,8 +7,9 @@
  *
  * Run with: npm run web   (WIDGENTIC_WEB_PORT, default 8080;
  * WIDGENTIC_MCP_UPSTREAM forwards /mcp to the MCP service for single-origin
- * deployments; WIDGENTIC_ORIGIN_TRIAL_TOKEN puts a Chrome origin-trial token
- * on the page)
+ * deployments; WIDGENTIC_MCP_PUBLIC_URL names the endpoint the Keys section
+ * shows when it is not this origin's /mcp; WIDGENTIC_ORIGIN_TRIAL_TOKEN puts a
+ * Chrome origin-trial token on the page)
  */
 import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
@@ -18,7 +19,7 @@ import { build } from "esbuild";
 import { CHROME_DEFAULTS, chromeCss } from "@widgentic/designer";
 import { createExecutionLimiter, DEFAULT_EXECUTIONS_PER_MINUTE, positiveIntFromEnv } from "@widgentic/mcp";
 import { createAuthoringHttpHandler } from "@widgentic/mcp/authoring";
-import { createMcpProxy, withOriginTrial } from "./edge.js";
+import { createMcpProxy, mcpEndpointHint, withMcpEndpoint, withOriginTrial } from "./edge.js";
 import { createIdentity } from "./identity.js";
 import { openDeployment } from "./store.js";
 
@@ -53,7 +54,10 @@ const bundle = await build({
 // Single-origin deployments: forward /mcp to the MCP service and carry a
 // Chrome origin-trial token into the page — both only when configured.
 const proxyMcp = createMcpProxy(process.env.WIDGENTIC_MCP_UPSTREAM);
-const page = withOriginTrial(readFileSync(join(here, "index.html"), "utf8"), process.env.WIDGENTIC_ORIGIN_TRIAL_TOKEN);
+const page = withMcpEndpoint(
+  withOriginTrial(readFileSync(join(here, "index.html"), "utf8"), process.env.WIDGENTIC_ORIGIN_TRIAL_TOKEN),
+  mcpEndpointHint(process.env)
+);
 const ASSETS: Record<string, { body: string; type: string }> = {
   "/": { body: page, type: "text/html; charset=utf-8" },
   "/app.bundle.js": { body: bundle.outputFiles[0]?.text ?? "", type: "text/javascript; charset=utf-8" },

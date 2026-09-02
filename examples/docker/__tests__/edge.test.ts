@@ -8,7 +8,7 @@
 import { createServer } from "node:http";
 import type { IncomingMessage, Server, ServerResponse } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
-import { createMcpProxy, withOriginTrial } from "../edge.js";
+import { createMcpProxy, mcpEndpointHint, withMcpEndpoint, withOriginTrial } from "../edge.js";
 
 let servers: Server[] = [];
 afterEach(() => {
@@ -98,5 +98,20 @@ describe("the origin-trial meta", () => {
     const withToken = withOriginTrial(page, "AbC123==");
     expect(withToken).toContain('<meta http-equiv="origin-trial" content="AbC123==">\n<title>');
     expect(withToken.indexOf("origin-trial")).toBeLessThan(withToken.indexOf("<title>"));
+  });
+});
+
+describe("the MCP endpoint hint", () => {
+  it("prefers the explicit public URL, then this origin's /mcp when forwarding, else knows nothing", () => {
+    expect(mcpEndpointHint({ WIDGENTIC_MCP_PUBLIC_URL: "https://mcp.example.test/mcp", WIDGENTIC_MCP_UPSTREAM: "http://mcp:8081" })).toBe("https://mcp.example.test/mcp");
+    expect(mcpEndpointHint({ WIDGENTIC_MCP_UPSTREAM: "http://mcp:8081" })).toBe("/mcp");
+    expect(mcpEndpointHint({ WIDGENTIC_MCP_PUBLIC_URL: " ", WIDGENTIC_MCP_UPSTREAM: "" })).toBeUndefined();
+    expect(mcpEndpointHint({})).toBeUndefined();
+  });
+  it("lands on the page as a meta tag only when known", () => {
+    const page = "<!doctype html>\n<title>t</title>\n<body></body>";
+    expect(withMcpEndpoint(page, undefined)).toBe(page);
+    expect(withMcpEndpoint(page, "/mcp")).toContain('<meta name="widgentic-mcp-endpoint" content="/mcp">\n<title>');
+    expect(withMcpEndpoint(page, 'https://x/"mcp')).toContain('content="https://x/&quot;mcp"');
   });
 });

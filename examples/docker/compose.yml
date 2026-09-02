@@ -35,6 +35,10 @@ services:
       # Container App running both containers): forward /mcp to the MCP
       # service so agents connect to https://<your-origin>/mcp.
       # WIDGENTIC_MCP_UPSTREAM: http://mcp:8081
+      # The endpoint the Keys section tells people to connect to, when it is
+      # neither this origin's /mcp nor http://<host>:8081/mcp (a reverse proxy
+      # in front of the mcp service, for example):
+      # WIDGENTIC_MCP_PUBLIC_URL: https://mcp.example.com/mcp
       # Chrome 149+ / Edge 150 expose WebMCP on this origin without a flag
       # when the page carries an origin-trial token for it (register the
       # origin at developer.chrome.com/origintrials; the token is public but

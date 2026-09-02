@@ -446,6 +446,32 @@ async function refreshKeys(): Promise<void> {
   showKeys();
 }
 
+/**
+ * Where hosts connect: the server's hint (explicit public URL, or this
+ * origin's /mcp when the web service forwards), else the compose default —
+ * the MCP service's own port on this host.
+ */
+function mcpEndpoint(): string {
+  const hint = document.querySelector('meta[name="widgentic-mcp-endpoint"]')?.getAttribute("content") ?? "";
+  if (hint === "") return `${location.protocol}//${location.hostname}:8081/mcp`;
+  return new URL(hint, location.origin).toString();
+}
+
+function renderConnectHint(): void {
+  const url = mcpEndpoint();
+  const el = $("key-connect");
+  el.replaceChildren();
+  const add = (text: string): void => { el.append(document.createTextNode(text)); };
+  const code = (text: string): void => { const c = document.createElement("code"); c.textContent = text; el.append(c); };
+  add("Connect a host to ");
+  code(url);
+  add(" — hosts that send headers: ");
+  code("x-api-key: <your key>");
+  add("; connectors that take only a URL: ");
+  code(`${url}?key=<your key>`);
+  add(".");
+}
+
 async function createKey(): Promise<void> {
   const name = $<HTMLInputElement>("key-name").value.trim();
   const execute = $<HTMLInputElement>("key-execute").checked;
@@ -454,6 +480,10 @@ async function createKey(): Promise<void> {
   const reveal = $("key-reveal");
   reveal.hidden = false;
   reveal.textContent = `${created.key} — ${created.notice}`;
+  // The ready-to-paste form for URL-only connectors, shown once with the key.
+  const asUrl = document.createElement("div");
+  asUrl.textContent = `${mcpEndpoint()}?key=${created.key}`;
+  reveal.append(asUrl);
   $<HTMLInputElement>("key-name").value = "";
   await refreshKeys();
 }
@@ -539,6 +569,7 @@ async function boot(): Promise<void> {
   openThemeDesigner();
   openSchemaDesigner();
   openActionDesigner();
+  renderConnectHint();
   showTab("widgets"); // mounts the widget designer — the one place that does
   status("ready — everything you save is served on the MCP endpoint immediately");
 

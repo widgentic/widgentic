@@ -37,6 +37,10 @@
   .muted { color: var(--host-muted); }
   .controls { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
   form.line { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
+  form.line label { display: inline-flex; align-items: center; gap: 6px; }
+  input[type="checkbox"] { width: 15px; height: 15px; padding: 0; margin: 0; accent-color: var(--host-accent); }
+  .connect { font-size: 12.5px; color: var(--host-muted); margin: 0 0 10px; }
+  .connect code { color: var(--host-text); word-break: break-all; }
   .reveal { border: 1px solid var(--host-accent-line); background: var(--host-accent-bg); border-radius: var(--host-radius-lg); padding: 8px 10px; margin: 8px 0; font-family: var(--host-font-mono); word-break: break-all; }
   .reveal[hidden] { display: none; }
 </style>
@@ -112,6 +116,7 @@
 
   <section id="pane-keys" hidden>
     <p class="muted">Keys let agent hosts read your catalog over MCP. The raw key is shown exactly once; <code>execute</code> additionally lets your http actions run.</p>
+    <p id="key-connect" class="connect"></p>
     <form id="key-form" class="line">
       <input id="key-name" placeholder="key name (e.g. laptop)" required>
       <label><input id="key-execute" type="checkbox"> execute</label>
