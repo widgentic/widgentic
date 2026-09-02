@@ -215,7 +215,7 @@ instead.
 
 Inline mounting is verified in the official **basic-host** reference,
 **VS Code Copilot Chat** (all four built-in kinds plus a custom template widget, live host re-theming),
-**claude.ai** and — a basic render, actions not yet probed — **ChatGPT Desktop**, which implements the MCP Apps standard;
+**claude.ai** and **ChatGPT** (web, mobile web and desktop — it implements the MCP Apps standard; `load`/http actions run, `prompt` actions are sent rather than prefilled);
 Claude Code degrades gracefully to text. Host registration snippets live in
 [TESTING.md](TESTING.md).
 
@@ -284,7 +284,7 @@ events. Persistence is always the host's.
 
 Widgets can carry **actions** — declared as data, never code. Two kinds:
 
-- `prompt` proposes a message: the host puts the resolved text into the user's composer (claude.ai and VS Code Copilot both do this) and the user decides to send it.
+- `prompt` proposes a message: the host puts the resolved text into the user's composer (claude.ai and VS Code Copilot both do this) and the user decides to send it. ChatGPT instead sends it — after a send-or-cancel dialog on desktop, automatically on the web when the connector is set to "allow all" — so on ChatGPT the text IS the message.
 - `http` calls an author-declared URL **server-side**: `method`, a fixed `https` `url`, an `input` schema (GET → query parameters, POST → JSON body) and an `output` schema the response must satisfy. Optional `headers`/`query` values may reference the user's secrets by name (`{ "secret": "weather-token" }`).
 
 Bind an action to a button or link with `action` (mutually exclusive with `href`) — either a shared action by name (`{ "ref": "refresh" }`) or inline (`{ "definition": { … } }`) — plus an `input` mapping (field ← data path or `{ "const": … }`, resolved at render time in the element's scope with `$root`, `$parent`, `$index` available) and an `output` mode (`merge` default, `replace`, or `patch` at a path). A widget-level `load` (http GET only) runs once when the widget first renders. See `examples/mcp-server/widgets/weather.ts` for the reference pattern.
