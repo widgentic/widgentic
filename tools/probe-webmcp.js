@@ -34,7 +34,9 @@
     ? [
         ["document.modelContext.executeTool(tool, input)", () => context.executeTool(target, { definition })],
         ["testing.executeTool(tool, input)", () => testing.executeTool(target, { definition })],
-        ["testing.executeTool(name, json)", () => testing.executeTool(target.name, JSON.stringify({ definition }))]
+        ["testing.executeTool(name, json)", () => testing.executeTool(target.name, JSON.stringify({ definition }))],
+        // Without the testing flag (origin trial), the spec surface is all there is.
+        ["document.modelContext.executeTool(tool, json)", () => context.executeTool(target, JSON.stringify({ definition }))]
       ]
     : [];
   for (const [shape, call] of calls) {

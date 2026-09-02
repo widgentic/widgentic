@@ -132,7 +132,13 @@ the expression file reads the page's `#agent-status`, lists the registered tools
 through `navigator.modelContextTesting.getTools()`, executes
 `widgentic_widget_draft_load` with a small definition and reports what the
 DESIGNER shows afterwards (the kind input's value, the preview's heading) — a
-tool that "succeeded" without the designer changing is a failure. Expect twelve tools, five of them `readOnlyHint`. The testing surface
+tool that "succeeded" without the designer changing is a failure. Two Chrome facts
+the probe encodes: the testing surface lists with `listTools()` and executes with
+`executeTool(name, jsonString)`, and the SPEC surface's `document.modelContext.executeTool(tool, input)`
+wants the input as a JSON STRING too (an object fails with "Failed to parse input
+arguments"). With an origin-trial token on the page the same probe runs on a Chrome
+WITHOUT any flag (`CHROME_ARGS` unset): `navigator.modelContextTesting` is absent and
+the spec surface does everything. Expect twelve tools, five of them `readOnlyHint`. The testing surface
 is version-dependent (Chrome 149+; its `executeTool` signature has moved), so
 the script prints what it found rather than asserting; read it. In ChatGPT
 Desktop the equivalent check is the address bar's **Available site tools**
