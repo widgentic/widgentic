@@ -11,13 +11,13 @@ Same server, different hosts. The rows below are generic facts confirmed by prob
 | Claude Desktop | Custom connector as above, or stdio through `claude_desktop_config.json` with absolute paths | Yes: Apps-capable versions mount the page in chat | Not probed | Not probed | Versions without Apps support receive the text result |
 | VS Code Copilot Chat | `.vscode/mcp.json` with `"type": "http"`, the server URL and an `x-api-key` header | Yes: verified for all four built-in kinds plus a custom template widget | Yes: prefills the composer | Yes: proxies `tools/call` | Live host re-theming flows into the `--wg-*` tokens |
 | Claude Code | `claude mcp add widgentic -- npx tsx /path/to/examples/mcp-server/main.ts` (stdio) | No: tool results are text; no UI mounting by design | Not applicable, no frame | Not applicable, no frame | Ask for `format: "page"` and open the document in a browser |
-| ChatGPT (connectors) | Custom connector by URL, so the key travels as `?key=` | Not probed. widgentic serves the MCP Apps `ui://` template, not ChatGPT's Apps SDK `openai/outputTemplate` convention, so expect the text result until probed | Not probed | Not probed | Its desktop app's browser runs the authoring page's WebMCP tools — see below |
+| ChatGPT | Custom connector by URL, so the key travels as `?key=` | Yes: ChatGPT implements the MCP Apps standard (`ui://` resources, `text/html;profile=mcp-app`) and a basic test in ChatGPT Desktop rendered a widget inline (2026-09-02); the older Apps SDK `openai/outputTemplate` is an alias, not a requirement | Not yet probed | Not yet probed | Declares CSP domains through the MCP Apps metadata; its desktop app's browser also runs the authoring page's WebMCP tools — see below |
 | MCP Apps basic-host | The official reference host pointed at a Streamable HTTP server built with `createWidgenticServer()` | Yes: the reference implementation | `ui/message` accepted | Yes: proxies `tools/call` | The cheapest place to probe the frame before a production host |
 | MCP Inspector | `npx @modelcontextprotocol/inspector npx tsx examples/mcp-server/main.ts` | Not part of our verification | Not applicable | Not applicable | Tool listing and raw tool results without any chat host |
 
 ## Facts that hold across Apps hosts
 
-- All three Apps hosts we probed — basic-host, claude.ai and VS Code Copilot Chat — honour `ui/message`, but only claude.ai advertises it. The frame therefore never gates prompt actions on the advertised flag; a host that answers with a JSON-RPC error gets an inline alert inside the frame while the widget stays intact.
+- All three Apps hosts we probed for actions — basic-host, claude.ai and VS Code Copilot Chat — honour `ui/message`, but only claude.ai advertises it. ChatGPT renders the template but its action behaviour is not yet probed. The frame therefore never gates prompt actions on the advertised flag; a host that answers with a JSON-RPC error gets an inline alert inside the frame while the widget stays intact.
 - `hostCapabilities.serverTools` in the initialize result is the reliable gate for http actions. Without it the frame renders http descriptors disabled with an explanatory `title`, and prompt actions stay enabled. All three probed hosts advertise it and proxy the frame's `tools/call` to the server.
 - App-side `tools/list` is unsupported everywhere (`-32601`), so the frame never enumerates tools; it calls `execute_action` by name.
 - Hosts cache `ui://` resources per conversation. After a server change, retest the template in a fresh chat.
@@ -31,7 +31,7 @@ A different axis from the table above: not a host rendering widgets, but a brows
 
 | Browser | How WebMCP is enabled | Status |
 |---|---|---|
-| ChatGPT Desktop (built-in browser) | Native, per OpenAI's WebMCP documentation; the address bar lists "Available site tools" | Documented by OpenAI; not yet probed by us — the check runs on the deployed self-host instance and will be recorded here |
+| ChatGPT Desktop (built-in browser) | Native, per OpenAI's WebMCP documentation; the address bar lists "Available site tools" | Documented by OpenAI; the widgentic tools are not yet probed there — the check runs on the deployed self-host instance and will be recorded here |
 | Chrome 149+ / Edge 150 | Origin trial (a token on the page enables it for that origin), or `chrome://flags/#enable-webmcp-testing` | Verified 2026-09-02 on Chrome 151 with the testing flag against both example hosts: twelve tools listed on `document.modelContext`, `readOnlyHint` intact on the five read tools, a draft-load call changed the designer visibly |
 | Chromium with an extension agent | A polyfill the host page loads (nothing is bundled), e.g. `@mcp-b/webmcp-polyfill` | Not probed |
 | Firefox, Safari | No implementation (standards positions open) | Not available: a polyfill supplies the API, not the agent |

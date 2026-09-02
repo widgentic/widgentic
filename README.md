@@ -194,7 +194,7 @@ For Claude Desktop, add to `claude_desktop_config.json` (absolute paths — Desk
 
 ### Inline widgets in Apps-capable hosts
 
-Hosts that support MCP Apps (Claude Desktop among them) can display widgets
+Hosts that support MCP Apps (claude.ai, Claude Desktop, ChatGPT and VS Code Copilot Chat among them) can display widgets
 **inline in the conversation**. The server implements the official convention
 (spec 2026-01-26, via `@modelcontextprotocol/ext-apps`): `render_widget`
 declares its app template (`_meta.ui.resourceUri` → `ui://widgentic/app.html`,
@@ -213,8 +213,9 @@ chat. Non-aware hosts (including Claude Code's terminal chat) receive the same
 result as text; there, use `format: "page"` and open the document in a browser
 instead.
 
-Inline mounting is verified in the official **basic-host** reference and
-**VS Code Copilot Chat** (all four built-in kinds plus a custom template widget, live host re-theming);
+Inline mounting is verified in the official **basic-host** reference,
+**VS Code Copilot Chat** (all four built-in kinds plus a custom template widget, live host re-theming),
+**claude.ai** and — a basic render, actions not yet probed — **ChatGPT Desktop**, which implements the MCP Apps standard;
 Claude Code degrades gracefully to text. Host registration snippets live in
 [TESTING.md](TESTING.md).
 
