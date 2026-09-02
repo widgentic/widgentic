@@ -1,8 +1,8 @@
 # @widgentic/webmcp
 
-> **Beta.** The API may change in minor versions before 1.0. Verified against
-> the WebMCP specification's `document.modelContext` shape (2026-09-02); see
-> "Browsers" below for what has been exercised where.
+> **Beta.** The API may change in minor versions before 1.0. Built against the
+> WebMCP specification's `document.modelContext` shape; see "Browsers" below
+> for what has been exercised where.
 
 Expose the mounted widgentic designers as [WebMCP](https://github.com/webmachinelearning/webmcp)
 tools, so a browser-side agent — ChatGPT Desktop's browser, Chrome or Edge in
