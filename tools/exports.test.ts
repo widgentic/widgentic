@@ -18,6 +18,7 @@ const ENTRIES = [
   "@widgentic/core/actions",
   "@widgentic/core/reactive",
   "@widgentic/designer",
+  "@widgentic/webmcp",
   "@widgentic/mcp",
   "@widgentic/mcp/sdk",
   "@widgentic/mcp/authoring",

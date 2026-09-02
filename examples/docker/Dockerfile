@@ -27,7 +27,7 @@ COPY docker/ ./
 # window between landing a change here and releasing it), this fails the
 # build instead of shipping containers that crash-loop.
 RUN node --disable-warning=ExperimentalWarning ./node_modules/.bin/tsx --eval \
-  "Promise.all([import('@widgentic/mcp/authoring'), import('@widgentic/mcp/store/sqlite'), import('@widgentic/mcp/sdk'), import('@widgentic/designer')]).then(() => console.log('entry imports ok'), (error) => { console.error(error); process.exit(1); })"
+  "Promise.all([import('@widgentic/mcp/authoring'), import('@widgentic/mcp/store/sqlite'), import('@widgentic/mcp/sdk'), import('@widgentic/designer'), import('@widgentic/webmcp')]).then(() => console.log('entry imports ok'), (error) => { console.error(error); process.exit(1); })"
 
 # node:sqlite is stable in behavior on Node 22 but still flagged
 # experimental; the entrypoints silence exactly that warning and no other.

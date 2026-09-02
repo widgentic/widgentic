@@ -1,0 +1,69 @@
+---
+title: "Co-author with a browser agent"
+description: "Expose the mounted designers as WebMCP tools with @widgentic/webmcp (beta), so an agent in the person's browser drafts into the designer they are looking at — and the person saves."
+---
+
+widgentic has always had two authors who never met on one screen: an agent that learns the authoring contract over MCP and drafts JSON, and a person who imports that JSON into a designer, fixes it and saves. [WebMCP](https://github.com/webmachinelearning/webmcp) — an experimental W3C standard shipping in ChatGPT Desktop's browser and in the Chrome 149+ / Edge 150 origin trial — lets a page register **tools the browser's agent calls under the person's own session**. `@widgentic/webmcp` registers the designers as those tools.
+
+<Note>
+**Beta.** The API may change in minor versions before 1.0, and browser support is moving. Verified against the specification's `document.modelContext` shape on 2026-09-02.
+</Note>
+
+```bash
+npm install @widgentic/webmcp
+```
+
+## One call after mounting
+
+```ts
+import { exposeDesigners } from "@widgentic/webmcp";
+
+const agentTools = await exposeDesigners({
+  widget: () => widgetDesigner,
+  theme: () => { showTab("theme"); return themeDesigner; },
+  schema: () => schemaDesigner,
+  action: () => actionDesigner
+});
+
+status.textContent = agentTools.supported
+  ? `agent tools: ${agentTools.registered.length} registered`
+  : "no agent-capable browser";
+```
+
+Sources are **getters**, resolved on every tool call, because hosts remount designers when the person switches tabs. A getter may bring its section on screen first — then "the agent asked for the theme designer" is something the person watches happen. In a browser without a model context the call resolves with `supported: false`, registers nothing and throws nothing.
+
+## The loop
+
+1. The person opens the authoring page in ChatGPT Desktop's browser (or a flagged Chrome) and asks for a widget.
+2. The agent calls `widgentic_widget_draft_get` to see what is open, then `widgentic_widget_draft_load` with a definition. The designer validates it exactly as its Import panel would: applied, with the designer's diagnostics — or refused, with the designer's own error strings.
+3. Fix, restyle, ask again: example data (`widgentic_widget_example_data_set`), preview theme (`widgentic_widget_theme_set`), a theme entry, a shared schema, an action.
+4. **The person saves.** No tool persists anything; the host's save controls remain the only write path. On the MCP endpoint's next `render_widget`, any agent with a key renders the widget the two of them made.
+
+## The tools
+
+Twelve tools under a configurable prefix (default `widgentic`); only the designers you supply a source for get tools, the token reference is always present. Read tools carry `annotations.readOnlyHint`, so agents run them without a confirmation step.
+
+| Tool | Read-only | Does |
+|---|---|---|
+| `widget_draft_get` | yes | The open definition `{ kind, template, descriptor, load? }` plus the designer's diagnostics |
+| `widget_draft_load` | | Replace the draft with a definition, through the designer's validation |
+| `widget_example_data_set` | | Replace `descriptor.dataExample`; the example-versus-schema verdict comes back in the diagnostics |
+| `widget_theme_set` | | Set the draft's preview theme tokens |
+| `theme_get` / `theme_load` / `theme_tokens_set` | get | The theme entry; merge tokens into it (`{ tokens, remove? }`) |
+| `schema_get` / `schema_load` | get | The shared data-schema entry |
+| `action_get` / `action_load` | get | The action entry |
+| `theme_token_specs` | yes | Every `--wg-*` token with type, default, purpose and fallback |
+
+Every result is MCP-shaped text content carrying one JSON document with a boolean `ok`. Refusals are results, never rejections: `NOT_MOUNTED`, `INVALID_INPUT` (naming the argument) and `REJECTED` (with the designer's `errors`).
+
+## Browsers, flags and polyfills
+
+- **Native**: `document.modelContext` (the specification, ChatGPT Desktop) is resolved first, `navigator.modelContext` (Chrome origin trial) second; an explicit `{ modelContext }` option wins over both.
+- **Chrome / Edge without a token**: `chrome://flags/#enable-webmcp-testing`, or `--enable-features=WebMCPTesting,DevToolsWebMCPSupport` and `navigator.modelContextTesting.getTools()` / `executeTool()` for driverless checks. With an [origin-trial token](https://developer.chrome.com/origintrials) on your page, no flag is needed on your origin.
+- **Polyfills**: nothing is bundled — a polyfill supplies the API, not the agent, and cannot make Firefox or Safari agent-capable. To reach extension-based agents, load one such as `@mcp-b/webmcp-polyfill` (it installs `document.modelContext` and defers to a native one) **before** `exposeDesigners`; the resolver finds whatever the page has.
+
+Tools register on the top-level page only; browsers do not read tools from iframes.
+
+## Your own tools
+
+`registerTools(tools, { modelContext?, signal? })` registers any descriptors in the same shape under one abort signal, and `exposeDesigners` takes extra ones as `{ tools }`. `designerTools(sources, { prefix })` returns the descriptors without registering. Build results with `okResult()` / `failResult()` so agents see one vocabulary. The self-host example ([Self-hosting](/develop/self-hosting)) is the reference host: its authoring page registers the tools, and its `web` service can forward `/mcp` so one origin serves both surfaces.

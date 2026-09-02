@@ -29,6 +29,41 @@ Hosts whose connector settings cannot send headers can use
 an unknown one) is served the built-in catalog — never an error. `execute`
 is opt-in per key and is what lets your http actions run.
 
+## Co-author with a browser agent (WebMCP)
+
+The authoring page registers its four designers as [WebMCP](https://github.com/webmachinelearning/webmcp)
+tools through `@widgentic/webmcp` (beta). Open it in **ChatGPT Desktop's
+browser**, or in Chrome 149+ / Edge 150 with `chrome://flags/#enable-webmcp-testing`
+(or with an origin-trial token for your origin — see below), and the header
+reads `agent tools: 12 registered`. Then the loop is:
+
+1. Ask the agent for a widget ("a card for these support tickets"). It calls
+   `widgentic_widget_draft_load` and the definition lands in the designer you
+   are looking at, with the designer's own diagnostics.
+2. Fix, restyle, ask again — the agent reads what you see (`widgentic_widget_draft_get`),
+   sets example data, tries a theme. Nothing is saved by a tool.
+3. **You** click *Save to my catalog*. On the MCP endpoint's next `render_widget`
+   the agent — any agent with your key — renders the widget you co-authored.
+
+In a browser without WebMCP the header reads `no agent-capable browser` and
+everything else is unchanged. No polyfill is bundled: a polyfill supplies the
+API, not the agent. If you want extension-based agents, load one such as
+`@mcp-b/webmcp-polyfill` in `index.html` before the app bundle; the package
+picks up whatever the page has.
+
+### One origin for both surfaces
+
+`WIDGENTIC_MCP_UPSTREAM=http://mcp:8081` on the `web` service forwards
+`/mcp` to the MCP service — method, headers, body and the streamed response
+untouched, no authorization added — so agents connect to
+`https://<your-origin>/mcp` and one certificate covers both. This is how the
+hosted challenge instance runs: one Azure Container App, two containers from
+this image sharing an ephemeral `/data` (a restart empties it — the compose
+file's named volume is the durable arrangement). `WIDGENTIC_ORIGIN_TRIAL_TOKEN`
+puts a Chrome origin-trial token on the page so Chrome exposes WebMCP on your
+origin without a flag; register the origin at developer.chrome.com/origintrials
+and keep the token in the environment.
+
 ## The trust shape
 
 The two services deliberately mirror the hosted product's split:

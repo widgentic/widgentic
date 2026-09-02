@@ -19,6 +19,7 @@ const alias = [
   { find: /^@widgentic\/mcp\/secrets\/keyvault$/, replacement: src("mcp", "secrets/keyvault.ts") },
   { find: /^@widgentic\/mcp\/secrets$/, replacement: src("mcp", "secrets/index.ts") },
   { find: /^@widgentic\/mcp$/, replacement: src("mcp") },
+  { find: /^@widgentic\/webmcp$/, replacement: src("webmcp") },
   { find: /^@widgentic\/designer\/browser$/, replacement: src("designer", "browser.ts") },
   { find: /^@widgentic\/designer$/, replacement: src("designer") },
   { find: /^@widgentic\/core\/([a-z-]+)$/, replacement: src("core", "$1/index.ts") },
@@ -47,6 +48,7 @@ export default defineConfig({
     projects: [
       project("core", ["packages/core/src/**/__tests__/**/*.test.ts"], ["packages/core/src/**/__tests__/**/*.test-d.ts"]),
       project("designer", ["packages/designer/src/**/__tests__/**/*.test.ts"]),
+      project("webmcp", ["packages/webmcp/src/**/__tests__/**/*.test.ts"]),
       project("mcp", ["packages/mcp/src/**/__tests__/**/*.test.ts"], ["packages/mcp/src/**/__tests__/**/*.test-d.ts"]),
       // Examples are a guide, not a product: this project is deliberately
       // narrow (the identity rules, where being wrong is a security bug);

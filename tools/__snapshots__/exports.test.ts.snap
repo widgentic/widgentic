@@ -393,3 +393,15 @@ exports[`published export surfaces > @widgentic/mcp/store/sqlite 1`] = `
   "createSqliteStore",
 ]
 `;
+
+exports[`published export surfaces > @widgentic/webmcp 1`] = `
+[
+  "DEFAULT_PREFIX",
+  "designerTools",
+  "exposeDesigners",
+  "failResult",
+  "okResult",
+  "registerTools",
+  "resolveModelContext",
+]
+`;

@@ -31,6 +31,15 @@ services:
       # user and make the proxy STRIP it from inbound client requests.
       # Once set, requests without the header are refused (fail closed).
       # WIDGENTIC_TRUSTED_USER_HEADER: x-forwarded-user
+      # Single-origin hosting (one domain, one certificate — e.g. one Azure
+      # Container App running both containers): forward /mcp to the MCP
+      # service so agents connect to https://<your-origin>/mcp.
+      # WIDGENTIC_MCP_UPSTREAM: http://mcp:8081
+      # Chrome 149+ / Edge 150 expose WebMCP on this origin without a flag
+      # when the page carries an origin-trial token for it (register the
+      # origin at developer.chrome.com/origintrials; the token is public but
+      # origin-bound, so keep it in the environment, not in the image).
+      # WIDGENTIC_ORIGIN_TRIAL_TOKEN: <token>
 
   mcp:
     build:

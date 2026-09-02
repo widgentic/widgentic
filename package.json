@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "license": "MIT",
-  "description": "Widgets for agents \u2014 workspace root: public packages under packages/, sample hosts under examples/.",
+  "description": "Widgets for agents — workspace root: public packages under packages/, sample hosts under examples/.",
   "workspaces": [
     "packages/*",
     "examples/*"
@@ -14,7 +14,7 @@
     "test": "vitest run",
     "test:types": "vitest --typecheck.only run",
     "test:watch": "vitest",
-    "build": "npm run build -w @widgentic/core && npm run build -w @widgentic/designer && npm run build -w @widgentic/mcp",
+    "build": "npm run build -w @widgentic/core && npm run build -w @widgentic/designer && npm run build -w @widgentic/webmcp && npm run build -w @widgentic/mcp",
     "pack:check": "node tools/pack-check.mjs",
     "changeset": "changeset",
     "version": "changeset version",

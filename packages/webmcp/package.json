@@ -1,0 +1,47 @@
+{
+  "name": "@widgentic/webmcp",
+  "version": "0.0.0",
+  "description": "BETA — expose mounted widgentic designers as WebMCP tools (document.modelContext), so a browser-side agent can draft into the designer the person is looking at. API may change in minor versions before 1.0.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/widgentic/widgentic.git",
+    "directory": "packages/webmcp"
+  },
+  "homepage": "https://widgentic.dev",
+  "keywords": [
+    "widgentic",
+    "webmcp",
+    "widgets",
+    "mcp",
+    "agents"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@widgentic/core": "^0.7.0",
+    "@widgentic/designer": "^0.7.0"
+  }
+}

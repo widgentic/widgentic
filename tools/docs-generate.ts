@@ -50,6 +50,7 @@ export const API_ENTRIES: ReadonlyArray<{ specifier: string; slug: string; pkg: 
   { specifier: "@widgentic/core/actions", slug: "core-actions", pkg: "@widgentic/core" },
   { specifier: "@widgentic/core/reactive", slug: "core-reactive", pkg: "@widgentic/core" },
   { specifier: "@widgentic/designer", slug: "designer", pkg: "@widgentic/designer" },
+  { specifier: "@widgentic/webmcp", slug: "webmcp", pkg: "@widgentic/webmcp" },
   { specifier: "@widgentic/mcp", slug: "mcp", pkg: "@widgentic/mcp" },
   { specifier: "@widgentic/mcp/sdk", slug: "mcp-sdk", pkg: "@widgentic/mcp" },
   { specifier: "@widgentic/mcp/authoring", slug: "mcp-authoring", pkg: "@widgentic/mcp" },

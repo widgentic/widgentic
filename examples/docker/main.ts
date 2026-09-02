@@ -21,6 +21,8 @@ import type { HttpActionDefinition } from "@widgentic/core";
 import { authoringClient as api, AuthoringApiError } from "@widgentic-examples/shared/client";
 import type { KeyEntry, SecretEntry, WidgetEntry } from "@widgentic-examples/shared/client";
 import { mountAction, mountSchema, mountTheme, mountWidget, previewThemes } from "@widgentic-examples/shared/designers";
+import { describeAgentTools, designerSources } from "@widgentic-examples/shared/webmcp";
+import { exposeDesigners } from "@widgentic/webmcp";
 import { invoiceWidget } from "@widgentic-examples/mcp-server/widgets";
 
 function $<T extends HTMLElement = HTMLElement>(id: string): T {
@@ -539,6 +541,23 @@ async function boot(): Promise<void> {
   openActionDesigner();
   showTab("widgets"); // mounts the widget designer — the one place that does
   status("ready — everything you save is served on the MCP endpoint immediately");
+
+  // The designers as WebMCP tools: a browser-side agent (ChatGPT Desktop's
+  // browser, Chrome in the origin trial) reads and edits the drafts on this
+  // page; every source opens its section first so the person sees what the
+  // agent is doing. Saving stays the person's — no tool here persists.
+  const agentTools = await exposeDesigners(
+    designerSources({
+      show: (kind) => showTab(`${kind}s`),
+      current: {
+        widget: () => widgetDesigner,
+        theme: () => themeDesigner,
+        schema: () => schemaDesigner,
+        action: () => actionDesigner
+      }
+    })
+  );
+  $("agent-status").textContent = describeAgentTools(agentTools);
 }
 
 void boot();

@@ -35,6 +35,8 @@ import { invoiceWidget, weatherWidget, xPostWidget } from "@widgentic-examples/m
 // WIRING and lives once in @widgentic-examples/shared; the seeds, persistence
 // and toggle below are the DEMO — copy those freely.
 import { mountAction, mountSchema, mountTheme, mountWidget, previewThemes } from "@widgentic-examples/shared/designers";
+import { describeAgentTools, designerSources } from "@widgentic-examples/shared/webmcp";
+import { exposeDesigners } from "@widgentic/webmcp";
 
 const DRAFT_KEY = "widgentic-designer-draft";
 const THEMES_KEY = "widgentic-designer-themes";
@@ -310,3 +312,22 @@ document.getElementById("reset")?.addEventListener("click", () => {
 });
 
 show("widget"); // show() mounts the entered tab; the others mount on first entry
+
+// The designers as WebMCP tools (@widgentic/webmcp): in ChatGPT Desktop's
+// browser or a Chrome with the WebMCP flag, an agent reads and edits these
+// drafts; each source shows its tab first, so the person watches it happen.
+// Saving stays with the person — the Save buttons above are the only writes.
+void exposeDesigners(
+  designerSources({
+    show,
+    current: {
+      widget: () => widgetDesigner,
+      theme: () => themeDesigner,
+      schema: () => schemaDesigner,
+      action: () => actionDesigner
+    }
+  })
+).then((agentTools) => {
+  const el = document.getElementById("agent-status");
+  if (el) el.textContent = describeAgentTools(agentTools);
+});

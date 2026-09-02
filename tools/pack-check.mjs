@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const PACKAGES = ["packages/core", "packages/designer", "packages/mcp"];
+const PACKAGES = ["packages/core", "packages/designer", "packages/webmcp", "packages/mcp"];
 const ALLOWED = /^(dist\/|package\.json$|README\.md$|LICENSE$|CHANGELOG\.md$)/;
 const out = mkdtempSync(join(tmpdir(), "widgentic-pack-"));
 let failed = false;

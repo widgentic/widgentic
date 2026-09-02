@@ -9,6 +9,7 @@ widgentic ships as three npm packages under the `@widgentic` scope. All three ar
 |---|---|---|---|
 | `@widgentic/core` | contract, adapters, mapper, catalog, theming, templates, actions, reactive rendering | browser and Node | nothing |
 | `@widgentic/designer` | widget, theme, schema and action designers, custom elements, single-file browser bundle | browser | `@widgentic/core` |
+| `@widgentic/webmcp` (beta) | the designers as WebMCP tools: descriptor factory, feature-detected registration, one dispose | browser | `@widgentic/core`, `@widgentic/designer` |
 | `@widgentic/mcp` | tool-output convention, tool handlers, app template, action execution, official-SDK assembly, per-principal store, secrets | Node 22 or later | `@widgentic/core` plus optional peers |
 
 Every entry below is a subpath in the package's `exports` map, resolving for both the `types` and the default import condition. The linked pages list each entry's runtime exports; they are generated from the packages themselves (see [API reference](/develop/api-reference)).
@@ -42,6 +43,14 @@ npm install @widgentic/designer
 The hostable designers as factories and opt-in custom elements. Browser only; depends on `@widgentic/core` and nothing else. One entry: [designer](/reference/api/designer).
 
 For pages without a bundler the package also publishes a single-file ES module bundle with core inlined at `dist/browser/widgentic-designer.js` (declared as the `./browser` subpath). Loading it from a module script registers the designer elements, so `<widgentic-designer>` mounts without any other network request for widgentic code. The module build stays the primary entry for bundler users. See [Embed the designers](/develop/embed-the-designers).
+
+## @widgentic/webmcp
+
+```bash
+npm install @widgentic/webmcp
+```
+
+**Beta** — the API may change in minor versions before 1.0; it versions on its own, outside the linked group. Registers mounted designers as [WebMCP](https://github.com/webmachinelearning/webmcp) tools on `document.modelContext` (falling back to `navigator.modelContext`), so a browser-side agent reads and edits the drafts the person is looking at. Browser only; depends on `@widgentic/core` and `@widgentic/designer`; bundles no polyfill; a reported no-op in a browser without a model context. One entry: [webmcp](/reference/api/webmcp). See [Co-author with a browser agent](/develop/co-author-with-an-agent).
 
 ## @widgentic/mcp
 

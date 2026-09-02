@@ -10,7 +10,8 @@
  *
  * The expression file holds one JS expression (a promise is awaited). Uses
  * the Chrome DevTools Protocol over Node's built-in fetch + WebSocket; the
- * browser gets a throwaway profile and is killed on exit.
+ * browser gets a throwaway profile and is killed on exit. `CHROME_ARGS`
+ * appends launch flags (space-separated) — e.g. the WebMCP testing features.
  */
 import { spawn } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
@@ -35,6 +36,7 @@ const chrome = spawn(
     "--no-first-run",
     `--remote-debugging-port=${port}`,
     `--user-data-dir=${profile}`,
+    ...(process.env.CHROME_ARGS ?? "").split(/\s+/).filter((arg) => arg !== ""),
     "about:blank"
   ],
   { stdio: "ignore" }

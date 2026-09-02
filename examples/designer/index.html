@@ -65,7 +65,7 @@
     border-bottom: 1px solid var(--host-border);
   }
   header h1 { font-size: 18px; margin: 0; }
-  #status { color: var(--host-muted); font-size: 12px; }
+  #status, #agent-status { color: var(--host-muted); font-size: 12px; }
   button {
     font: inherit;
     padding: 4px 10px;
@@ -111,6 +111,7 @@
     <button id="chrome-toggle" type="button">Host chrome</button>
     <button id="reset" type="button">Reset all</button>
     <span id="status"></span>
+    <span id="agent-status" title="WebMCP: the designers on this page are tools a browser-side agent can use; you save."></span>
   </header>
   <div id="widget-designer"></div>
   <div id="theme-designer" hidden></div>

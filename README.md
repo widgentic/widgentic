@@ -27,6 +27,7 @@ All capabilities are specified under `openspec/specs/` and implemented with zero
 | `mcp-server` | `@widgentic/mcp` | The Widgentic MCP server: eight tools — `list_widgets`, `list_schemas`, `list_actions`, `list_themes`, `list_theme_tokens` and `get_authoring_guide` (discovery) + `render_widget` (validate → render → HTML + payload) and `execute_action` (app-only) — as SDK-free definitions/handlers, plus the full server assembly behind `@widgentic/mcp/sdk` (MCP SDK as optional peers) |
 | `widget-store` | `@widgentic/mcp/store` | Per-principal widgets, themes, and shared data schemas: a persistence-agnostic port (`resolvePrincipal`/`widgets`/`themes`/`schemas`), memory + file reference implementations, hashed constant-time keys, structural limits, and request-scoped `composeCatalog`/`composeThemes` — widgets may reference a shared schema by name (`dataSchemaRef`), resolved at composition so one `person` schema serves every person widget |
 | `widget-designer` | `@widgentic/designer` | Three embeddable designers (factories + opt-in custom elements, zero deps): the **widget** designer (template tree/JSON, full descriptor, styles and hints as tree-or-JSON, dataSchema, theme selection with a token reference) and the standalone **theme** designer (tokens, custom variables, named entries, previewing host-supplied widgets) and the standalone **schema** designer (shared data-schema entries) — all with live validation and an optional read-only mode |
+| `designer-webmcp` | `@widgentic/webmcp` (beta) | The mounted designers as **WebMCP** tools (`document.modelContext`): twelve `widgentic_*` tools a browser-side agent (ChatGPT Desktop's browser, Chrome/Edge in the origin trial) uses to read and edit the drafts the person is looking at — agents edit, people save; feature-detected, a reported no-op without an agent-capable browser |
 
 ## Packages
 
@@ -34,6 +35,7 @@ All capabilities are specified under `openspec/specs/` and implemented with zero
 |---|---|---|
 | [`@widgentic/core`](packages/core) | contract, adapters, mapper, catalog, theming, templates, actions, reactive rendering | browser + Node |
 | [`@widgentic/designer`](packages/designer) | widget / theme / schema / action designers, custom elements, browser bundle | browser |
+| [`@widgentic/webmcp`](packages/webmcp) | **beta** — the designers as WebMCP tools: descriptor factory, feature-detected registration, one `dispose()`; depends on core + designer | browser |
 | [`@widgentic/mcp`](packages/mcp) | tool-output convention, handlers, app template, action execution, official-SDK assembly (`/sdk`), authoring surface (`/authoring`), store (`/store`, `/store/sqlite`, `/store/cosmos`), secrets (`/secrets`, `/secrets/keyvault`) | Node ≥ 22 |
 | `widgentic/apps` (private repository) | our MCP server and the widgentic.dev app, Azure infrastructure, runbook — consumes the published packages | — |
 | `examples/*` | sample hosts: a stdio MCP server with compiled-in widgets, a designer host page, a self-hosted docker deployment (authoring app + MCP endpoint over SQLite), and the shared wiring they import | — |

@@ -2,7 +2,7 @@
 
 Widgets for agents: turn structured data into agent-friendly widgets (cards,
 tables, trees, groups, custom templates) and expose them over MCP with an MCP
-Apps UI. This repository is the PUBLIC half of the project: the three npm
+Apps UI. This repository is the PUBLIC half of the project: the four npm
 packages and the sample hosts. Our own deployments live in the private
 repository `widgentic/apps` (local checkout: `/data/source/widgentic-apps`).
 
@@ -10,7 +10,7 @@ repository `widgentic/apps` (local checkout: `/data/source/widgentic-apps`).
 
 | | `widgentic/widgentic` (this repo, public) | `widgentic/apps` (private) |
 |---|---|---|
-| contents | `packages/core`, `packages/designer`, `packages/mcp`, `examples/*`, `tools/`, `openspec/` | `apps/mcp-server` (mcp.widgentic.dev), `apps/web` (widgentic.dev), `infra/` (Bicep), Dockerfile, `RUNBOOK.md`, own `openspec/` (`widgentic-app` spec) |
+| contents | `packages/core`, `packages/designer`, `packages/webmcp`, `packages/mcp`, `examples/*`, `tools/`, `openspec/` | `apps/mcp-server` (mcp.widgentic.dev), `apps/web` (widgentic.dev), `infra/` (Bicep), Dockerfile, `RUNBOOK.md`, own `openspec/` (`widgentic-app` spec) |
 | consumes | nothing from apps — ever | the PUBLISHED `@widgentic/*` packages (`^x.y.z` from npm); never source paths |
 | releases | Changesets → "Version Packages" PR → `release.yml` publishes with npm provenance | `az acr build` + Bicep deploy from its own checkout (see its `RUNBOOK.md`) |
 | specs | every capability except `widgentic-app` | `widgentic-app` |
@@ -44,6 +44,7 @@ iterating before a release use `npm link` from a built checkout of this repo
 ```
 packages/core       @widgentic/core   contract, adapters, mapper, catalog, theming, templates, actions, reactive, shared
 packages/designer   @widgentic/designer   widget/theme/schema/action designers, custom elements, src/browser.ts → single-file bundle
+packages/webmcp     @widgentic/webmcp   BETA: the designers as WebMCP tools (document.modelContext) — descriptor factory, feature-detected registration, dispose; outside the linked release group
 packages/mcp        @widgentic/mcp    output/ (tool-output convention), server/ (handlers, app template, actions, guarded fetch,
                                       server.ts = createWidgenticServer behind ./sdk), authoring/ (./authoring — the hostable write surface),
                                       store/ (./store, ./store/sqlite, ./store/cosmos), secrets/ (./secrets, ./secrets/keyvault)
@@ -51,7 +52,7 @@ examples/mcp-server  stdio server with compiled-in widgets (`npm run mcp`); also
 examples/designer    designer demo host (`npm run designer`; /standalone.html uses the published browser bundle)
 examples/docker      self-hosted deployment: authoring app + MCP endpoint over one SQLite volume (docker compose)
 examples/shared      wiring the example hosts import (designer mount discipline, authoring client, preview-theme merge)
-tools/               boundaries.test.ts, exports.test.ts (snapshots of all 18 entries), pack-check.mjs, docs-generate.ts
+tools/               boundaries.test.ts, exports.test.ts (snapshots of all 19 entries), pack-check.mjs, docs-generate.ts
 openspec/            specs/ (current behavior per capability), changes/ (active), changes/archive/ (full history)
 ```
 
@@ -79,11 +80,11 @@ pack:check`, `openspec validate` — all green.
 
 ## Boundaries (enforced by `tools/boundaries.test.ts` — do not weaken it)
 
-- Dependency direction: core → nothing; designer → core; mcp → core; examples →
+- Dependency direction: core → nothing; designer → core; webmcp → core, designer; mcp → core; examples →
   packages only. Cross-package imports use the package specifier (root or a
   DECLARED `exports` entry); intra-package imports are relative; no deep paths
   into another package.
-- `@widgentic/core` and `@widgentic/designer` are browser-safe: no `node:`,
+- `@widgentic/core`, `@widgentic/designer` and `@widgentic/webmcp` are browser-safe: no `node:`,
   `Buffer`, `process`. `@widgentic/mcp` requires Node ≥ 22.
 - Zero runtime dependencies. In mcp the MCP SDK, `@modelcontextprotocol/ext-apps`
   and `zod` are OPTIONAL peers used only by `packages/mcp/src/server/server.ts`
@@ -179,7 +180,8 @@ pack:check`, `openspec validate` — all green.
 
 Changesets with a LINKED group (core, designer, mcp): packages released in
 the same run take the same version, but a package with no changeset is NOT
-bumped — linked is not `fixed`. The 0.2.0 release of `designer` left core
+bumped — linked is not `fixed`. `@widgentic/webmcp` (beta) is OUTSIDE the
+group: it versions alone from 0.1.0 and rides on its declared ranges. The 0.2.0 release of `designer` left core
 and mcp at 0.1.0. Compatibility rides on the DECLARED RANGES, not on matching
 numbers: designer and mcp both depend on core, so core can never ship alone;
 only the leaves drift. A version-packages commit may touch a manifest without

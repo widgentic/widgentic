@@ -28,6 +28,9 @@
       "@widgentic/designer/browser": [
         "./packages/designer/src/browser.ts"
       ],
+      "@widgentic/webmcp": [
+        "./packages/webmcp/src/index.ts"
+      ],
       "@widgentic/mcp/authoring": [
         "./packages/mcp/src/authoring/index.ts"
       ],

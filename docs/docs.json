@@ -123,6 +123,7 @@
               "develop/packages",
               "develop/render-in-your-host",
               "develop/embed-the-designers",
+              "develop/co-author-with-an-agent",
               "develop/run-your-own-server",
               "develop/self-hosting"
             ]
@@ -165,6 +166,7 @@
               "reference/api/core-actions",
               "reference/api/core-reactive",
               "reference/api/designer",
+              "reference/api/webmcp",
               "reference/api/mcp",
               "reference/api/mcp-sdk",
               "reference/api/mcp-authoring",

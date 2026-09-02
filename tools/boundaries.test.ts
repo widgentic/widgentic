@@ -4,8 +4,9 @@
  * Every import in packages/ and examples/ is classified and checked:
  *   - relative imports never leave their root (a package, an app, an example)
  *   - `@widgentic/<pkg>[/sub]` must be a declared `exports` entry and an
- *     allowed edge (core → nothing; designer, mcp → core; examples → any)
- *   - `node:` modules, `Buffer` and `process` stay out of core and designer
+ *     allowed edge (core → nothing; designer, mcp → core; webmcp → core,
+ *     designer; examples → any)
+ *   - `node:` modules, `Buffer` and `process` stay out of core, designer and webmcp
  *   - third-party imports in package sources match the package's manifest
  *     (mcp: the MCP SDK and zod only from the `./sdk` assembly)
  * Tests (`__tests__`) may additionally use vitest, the SDK client, the
@@ -17,10 +18,16 @@ import { dirname, join, relative, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const ROOT = resolve(import.meta.dirname, "..");
-const PACKAGES: Record<string, string> = { core: "packages/core", designer: "packages/designer", mcp: "packages/mcp" };
-const ALLOWED_EDGES: Record<string, string[]> = { core: [], designer: ["core"], mcp: ["core"] };
-const BROWSER_SAFE = new Set(["core", "designer"]);
-const EXTERNALS: Record<string, RegExp[]> = { core: [], designer: [], mcp: [/^@azure\//] };
+const PACKAGES: Record<string, string> = { core: "packages/core", designer: "packages/designer", webmcp: "packages/webmcp", mcp: "packages/mcp" };
+const ALLOWED_EDGES: Record<string, string[]> = { core: [], designer: ["core"], webmcp: ["core", "designer"], mcp: ["core"] };
+const BROWSER_SAFE = new Set(["core", "designer", "webmcp"]);
+const EXTERNALS: Record<string, RegExp[]> = { core: [], designer: [], webmcp: [], mcp: [/^@azure\//] };
+/** Runtime dependencies each package may declare — the spec's dependency direction, as data. */
+const EXPECTED_DEPENDENCIES: Record<string, string[]> = {
+  "@widgentic/designer": ["@widgentic/core"],
+  "@widgentic/mcp": ["@widgentic/core"],
+  "@widgentic/webmcp": ["@widgentic/core", "@widgentic/designer"]
+};
 /** The one file in mcp allowed to import the MCP SDK and zod: the official-SDK assembly. */
 const SDK_ONLY = new Set(["packages/mcp/src/server/server.ts"]);
 const SDK = [/^@modelcontextprotocol\//, /^zod$/];
@@ -119,10 +126,15 @@ describe("package boundaries", () => {
     const core = manifests.get("@widgentic/core") as Manifest & { dependencies?: unknown; peerDependencies?: unknown };
     expect(core.dependencies).toBeUndefined();
     expect(core.peerDependencies).toBeUndefined();
-    for (const name of ["@widgentic/designer", "@widgentic/mcp"]) {
+    for (const [name, expected] of Object.entries(EXPECTED_DEPENDENCIES)) {
       const m = manifests.get(name) as Manifest & { dependencies?: Record<string, string> };
-      expect(Object.keys(m.dependencies ?? {})).toEqual(["@widgentic/core"]);
+      expect(Object.keys(m.dependencies ?? {}).sort(), name).toEqual(expected);
     }
+    const webmcp = manifests.get("@widgentic/webmcp") as Manifest & { peerDependencies?: unknown; description?: string };
+    expect(webmcp.peerDependencies).toBeUndefined();
+    // Beta is stated where installers read: the manifest description and the README.
+    expect(webmcp.description).toMatch(/beta/i);
+    expect(readFileSync(join(ROOT, "packages/webmcp/README.md"), "utf8")).toMatch(/\*\*Beta\.\*\*/);
     const mcp = manifests.get("@widgentic/mcp") as Manifest & { peerDependencies?: Record<string, string>; peerDependenciesMeta?: Record<string, { optional?: boolean }> };
     for (const peer of Object.keys(mcp.peerDependencies ?? {})) {
       expect(mcp.peerDependenciesMeta?.[peer]?.optional, peer).toBe(true);
