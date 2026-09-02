@@ -14,7 +14,7 @@
  * appends launch flags (space-separated) — e.g. the WebMCP testing features.
  */
 import { spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { writeFileSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -124,6 +124,16 @@ async function main() {
   });
   if (result.exceptionDetails) {
     throw new Error(result.exceptionDetails.text + " " + JSON.stringify(result.exceptionDetails.exception ?? {}));
+  }
+  // SCREENSHOT=<file.png> captures the page AFTER the expression ran (so a
+  // probe can drive the UI first); VIEWPORT=WxH sizes it (default 1280x900).
+  if (process.env.SCREENSHOT) {
+    const [w, h] = (process.env.VIEWPORT ?? "1280x900").split("x").map(Number);
+    await send("Emulation.setDeviceMetricsOverride", { width: w, height: h, deviceScaleFactor: 1, mobile: false });
+    await sleep(300);
+    const shot = await send("Page.captureScreenshot", { format: "png" });
+    writeFileSync(process.env.SCREENSHOT, Buffer.from(shot.data, "base64"));
+    console.error(`screenshot: ${process.env.SCREENSHOT}`);
   }
   console.log(JSON.stringify(result.result.value, null, 2));
   socket.close();

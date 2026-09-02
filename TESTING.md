@@ -127,7 +127,10 @@ CHROME_ARGS="--enable-features=WebMCPTesting,DevToolsWebMCPSupport" \
   node tools/probe-computed.mjs http://localhost:8082/ tools/probe-webmcp.js
 ```
 
-`probe-computed.mjs` launches the local Chrome with the flags from `CHROME_ARGS`;
+`probe-computed.mjs` launches the local Chrome with the flags from `CHROME_ARGS`
+(`SCREENSHOT=<file.png>` captures the page after the expression ran, `VIEWPORT=WxH`
+sizes it — the expression may drive the UI first, so a screenshot can show the result
+of a click);
 the expression file reads the page's `#agent-status`, lists the registered tools
 through `navigator.modelContextTesting.getTools()`, executes
 `widgentic_widget_draft_load` with a small definition and reports what the
@@ -143,6 +146,28 @@ is version-dependent (Chrome 149+; its `executeTool` signature has moved), so
 the script prints what it found rather than asserting; read it. In ChatGPT
 Desktop the equivalent check is the address bar's **Available site tools**
 listing the twelve, then asking for a widget and watching the designer.
+
+## Self-host example: the README loop, as a judge would run it
+
+The README's three commands are the whole setup — a KEK file, `docker compose up
+--build`, author at `:8080` — and the deployed demo runs the SAME image with only the
+environment variables the README documents (`WIDGENTIC_MCP_UPSTREAM`, `WIDGENTIC_KEK`,
+`WIDGENTIC_DB`, `WIDGENTIC_ORIGIN_TRIAL_TOKEN`). To prove the loop locally:
+
+```sh
+cd examples/docker && docker compose up --build -d
+curl -s -X POST http://localhost:8080/api/keys -H 'Content-Type: application/json' \
+  -d '{"name":"laptop"}' -o key.json            # single-principal mode: same-origin/non-browser writes pass
+CHROME_ARGS="--enable-features=WebMCPTesting,DevToolsWebMCPSupport" SCREENSHOT=loop.png \
+  node ../../tools/probe-computed.mjs http://localhost:8080/ <expression that calls widgentic_widget_draft_load, then clicks #widget-save>
+# then, with the key from key.json:
+#   tools/call list_widgets  → the saved kind is listed WITH the key and absent WITHOUT it
+#   tools/call render_widget { widget: "<kind>", data: {...}, format: "page" } → a page carrying the data
+docker compose down -v
+```
+
+`render_widget` takes `widget` (the kind), `data` (any JSON) and `format`; a `kind`
+argument is refused with `-32602`.
 
 ## Self-host example: compose smoke (`examples/docker`)
 
@@ -239,6 +264,7 @@ claude mcp add widgentic -- npx tsx /path/to/widgentic/examples/mcp-server/main.
 
 ## Verification log
 
+- **Self-host README loop, run as a judge would (2026-09-02, local Docker 29.7 / Compose 5.4, unmodified image)** — `docker compose up --build -d` from `examples/docker` with an existing `kek.txt`: both services up (`web` :8080, `mcp` :8081). Served: `/healthz` 200, the page carries `#key-connect` and NO endpoint meta (no upstream configured → the page fell back to `http://localhost:8081/mcp`, which the Keys pane then showed with both key forms), `POST /mcp` on the web port 404 (forward off, as documented), `:8081/mcp initialize` → `serverInfo widgentic 0.1.0`, keyless `tools/list` 8. `POST /api/keys` → 201 with `entry`, `key`, `notice` (raw key kept in a file, never printed). Headless Chrome 151 with the testing flag on `http://localhost:8080/`: header `WebMCP tools are available in this browser …`, 12 tools; `widgentic_widget_draft_load` with a `judge-card` definition → `ok: true, previewable`, the kind input and the preview showed it; clicking `#widget-save` → status `saved judge-card — it is in your MCP catalog now`, the list shows `judge-card`. MCP with the key: anonymous `list_widgets` does NOT contain `judge-card`, the keyed call does; `render_widget { widget: "judge-card", data, format: "page" }` → 7160 B page carrying the title and `wg-card` (screenshotted; a `kind` argument is refused with `-32602`). Three screenshots (designer after save, Keys pane, rendered page) went to the owner. Conclusion: the deployed demo is this image unchanged; the README reproduces it.
 Deployment entries (every vNN, production checks, claude.ai/Copilot legs against the hosted server) moved to `widgentic/apps` RUNBOOK.md on 2026-08-27; package-level entries stay here.
 
 - **Designers as WebMCP tools (2026-09-02, change `designer-webmcp`, new package `@widgentic/webmcp` 0.1.0 pending release)** — headless Chrome 151 launched with `--enable-features=WebMCPTesting,DevToolsWebMCPSupport` against BOTH example hosts — the designer demo (`npm run designer`) and the self-host authoring app (`examples/docker/web.ts` on a scratch SQLite file, the host the live URL runs) — driven by `tools/probe-computed.mjs` + `tools/probe-webmcp.js`, with identical results. What was VISIBLE: the page's own header read `agent tools: 12 registered`; BOTH `document.modelContext` and `navigator.modelContext` existed as `ModelContext` objects with `registerTool`/`getTools`/`executeTool` (the package resolves the document's first, per the spec and ChatGPT's docs); `document.modelContext.getTools()` listed the twelve `widgentic_*` tools with `annotations.readOnlyHint` intact on exactly the five read tools (`*_get` ×4 and `theme_token_specs`) — the hint reaches the browser, so ChatGPT can run them without a confirmation step; `navigator.modelContextTesting.listTools()` listed the same twelve. Executing `widgentic_widget_draft_load` through the testing surface (`executeTool(name, jsonString)` — Chrome 151 wants the input SERIALIZED there, and its in-page `document.modelContext.executeTool(tool, object)` answered "Failed to parse input arguments"; the agent-side path is the one that matters) returned our MCP-shaped result `{"content":[{"type":"text","text":"{\"ok\":true,\"diagnostics\":{\"styles\":[],\"previewable\":true},\"diagnosticsDerived\":false}"}]}`, and the DESIGNER changed: the kind input read `probe-card` and the live preview rendered the definition's example title `Hello from WebMCP`. Unit gate on the fake model context: 27 webmcp tests (descriptor set, prefix, read-only annotations, closed schemas, real-designer round trips for widget/theme/schema/action, `NOT_MOUNTED`/`INVALID_INPUT`/`REJECTED` results, document-over-navigator precedence, per-name failure reporting, idempotent dispose, host tools under the same signal) plus 3 self-host edge tests (streamed `/mcp` forward with headers/body/query intact, 404 when unset, 502 with a structured error when the upstream is down, origin-trial meta only when a token is set). Repo gate: typecheck, 1079 tests, build, pack:check (four tarballs), docs:check (52 MDX files) green; the export snapshot gained the `@widgentic/webmcp` block (`DEFAULT_PREFIX`, `designerTools`, `exposeDesigners`, `failResult`, `okResult`, `registerTools`, `resolveModelContext`). Not verified here, by design: ChatGPT Desktop's "Available site tools" listing and its confirmation UX — that check runs on the deployed self-host instance (apps repo log).
