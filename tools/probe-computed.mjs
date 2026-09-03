@@ -131,6 +131,17 @@ async function main() {
     const [w, h] = (process.env.VIEWPORT ?? "1280x900").split("x").map(Number);
     await send("Emulation.setDeviceMetricsOverride", { width: w, height: h, deviceScaleFactor: 1, mobile: false });
     await sleep(300);
+    // SCROLL_TO=<css selector> brings an element to the top AFTER the resize
+    // (a resize re-lays the page out, so a scroll done inside the expression
+    // does not survive it).
+    if (process.env.SCROLL_TO) {
+      await send("Runtime.evaluate", {
+        expression: `document.querySelector(${JSON.stringify(process.env.SCROLL_TO)})?.scrollIntoView({ block: "start" })`,
+        awaitPromise: false,
+        returnByValue: true
+      });
+      await sleep(400);
+    }
     const shot = await send("Page.captureScreenshot", { format: "png" });
     writeFileSync(process.env.SCREENSHOT, Buffer.from(shot.data, "base64"));
     console.error(`screenshot: ${process.env.SCREENSHOT}`);
