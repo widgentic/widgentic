@@ -114,6 +114,11 @@ async function main() {
   const once = (method) => new Promise((resolve) => events.set(method, resolve));
 
   await send("Page.enable");
+  // DARK=1 emulates prefers-color-scheme: dark before navigation, so pages
+  // that follow the system scheme render their dark palette.
+  if (process.env.DARK === "1") {
+    await send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: "dark" }] });
+  }
   const loaded = once("Page.loadEventFired");
   await send("Page.navigate", { url });
   await Promise.race([loaded, sleep(15000).then(() => { throw new Error("load timed out"); })]);
