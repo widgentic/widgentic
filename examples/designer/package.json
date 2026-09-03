@@ -9,6 +9,6 @@
     "@widgentic-examples/shared": "^0.0.0",
     "@widgentic/core": "^0.7.0",
     "@widgentic/designer": "^0.7.0",
-    "@widgentic/webmcp": "^0.1.0"
+    "@widgentic/webmcp": "^0.2.0"
   }
 }
