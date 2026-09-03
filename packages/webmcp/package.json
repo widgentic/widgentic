@@ -1,6 +1,6 @@
 {
   "name": "@widgentic/webmcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "BETA — expose mounted widgentic designers as WebMCP tools (document.modelContext), so a browser-side agent can draft into the designer the person is looking at. API may change in minor versions before 1.0.",
   "license": "MIT",
   "type": "module",
