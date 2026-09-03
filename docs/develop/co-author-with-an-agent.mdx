@@ -40,7 +40,7 @@ Sources are **getters**, resolved on every tool call, because hosts remount desi
 
 ## The tools
 
-Twelve tools under a configurable prefix (default `widgentic`); only the designers you supply a source for get tools, the token reference is always present. Read tools carry `annotations.readOnlyHint`, so agents run them without a confirmation step.
+Fourteen tools under a configurable prefix (default `widgentic`); only the designers you supply a source for get tools, the three reference tools are always present. Every editing tool's description carries a summary of the template DSL and the style rules, and points at the guide and the check tool, so the agent drafts by the designer's own rules from the first call. Read tools carry `annotations.readOnlyHint`, so agents run them without a confirmation step.
 
 | Tool | Read-only | Does |
 |---|---|---|
@@ -51,9 +51,15 @@ Twelve tools under a configurable prefix (default `widgentic`); only the designe
 | `theme_get` / `theme_load` / `theme_tokens_set` | get | The theme entry; merge tokens into it (`{ tokens, remove? }`) |
 | `schema_get` / `schema_load` | get | The shared data-schema entry |
 | `action_get` / `action_load` | get | The action entry |
+| `authoring_guide` | yes | The full authoring contract, derived from the validators: widget shape, template DSL and its `map`/`prefix`/`format` transforms, safety, styles, data schemas, tokens, limits |
+| `widget_definition_check` | yes | Validate a definition without touching the designer; same errors and diagnostics as a load |
 | `theme_token_specs` | yes | Every `--wg-*` token with type, default, purpose and fallback |
 
 Every result is MCP-shaped text content carrying one JSON document with a boolean `ok`. Refusals are results, never rejections: `NOT_MOUNTED`, `INVALID_INPUT` (naming the argument) and `REJECTED` (with the designer's `errors`).
+
+## What the host's agent can still do
+
+No tool here saves. The guide and every editing tool tell the agent to leave the Save control to the person unless asked. A host whose agent can operate the page — ChatGPT's browser can click elements — may press Save itself, under the person's session and the host's permission settings; asked to "create a widget", ChatGPT drafted through the tools and then clicked Save. The package cannot prevent that and does not try: the draft is visible in the designer before any such save, and the person's wording decides ("draft it and stop" versus "create it"). If that matters to your users, say it in your UI.
 
 ## Browsers, flags and polyfills
 

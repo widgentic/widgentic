@@ -6,17 +6,23 @@ const none = () => undefined;
 const ALL = { widget: none, theme: none, schema: none, action: none };
 
 describe("designerTools", () => {
-  it("produces tools only for the supplied designers, plus the token reference", () => {
+  it("produces tools only for the supplied designers, plus the reference tools", () => {
     const names = designerTools({ widget: none }).map((t) => t.name);
     expect(names).toEqual([
       "widgentic_widget_draft_get",
       "widgentic_widget_draft_load",
       "widgentic_widget_example_data_set",
       "widgentic_widget_theme_set",
+      "widgentic_authoring_guide",
+      "widgentic_widget_definition_check",
       "widgentic_theme_token_specs"
     ]);
-    expect(designerTools({}).map((t) => t.name)).toEqual(["widgentic_theme_token_specs"]);
-    expect(designerTools(ALL)).toHaveLength(12);
+    expect(designerTools({}).map((t) => t.name)).toEqual([
+      "widgentic_authoring_guide",
+      "widgentic_widget_definition_check",
+      "widgentic_theme_token_specs"
+    ]);
+    expect(designerTools(ALL)).toHaveLength(14);
   });
 
   it("names follow the prefix", () => {
@@ -30,7 +36,7 @@ describe("designerTools", () => {
 
   it("annotates read tools read-only and nothing else", () => {
     for (const t of designerTools(ALL)) {
-      const reads = t.name.endsWith("_get") || t.name.endsWith("theme_token_specs");
+      const reads = t.name.endsWith("_get") || t.name.endsWith("theme_token_specs") || t.name.endsWith("authoring_guide") || t.name.endsWith("definition_check");
       expect(t.annotations?.readOnlyHint === true, t.name).toBe(reads);
     }
   });
@@ -52,5 +58,17 @@ describe("designerTools", () => {
     const editing = tools.filter((t) => t.annotations?.readOnlyHint !== true);
     expect(editing.length).toBe(7);
     for (const t of editing) expect(t.description).toMatch(/person reviews|person saves|not a saved theme/);
+  });
+
+  it("teaches the authoring contract where the agent reads it", () => {
+    const byName = new Map(designerTools(ALL).map((t) => [t.name, t.description]));
+    const load = byName.get("widgentic_widget_draft_load") ?? "";
+    for (const term of ["map", "prefix", "format", "each", "when", "bind", ".wg-", "var(--wg-", "dataShape", "widgentic_authoring_guide", "widgentic_widget_definition_check"]) {
+      expect(load, term).toContain(term);
+    }
+    expect(byName.get("widgentic_theme_load")).toContain("theme_token_specs");
+    expect(byName.get("widgentic_schema_load")).toContain("dataSchemaRef");
+    const acme = new Map(designerTools(ALL, { prefix: "acme" }).map((t) => [t.name, t.description]));
+    expect(acme.get("acme_widget_draft_load")).toContain("acme_authoring_guide");
   });
 });

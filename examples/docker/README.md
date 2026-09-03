@@ -50,7 +50,10 @@ says `WebMCP tools are available in this browser`. Then the loop is:
    the agent — any agent with your key — renders the widget you co-authored.
 
 In a browser without WebMCP nothing is shown and everything else is
-unchanged. No polyfill is bundled: a polyfill supplies the
+unchanged. No tool saves, but a host whose agent can operate the page (ChatGPT's
+browser can click) may press *Save to my catalog* itself under your session and
+its permission settings; the draft is on screen before it does. Say "draft it,
+I will save" when you want the click to be yours. No polyfill is bundled: a polyfill supplies the
 API, not the agent. If you want extension-based agents, load one such as
 `@mcp-b/webmcp-polyfill` in `index.html` before the app bundle; the package
 picks up whatever the page has.

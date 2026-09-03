@@ -37,8 +37,9 @@ export function themeTools(source: () => ThemeDesignerHandle | undefined, name: 
       name: name("theme_load"),
       title: "Load a theme entry",
       description:
-        "Replace the entry in the theme designer: { entry: { name, label?, description?, tokens } }. name: lowercase letters, digits, '.', '_' or '-'; light and dark are reserved. " +
-        "Validated by the theming rules (list tokens with theme_token_specs); refused → { ok: false, code: 'REJECTED', errors }. " +
+        "Replace the entry in the theme designer: { entry: { name, label?, description?, tokens } }. name: letters, digits, '.', '_' or '-'; light and dark are reserved. " +
+        "tokens: bare --wg-* token names (colours: bg, surface, fg, muted, accent, accent-fg, border; shape: radius, radius-sm, radius-lg, spacing, border-width; type and status tokens — list them all with theme_token_specs) and author variables x-<name>, to plain CSS values (no ';', '{', '}', 'url(' or 'expression('). " +
+        "A dark theme sets bg/surface/fg/muted/border together so contrast holds. Refused → { ok: false, code: 'REJECTED', errors }. " +
         PERSON_SAVES,
       inputSchema: ENTRY_SCHEMA("theme"),
       execute(input) {
@@ -103,7 +104,8 @@ export function schemaTools(source: () => SchemaDesignerHandle | undefined, name
       name: name("schema_load"),
       title: "Load a schema entry",
       description:
-        "Replace the entry in the schema designer: { entry: { name, label?, description?, schema } }. name: letters, digits, '.', '_' or '-'; schema: a JSON Schema object. " +
+        "Replace the entry in the schema designer: { entry: { name, label?, description?, schema } }. name: letters, digits, '.', '_' or '-'; schema: a JSON Schema object in the supported subset — type (object/array/string/number/integer/boolean/null or an array of those), properties, required, items, enum, pattern (bounded); unknown keywords are ignored. " +
+        "Widgets reference it as descriptor.dataSchemaRef: \"<name>\" instead of an inline dataSchema. " +
         "Refused → { ok: false, code: 'REJECTED', errors }. " +
         PERSON_SAVES,
       inputSchema: ENTRY_SCHEMA("schema"),

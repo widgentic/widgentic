@@ -42,8 +42,10 @@ unchanged.
 ## The tools
 
 Names are `<prefix>_<suffix>`; the prefix defaults to `widgentic` (`{ prefix }`
-in the options). Only designers you supply a source for get tools; the token
-reference is always present.
+in the options). Only designers you supply a source for get tools; the three
+reference tools are always present. Every editing tool's description carries a
+summary of the template DSL and the style rules, so an agent that reads only
+the tool list drafts by the same rules as one that read the guide.
 
 | Tool | Read-only | Does |
 |---|---|---|
@@ -55,6 +57,8 @@ reference is always present.
 | `theme_tokens_set` | | Merge tokens into the open entry (`{ tokens, remove? }`), validated as a whole |
 | `schema_get` / `schema_load` | get | The shared data-schema entry `{ name, label?, description?, schema }` |
 | `action_get` / `action_load` | get | The action entry `{ name, label?, description?, definition }` |
+| `authoring_guide` | yes | The full authoring contract — widget shape, template DSL (`bind`/`each`/`when`, `map`/`prefix`/`format`), safety, styles, data schemas, theme tokens, limits — derived from the validators |
+| `widget_definition_check` | yes | Validate a definition without touching the designer; the same errors and diagnostics the load would return |
 | `theme_token_specs` | yes | Every `--wg-*` token with type, default, purpose and fallback, from the exported specs |
 
 Every tool resolves to MCP-shaped text content carrying one JSON document with
@@ -74,6 +78,16 @@ handle it sees and returns what the designer computed for the change a tool
 made. Before the first change there is nothing to return, so `widget_draft_get`
 derives them without the host's shared entries and says so with
 `diagnosticsDerived: true`.
+
+## What a host agent can still do
+
+No tool here saves, and the guide tells the agent to leave the Save control to
+the person unless asked. A host whose agent can operate the page — ChatGPT's
+browser can click — may press Save itself, under the person's session and the
+host's permission settings. The package cannot prevent that, and does not try:
+the draft is visible in the designer before any such save, and the person's
+request ("draft it, I will save") is what the agent follows. Say so in your
+own UI if it matters to your users.
 
 ## Your own tools
 

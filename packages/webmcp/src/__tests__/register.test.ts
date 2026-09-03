@@ -38,7 +38,7 @@ describe("registration", () => {
     expect(result.supported).toBe(false);
     expect(result.registered).toEqual([]);
     expect(result.failed).toEqual([]);
-    expect(result.tools.length).toBe(5);
+    expect(result.tools.length).toBe(7);
     expect(() => result.dispose()).not.toThrow();
   });
 
@@ -61,7 +61,7 @@ describe("registration", () => {
     try {
       expect(resolveModelContext()).toBe(a.context);
       await exposeDesigners({ widget: none });
-      expect(a.calls.length).toBe(5);
+      expect(a.calls.length).toBe(7);
       expect(b.calls.length).toBe(0);
       restoreDoc();
       expect(resolveModelContext()).toBe(b.context);
@@ -78,6 +78,8 @@ describe("registration", () => {
       "widgentic_widget_draft_get",
       "widgentic_widget_example_data_set",
       "widgentic_widget_theme_set",
+      "widgentic_authoring_guide",
+      "widgentic_widget_definition_check",
       "widgentic_theme_token_specs"
     ]);
     expect(result.failed).toEqual([{ name: "widgentic_widget_draft_load", message: "duplicate" }]);

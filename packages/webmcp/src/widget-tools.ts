@@ -6,6 +6,7 @@
 import type { DesignerDiagnostics, DesignerHandle, WidgetDefinition, WidgetDraft } from "@widgentic/designer";
 import { deriveDiagnostics } from "@widgentic/designer";
 import { isPlainObject } from "@widgentic/core";
+import { dslCheatSheet } from "./guide.js";
 import { argumentsOf, invalidArgument, notMounted, okResult, rejected } from "./result.js";
 import { defineTool, objectSchema, PERSON_SAVES } from "./tool.js";
 import type { NameOf } from "./tool.js";
@@ -52,7 +53,8 @@ const DEFINITION_SHAPE =
   "template: the widgentic template DSL (data SELECTS, you supply every literal; no expressions); " +
   "descriptor: { description (required), dataSchema? | dataSchemaRef?, dataExample?, … }; load?: an http action binding run on first render.";
 
-export function widgetTools(source: () => DesignerHandle | undefined, name: NameOf): WebMcpTool[] {
+export function widgetTools(source: () => DesignerHandle | undefined, name: NameOf, prefix: string): WebMcpTool[] {
+  const rules = dslCheatSheet(prefix);
   const resolve = (): DesignerHandle | undefined => {
     const handle = source();
     if (handle !== undefined) track(handle);
@@ -84,7 +86,9 @@ export function widgetTools(source: () => DesignerHandle | undefined, name: Name
         DEFINITION_SHAPE +
         " The designer validates it: applied → { ok: true, diagnostics } and the person sees it immediately; refused → { ok: false, code: 'REJECTED', errors } with the exact messages the designer shows. " +
         "Keep the person's kind unless asked to change it. " +
-        PERSON_SAVES,
+        PERSON_SAVES +
+        " " +
+        rules,
       inputSchema: objectSchema(
         { definition: { type: "object", description: "The widget definition in export shape." } },
         ["definition"]
@@ -104,7 +108,7 @@ export function widgetTools(source: () => DesignerHandle | undefined, name: Name
       title: "Set the widget's example data",
       description:
         "Replace the draft's example data (descriptor.dataExample) — the data the preview renders and the example saved with the widget. " +
-        "Send { data } matching the draft's data schema. Returns the diagnostics; a mismatch with the schema is reported in diagnostics.example rather than silently previewed. " +
+        "Send { data } matching the draft's data schema (the shape descriptor.dataShape sketches; bind paths in the template must exist in it). Returns the diagnostics; a mismatch with the schema is reported in diagnostics.example rather than silently previewed. " +
         PERSON_SAVES,
       inputSchema: objectSchema(
         { data: { description: "Example data for the widget (any JSON value the data schema accepts)." } },

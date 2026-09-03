@@ -31,8 +31,8 @@ A different axis from the table above: not a host rendering widgets, but a brows
 
 | Browser | How WebMCP is enabled | Status |
 |---|---|---|
-| ChatGPT Desktop (built-in browser) | Native, per OpenAI's WebMCP documentation; the address bar lists "Available site tools" | Documented by OpenAI; the widgentic tools are not yet probed there — the check runs on the deployed self-host instance and will be recorded here |
-| Chrome 149+ / Edge 150 | Origin trial (a token on the page enables it for that origin), or `chrome://flags/#enable-webmcp-testing` | Verified on Chrome 151 both ways — with the testing flag, and with an origin-trial token on a plain Chrome with no flag: twelve tools listed on `document.modelContext`, `readOnlyHint` intact on the five read tools, `executeTool` (input as a JSON string) changed the designer visibly |
+| ChatGPT Desktop (built-in browser) | Native; the address bar lists "Available site tools" | Verified: the tools are listed and called. Its agent can also operate the page, so asked to "create a widget" it drafts through the tools and then clicks Save itself under the person's session and permission settings — the draft is visible first; say "draft it, I will save" to keep the click |
+| Chrome 149+ / Edge 150 | Origin trial (a token on the page enables it for that origin), or `chrome://flags/#enable-webmcp-testing` | Verified on Chrome 151 both ways — with the testing flag, and with an origin-trial token on a plain Chrome with no flag: the tools listed on `document.modelContext`, `readOnlyHint` intact on the read tools, `executeTool` (input as a JSON string) changed the designer visibly |
 | Chromium with an extension agent | A polyfill the host page loads (nothing is bundled), e.g. `@mcp-b/webmcp-polyfill` | Not probed |
 | Firefox, Safari | No implementation (standards positions open) | Not available: a polyfill supplies the API, not the agent |
 

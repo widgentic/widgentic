@@ -4,7 +4,7 @@
  * the token reference tool is always present.
  */
 import { actionTools, schemaTools, themeTools } from "./entry-tools.js";
-import { themeTokenSpecsTool } from "./reference-tools.js";
+import { authoringGuideTool, themeTokenSpecsTool, widgetDefinitionCheckTool } from "./reference-tools.js";
 import type { NameOf } from "./tool.js";
 import type { DesignerSources, ToolsOptions, WebMcpTool } from "./types.js";
 import { widgetTools } from "./widget-tools.js";
@@ -20,10 +20,10 @@ export function designerTools(sources: DesignerSources, options: ToolsOptions = 
   }
   const name: NameOf = (suffix) => `${prefix}_${suffix}`;
   const tools: WebMcpTool[] = [];
-  if (sources.widget !== undefined) tools.push(...widgetTools(sources.widget, name));
+  if (sources.widget !== undefined) tools.push(...widgetTools(sources.widget, name, prefix));
   if (sources.theme !== undefined) tools.push(...themeTools(sources.theme, name));
   if (sources.schema !== undefined) tools.push(...schemaTools(sources.schema, name));
   if (sources.action !== undefined) tools.push(...actionTools(sources.action, name));
-  tools.push(themeTokenSpecsTool(name));
+  tools.push(authoringGuideTool(name, prefix), widgetDefinitionCheckTool(name, prefix), themeTokenSpecsTool(name));
   return tools;
 }
