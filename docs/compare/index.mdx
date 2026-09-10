@@ -1,0 +1,74 @@
+---
+title: "widgentic in the generative-UI landscape"
+description: "Where widgentic sits among MCP Apps, the OpenAI Apps SDK, MCP-UI, A2UI, AG-UI and the declarative-format projects, and what the comparison suggests we build next."
+hidden: true
+---
+
+<Note>
+Working analysis, dated 2026-09-10. Facts about other projects come from their own docs and repositories as read on that day, and from three third-party surveys cited at the end. Detail pages: [widgentic and A2UI](/compare/a2ui), [widgentic and AG-UI](/compare/ag-ui). These pages are not in the public navigation.
+</Note>
+
+## Three layers, not one race
+
+The field has settled on a vocabulary that keeps most of these projects from competing head-on. CopilotKit states it as *generation → transport → rendering*; the OpenUI "State of Generative UI" report splits the same thing into a **transport** decision (where the UI appears) and a **generation** decision (what the agent emits).
+
+| Layer | Question | Projects |
+|---|---|---|
+| Transport | How does an agent's output reach a surface a person sees? | **MCP** tool results and **MCP Apps** (third-party hosts: ChatGPT, claude.ai, VS Code, Goose, Postman); **AG-UI** (an application you own); **A2A** (agent to agent, with A2UI as an extension) |
+| Generation | What does the agent emit? | *Static / registry*: a kind plus data (**widgentic**, CopilotKit tool renders). *Declarative*: a component tree from a catalog (**A2UI**, **Open-JSON-UI**, **json-render**, **OpenUI Lang**). *Open-ended*: HTML/JS the model wrote (raw **MCP Apps** and **OpenAI Apps SDK** resources) |
+| Rendering | Who turns the emitted thing into pixels? | The host's sandboxed iframe (MCP Apps, Apps SDK); the application's own components (AG-UI + CopilotKit, A2UI renderers); a shipped-in renderer (**widgentic**'s app template, A2UI's "renderer inside an MCP App" pattern) |
+
+widgentic occupies **generation and rendering** and rides on **MCP** for transport. It is the only project in the table that is simultaneously a registry-style payload contract, a people-authored declarative template layer, a renderer that ships itself into hosts it does not control, and a multi-tenant server with an authoring surface. Every other project covers one or two of those.
+
+## The matrix
+
+| | Transport | Who composes the layout | UI vocabulary | Renders in third-party chat hosts today | Input from the reader | Actions | Theming owner | Persistence, keys, authoring | License, steward |
+|---|---|---|---|---|---|---|---|---|---|
+| **widgentic** | MCP, MCP Apps | A person (template), the agent picks a kind | card, table, tree, group, template kinds; `--wg-*` tokens | claude.ai, ChatGPT, VS Code Copilot Chat, Claude Desktop | No (backlog) | `prompt` proposes; `http` runs server-side, guarded, with secrets | People author themes; host re-themes through tokens | Yes: per-principal stores, scoped keys, four designers, no agent write path | MIT, widgentic |
+| **MCP Apps** ([spec 2026-01-26](https://blog.modelcontextprotocol.io/posts/2026-01-26-mcp-apps/)) | MCP | The server (any HTML) | None: a `ui://` resource in a sandboxed iframe | ChatGPT, Claude, VS Code, Goose, Postman | Whatever the HTML does | `ui/message`, proxied `tools/call`, `ui/open-link` | The host passes theme variables; the app decides | No: it is a rendering convention | MIT, MCP project (Agentic AI Foundation) |
+| **OpenAI Apps SDK** | ChatGPT only | The server (React / web components) | None: `window.openai` bridge | ChatGPT | Whatever the app does | Tool calls, `sendFollowUpMessage` | App-owned, with ChatGPT theme hints | ChatGPT directory, OAuth | Proprietary platform; ChatGPT also implements MCP Apps since January 2026 |
+| **MCP-UI** | MCP (embedded resources) | The server | None: HTML, external URL, or remote-DOM | Goose, Postman, mcp-ui lineage hosts; folded into MCP Apps | Whatever the content does | `ui/*` intents | App-owned | No | Apache-2.0, community; the ancestor widgentic's `format: "app"` still serves |
+| **A2UI** (v1.0 candidate) | A2A, AG-UI, MCP, WebSockets | **The agent**, per turn, from a catalog | 18 basic components, custom catalogs as JSON Schema | No native renderer in ChatGPT or claude.ai; "renderer inside an MCP App" is the documented workaround | Yes: five two-way-bound inputs, validators | `action` events to the agent; local `functionCall`; v1.0 bidirectional RPC | Renderer-owned; agent theming removed in v1.0 | Composer (hosted editor); rest is the integrator's | Apache-2.0, Google |
+| **AG-UI** (1.0 draft) | Itself: SSE, protobuf | Not its concern | None by design; `ACTIVITY_*` envelope carries A2UI, MCP Apps or anything | No: targets the application you own | Frontend tools, interrupts with `responseSchema` | Frontend tools executed by the app under user consent | The app | No | MIT, CopilotKit |
+| **Open-JSON-UI** (OpenAI) | MCP Apps in ChatGPT (components run in the iframe, over the Apps bridge) | The agent, from a fixed schema | An open standardization of OpenAI's internal declarative UI schema ([overview via CopilotKit](https://docs.copilotkit.ai/agno/generative-ui/open-json-ui)) | ChatGPT | Per schema; not verified here | Per component | Host | No | OpenAI |
+| **json-render** (Vercel Labs), **OpenUI Lang** | Any (payload formats) | The agent | Developer catalogs; json-render streams RFC 6902 patches; OpenUI Lang is a line DSL | Only where a renderer is embedded | Yes | Per catalog | Renderer | No | MIT |
+
+The last three rows are summarized from the surveys cited below rather than from their own specifications, and should be checked before quoting.
+
+## What the comparison says about widgentic
+
+**Distinct, defensible today.**
+
+- The only path that puts a *designed* widget inline in ChatGPT, claude.ai and VS Code without the host learning anything new. A2UI needs a renderer in the host; AG-UI needs to own the application; raw MCP Apps needs the server to write HTML per tool.
+- Tables and trees as first-class kinds. A2UI's basic catalog has neither.
+- Server-side actions with secrets, scopes and redaction; a written trust model; validation on write and read. No other project in the table ships a tenancy story.
+- The agent-facing side of a result: descriptors as steering, structured errors, hint and action notes, model-context slimming, an authoring guide derived from the validators.
+- Token economy: a kind and its data, not a layout and its data, on every turn.
+
+**Behind, and the field has shown the shape of the fix.**
+
+- No input from the reader. A2UI's two-way-bound inputs with closed-vocabulary validators and AG-UI's interrupt `responseSchema` are the two designs to borrow from.
+- No Markdown, no media beyond `img`, no tabs or modal. A2UI's `Text` is Markdown.
+- Web DOM only. A2UI renders natively on Flutter today and on Compose and SwiftUI soon.
+- No presence in owned applications built on AG-UI/CopilotKit, which is where the agent frameworks (LangGraph, CrewAI, ADK, Strands, Microsoft Agent Framework, Pydantic AI, Mastra, Agno, the Claude Agent SDK) send their UI.
+- Ecosystem gravity: A2UI has Google, 16k stars and a certification program on the roadmap; AG-UI has every framework and $27M behind it.
+
+**Convergent decisions that validate the invariants.** A2UI removed agent theming in v1.0 for lack of uptake; widgentic never allowed it. AG-UI's draft spec says model output is untrusted and must never be rendered as executable markup; widgentic's tree is built with `createElement` behind allowlists. Both A2UI and widgentic return structured validation errors for the model to correct. The "templates are data" invariant is now the industry position, not an outlier.
+
+## Recommended next steps, by value
+
+1. **Probe, then adapt, into AG-UI applications.** Zero-code first: point CopilotKit's `@ag-ui/mcp-apps-middleware` at a widgentic server and see whether the `ui://widgentic/app.html` template mounts, whether `ui/message` and `serverTools` work there. Then a thin renderer that mounts the `application/vnd.widgentic+json` block with `mountWidget` from `@widgentic/core`. This is the cheapest way into every agent framework at once, because AG-UI already carries MCP tool results and `@widgentic/core` is browser-safe with zero dependencies. Detail: [widgentic and AG-UI](/compare/ag-ui).
+2. **Publish a widgentic A2UI catalog and a `toA2UI` projection.** A custom catalog is a JSON Schema document; the render tree is pure data. `WgCard`, `WgTable`, `WgTree`, `WgGroup` as A2UI components give A2UI the table and tree it lacks and give widgentic every A2UI renderer (React, Lit, Angular, Flutter, Lynx) and transport (A2A, AG-UI). Detail: [widgentic and A2UI](/compare/a2ui).
+3. **Design bounded input for actions** on the A2UI + AG-UI shape: two-way binding into a widget-local model, a closed validator set, `action.input` reading from the model, and a typed answer. This closes the largest functional gap and is already a backlog item.
+4. **Adopt RFC 6902 for the `patch` output mode**, so an action result is forwardable as an AG-UI `STATE_DELTA` or an A2UI `updateDataModel`, and the authoring contract loses a bespoke grammar. Keep `merge` and `replace` as defaults.
+5. **Stable node ids in `structuredContent.tree`** for template kinds: enables streaming preview of custom kinds and replaces the positional diff on the backlog with a keyed one.
+6. **Markdown as a bind mode** rendered through the tree, never `innerHTML`.
+7. **A public conformance fixture set** for the payload contract (payload in, tree out), the prerequisite for anyone else's renderer and for the A2UI catalog to prove equivalence.
+8. **Position by complement**, in the sentence form AG-UI made familiar: *MCP gives agents tools; AG-UI brings agents into your application; A2UI lets an agent compose a screen; widgentic gives tool results a designed face any MCP host can show.* Publishing these pages is a `[USER]` call: they are analysis, and they name other projects.
+
+## Sources
+
+- [The State of Generative UI in 2026 (OpenUI)](https://www.openui.com/blog/state-of-generative-ui-report) · [The accelerating GenUI ecosystem (TELUS Digital, 2026-03-27)](https://www.telusdigital.com/insights/data-and-ai/article/accelerating-genui-ecosystem-mcp-apps-openai-apps-sdk-and-google-a2ui) · [MCP Apps vs OpenAI Apps SDK (MCP.Directory)](https://mcp.directory/blog/mcp-apps-standard-vs-openai-apps-sdk-2026)
+- [MCP Apps announcement (2026-01-26)](https://blog.modelcontextprotocol.io/posts/2026-01-26-mcp-apps/) · [OpenAI Apps SDK reference](https://developers.openai.com/apps-sdk/reference)
+- [AG-UI and A2UI (CopilotKit)](https://www.copilotkit.ai/ag-ui-and-a2ui) · [Agent Spec for A2UI through AG-UI (Oracle)](https://blogs.oracle.com/ai-and-datascience/announcing-agent-spec-for-a2ui-copilotkit-ag-ui) · [A2UI launches with AG-UI support (CopilotKit)](https://docs.copilotkit.ai/whats-new/a2ui-launch)
+- Project sources are listed on the two detail pages.

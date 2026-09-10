@@ -1,0 +1,76 @@
+---
+title: "widgentic and AG-UI"
+description: "AG-UI is the event stream between an agent runtime and an application you own; widgentic is the widget vocabulary a tool result can carry. They meet at one envelope."
+hidden: true
+---
+
+<Note>
+Working analysis, dated 2026-09-10. Facts about AG-UI were read from its docs, draft specification, repository and package registries on that day; anything not confirmed says so. This page is not in the public navigation.
+</Note>
+
+## One-line each
+
+- **AG-UI** ([docs.ag-ui.com](https://docs.ag-ui.com/introduction), [repo](https://github.com/ag-ui-protocol/ag-ui)) — "an open, lightweight, event-based protocol that standardizes how AI agents connect to user-facing applications": one `RunAgentInput` POST in, one ordered stream of typed events out. Created by CopilotKit (public since April 2025, MIT, no foundation; a $27M Series A in May 2026 was raised explicitly around it).
+- **widgentic** — a payload contract (`{ kind, data, hints?, meta? }`), a catalog of generic widgets plus people-authored templates, a renderer, and an MCP server that validates and renders for any MCP host. It defines *what a tool result looks like*, not how an agent run reaches an application.
+
+The two do not compete. AG-UI itself says so of the whole category: "AG-UI is not a generative UI specification — it's a User Interaction protocol that provides the bi-directional runtime connection between the agent and the application" ([generative UI specs](https://docs.ag-ui.com/concepts/generative-ui-specs)). widgentic is exactly the kind of specification that sentence leaves room for.
+
+## Where each sits
+
+| Layer | AG-UI | widgentic |
+|---|---|---|
+| Transport (agent run ⇄ app) | The protocol itself: SSE (MUST) or length-prefixed protobuf (OPTIONAL) over HTTP; WebSocket has no standard binding yet | Not addressed. widgentic rides on MCP tool results and MCP Apps (`ui://` template in a sandboxed iframe) |
+| Run lifecycle | `RUN_STARTED`/`RUN_FINISHED`/`RUN_ERROR`, `STEP_*`, `SUBAGENT_*`, reasoning events | None. A render is one `tools/call` |
+| Streaming text and tool arguments | `TEXT_MESSAGE_*`, `TOOL_CALL_START/ARGS/END`, `*_CHUNK` | A streaming *preview* of built-in kinds from `ui/notifications/tool-input-partial`; the tool result is authoritative |
+| Shared state | `STATE_SNAPSHOT` replaces, `STATE_DELTA` is RFC 6902 JSON Patch, state round-trips through the app on every run | The widget's own payload: `mountWidget(...).update(next)` patches the DOM in place; an action result applies `merge`, `replace` or `patch` at a path |
+| UI vocabulary | Deliberately none. `ACTIVITY_SNAPSHOT`/`ACTIVITY_DELTA` carry an opaque `content` object tagged by `activityType`; the widget spec is always external (A2UI, MCP Apps, Open-JSON-UI) | The whole product: `card`, `table`, `tree`, `group`, template kinds, `--wg-*` tokens, hints, descriptors |
+| Interaction back to the agent | Frontend tools (app executes, answers with a `role: "tool"` message on the next run) and interrupts (`outcome: { type: "interrupt" }` answered by `resume`) | `prompt` actions prefill the composer through `ui/message`; `http` actions execute server-side and post the new payload to the model's context. No client-side execution, by design |
+| Who renders | Your application, usually CopilotKit hooks (`useRenderToolCall`, `useFrontendTool`, `useHumanInTheLoop`) | Any MCP Apps host inline, or your page through `@widgentic/core` |
+| Authoring surface | None | Widget, theme, schema and action designers; agents draft, people save |
+| Trust stance | "Model output is untrusted input … Applications MUST validate what they act on and MUST NOT render streamed content as executable markup"; auth is out of scope ("AG-UI defines no credential") | Same premise, enforced in code: templates are data, active-content tags rejected, DOM built with `createElement`, actions execute behind a guarded fetch, keys read-only by default. See the [trust model](/how-it-works/trust-model) |
+
+## What AG-UI has that widgentic should not build
+
+AG-UI's value is reach into agent runtimes: LangGraph, CrewAI, Microsoft Agent Framework, Google ADK, AWS Strands, Mastra, Pydantic AI, Agno, LlamaIndex, AG2, the Claude Agent SDK, Amazon Bedrock AgentCore (SSE and WebSocket since March 2026) all ship integrations ([README status tables](https://github.com/ag-ui-protocol/ag-ui#readme)). A run lifecycle, subagent events, reasoning streams and JSON-Patch state are the job of the layer that owns the model loop. widgentic owns no model loop and should keep it that way: the invariant "the agent never calls `execute_action` itself" only holds because the host, not widgentic, mediates the conversation.
+
+## What widgentic has that AG-UI leaves to someone else
+
+- **A fixed, small vocabulary the model selects from.** In the generation taxonomy AG-UI's own ecosystem uses, this is the *static/registry* pattern: visual fidelity by construction, and the cheapest wire format, because the agent sends data and a kind, not a layout. Templates add the *declarative* pattern without handing it to the model: people author templates, the model only fills them.
+- **Agent-facing feedback in the result.** `Hint notes:` and `Action notes:` tails, structured error codes, `structuredContent.diagnostics`, and model-context slimming in Apps hosts. AG-UI has no equivalent because the application owns the prompt.
+- **Distribution into hosts you do not own.** claude.ai, ChatGPT, VS Code Copilot Chat and Claude Desktop mount widgets today ([host matrix](/how-it-works/host-matrix)). AG-UI targets the opposite case, the application you own.
+- **Server-side action execution with secrets.** Guarded fetch, envelope-encrypted secrets referenced by name, redaction, scopes fixed at key creation. AG-UI's frontend-tool model puts execution in the browser under user consent instead; both are defensible, they are different products.
+
+## Where they meet: one envelope
+
+AG-UI already carries two external UI specs through the same mechanism, and a third fits without protocol change:
+
+| Spec | Middleware | Event | Renderer |
+|---|---|---|---|
+| A2UI | `@ag-ui/a2ui-middleware` injects a `render_a2ui` tool, validates the model's JSON, emits `ACTIVITY_SNAPSHOT` with `activityType: "a2ui-surface"` | `ACTIVITY_SNAPSHOT` | `@copilotkit/a2ui-renderer` |
+| MCP Apps | `@ag-ui/mcp-apps-middleware` emits `ACTIVITY_SNAPSHOT` with `activityType: "mcp-apps"` carrying `resourceUri`, `serverId` and the tool result | `ACTIVITY_SNAPSHOT` | Sandboxed iframe |
+| widgentic (possible) | `@ag-ui/mcp-middleware` already lists and executes MCP tools server-side as `mcp__{serverId}__{tool}`; a widgentic renderer would read the `application/vnd.widgentic+json` block from the `render_widget` result and mount it with `@widgentic/core` | `TOOL_CALL_RESULT` or an `ACTIVITY_SNAPSHOT` tagged `activityType: "widgentic"` | `mountWidget` from `@widgentic/core/reactive`, zero dependencies, browser-safe |
+
+Two routes, neither probed yet:
+
+1. **No new code.** Point `mcp-apps-middleware` at a widgentic server: `render_widget` declares `_meta.ui.resourceUri` → `ui://widgentic/app.html`, which is what that middleware forwards. Expect the same iframe rendering the Apps hosts get. Prompt actions need the host to honour `ui/message`; http actions need `serverTools`. Whether CopilotKit's iframe host proxies `tools/call` is unknown.
+2. **Native mounting.** A small renderer package (or an example under `examples/`) that maps a widgentic payload to DOM through `mountWidget`. This is the route that gives an owned application the same in-place patching and theming that the Apps template has, without an iframe. Because `@widgentic/core` is browser-safe and dependency-free, the renderer is a thin adapter; the cost is mostly the CopilotKit hook glue and a test rig.
+
+## Ideas worth taking from AG-UI
+
+- **RFC 6902 for `patch`.** widgentic's action output `patch` mode names a path; AG-UI (and A2UI's data model updates) standardize on JSON Patch. Adopting the RFC for the `patch` grammar would make an action result directly forwardable as a `STATE_DELTA` and removes a bespoke format from the authoring contract. Keep `merge`/`replace` as the ergonomic defaults.
+- **Interrupts with a `responseSchema`.** AG-UI's `RUN_FINISHED` interrupt carries `{ id, reason, message?, responseSchema? }` and the app answers through `resume`. That is the shape the backlog item "form inputs / client-side arg collection for actions" needs: a declared schema, a host-rendered form, a typed answer, no code in the widget.
+- **`protocolVersion` on the wire.** The 1.0 draft adds a version string to the run input and `RUN_STARTED`. widgentic's payload has no version field; renderers ignore unknown fields, which has been enough so far, but a `meta.contract` or similar would let a host log what it was given when a shape changes.
+- **Positioning by complement.** "MCP gives agents tools; A2A lets agents talk to agents; AG-UI brings agents into user-facing applications" is the sentence that made AG-UI legible. The widgentic equivalent writes itself: *MCP gives agents tools; widgentic gives tool results a face any host can show.*
+
+## Facts to keep in mind
+
+- No numbered protocol release exists yet: `@ag-ui/core` 0.0.59 (2026-08-27), Python `ag-ui-protocol` 0.1.22 (2026-08-31), date-tagged repo releases, and a **draft** 1.0 behavioural spec at [docs.ag-ui.com/spec/draft](https://docs.ag-ui.com/spec/draft/index) whose `schema.json` is authoritative for shapes.
+- Frontend tool answers and interrupt resumes cross a run boundary; there is no mid-run channel from client to agent, no SSE resumption, and the protobuf binding drops unknown fields.
+- Governance is CopilotKit's (`CODEOWNERS` is the company org; a biweekly working group; community SDKs are maintained by their contributors).
+
+## Sources
+
+- [Introduction](https://docs.ag-ui.com/introduction) · [Events](https://docs.ag-ui.com/concepts/events) · [Tools](https://docs.ag-ui.com/concepts/tools) · [Interrupts](https://docs.ag-ui.com/concepts/interrupts) · [State](https://docs.ag-ui.com/concepts/state) · [Generative UI specs](https://docs.ag-ui.com/concepts/generative-ui-specs) · [Agentic protocols](https://docs.ag-ui.com/agentic-protocols)
+- [Draft 1.0 specification](https://docs.ag-ui.com/spec/draft/index) · [HTTP + SSE binding](https://docs.ag-ui.com/spec/draft/basic/transports/http-sse) · [Run input](https://docs.ag-ui.com/spec/draft/basic/run-input)
+- [AG-UI and A2UI](https://www.copilotkit.ai/ag-ui-and-a2ui) · [The state of agentic UI: AG-UI, MCP-UI and A2UI](https://www.copilotkit.ai/blog/the-state-of-agentic-ui-comparing-ag-ui-mcp-ui-and-a2ui-protocols) · [Developer's guide to generative UI in 2026](https://www.copilotkit.ai/blog/the-developer-s-guide-to-generative-ui-in-2026)
+- [Amazon Bedrock AgentCore adds AG-UI](https://aws.amazon.com/about-aws/whats-new/2026/03/amazon-bedrock-agentcore-runtime-ag-ui-protocol) · [CopilotKit Series A](https://techcrunch.com/2026/05/05/copilotkit-raises-27m-to-help-devs-deploy-app-native-ai-agents/)
