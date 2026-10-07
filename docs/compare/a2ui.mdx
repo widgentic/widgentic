@@ -1,0 +1,97 @@
+---
+title: "widgentic and A2UI"
+description: "Both say UI should be data, not code. A2UI lets the agent compose a layout from a catalog and asks the host to bring a renderer; widgentic lets the agent pick a kind and fill it, and ships the renderer into hosts it does not own."
+hidden: true
+---
+
+<Note>
+Working analysis, dated 2026-09-10. Facts about A2UI were read from its specification (v0.9.1 current, v1.0 candidate), repository, site and package registries on that day; anything not confirmed says so. This page is not in the public navigation.
+</Note>
+
+## One-line each
+
+- **A2UI** ([a2ui.org](https://a2ui.org), [repo](https://github.com/a2ui-project/a2ui)) — an open JSON protocol in which an agent streams a declarative description of a UI (a flat list of components plus a data model) and the client renders it with its own native component library. Google-originated (public 2025-12-15, Apache-2.0, Google CLA; not a foundation project as of today), developed with Google Opal, Flutter's GenUI SDK, Gemini Enterprise, AG-UI/CopilotKit and the A2A team. Tagline: agent UIs should be "safe like data, but expressive like code."
+- **widgentic** — a payload contract (`{ kind, data, hints?, meta? }`), four built-in kinds plus people-authored template kinds, `--wg-*` theming, and an MCP server that validates and renders inline in any MCP Apps host. Tagline in the same register: *the agent supplies data; a person supplied the layout; the host supplies the look.*
+
+This is the closest comparison in the field. Both projects reject "the model writes HTML". They differ on **who composes the layout** and **who brings the renderer**.
+
+## Side by side
+
+| | A2UI (v1.0 candidate) | widgentic |
+|---|---|---|
+| Unit on the wire | JSONL messages, each `"version"` plus one key: `createSurface`, `updateComponents`, `updateDataModel`, `deleteSurface`, and (v1.0) `callRendererFunction` / `agentFunctionResponse`; back: `action`, `error`, `callAgentFunction` / `rendererFunctionResponse` | One MCP tool result: text fallback, the `application/vnd.widgentic+json` payload block, and `structuredContent` `{ html, css, tree, payload }`; back: `ui/message` (prompt) or `tools/call execute_action` (http) |
+| Who composes the layout | **The agent**, per response: a flat adjacency list of components (`id`, `component`, props; containers reference children by id; exactly one `"id": "root"`) | **A person**, once: a built-in kind or a stored template. The agent selects a `kind` and supplies `data`, `hints`, `meta` |
+| Vocabulary | Basic catalog of 18 components: `Text` (Markdown), `Image`, `Icon`, `Video`, `AudioPlayer`, `Row`, `Column`, `List`, `Card`, `Tabs`, `Modal`, `Divider`, `Button`, `TextField`, `CheckBox`, `ChoicePicker`, `Slider`, `DateTimeInput`. Custom catalogs are JSON Schema documents with `catalogId`, `components`, `functions`, optional Markdown `instructions` for the LLM. No Table, Tree, Form, Chart or file upload | `card`, `table`, `tree`, `group` (mixed kinds, layout hints) plus any number of template kinds per principal. Templates are plain HTML elements under a denylist (`FORBIDDEN_TAGS`), with `bind`/`each`/`when`. No input elements, no media beyond `img`, no Markdown |
+| Data binding | JSON Pointer (RFC 6901): `{"path": "/user/name"}`; template children `{"path": "/items", "componentId": "tpl"}` with item-relative paths; two-way binding for inputs into a surface-local data model | Dot paths: `{ "bind": "user.name" }`, `each`, `when`, `$root` / `$parent` / `$index` / `$meta`; one-way, render time only |
+| Transforms | 14 catalog functions callable via `{"call": "fn", "args": {...}}`: `required`, `regex`, `length`, `numeric`, `email`, `formatString`, `formatNumber`, `formatCurrency`, `formatDate`, `pluralize`, `openUrl`, `and`, `or`, `not`; string interpolation with `formatString` | A closed set that never evaluates: `map` (value selects an authored literal), `prefix`, `format` (`number` / `currency` / `date`). No calls, no interpolation, no boolean logic |
+| Updates | `updateDataModel` upserts at a path (`null` deletes); re-sending a component id replaces it; components may arrive in any order and render progressively once `root` exists | `mountWidget(...).update(next)` patches the DOM in place; an action result applies `merge` / `replace` / `patch` at a path; streaming preview for built-in kinds from partial tool input |
+| Interaction | `action` events carry `name`, `sourceComponentId`, resolved `context` back to the agent; `functionCall` runs a catalog function locally; v1.0 adds a bidirectional function RPC with `allowedCallers` and `requiresUserActivation` (`openUrl` requires it) | `prompt` actions *propose* a message (composer prefill through `ui/message`); `http` actions run **server-side** through a guarded fetch with secrets by name; the frame never touches the network |
+| Theming | "Agents describe what to show, renderers decide how it looks." Agent-supplied `theme` / `primaryColor` were **removed in v1.0** after "no great uptake" (issue #1118); web renderers theme through `--a2ui-*` CSS custom properties; only semantic `variant` hints survive | 32 typed `--wg-*` tokens, author `x-*` variables, named themes as validated JSON, chosen by people and referenced by **name** in `render_widget`; host style variables are bridged into the tokens in Apps hosts |
+| Catalog discovery | Capability handshake: agent advertises `supportedCatalogIds` / `acceptsInlineCatalogs`; renderer answers `a2uiRendererCapabilities`; `catalogId` is an opaque string, resolution is component → surface default → error, "no fallback" | `list_widgets` returns every kind's descriptor (purpose, data shape, example, hints); an unknown key degrades to the built-in catalog, never to an error |
+| Validation feedback to the model | A "prompt-generate-validate loop": `additionalProperties: false` schemas, `VALIDATION_FAILED` / `UNALLOWED_PARENT` / `UNALLOWED_CHILD` with a `path` fed back to the LLM | Structured codes (`UNKNOWN_KIND`, `MISSING_FIELD`, ...) on failure; on success a `Hint notes:` / `Action notes:` tail and `structuredContent.diagnostics`; model-context slimming in Apps hosts |
+| Where it renders | Your application, with an official renderer: React, Lit, Angular (`@a2ui/*`), Flutter (GenUI SDK), Lynx; SwiftUI and Jetpack Compose planned for Q3 2026; community Vue, Svelte, React Native, Ink | Any MCP Apps host, inline, without the host knowing widgentic exists: claude.ai, ChatGPT, VS Code Copilot Chat, Claude Desktop today ([host matrix](/how-it-works/host-matrix)); or your page through `@widgentic/core` |
+| Transports | A2A extension (`application/a2ui+json` data parts), AG-UI (`ACTIVITY_SNAPSHOT`, `activityType: "a2ui-surface"`), MCP (`a2ui://` template resources, `updateDataModel` in an embedded resource), WebSockets, SSE, REST (status of the last three disagrees between the roadmap and the transports page) | MCP tool results and MCP Apps (`ui://widgentic/app.html`, `text/html;profile=mcp-app`); `format: "app"` for mcp-ui lineage hosts; `format: "page"` for a browser |
+| Persistence, tenancy, authoring | Out of scope for the spec. A hosted **A2UI Composer** edits widget JSON visually; catalogs live wherever the developer puts them | Per-principal stores (memory, file, SQLite, Cosmos), hashed keys with scopes, secrets with envelope encryption, four designers, agents draft and people save |
+| Security posture | "Declarative data, no code execution"; the catalog is an **allowlist** of components; `additionalProperties: false`; data-model sync goes only to the creating agent; sandboxing of custom components is "firmly in the developer's hands"; no threat-model section in the spec | A written [trust model](/how-it-works/trust-model): no agent write path, denylist tags and attributes at validation plus serializer allowlists at mount, URL-scheme allowlist, node budget and depth limit, guarded fetch, secret redaction, rate limits |
+| Maturity (2026-09-10) | v0.9.1 "current production", v1.0 candidate with Q4 2026 finalization and a renderer certification program planned; 16.3k stars; Opal in production; `@a2ui/react` 0.11.0 | 0.x packages, one team; verified in four third-party hosts; 840+ tests, spec-first |
+
+## The structural difference, and what it buys
+
+A2UI puts the layout decision in the model's hands each turn. That is what makes it *generative*: a Column of Cards with a Tabs component and a Slider can appear without anyone having designed that screen. It costs tokens on every response (structure travels with data), and the ecosystem's own critique is that loose catalogs let agents "choose odd combinations" of components. A2UI answers with `instructions` in the catalog, `allowedParents` / `allowedChildren` in v1.0, and the validate-and-retry loop.
+
+widgentic takes the layout decision away from the model. The agent's degrees of freedom are `kind`, `data`, `hints` and `meta`; a person fixed everything else in a template, once, with a validator watching. That buys fidelity by construction, the smallest possible wire format, and a result the model can be told not to restate. It costs generality: there is no way to show a screen nobody designed, except by composing existing kinds in a `group`.
+
+The two positions are the "declarative" and "static/registry" cells of the taxonomy the rest of the field uses, and they are not exclusive. A widgentic template *is* an A2UI-style declarative layout, just authored by a person instead of the model, and A2UI's own basic catalog is a registry the model picks from.
+
+## Who brings the renderer
+
+A2UI's model requires the host application to embed an A2UI renderer. That is natural in an app you build (Opal, ADK Web, a CopilotKit app) and impossible in a chat host you do not control: ChatGPT and claude.ai do not ship an A2UI renderer. A2UI's documented answer for those hosts is its third MCP pattern, "an A2UI renderer bundled inside an MCP App" — a sandboxed iframe carrying its own renderer.
+
+That third pattern is widgentic's architecture already: the `ui://widgentic/app.html` template is a self-contained bridge that mounts the render tree natively inside the host's sandbox, patches it on later results, previews partial input, and forwards links and prompts to the host. widgentic has spent its effort on that path because it is the one that reaches hosts with users today. The converse holds too: in an owned application with a native component library, A2UI's renderers give a native look that a widgentic iframe cannot.
+
+## Where A2UI is ahead
+
+- **Input.** Five two-way-bound input components, validators as catalog functions, and a submit `action` with resolved `context`. widgentic is deliberately "not a forms library"; the backlog item *form inputs / client-side arg collection for actions* is exactly this gap.
+- **Rich text and media.** Markdown `Text`, `Video`, `AudioPlayer`, `Tabs`, `Modal`. widgentic renders text nodes and `img` only.
+- **Native, multi-platform rendering.** Flutter today, Compose and SwiftUI planned. widgentic is web DOM.
+- **Ecosystem gravity.** Google Opal in production, Gemini Enterprise (for A2A-registered agents), ADK, CopilotKit day-zero support, Vercel json-render and Oracle Agent Spec interop, a Composer and a Theater, an eval and conformance suite, a certification program on the roadmap.
+- **Progressive rendering from a flat list.** Because components carry ids and arrive in any order, a renderer can paint as the stream lands. widgentic previews only built-in kinds from partial input; custom kinds show a skeleton.
+
+## Where widgentic is ahead
+
+- **Distribution without host cooperation.** Inline widgets in ChatGPT, claude.ai, VS Code Copilot Chat and Claude Desktop today, using only the MCP Apps standard those hosts already implement.
+- **Tables and trees.** A2UI's basic catalog has neither; `List` of `Row`s is the nearest approximation. widgentic's `table` (columns, image cells, field formats, links) and `tree` (native disclosures, icons) are first-class.
+- **Server-side actions with secrets.** Guarded public-https fetch, secrets referenced by name and redacted everywhere, scopes fixed at key creation, bindings that resolve from the store and never from the request. A2UI's `openUrl` requires user activation; everything else it does with the network is the host's problem.
+- **A tenancy and authoring story.** Stores, keys, limits, designers, the agent-drafts-people-save loop, and "refuse at the door" validation on write and read. A2UI leaves all of it to the integrator.
+- **Agent-facing result design.** Descriptors as the steering surface, structured errors, hint and action notes, model-context slimming, `get_authoring_guide` derived from the validators.
+- **Token economy.** Kind plus data versus structure plus data on every turn.
+
+## Convergences worth noting
+
+- **Agent theming failed in A2UI** and was removed in v1.0; widgentic never allowed it (the agent passes a theme *name*; people author themes; the host re-themes through bridged tokens). Same conclusion from two directions.
+- **Validate and feed back.** Both treat the model as a fallible author and return machine-readable errors it can act on.
+- **Functions are a closed vocabulary in both**, but A2UI's is a small expression language (`and`/`or`/`not`, interpolation, validators) while widgentic's `map`/`prefix`/`format` never evaluates. A2UI's v1.0 `allowedCallers` and `requiresUserActivation` show the boundary they had to add once functions could be called from either side.
+- **Semantic, not visual, hints.** A2UI's `variant`; widgentic's `hints` and `map` to `wg-status-*` classes.
+
+## Ideas worth taking from A2UI
+
+1. **A widgentic A2UI catalog.** Custom catalogs are JSON Schema documents with `catalogId`, `components`, `functions` and `instructions`. Publishing `WgCard`, `WgTable`, `WgTree`, `WgGroup` as an A2UI catalog (component props mirroring `data` / `hints` / `meta`) lets any A2UI renderer host show widgentic kinds natively and gives A2UI agents the table and tree it lacks. The `instructions` field is where the descriptors already written for `list_widgets` go.
+2. **A `toA2UI` projection.** The render tree is pure data (`WidgetNode`), so projecting a built-in render to A2UI basic-catalog components (`Card`, `Column`, `Row`, `Text`, `Image`, `List`) plus a `dataModel` is a mapping, not a rewrite. It turns widgentic into a *generation* layer for A2UI transports (A2A, AG-UI) without touching widgentic's own hosts.
+3. **Bounded input, A2UI-shaped.** Model the backlog item on A2UI: input elements bind two-way into a widget-local model; `action.input` may read from that model; validators are a closed set (`required`, `regex`, `length`, `numeric`, `email`) that mark the button disabled with a reason, never run code. Pairs with AG-UI's interrupt `responseSchema` (see [widgentic and AG-UI](/compare/ag-ui)).
+4. **Markdown as a bind mode, rendered through the tree.** `Text` being Markdown is a large part of A2UI's expressiveness. A `{ "bind": "notes", "markdown": true }` that parses a safe subset into `WidgetNode`s (never `innerHTML`) would close the gap while keeping "bindings never inject markup" true in spirit: the parser, not the value, decides the tags.
+5. **Progressive rendering for custom kinds.** A2UI's id-addressed flat list is what makes streaming cheap. widgentic's `structuredContent.tree` could carry stable node ids for template kinds so the bridge can preview and patch them the way it does built-ins; the same ids fix the positional-diff item on the backlog (a reorder currently re-pairs open toggles by index).
+6. **Conformance fixtures.** A2UI ships an eval and conformance suite and plans renderer certification. A public fixture set for the payload contract (payload in, `tree` out) would let a third-party renderer or the A2UI catalog above prove it matches `renderToHtml`.
+
+## Facts to keep in mind
+
+- Governance is Google's: the CLA, Google's community guidelines, Google-internal triage links in `CONTRIBUTING.md`. A2A joined the Agentic AI Foundation in August 2026; A2UI was not named.
+- The spec has no threat-model section; safety claims rest on "declarative data, no code execution" and the catalog allowlist. Custom "Smart Wrapper" components and the MCP-Apps-in-A2UI double-iframe guide are where sandboxing is discussed.
+- Third-party critiques on record: little production use outside Google (TELUS Digital, March 2026); "odd combinations" from loose catalogs (sunpeak); UI impersonation concerns (InfoQ, July 2026).
+- The transports page and the roadmap disagree on whether REST, WebSockets and MCP are complete.
+
+## Sources
+
+- [Specification v1.0 candidate](https://a2ui.org/specification/v1.0-a2ui/) · [Messages](https://a2ui.org/reference/messages/) · [Components](https://a2ui.org/reference/components/) · [Theming guide](https://a2ui.org/guides/theming/) · [Roadmap](https://a2ui.org/roadmap/) · [A2UI in the world](https://a2ui.org/ecosystem/a2ui-in-the-world/) · [Renderers](https://a2ui.org/ecosystem/renderers/) · [How does A2UI compare?](https://a2ui.org/introduction/agent-ui-ecosystem/)
+- Repository paths: `specification/v1_0/docs/a2ui_protocol.md`, `specification/v1_0/json/*.json`, `specification/v1_0/catalogs/basic/catalog.json`, `docs/public/guides/a2ui_over_mcp.md`, `docs/public/guides/mcp-apps-in-a2ui.md`
+- [Introducing A2UI (Google, 2025-12-15)](https://developers.googleblog.com/introducing-a2ui-an-open-project-for-agent-driven-interfaces/) · [A2UI v0.9 (2026-04-17)](https://developers.googleblog.com/a2ui-v0-9-generative-ui/) · [A2UI and MCP Apps (2026-06-17)](https://developers.googleblog.com/a2ui-and-mcp-apps/)
+- [TELUS Digital on the GenUI ecosystem](https://www.telusdigital.com/insights/data-and-ai/article/accelerating-genui-ecosystem-mcp-apps-openai-apps-sdk-and-google-a2ui) · [InfoQ on A2UI](https://www.infoq.com/news/2026/07/google-a2ui-genui/) · [sunpeak: MCP Apps vs A2UI](https://sunpeak.ai/blogs/mcp-apps-vs-a2ui/) · [A2A joins the Agentic AI Foundation](https://www.forbes.com/sites/janakirammsv/2026/08/19/agent2agent-joins-the-agentic-ai-foundation-alongside-mcp/)

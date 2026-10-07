@@ -1,0 +1,86 @@
+---
+title: "widgentic and json-render"
+description: "json-render is Vercel Labs' library for letting a model compose a UI from a Zod catalog and streaming it as JSON Patch into your own components; widgentic stores people-authored widgets and renders them into hosts you do not own."
+hidden: true
+---
+
+<Note>
+Working analysis, dated 2026-09-10. Facts about json-render were read from its repository, site, changelog, package manifests and npm registry on that day; anything not confirmed says so. This page is not in the public navigation.
+</Note>
+
+## One-line each
+
+- **json-render** ([json-render.dev](https://json-render.dev), [repo](https://github.com/vercel-labs/json-render)) — "The Generative UI framework": the developer defines a catalog of components and actions as Zod schemas, an LLM emits a JSON spec constrained to that catalog (streamed line by line as RFC 6902 patches), and a renderer maps the spec onto the host's own components. Vercel Labs, Apache-2.0, created 2026-01-14, all packages at **0.20.0** (2026-08-16), 16.1k stars, one dominant maintainer (177 of about 220 commits). Its own framing, from the maintainer in issue #9: "json-render's format is a library API, not a protocol."
+- **widgentic** — a payload contract (`{ kind, data, hints?, meta? }`), a catalog of generic kinds plus people-authored template kinds stored per principal, `--wg-*` theming, and an MCP server that validates and renders inline in any MCP Apps host. The payload *is* a protocol between independent parties: a server that renders and a host that mounts.
+
+Both say "AI generates JSON, you render it safely." They differ on who defines the catalog and how, who composes the layout, and where the pixels land.
+
+## Side by side
+
+| | json-render 0.20.0 | widgentic |
+|---|---|---|
+| Unit the model emits | A flat spec `{ root, elements, state? }`: elements keyed by id with `type`, `props`, `children` (ids), `slots`, `visible`, `repeat`, `watch`, `on`. Streamed as JSONL where each line is one RFC 6902 operation (`add`, `remove`, `replace`, `move`, `copy`, `test`) against the spec | A payload `{ kind, data, hints?, meta? }`. The render tree, HTML and CSS are produced server-side and travel in `structuredContent`; the model never emits structure |
+| Who composes the layout | **The model**, per turn, from the catalog; refinement re-prompts with `editModes` `patch` / `merge` / `diff` against the current spec | **A person**, once, in the widget designer; the model selects a `kind` and fills `data` |
+| Who defines the catalog, and how | **A developer, in TypeScript**: `defineCatalog(schema, { components: { Card: { props: z.object(...), description } }, actions })` plus `defineRegistry` binding each type to a component. Adding a component is a code change and a deploy | **Anyone, as JSON**: a template entry saved in the designer, validated on write and read, stored per principal, live on the next `tools/call`. Built-ins are code; custom kinds never are |
+| Catalog to model | `catalog.prompt()` builds the system prompt (components, props, examples); `jsonSchema({ strict: true })` targets OpenAI / Gemini / Anthropic structured outputs. Reported at about 4,300 tokens for an 18-component catalog (issue #324) | `list_widgets` descriptors and `get_authoring_guide`, both derived from the validators; tool descriptions carry the steering |
+| Data binding and directives | `{ "$state": "/pointer" }`, two-way `$bindState` / `$bindItem`, `$item`, `$index`, `$cond` / `$then` / `$else`, `$template` interpolation, `$computed` calling host-registered functions; `@json-render/directives` adds `$format`, `$math`, `$concat`, `$count`, `$truncate`, `$pluralize`, `$join`, `$t`; `visible` with `eq` / `neq` / `gt` / `lt` / `$and` / `$or`; `repeat: { statePath, key }` | `bind`, `each`, `when`, `$root` / `$parent` / `$index` / `$meta`; transforms `map`, `prefix`, `format` (`number` / `currency` / `date`). One-way, render time, no comparisons, no host functions |
+| Actions | `on: { press: { action, params } }`; components `emit("press")`; the host supplies `handlers`; built-ins `setState`, `pushState`, `removeState`, `validateForm`; `confirm`, `onSuccess` / `onError`; `watch` fires on state change. Execution is in the browser, by the developer's code | `prompt` proposes a message through `ui/message`; `http` runs server-side through a guarded fetch with secrets by name. The frame never touches the network |
+| State | `StateProvider`, `useStateStore`, `useStateValue`, `useStateBinding`; adapters for redux, zustand, jotai, xstate | The widget payload; in-place DOM patching; action results apply `merge` / `replace` / `patch` |
+| Validation and repair | `validateSpec` (dangling children, malformed `visible`, `repeat` misuse) and `autoFixSpec` classifying fixes lossless or lossy, with guidance to re-prompt rather than fix lossily | Structured error codes on invalid payloads; misaimed hints never fail a render and come back as `Hint notes:` plus `structuredContent.diagnostics` |
+| Streaming | Progressive: each patch line applies as it arrives; `useUIStream`, `createSpecStreamCompiler`; an inline mode mixes prose and patches in an AI SDK message stream (`pipeJsonRender`, `useJsonRenderMessage`) | Preview of built-in kinds from `ui/notifications/tool-input-partial`; the tool result is authoritative |
+| Renderers | React, Vue 3, Svelte 5, SolidJS, React Native, shadcn (36 components) and shadcn-svelte, React Three Fiber, Next.js (routes, layouts, SSR), Remotion (video), React PDF, React Email, Ink (terminal), Image (Satori), codegen to standalone React, devtools for four frameworks. 28 packages on npm, one shared version | Plain DOM from a pure render tree, zero dependencies; the MCP Apps template for third-party hosts; `format: "page"` for a browser document |
+| Third-party chat hosts | `@json-render/mcp`: `createMcpApp({ name, version, catalog, html })`, `registerJsonRenderTool`, `registerJsonRenderResource`, `useJsonRenderApp` in the iframe; claims Claude, ChatGPT, VS Code Copilot, Cursor, Goose, Postman. The iframe carries the developer's bundle. Open issue #195: "MCP App just shows json" | The primary path: verified inline in claude.ai, ChatGPT, VS Code Copilot Chat, Claude Desktop ([host matrix](/how-it-works/host-matrix)); one generic template, no per-widget code |
+| Theming | None in core; the registry's components decide. shadcn packages need Tailwind and expose `variant` / `size` / `gap` / `padding`, plus `className: z.string()` on `Card`, `Stack`, `Grid`; document renderers let the model emit raw `style` values where the catalog says so | 32 typed `--wg-*` tokens, `x-*` variables, named themes as validated JSON referenced by name; host variables bridged into the tokens; agents never author styles |
+| Safety posture | "No arbitrary code execution … not an iframe, not markdown, not generated code"; directives are closed forms dispatched by type guards, `$computed` reaches only registered functions. No sandbox for web renderers (output is your components, in page). No URL-scheme allowlist documented; `href` / `src` / `url` props are plain strings and the docs' `navigate` handler assigns `window.location.href` | Written [trust model](/how-it-works/trust-model): no agent write path, denylist tags and attributes, serializer allowlists, URL-scheme allowlist, node budget, guarded fetch, secret redaction, rate limits |
+| Persistence, tenancy, secrets | None. A catalog is source code; state stores are client state | Stores (memory, file, SQLite, Cosmos), hashed scoped keys, envelope-encrypted secrets, limits per principal |
+| Interop | Concept pages only, marked "illustrative": A2UI, AG-UI, Adaptive Cards (an A2UI catalog as Zod plus a hand-written `renderA2UI()`; no adapter ships). a2ui.org lists it as an ecosystem renderer on that basis. `@json-render/yaml` is an alternative wire format | MCP tool results, MCP Apps, `format: "app"` for mcp-ui lineage; see [widgentic and A2UI](/compare/a2ui) and [widgentic and AG-UI](/compare/ag-ui) for the proposed bridges |
+| Runtime deps | `zod ^4` peer plus the framework; React renderer pins `react ^19.2.3` (issue #329) | Zero |
+
+## The structural difference
+
+json-render and A2UI share the generation model: the layout is the model's to compose each turn, from an allowlist. json-render differs from A2UI in being **developer-first and TypeScript-first**: the catalog is Zod in your codebase, the renderer is your components, and the spec is not meant to cross an organizational boundary. That is why it can ship 28 renderers and skip a specification: there is nobody else to agree with.
+
+widgentic moves the layout decision off the model and the catalog definition off the developer. A template is JSON a person saves in a designer; the server composes a fresh catalog per request from the store; the payload crosses the boundary between a server and a host that never met. That is what makes the no-code authoring loop and the multi-tenant server possible, and it is what json-render's architecture cannot offer without a deploy per widget.
+
+The token economics follow. json-render pays for structure on every turn and for the catalog prompt on every conversation; its own issue tracker records about 4,300 tokens for an 18-component catalog, and the OpenUI benchmark puts a json-render spec at roughly twice a line-DSL equivalent (json-render itself makes no efficiency claims). widgentic pays for `list_widgets` once and then for `kind` plus `data`, and in Apps hosts the model is told not to restate what is already displayed.
+
+## Where json-render is ahead
+
+- **Renderer breadth.** Vue, Svelte, Solid, React Native, PDF, email, video, terminal, image, 3D from one spec. widgentic is DOM.
+- **Forms and two-way binding.** `$bindState`, `validateForm`, `check.required()`, `confirm`. widgentic is deliberately not a forms library.
+- **Refinement loop.** `editModes` (`patch` / `merge` / `diff`) let a follow-up prompt edit the current spec instead of regenerating it.
+- **Repair with intent.** `autoFixSpec` names each fix lossless or lossy and tells the caller which to accept. widgentic's diagnostics report; they do not repair.
+- **Developer experience in the Vercel stack.** `useUIStream`, inline prose-plus-UI in AI SDK message streams, devtools, codegen to plain React, structured-output JSON Schema for three model vendors.
+- **Distribution.** Vercel Labs, 16k stars in eight months, coverage in InfoQ and The New Stack.
+
+## Where widgentic is ahead
+
+- **No-code, per-tenant authoring.** A widget is data saved by a person, not a component shipped by a developer; the catalog changes without a deploy and differs per API key.
+- **A protocol, not a library.** The payload block and `structuredContent` shapes are stable across hosts and servers that share no code; `tools/exports.test.ts` snapshots every exported name so surface changes are reviewed.
+- **Third-party hosts as the primary target**, with one generic template and verified behaviour per host, including action semantics that differ by host (ChatGPT sends, others prefill).
+- **Hardening the model output never had to pass in json-render's design**: URL-scheme allowlists, no styles from the agent, node budgets, a guarded fetch, secrets redacted everywhere. In json-render, `href` is a string and `className` is a string on three layout components.
+- **Server-side actions with secrets and scopes.** json-render actions are browser handlers written by the developer.
+- **Theming as a contract.** Typed tokens with documented use, host re-theming, themes chosen by name.
+- **Zero dependencies**, spec-first, 840+ tests, browser-safe core.
+
+## Ideas worth taking from json-render
+
+1. **Presentational directives for `format`.** `$count`, `$join`, `$truncate`, `$pluralize` are render-time transforms with no evaluation. Adding `count`, `join`, `truncate` and `pluralize` types to widgentic's closed `format` vocabulary covers most of what authors reach for `$computed` to do, without opening an expression language.
+2. **Lossless auto-fix, reported.** Where a payload defect has exactly one safe correction (a numeric string in a `number` field, a trailing comma in a hint list, a column name differing only by case), apply it, render, and say so in `structuredContent.diagnostics` with a `fixed` marker. Keep rejecting anything lossy. Fewer round trips, same contract.
+3. **Edit modes for `render_widget`.** A follow-up call that says "same widget, patch `data` at `/lines/2/amount`" instead of resending the payload maps onto the action output modes that already exist. RFC 6902 for `patch` (already recommended on the [landscape page](/compare)) makes json-render's `patch` mode and widgentic's identical.
+4. **A measured token footprint.** Publish the token cost of `list_widgets`, `get_authoring_guide` and one render of each built-in kind, so "kind plus data" is a number next to json-render's 4,300-token catalog prompt and the OpenUI benchmark rather than a claim.
+5. **Document and image formats.** `format: "page"` is already a document; json-render's React Email and Satori image renderers suggest `format: "email"` (inline-styled HTML) and a server-side PNG for surfaces that accept images but not HTML (chat platforms without MCP Apps). The headless-Chrome probe rig in `tools/` is most of a PNG renderer.
+6. **Devtools for the payload.** An inspector that shows the payload, the resolved tree and the diagnostics side by side would help authors the way `@json-render/devtools` helps developers; the designer's preview is the natural home.
+
+## Facts to keep in mind
+
+- The project is eight months old, at 0.x, under `vercel-labs`, with one maintainer author of most commits; it does not label itself experimental or production.
+- The A2UI, AG-UI and Adaptive Cards pages are concept guides, not shipped adapters; a2ui.org lists json-render as a renderer on the strength of that guide.
+- Open issues to watch: `catalog.validate()` stripping `on` / `repeat` / `watch` / `state` (#222), malformed JSONL dropped silently (#196), malformed patch indexes accepted (#326), no data loading on mount (#245), `className` everywhere (#145), Angular (#332) and Web Component (#289) renderer requests.
+- The OpenUI benchmark's sample json-render patch uses a shape (`"path": "/elements/-"` with `id` fields) that is not json-render's map-keyed spec, so treat its json-render numbers as indicative.
+
+## Sources
+
+- [json-render.dev](https://json-render.dev/) · [Docs](https://json-render.dev/docs) · [A2UI concept page](https://json-render.dev/docs/a2ui) · [Repository](https://github.com/vercel-labs/json-render) (README, CHANGELOG, AGENTS.md, `packages/*/README.md`, `apps/web/app/(main)/docs/*.mdx`) · [Issue #9 on protocols vs libraries](https://github.com/vercel-labs/json-render/issues/9)
+- npm: `registry.npmjs.org/@json-render/*` (28 packages at 0.20.0, 2026-08-16)
+- [InfoQ on json-render (2026-03)](https://www.infoq.com/news/2026/03/vercel-json-render/) · [The New Stack](https://thenewstack.io/vercels-json-render-a-step-toward-generative-ui/) · [a2ui.org ecosystem renderers](https://a2ui.org/reference/renderers/) · [OpenUI: State of Generative UI in 2026](https://www.openui.com/blog/state-of-generative-ui-report)
