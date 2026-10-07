@@ -164,7 +164,7 @@ pack:check`, `openspec validate` — all green.
    Claude Desktop, or the user's screenshots — are routed INTO the in-flight
    change first (delta requirement + regression test), then implemented; a
    deliberate behavior gets a descriptor/doc update; bigger items are queued
-   in the change's design risks with rationale. Deviations discovered during
+   in the change's design risks with rationale and added to `BACKLOG.md`. Deviations discovered during
    apply are recorded as design decisions, never absorbed silently.
 3. Verification standard: read SERVED bytes (download to a file, then grep —
    piped `curl | grep` is unreliable here), confirm the new revision carries
@@ -248,4 +248,4 @@ otherwise it runs `pack:check`. After a publish, bump the range in
 - `openspec/specs/<capability>/spec.md` — current behavior; `openspec/changes/archive/` — every change with proposal, design decisions and tasks.
 - `TESTING.md` — package testing, protocol smokes, host registration snippets, package-level verification log.
 - `packages/*/README.md` — per-package install/usage.
-- Backlog (not scheduled): Server-side image inlining substitutes a fetched data URI at EVERY occurrence of its URL (a 200-node tree with one folder icon duplicates the base64 200×) and many distinct small icons exhaust the 24-URL fetch budget ahead of a hero image — an occurrence-aware byte budget and shape-aware priority (flagged in the 2026-09-01 `native-widgets-refresh` review); the reactive/bridge diffs are positional, so a reordering action result re-pairs a visitor's `open` toggles by index — a keyed tree diff would pair by node identity (same review). `execute_action` failure text can name the target hostname (`guarded-fetch.ts` refusal/fetch messages) while `list_actions` deliberately withholds the transport — align the failure texts for execute-scoped keys (flagged in the 2026-09-01 `agent-visible-actions` review). Custom-kind streaming previews (`get_widget_template` app tool); template performance/resource size of `ui://widgentic/app.html`; form inputs / client-side arg collection for actions; DEK unwrap cache; merging two accounts that both already hold content (account LINKING shipped in v41–v43 and aliases a second sign-in onto one account — linking a subject that already owns a populated account is refused with `SUBJECT_IN_USE`; a merge would combine the two).
+- `BACKLOG.md` — unscheduled work in two parts, widgentic itself and pairing with other technologies, each entry with an ID, priority and origin. New items go there, not here.
