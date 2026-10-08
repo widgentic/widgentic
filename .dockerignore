@@ -1,0 +1,14 @@
+# Repository-root build contexts (examples/docker/Dockerfile.source). The
+# published-package build uses examples/ as its context and its own
+# examples/docker/Dockerfile.dockerignore.
+**/node_modules
+**/dist
+**/*.log
+.git
+.github
+.claude
+docs
+openspec
+examples/docker/data
+examples/docker/kek.txt
+examples/docker/.env

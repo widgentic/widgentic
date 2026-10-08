@@ -31,6 +31,9 @@ services:
       # user and make the proxy STRIP it from inbound client requests.
       # Once set, requests without the header are refused (fail closed).
       # WIDGENTIC_TRUSTED_USER_HEADER: x-forwarded-user
+      # Sample schemas, themes and widgets at first run (never overwrites
+      # what you already hold; ignored in multi-user mode):
+      # WIDGENTIC_SEED_FILE: /srv/docker/seed/demo.json
       # Single-origin hosting (one domain, one certificate — e.g. one Azure
       # Container App running both containers): forward /mcp to the MCP
       # service so agents connect to https://<your-origin>/mcp.

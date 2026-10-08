@@ -20,6 +20,8 @@ import type { WritableWidgetStore } from "@widgentic/mcp/store";
 
 export interface Identity {
   mode: "single" | "trusted-header";
+  /** The one principal in single mode (the seed's target); absent otherwise. */
+  principalId?: string;
   resolve(req: IncomingMessage): Promise<PrincipalContext | undefined>;
 }
 
@@ -33,6 +35,7 @@ export async function createIdentity(store: WritableWidgetStore): Promise<Identi
     console.error("widgentic web: single-principal mode (no sign-in) — for localhost or a trusted network");
     return {
       mode: "single",
+      principalId: local.id,
       resolve: async () => ({ principalId: local.id, label: "Self-hosted" })
     };
   }

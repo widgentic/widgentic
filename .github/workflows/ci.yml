@@ -37,3 +37,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: docker build -f examples/docker/Dockerfile -t widgentic-selfhost examples
+  selfhost-source-image:
+    # Builds the self-host image from THIS checkout's packages, packed and
+    # installed as tarballs: the staging path for unreleased changes. Not a
+    # required check — a red build here is a signal, not a merge block.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f examples/docker/Dockerfile.source -t widgentic-selfhost-source .
