@@ -23,6 +23,7 @@ import {
 } from "@widgentic/mcp";
 import { ANONYMOUS_PRINCIPAL, composeCatalog, composeThemes } from "@widgentic/mcp/store";
 import type { Principal, WidgetStore } from "@widgentic/mcp/store";
+import { loadDeploymentKey } from "./deployment-key.js";
 import { openDeployment } from "./store.js";
 
 const PORT = positiveIntFromEnv(process.env.WIDGENTIC_MCP_PORT, 8081);
@@ -33,6 +34,8 @@ const limiter = createExecutionLimiter(
 
 // The read-only port: this service can never write, by the type it holds.
 const store: WidgetStore = openDeployment("mcp").store;
+// An operator-supplied key that survives an ephemeral store (optional).
+const deploymentKey = loadDeploymentKey(process.env);
 
 function requestKey(req: IncomingMessage): string | undefined {
   const header = req.headers["x-api-key"];
@@ -85,7 +88,7 @@ const httpServer = createHttpServer(async (req: IncomingMessage, res: ServerResp
     let principal: Principal = ANONYMOUS_PRINCIPAL;
     const presentedKey = requestKey(req);
     if (presentedKey !== undefined && presentedKey !== "") {
-      const resolved = await store.resolvePrincipal(presentedKey);
+      const resolved = deploymentKey?.match(presentedKey) ?? (await store.resolvePrincipal(presentedKey));
       if (resolved === undefined) {
         console.error("widgentic mcp: presented key resolved to no principal; serving the anonymous catalog.");
       } else {

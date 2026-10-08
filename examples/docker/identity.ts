@@ -18,8 +18,13 @@ import type { IncomingMessage } from "node:http";
 import type { PrincipalContext } from "@widgentic/mcp/authoring";
 import type { WritableWidgetStore } from "@widgentic/mcp/store";
 
+/** The subject of the one principal a single-principal deployment serves. */
+export const SINGLE_PRINCIPAL_SUBJECT = "local:default";
+
 export interface Identity {
   mode: "single" | "trusted-header";
+  /** The one principal in single mode (the seed's target); absent otherwise. */
+  principalId?: string;
   resolve(req: IncomingMessage): Promise<PrincipalContext | undefined>;
 }
 
@@ -29,10 +34,11 @@ export async function createIdentity(store: WritableWidgetStore): Promise<Identi
   if (headerName === undefined || headerName === "") {
     // No subject in the context: the identity routes (linked accounts) do
     // not exist in this mode, by construction.
-    const local = await store.ensurePrincipal("local:default", "Self-hosted");
+    const local = await store.ensurePrincipal(SINGLE_PRINCIPAL_SUBJECT, "Self-hosted");
     console.error("widgentic web: single-principal mode (no sign-in) — for localhost or a trusted network");
     return {
       mode: "single",
+      principalId: local.id,
       resolve: async () => ({ principalId: local.id, label: "Self-hosted" })
     };
   }

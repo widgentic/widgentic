@@ -1,0 +1,53 @@
+# Self-hosted widgentic built from THIS checkout — the way to run unreleased
+# package changes in a container (a staging deployment of a feature branch).
+# The published image (Dockerfile) installs @widgentic/* from the registry;
+# this one compiles the four packages here, packs them with `npm pack`, and
+# installs those tarballs in their place, so the image runs the branch's code
+# laid out exactly as a registry install would be. The committed manifest is
+# never edited: the rewrite happens inside the build.
+#
+# Build from the repository ROOT (it needs packages/ and the lockfile):
+#   docker build -f examples/docker/Dockerfile.source -t widgentic-selfhost:dev .
+
+FROM node:22-alpine AS packages
+WORKDIR /repo
+COPY . .
+RUN npm ci --no-audit --no-fund
+RUN npm run build
+RUN mkdir /tarballs && npm pack --pack-destination /tarballs \
+  -w @widgentic/core -w @widgentic/designer -w @widgentic/webmcp -w @widgentic/mcp
+
+FROM node:22-alpine
+WORKDIR /srv/docker
+COPY examples/shared /srv/shared
+COPY examples/mcp-server /srv/mcp-server
+COPY examples/docker/ ./
+COPY --from=packages /tarballs /tarballs
+# Point the four packages — and, through overrides, every nested range on
+# them — at the packed tarballs, so one copy of each resolves everywhere.
+RUN node -e ' \
+  const fs = require("node:fs"); \
+  const manifest = JSON.parse(fs.readFileSync("package.json", "utf8")); \
+  manifest.overrides = {}; \
+  for (const file of fs.readdirSync("/tarballs")) { \
+    const name = "@widgentic/" + file.replace(/^widgentic-/, "").replace(/-\d+\.\d+\.\d+.*\.tgz$/, ""); \
+    manifest.dependencies[name] = "file:/tarballs/" + file; \
+    manifest.overrides[name] = "file:/tarballs/" + file; \
+  } \
+  fs.writeFileSync("package.json", JSON.stringify(manifest, null, 2)); \
+  console.log(manifest.overrides);'
+RUN npm install --omit=dev --no-audit --no-fund --install-links
+
+# Same smoke as the published image: the services' entries must import.
+RUN node --disable-warning=ExperimentalWarning ./node_modules/.bin/tsx --eval \
+  "Promise.all([import('@widgentic/mcp/authoring'), import('@widgentic/mcp/store/sqlite'), import('@widgentic/mcp/sdk'), import('@widgentic/designer'), import('@widgentic/webmcp')]).then(() => console.log('entry imports ok'), (error) => { console.error(error); process.exit(1); })"
+
+ENV NODE_OPTIONS=--disable-warning=ExperimentalWarning
+ENV WIDGENTIC_DB=/data/widgentic.db
+
+RUN mkdir -p /data && chown node:node /data
+USER node
+VOLUME /data
+
+EXPOSE 8080 8081
+CMD ["./node_modules/.bin/tsx", "mcp.ts"]
