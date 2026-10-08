@@ -223,3 +223,36 @@ export const EXECUTE_ACTION_TOOL: McpToolDefinition = {
     additionalProperties: false
   }
 };
+
+/**
+ * Called by the app template (app-only visibility), never by agents: while
+ * a render's input streams, previews a kind the frame cannot build itself
+ * by rendering the partial payload through the caller's composed catalog.
+ */
+export const PREVIEW_WIDGET_TOOL: McpToolDefinition = {
+  name: "preview_widget",
+  description:
+    "Called by the widgentic app template while a render's input is still " +
+    "streaming, not by agents: renders the partial payload of a stored " +
+    "widget so the frame can show it as it arrives. Agents should call " +
+    "render_widget instead.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      widget: { type: "string", description: "Widget kind id of the streaming render." },
+      data: {
+        type: ["array", "object", "string", "number", "boolean", "null"],
+        description: "The data received so far; it may be incomplete."
+      },
+      hints: { type: "object", description: "The render's hints so far." },
+      meta: { type: "object", description: "The render's metadata so far." },
+      theme: {
+        type: ["object", "string"],
+        description: "The render's theme name or token map so far; ignored when it does not resolve."
+      }
+    },
+    required: ["widget"],
+    additionalProperties: false
+  }
+};
+

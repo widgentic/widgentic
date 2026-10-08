@@ -1,6 +1,6 @@
 ---
 title: "MCP tools"
-description: "The 8 tools of a widgentic MCP server — name, description as the model sees it, and the JSON Schema of each input — derived from the tool definitions."
+description: "The 9 tools of a widgentic MCP server — name, description as the model sees it, and the JSON Schema of each input — derived from the tool definitions."
 ---
 
 
@@ -178,6 +178,52 @@ Called by widgentic widgets, not by agents: runs a widget's bound http action (a
     "widget",
     "action",
     "payload"
+  ],
+  "additionalProperties": false
+}
+```
+
+## preview_widget
+
+Called by the widgentic app template while a render's input is still streaming, not by agents: renders the partial payload of a stored widget so the frame can show it as it arrives. Agents should call render\_widget instead.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "widget": {
+      "type": "string",
+      "description": "Widget kind id of the streaming render."
+    },
+    "data": {
+      "type": [
+        "array",
+        "object",
+        "string",
+        "number",
+        "boolean",
+        "null"
+      ],
+      "description": "The data received so far; it may be incomplete."
+    },
+    "hints": {
+      "type": "object",
+      "description": "The render's hints so far."
+    },
+    "meta": {
+      "type": "object",
+      "description": "The render's metadata so far."
+    },
+    "theme": {
+      "type": [
+        "object",
+        "string"
+      ],
+      "description": "The render's theme name or token map so far; ignored when it does not resolve."
+    }
+  },
+  "required": [
+    "widget"
   ],
   "additionalProperties": false
 }

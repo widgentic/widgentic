@@ -7,6 +7,7 @@ export {
   LIST_ACTIONS_TOOL,
   GET_AUTHORING_GUIDE_TOOL,
   EXECUTE_ACTION_TOOL,
+  PREVIEW_WIDGET_TOOL,
   WIDGENTIC_UI_URI_PREFIX,
   WIDGENTIC_APP_MIME_TYPE,
   WIDGENTIC_APP_TEMPLATE_URI
@@ -18,9 +19,10 @@ export {
   handleListThemeTokens,
   handleListThemes,
   handleListSchemas,
-  handleListActions
+  handleListActions,
+  handlePreviewWidget
 } from "./handlers.js";
-export type { StoredSchemaEntry, StoredActionEntry } from "./handlers.js";
+export type { PreviewWidgetOptions, StoredSchemaEntry, StoredActionEntry } from "./handlers.js";
 export { buildAppTemplate } from "./app-template.js";
 export { buildAuthoringGuide, handleGetAuthoringGuide } from "./guide.js";
 export {
@@ -47,6 +49,10 @@ export {
   ACTION_TIMEOUT_MS
 } from "./guarded-fetch.js";
 export type { GuardedFetchDeps, GuardedJsonResult, PinnedFetch } from "./guarded-fetch.js";
-export { createExecutionLimiter, DEFAULT_EXECUTIONS_PER_MINUTE } from "./rate-limit.js";
+export {
+  createExecutionLimiter,
+  DEFAULT_EXECUTIONS_PER_MINUTE,
+  DEFAULT_PREVIEWS_PER_MINUTE
+} from "./rate-limit.js";
 export { readBodyText, positiveIntFromEnv, BodyTooLargeError, DEFAULT_MAX_BODY_BYTES } from "./body.js";
 export type { ExecutionLimiter } from "./rate-limit.js";

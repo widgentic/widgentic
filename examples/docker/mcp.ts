@@ -18,6 +18,7 @@ import {
   createExecutionLimiter,
   DEFAULT_EXECUTIONS_PER_MINUTE,
   DEFAULT_MAX_BODY_BYTES,
+  DEFAULT_PREVIEWS_PER_MINUTE,
   positiveIntFromEnv,
   readBodyText
 } from "@widgentic/mcp";
@@ -29,6 +30,11 @@ const PORT = positiveIntFromEnv(process.env.WIDGENTIC_MCP_PORT, 8081);
 const MAX_BODY_BYTES = positiveIntFromEnv(process.env.WIDGENTIC_MAX_BODY_BYTES, DEFAULT_MAX_BODY_BYTES);
 const limiter = createExecutionLimiter(
   positiveIntFromEnv(process.env.WIDGENTIC_EXECUTE_RATE, DEFAULT_EXECUTIONS_PER_MINUTE)
+);
+// Separate bucket: a burst of streaming previews must never spend the
+// principal's action executions, nor the reverse.
+const previewLimiter = createExecutionLimiter(
+  positiveIntFromEnv(process.env.WIDGENTIC_PREVIEW_RATE, DEFAULT_PREVIEWS_PER_MINUTE)
 );
 
 // The read-only port: this service can never write, by the type it holds.
@@ -113,7 +119,8 @@ const httpServer = createHttpServer(async (req: IncomingMessage, res: ServerResp
       sharedActions: () => store.actions(principalRef.id),
       secrets: (name: string) => store.secretValue(principalRef.id, name),
       scopes: principal.scopes,
-      rateLimit: () => limiter.take(principalRef.id)
+      rateLimit: () => limiter.take(principalRef.id),
+      previewRateLimit: () => previewLimiter.take(principalRef.id)
     });
     const transport = new StreamableHTTPServerTransport({ enableJsonResponse: true });
     res.on("close", () => {

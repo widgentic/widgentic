@@ -455,6 +455,51 @@ export function mountTemplatePanel(
     return h("span", { class: `wgd-pathwrap${marker}` }, [select, custom]);
   }
 
+  /**
+   * An `each` node's optional key: the item path that identifies a row, so
+   * a reordered list patches by identity. Completions are the item scope's
+   * bind paths; the empty choice (or an emptied input) removes the key.
+   */
+  function keyControl(
+    value: string | undefined,
+    scope: unknown,
+    onCommit: (key: string | undefined) => void
+  ): HTMLElement {
+    const current = value ?? "";
+    const commit = (next: string) => onCommit(next === "" ? undefined : next);
+    const title = "Optional item key (e.g. id): a reordered list keeps each item's state";
+    const options = isPlainObject(scope) ? pathOptions(scope, "bind") : [];
+    if (options.length === 0) {
+      const input = changeInput(current, commit, "wgd-input wgd-each-key");
+      input.placeholder = "key path";
+      input.title = title;
+      return input;
+    }
+    const select = h("select", { class: "wgd-select wgd-each-key", title });
+    const known = current === "" || options.includes(current);
+    select.append(h("option", { value: "" }, ["no key"]));
+    for (const option of known ? options : [current, ...options]) {
+      select.append(
+        h("option", { value: option }, [option === current && !known ? `${option} (off-schema)` : option])
+      );
+    }
+    select.append(h("option", { value: "__custom__" }, ["custom…"]));
+    select.value = current;
+    fitSelect(select);
+    const custom = changeInput(current, commit, "wgd-input wgd-each-key");
+    custom.hidden = true;
+    select.addEventListener("change", () => {
+      if (select.value === "__custom__") {
+        custom.hidden = false;
+        custom.focus();
+        return;
+      }
+      custom.hidden = true;
+      commit(select.value);
+    });
+    return h("span", { class: "wgd-pathwrap" }, [select, custom]);
+  }
+
   function tagControl(tag: string, onCommit: (tag: string) => void): HTMLElement {
     const select = h("select", { class: "wgd-select wgd-tag" });
     const options = TAG_OPTIONS.includes(tag) ? TAG_OPTIONS : [tag, ...TAG_OPTIONS];
@@ -602,12 +647,18 @@ export function mountTemplatePanel(
       return nodeShell("bind", path, inline, body, errorHere, removable, moves, icons.length > 0 ? { icons } : undefined);
     }
     if (typeof node.each === "string") {
+      const each = node.each;
+      const { each: _each, key: _key, ...rest } = node;
       return nodeShell(
         "each",
         path,
         [
-          pathControl(node.each, scope, "each", (value) =>
+          pathControl(each, scope, "each", (value) =>
             commitAt(path, { ...node, each: value })
+          ),
+          h("span", { class: "wgd-st-colon" }, ["key"]),
+          keyControl(typeof node.key === "string" ? node.key : undefined, itemScope(scope, each), (key) =>
+            commitAt(path, { each, ...(key === undefined ? {} : { key }), ...rest })
           )
         ],
         [

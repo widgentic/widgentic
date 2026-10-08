@@ -1177,3 +1177,79 @@ describe("nullable type arrays in the schema builder", () => {
     expect(count.type).toEqual(["number", "null"]);
   });
 });
+
+describe("keyed each rows", () => {
+  const schema = {
+    type: "object",
+    properties: {
+      lines: {
+        type: "array",
+        items: { type: "object", properties: { sku: { type: "string" }, name: { type: "string" } } }
+      }
+    }
+  };
+
+  function mount(template: unknown, dataSchema: unknown = schema) {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const designer = createDesigner(container);
+    designer.loadWidget({
+      kind: "probe",
+      template,
+      descriptor: { description: "d", dataShape: "s", ...(dataSchema === undefined ? {} : { dataSchema }) }
+    });
+    return { container, designer, keySelect: () => container.querySelector(".wgd-each-key") as HTMLSelectElement };
+  }
+
+  const draftTemplate = (designer: ReturnType<typeof createDesigner>): Record<string, unknown> => {
+    const template: unknown = designer.getDraft().template;
+    if (typeof template !== "object" || template === null || Array.isArray(template)) {
+      throw new Error("draft template is not an object node");
+    }
+    return template as Record<string, unknown>;
+  };
+
+  it("sets the key from the row and shows it in the JSON pane", () => {
+    const { container, designer, keySelect } = mount({ each: "lines", template: "x" });
+    change(keySelect(), "sku");
+    expect(draftTemplate(designer)).toEqual({ each: "lines", key: "sku", template: "x" });
+    const json = [...container.querySelectorAll("textarea")].map((t) => (t as HTMLTextAreaElement).value).join("\n");
+    expect(json).toContain('"key": "sku"');
+  });
+
+  it("removes the key when it is cleared", () => {
+    const { designer, keySelect } = mount({ each: "lines", key: "sku", template: "x" });
+    expect(keySelect().value).toBe("sku");
+    change(keySelect(), "");
+    expect(draftTemplate(designer)).toEqual({ each: "lines", template: "x" });
+    expect("key" in draftTemplate(designer)).toBe(false);
+  });
+
+  it("offers the item scope's paths", () => {
+    const { keySelect } = mount({ each: "lines", template: "x" });
+    const options = [...keySelect().options].map((o) => o.value);
+    expect(options).toEqual(expect.arrayContaining(["", "sku", "name", "__custom__"]));
+    expect(options).not.toContain("lines");
+  });
+
+  it("shows a malformed key's validator error beside the row", () => {
+    const { container, keySelect } = mount({ tag: "ul", children: [{ each: "lines", template: "x" }] });
+    change(keySelect(), "__custom__");
+    const custom = container.querySelector("input.wgd-each-key") as HTMLInputElement;
+    expect(custom.hidden).toBe(false);
+    change(custom, "a..b");
+    const eachRow = [...container.querySelectorAll(".wgd-node")].find((row) =>
+      row.querySelector(".wgd-each-key")
+    );
+    expect(eachRow?.textContent).toContain("Invalid data path 'a..b'");
+  });
+
+  it("falls back to free text without a schema and clears on empty input", () => {
+    const { container, designer } = mount({ each: "lines", template: "x" }, undefined);
+    const input = container.querySelector("input.wgd-each-key") as HTMLInputElement;
+    change(input, "id");
+    expect(draftTemplate(designer)).toMatchObject({ key: "id" });
+    change(container.querySelector("input.wgd-each-key") as HTMLInputElement, "");
+    expect("key" in draftTemplate(designer)).toBe(false);
+  });
+});

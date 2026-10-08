@@ -132,6 +132,7 @@ cipher port accepts `createKeyVaultCipher` from `@widgentic/mcp/secrets/keyvault
 | `WIDGENTIC_TRUSTED_USER_HEADER` | unset | multi-user via a trusted proxy header; unset = single principal |
 | `WIDGENTIC_WEB_PORT` / `WIDGENTIC_MCP_PORT` | 8080 / 8081 | service ports |
 | `WIDGENTIC_EXECUTE_RATE` | 60 | per-principal action executions and test calls per minute |
+| `WIDGENTIC_PREVIEW_RATE` | 240 | per-principal streaming previews of stored widgets per minute |
 
 ## MCP-only, without compose
 

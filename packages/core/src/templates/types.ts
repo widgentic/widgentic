@@ -48,9 +48,14 @@ export interface TemplateElement {
   action?: ActionBinding;
 }
 
-/** Repeats `template` for each element of the array at `each`. */
+/**
+ * Repeats `template` for each element of the array at `each`. `key`, a path
+ * resolved in the item's scope, gives each iteration's single output
+ * element a key so a reordered list patches by identity, not position.
+ */
 export interface TemplateEach {
   each: string;
+  key?: string;
   template: TemplateNode;
   empty?: TemplateNode;
 }

@@ -3,6 +3,7 @@ import type { WidgetNode } from "../node.js";
 import { el } from "../node.js";
 import { formatValue, isPlainObject } from "./format.js";
 import { imageNode, resolveImage } from "./images.js";
+import { keysFromIds } from "./keys.js";
 
 /**
  * `tree` renderer.
@@ -13,7 +14,9 @@ import { imageNode, resolveImage } from "./images.js";
  * renders as a native `details`/`summary` disclosure, so branches expand and
  * collapse with no script in every context the HTML reaches;
  * `hints.expandDepth` (default unlimited) selects the INITIAL state by
- * marking nodes at depth < value `open`. Leaves carry no disclosure.
+ * marking nodes at depth < value `open`. Leaves carry no disclosure. Each
+ * sibling list is keyed by node `id` when all its nodes carry distinct ones,
+ * so a visitor's open branch follows its node through a reorder.
  * Total: never throws.
  */
 export function renderTree(payload: WidgetPayload): WidgetNode {
@@ -25,11 +28,7 @@ export function renderTree(payload: WidgetPayload): WidgetNode {
       ? Math.max(0, depthHint)
       : Infinity;
   const roots = Array.isArray(payload.data) ? payload.data : [payload.data];
-  const list = el(
-    "ul",
-    { class: "wg-tree" },
-    roots.map((node) => renderNode(node, 0, expandDepth))
-  );
+  const list = el("ul", { class: "wg-tree" }, renderList(roots, 0, expandDepth));
   // Title chrome from meta — tree data has no title slot, so meta is the
   // only source; absence means no title line.
   const title = payload.meta?.title;
@@ -79,36 +78,50 @@ const childrenOf = (node: unknown): unknown[] | undefined =>
     ? node.children
     : undefined;
 
+function renderList(nodes: unknown[], depth: number, expandDepth: number): WidgetNode[] {
+  const keys = keysFromIds(nodes);
+  return nodes.map((node, index) => renderNode(node, depth, expandDepth, keys?.[index]));
+}
+
 function renderNode(
   node: unknown,
   depth: number,
-  expandDepth: number
+  expandDepth: number,
+  key: string | undefined
 ): WidgetNode {
   const childNodes = depth < MAX_TREE_DEPTH ? childrenOf(node) : undefined;
 
   // Leaves are plain labels: the presence of the disclosure is what marks a
   // branch, so a leaf must not offer a toggle affordance.
   if (childNodes === undefined) {
-    return el("li", { class: "wg-tree-node" }, [
-      el("span", { class: "wg-tree-label" }, labelChildren(node))
-    ]);
+    return el(
+      "li",
+      { class: "wg-tree-node" },
+      [el("span", { class: "wg-tree-label" }, labelChildren(node))],
+      key
+    );
   }
   // `open` is a pure function of data + hints, so an unchanged branch
   // re-emits the same attributes and the in-place patchers leave a
   // visitor's own toggle alone.
   const isOpen = depth < expandDepth;
-  return el("li", { class: "wg-tree-node" }, [
-    el(
-      "details",
-      { class: "wg-tree-branch", ...(isOpen ? { open: "" } : {}) },
-      [
-        el("summary", { class: "wg-tree-label" }, labelChildren(node)),
-        el(
-          "ul",
-          { class: "wg-tree-children" },
-          childNodes.map((child) => renderNode(child, depth + 1, expandDepth))
-        )
-      ]
-    )
-  ]);
+  return el(
+    "li",
+    { class: "wg-tree-node" },
+    [
+      el(
+        "details",
+        { class: "wg-tree-branch", ...(isOpen ? { open: "" } : {}) },
+        [
+          el("summary", { class: "wg-tree-label" }, labelChildren(node)),
+          el(
+            "ul",
+            { class: "wg-tree-children" },
+            renderList(childNodes, depth + 1, expandDepth)
+          )
+        ]
+      )
+    ],
+    key
+  );
 }

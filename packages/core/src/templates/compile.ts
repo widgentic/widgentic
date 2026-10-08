@@ -77,6 +77,13 @@ function resolvePath(path: string, frames: Frame[], meta: unknown): unknown {
   return current;
 }
 
+/** A key's string form: strings and finite numbers only. */
+function keyOf(value: unknown): string | undefined {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return undefined;
+}
+
 /**
  * Interpretation budget. `each` multiplies template nodes by the length of
  * AGENT-supplied data, so template size bounds nothing on its own — a
@@ -202,6 +209,7 @@ function interpretNode(
     }
     const out: WidgetNode[] = [];
     const itemPath = join(tpath, "template");
+    const keyPath = typeof node.key === "string" ? node.key : undefined;
     for (let i = 0; i < items.length; i++) {
       if (budget.remaining <= 0) {
         budget.truncated = true;
@@ -209,7 +217,13 @@ function interpretNode(
       }
       budget.remaining--; // the iteration itself costs, even when it renders nothing
       frames.push({ scope: items[i], index: i });
-      out.push(...interpretNode(node.template, frames, meta, budget, itemPath, ctx));
+      const rendered = interpretNode(node.template, frames, meta, budget, itemPath, ctx);
+      const only = rendered.length === 1 ? rendered[0] : undefined;
+      if (keyPath !== undefined && only !== undefined && typeof only !== "string") {
+        const key = keyOf(resolvePath(keyPath, frames, meta));
+        if (key !== undefined) rendered[0] = { ...only, key };
+      }
+      out.push(...rendered);
       frames.pop();
     }
     return out;

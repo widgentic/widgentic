@@ -1,7 +1,8 @@
 /**
- * Per-principal token bucket for `execute_action`: a hostile client
- * looping on the tool is bounded here, per replica. The frame's
- * disable-while-in-flight is UX, not a control. SDK-free and pure over an
+ * Per-principal token bucket for the app tools (`execute_action`,
+ * `preview_widget`; one limiter each): a hostile client looping on a tool
+ * is bounded here, per replica. The frame's disable-while-in-flight and
+ * one-preview-in-flight are UX, not controls. SDK-free and pure over an
  * injectable clock so it is unit-testable.
  */
 export interface ExecutionLimiter {
@@ -10,6 +11,13 @@ export interface ExecutionLimiter {
 }
 
 export const DEFAULT_EXECUTIONS_PER_MINUTE = 60;
+
+/**
+ * Previews: a 10-second stream at about four settled calls a second, for
+ * several renders a minute. Previews never fetch, so this bounds store
+ * reads, not outbound traffic.
+ */
+export const DEFAULT_PREVIEWS_PER_MINUTE = 240;
 
 export function createExecutionLimiter(
   perMinute: number,

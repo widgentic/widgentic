@@ -188,7 +188,7 @@ describe("inlineImagesInHtml", () => {
     expect(out).toContain('alt="avatar"'); // rest of the tag untouched
   });
 
-  it("inlines up to 24 images, first-N in document order, rest untouched", async () => {
+  it("fetches the 24 highest-priority sources, document order within a priority, rest untouched", async () => {
     const calls: string[] = [];
     const html = Array.from(
       { length: 30 },

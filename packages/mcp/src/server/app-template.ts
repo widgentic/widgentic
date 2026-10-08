@@ -97,6 +97,15 @@ function build(node) {
   }
   return el;
 }
+function keyIndex(list) {
+  const index = new Map();
+  for (let i = 0; i < list.length; i++) {
+    const node = list[i];
+    if (!isElement(node) || typeof node.key !== "string" || index.has(node.key)) return undefined;
+    index.set(node.key, i);
+  }
+  return index;
+}
 function patch(prev, next, dom) {
   if (typeof prev === "string" && typeof next === "string") {
     if (prev !== next) dom.nodeValue = next;
@@ -123,6 +132,26 @@ function patch(prev, next, dom) {
   const nextKids = Array.isArray(next.children) ? next.children : [];
   const domKids = [];
   for (let i = 0; i < dom.childNodes.length; i++) domKids.push(dom.childNodes[i]);
+  // Keyed lists (every child of both lists a uniquely keyed element) pair
+  // by key and MOVE nodes, exactly as core reactive/diff.ts does.
+  const prevIndex = keyIndex(prevKids);
+  if (prevIndex && keyIndex(nextKids)) {
+    const kept = new Set();
+    const placed = nextKids.map(function (child) {
+      const i = prevIndex.get(child.key);
+      if (i === undefined || !domKids[i]) return build(child);
+      kept.add(i);
+      return patch(prevKids[i], child, domKids[i]);
+    });
+    domKids.forEach(function (d, i) {
+      if (!kept.has(i) && d.parentNode === dom) dom.removeChild(d);
+    });
+    placed.forEach(function (d, i) {
+      const at = dom.childNodes[i] || null;
+      if (d !== at) dom.insertBefore(d, at);
+    });
+    return dom;
+  }
   const shared = Math.min(prevKids.length, nextKids.length, domKids.length);
   for (let i = 0; i < shared; i++) patch(prevKids[i], nextKids[i], domKids[i]);
   for (let i = domKids.length - 1; i >= nextKids.length; i--) {
@@ -630,6 +659,54 @@ function mountPreviewTree(tree) {
   }
   mountedTree = tree;
 }
+// Server previews: kinds the frame cannot build (stored templates live on
+// the server) are rendered by the app-only preview_widget tool. One request
+// in flight; snapshots arriving meanwhile overwrite one pending slot. Any
+// failure ends previews for the run and keeps what is on screen. The state
+// object is per streaming run: a new run or a cancel replaces it, so a late
+// answer for an old run is recognised and dropped.
+const BUILT_INS = ["card", "table", "tree", "group"];
+function needsServer(args) {
+  if (BUILT_INS.indexOf(args.widget) === -1) return true;
+  if (args.widget !== "group") return false;
+  const items = isObj(args.data) && Array.isArray(args.data.items) ? args.data.items : [];
+  return items.some(function (item) {
+    return isObj(item) && typeof item.kind === "string" && BUILT_INS.indexOf(item.kind) === -1;
+  });
+}
+function newServerPreview() {
+  return { inFlight: false, next: undefined, stopped: false, tree: undefined };
+}
+let serverPreview = newServerPreview();
+function requestServerPreview(args) {
+  const state = serverPreview;
+  if (state.stopped || resultRendered) return;
+  if (!serverToolsAvailable()) { state.stopped = true; return; }
+  if (state.inFlight) { state.next = args; return; }
+  state.inFlight = true;
+  const input = { widget: args.widget };
+  ["data", "hints", "meta", "theme"].forEach(function (field) {
+    if (args[field] !== undefined) input[field] = args[field];
+  });
+  const live = function () { return state === serverPreview && !resultRendered; };
+  request("tools/call", { name: "preview_widget", arguments: input }, ACTION_TIMEOUT_MS).then(
+    function (result) {
+      if (!live()) return;
+      const sc = result && result.structuredContent;
+      if (!result || result.isError || !sc || !isElement(sc.tree)) { state.stopped = true; return; }
+      state.tree = sc.tree;
+      if (typeof sc.css === "string") dynamicCss.textContent = sc.css;
+      root.setAttribute("data-wgd-preview", "true");
+      mountPreviewTree(sc.tree);
+    },
+    function () { state.stopped = true; }
+  ).then(function () {
+    state.inFlight = false;
+    const next = state.next;
+    state.next = undefined;
+    if (next !== undefined && live()) requestServerPreview(next);
+  });
+}
 function applyPreview() {
   previewQueued = false;
   if (resultRendered || previewArgs === undefined) return;
@@ -637,12 +714,19 @@ function applyPreview() {
   const args = previewArgs;
   const widget = typeof args.widget === "string" ? args.widget : undefined;
   if (widget === undefined) return; // nothing nameable yet — height is reserved
+  if (needsServer(args)) {
+    requestServerPreview(args);
+    // The last server preview stays up between answers; a client build
+    // would flicker back to the skeleton.
+    if (serverPreview.tree !== undefined) return;
+  }
   const tree = previewFor(widget, coerceData(args.data), args.hints, args.meta);
   mountPreviewTree(tree !== undefined ? tree : skeletonTree(widget));
 }
 function onToolInput(params) {
-  // Input after a result is a NEW call on a reused frame (basic-host
-  // reuses frames; claude.ai mounts per render) — start a fresh cycle.
+  // Input after a result (or a cancel) is a NEW call on a reused frame
+  // (basic-host reuses frames; claude.ai mounts per render).
+  if (resultRendered || previewArgs === undefined) serverPreview = newServerPreview();
   resultRendered = false;
   heldPayload = undefined;
   loadFired = false;
@@ -678,6 +762,7 @@ window.addEventListener("message", (event) => {
     // Back to the pre-input placeholder: an abandoned preview must not
     // linger looking like a rendered widget.
     previewArgs = undefined;
+    serverPreview = newServerPreview();
     resultRendered = false;
     heldPayload = undefined;
     loadFired = false;
@@ -881,6 +966,22 @@ body {
     `<!doctype html>\n<meta charset="utf-8">\n<title>widgentic</title>\n` +
     `<style>\n${baseStylesheet}\n${hostTokenBridgeCss}\n${darkOverridesCss}\n</style>\n` +
     `<style id="wg-dynamic-css"></style>\n` +
-    `<body><div id="wg-root"></div>\n<script>${bridge}</script></body>`
+    `<body><div id="wg-root"></div>\n<script>${compactScript(bridge)}</script></body>`
   );
+}
+
+/**
+ * Drop blank lines, full-line comments and leading indentation from the
+ * inline bridge before it is served: maintainer notes stay in source and
+ * cost nothing on the wire. Safe by construction — the bridge lives inside a
+ * TypeScript template literal, so it holds no backtick, so every string in
+ * it is single-line and no line's indentation or `//` prefix can belong to a
+ * string.
+ */
+function compactScript(script: string): string {
+  return script
+    .split("\n")
+    .map((line) => line.trimStart())
+    .filter((line) => line !== "" && !line.startsWith("//"))
+    .join("\n");
 }

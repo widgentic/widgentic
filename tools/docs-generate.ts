@@ -25,6 +25,7 @@ import {
 } from "@widgentic/core";
 import {
   EXECUTE_ACTION_TOOL,
+  PREVIEW_WIDGET_TOOL,
   GET_AUTHORING_GUIDE_TOOL,
   LIST_ACTIONS_TOOL,
   LIST_SCHEMAS_TOOL,
@@ -69,7 +70,8 @@ const TOOLS = [
   LIST_THEME_TOKENS_TOOL,
   GET_AUTHORING_GUIDE_TOOL,
   RENDER_WIDGET_TOOL,
-  EXECUTE_ACTION_TOOL
+  EXECUTE_ACTION_TOOL,
+  PREVIEW_WIDGET_TOOL
 ];
 
 // --- MDX helpers ----------------------------------------------------------

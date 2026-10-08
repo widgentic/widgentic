@@ -14,7 +14,7 @@ Templates are data: they select and arrange values, and the author supplies ever
 - **STRING** — a text node: "Hello"
 - **BIND** — \{ "bind": "path.to.value" \} renders the value as text; '.' binds the scope itself. A text bind may carry "map": \{ "\<value\>": "\<authored label\>" \} with an optional "default" — the value SELECTS a label (status → wording) — or a "format" (below), never both; "prefix" is an attribute-value transform and is ignored in a text position
 - **PATHS** — dot paths against the current scope (each item inside EACH). Escapes: '\$meta.x' reads payload.meta; '\$root.x' reads the top-level data from any depth; '\$parent.x' steps out of one enclosing EACH per token ('\$parent.\$parent.x'); '\$index' is the zero-based position in the innermost EACH
-- **EACH** — \{ "each": "path.to.array", "template": \<node\>, "empty"?: \<node\> \} repeats template with each item as scope
+- **EACH** — \{ "each": "path.to.array", "key"?: "path", "template": \<node\>, "empty"?: \<node\> \} repeats template with each item as scope; "key" names the item path that identifies it (e.g. "id"), so a list an action reorders keeps each item's element and state
 - **WHEN** — \{ "when": "path", "template": \<node\>, "else"?: \<node\> \} renders template when the value is truthy
 - **ELEMENT** — \{ "tag": "div", "attrs"?: \{ "class": "x", "src": \{ "bind": "path" \} \}, "children"?: \[\<node\>...\] \}
 - **ATTR MAP** — \{ "bind": "status", "map": \{ "do-not-contact": "wg-status wg-status-danger", "active": "wg-status wg-status-success" \}, "default": "wg-status" \} — the bound value SELECTS one of your literals (semantic classes from data values); a miss emits default, or empty without one

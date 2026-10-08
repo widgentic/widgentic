@@ -6,7 +6,7 @@ export type {
 } from "./node.js";
 export { el } from "./node.js";
 export { createCatalog, DuplicateKindError } from "./registry.js";
-export type { WidgetCatalog, RenderResult } from "./registry.js";
+export type { WidgetCatalog, RenderOptions, RenderResult } from "./registry.js";
 export type { WidgetDescriptor, WidgetDescriptorInput } from "./descriptors.js";
 export { validateDataAgainstSchema, PATTERN_MAX_LENGTH } from "./schema.js";
 export type { DataSchema } from "./schema.js";

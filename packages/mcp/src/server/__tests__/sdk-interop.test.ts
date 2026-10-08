@@ -170,6 +170,7 @@ describe("SDK interoperability (in-memory transport, library assembly)", () => {
       "list_theme_tokens",
       "list_themes",
       "list_widgets",
+      "preview_widget",
       "render_widget"
     ]);
     // App-only visibility: Apps hosts hide it from the model; the SDK
@@ -179,6 +180,22 @@ describe("SDK interoperability (in-memory transport, library assembly)", () => {
     expect(execute?._meta).toMatchObject({
       ui: { resourceUri: "ui://widgentic/app.html", visibility: ["app"] }
     });
+    const preview = tools.tools.find((tool) => tool.name === "preview_widget");
+    expect(preview?._meta).toMatchObject({
+      ui: { resourceUri: "ui://widgentic/app.html", visibility: ["app"] }
+    });
+  });
+
+  it("preview_widget round-trips a partial render's tree through the protocol", async () => {
+    const { client } = await connect();
+    const result = (await client.callTool({
+      name: "preview_widget",
+      arguments: { widget: "table", data: [{ id: 1, name: "Ada" }] }
+    })) as DeliveredResult & { structuredContent?: { tree?: unknown; css?: unknown } };
+    expect(result.isError).toBeFalsy();
+    expect(JSON.stringify(result.structuredContent?.tree)).toContain("Ada");
+    expect(typeof result.structuredContent?.css).toBe("string");
+    expect(result.structuredContent).not.toHaveProperty("payload");
   });
 
   it("field descriptions from definitions reach the wire schema", async () => {
