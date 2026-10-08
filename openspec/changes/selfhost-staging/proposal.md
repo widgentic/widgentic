@@ -21,6 +21,11 @@ tester re-creates the same schemas, themes and widgets by hand before testing an
   never overwritten, refusals logged with their code, the service starting regardless.
   Unset, nothing happens; in trusted-header mode the seed is ignored with a log line. Keys
   and secrets are never seeded.
+- **A deployment key.** With `WIDGENTIC_DEFAULT_KEY_FILE` (or `WIDGENTIC_DEFAULT_KEY`)
+  set, the MCP service accepts that one key for the single principal on every boot, so
+  ChatGPT, Claude and Copilot stay configured across deploys. It is held as a digest,
+  compared in constant time and never stored or logged, and it is read-only unless
+  `WIDGENTIC_DEFAULT_KEY_SCOPES` names `execute`.
 - **Sample content.** `examples/docker/seed/demo.json` carries the demo's current entries
   (two shared schemas, two themes, an agenda and an inbox widget) for staging and for any
   self-hoster who wants a populated first run.
@@ -34,13 +39,13 @@ None.
 
 ### Modified Capabilities
 
-- `self-host-example`: the image requirement gains the source-build variant; a new
-  requirement specifies the optional startup seed.
+- `self-host-example`: the image requirement gains the source-build variant; new
+  requirements specify the optional startup seed and the deployment key.
 
 ## Impact
 
-- **Code.** `examples/docker/` (`Dockerfile.source`, `seed.ts`, `web.ts`, `seed/demo.json`,
-  README, `.env.example`), a root `.dockerignore`, `.github/workflows/ci.yml`.
+- **Code.** `examples/docker/` (`Dockerfile.source`, `seed.ts`, `deployment-key.ts`, `web.ts`,
+  `mcp.ts`, `seed/demo.json`, README, `.env.example`), a root `.dockerignore`, `.github/workflows/ci.yml`.
 - **No package change**, so no changeset: the four packages and their exports are
   untouched.
 - **Cross-repo.** `widgentic/apps` sets `WIDGENTIC_SEED_FILE` on the demo's web container,

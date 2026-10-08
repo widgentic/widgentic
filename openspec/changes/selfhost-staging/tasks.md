@@ -12,8 +12,14 @@
 - [x] 2.3 Tests for every scenario of the new requirement: populated empty store with a rendering widget; a person's theme survives; a widget with an unknown schema is refused with `UNKNOWN_SCHEMA` while the rest land; missing and non-JSON files start clean; unset and trusted-header write nothing.
 - [x] 2.4 `examples/docker/seed/demo.json` from the demo's current schemas, themes and widgets, verbatim (design D4); a test that it seeds cleanly into an empty store.
 
-## 3. Docs and gate
+## 3. Deployment key
 
-- [x] 3.1 Example README and `.env.example`: the source-build variant beside the linking recipe, and `WIDGENTIC_SEED_FILE` with the sample file.
-- [x] 3.2 `TESTING.md` entry for the local source build and seed check.
-- [x] 3.3 Gate: typecheck, `npm test`, `npm run build`, `npm run pack:check`, `openspec validate --strict selfhost-staging`, `openspec validate --specs`, `npm run docs:check`.
+- [x] 3.1 `examples/docker/deployment-key.ts`: load the key from file or variable, require the minted shape, keep only its digest, normalize scopes (read-only by default, a bad scope falls back to read-only with a log line), never log the value; `mcp.ts` checks it before the store (design D6).
+- [x] 3.2 Tests for every scenario of the requirement: the key reaches the seeded catalog on a fresh store; read-only by default and with `execute` when named; `write` falls back; malformed, uppercase and unreadable values are ignored without logging the value; file preferred over variable; other keys do not match; unset changes nothing.
+- [x] 3.3 README (section and configuration rows) and `.env.example`.
+
+## 4. Docs and gate
+
+- [x] 4.1 Example README and `.env.example`: the source-build variant beside the linking recipe, and `WIDGENTIC_SEED_FILE` with the sample file.
+- [x] 4.2 `TESTING.md` entry for the local source build, seed and deployment-key checks.
+- [x] 4.3 Gate: typecheck, `npm test`, `npm run build`, `npm run pack:check`, `openspec validate --strict selfhost-staging`, `openspec validate --specs`, `npm run docs:check`.
