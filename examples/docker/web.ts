@@ -6,7 +6,8 @@
  * `@widgentic/mcp/authoring`'s, not this file's.
  *
  * Run with: npm run web   (WIDGENTIC_WEB_PORT, default 8080;
- * WIDGENTIC_MCP_UPSTREAM forwards /mcp to the MCP service for single-origin
+ * WIDGENTIC_SEED_FILE loads sample entries into the single principal at
+ * boot; WIDGENTIC_MCP_UPSTREAM forwards /mcp to the MCP service for single-origin
  * deployments; WIDGENTIC_MCP_PUBLIC_URL names the endpoint the Keys section
  * shows when it is not this origin's /mcp; WIDGENTIC_ORIGIN_TRIAL_TOKEN puts a
  * Chrome origin-trial token on the page)
@@ -21,6 +22,7 @@ import { createExecutionLimiter, DEFAULT_EXECUTIONS_PER_MINUTE, positiveIntFromE
 import { createAuthoringHttpHandler } from "@widgentic/mcp/authoring";
 import { createMcpProxy, mcpEndpointHint, withMcpEndpoint, withOriginTrial } from "./edge.js";
 import { createIdentity } from "./identity.js";
+import { seedOnStartup } from "./seed.js";
 import { openDeployment } from "./store.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -28,6 +30,8 @@ const PORT = positiveIntFromEnv(process.env.WIDGENTIC_WEB_PORT, 8080);
 
 const { store, secretsEnabled } = openDeployment("web");
 const identity = await createIdentity(store);
+// Optional sample content for the single principal (WIDGENTIC_SEED_FILE).
+await seedOnStartup(store, identity, process.env.WIDGENTIC_SEED_FILE);
 
 // Test calls draw from a per-service bucket at the same rate as the MCP
 // edge's — like production, budgets are per replica (see rate-limit.ts), so

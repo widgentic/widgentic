@@ -133,6 +133,7 @@ cipher port accepts `createKeyVaultCipher` from `@widgentic/mcp/secrets/keyvault
 | `WIDGENTIC_WEB_PORT` / `WIDGENTIC_MCP_PORT` | 8080 / 8081 | service ports |
 | `WIDGENTIC_EXECUTE_RATE` | 60 | per-principal action executions and test calls per minute |
 | `WIDGENTIC_PREVIEW_RATE` | 240 | per-principal streaming previews of stored widgets per minute |
+| `WIDGENTIC_SEED_FILE` | unset | JSON file of sample entries loaded into the single principal at boot (see below) |
 
 ## MCP-only, without compose
 
@@ -144,11 +145,41 @@ docker run -p 8081:8081 -v widgentic-data:/data widgentic-selfhost
 Serves the built-in catalog to everyone; add the `web` service when you want
 your own widgets in it.
 
+## Sample content at first run
+
+Set `WIDGENTIC_SEED_FILE` on the `web` service to a JSON file of the shape
+`{ "schemas": [...], "themes": [...], "actions": [...], "widgets": [...] }`
+(each array optional, entries as the app imports and exports them), and the
+single principal gets those entries at boot. They go through the same
+validation as an import, schemas and actions before the widgets that use
+them. An entry you already hold is never overwritten, so a restart keeps
+your edits. A refused entry is logged with its code, and a missing or broken
+file is logged too; the service starts either way. Keys and secrets are never
+seeded, and multi-user mode ignores the seed.
+
+`seed/demo.json` ships in the image as a starting point: two shared schemas,
+two themes and an agenda and an inbox widget built on them.
+
+```sh
+WIDGENTIC_SEED_FILE=/srv/docker/seed/demo.json
+```
+
 ## Running against unreleased package changes
 
 The image installs the published `@widgentic/*` packages, which is the
-point — it proves what a reader gets. To try unreleased changes, run the
-hosts directly from a monorepo checkout (`npm run build`, then `npm link`
-the three packages and `npm link @widgentic/core @widgentic/designer
-@widgentic/mcp` here); path or `file:` edits to the widgentic ranges are
-never committed.
+point — it proves what a reader gets. Two ways run unreleased changes
+instead, and neither edits the committed manifest:
+
+- **On your machine:** run the hosts directly from a monorepo checkout
+  (`npm run build`, then `npm link` the packages and `npm link
+  @widgentic/core @widgentic/designer @widgentic/mcp @widgentic/webmcp`
+  here).
+- **In a container, such as a staging deployment of a branch:** build
+  `Dockerfile.source` from the repository ROOT. It compiles the four packages
+  from the checkout, packs them with `npm pack`, and installs those tarballs
+  in place of the registry versions, so the image runs your branch's code laid
+  out exactly as a published install would be.
+
+```sh
+docker build -f examples/docker/Dockerfile.source -t widgentic-selfhost:dev .   # run from the repository root
+```
