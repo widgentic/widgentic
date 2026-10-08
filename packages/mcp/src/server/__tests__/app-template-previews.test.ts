@@ -163,6 +163,86 @@ describe("server previews for custom kinds", () => {
   });
 });
 
+describe("previews wait for a settled widget name", () => {
+  // Snapshots keep the streamed key order: a name is settled once another
+  // key follows it, or in the complete tool-input.
+  const toolInput = (args: Record<string, unknown>) => ({
+    jsonrpc: "2.0",
+    method: "ui/notifications/tool-input",
+    params: { arguments: args }
+  });
+
+  it("shows an unnamed placeholder while the data streams before the widget", async () => {
+    const t = serverHost();
+    await tick();
+    t.dispatch(toolInputPartial({ data: { appointments: [{ id: "a1", title: "Kickoff" }] } }));
+    await settle();
+    expect(t.root().textContent).toBe("Generating\u2026");
+    expect(t.root().getAttribute("data-wgd-preview")).toBe("true");
+    expect(t.requests("tools/call")).toHaveLength(0);
+  });
+
+  it("neither names nor requests a half-streamed widget name", async () => {
+    const t = serverHost();
+    await tick();
+    t.dispatch(toolInputPartial({ data: { appointments: [] }, widget: "appointme" }));
+    await settle();
+    expect(t.root().textContent).toBe("Generating\u2026");
+    expect(t.requests("tools/call")).toHaveLength(0);
+  });
+
+  it("requests the preview once the complete input settles a trailing name", async () => {
+    const t = serverHost();
+    await tick();
+    t.dispatch(toolInputPartial({ data: { name: "Ada" }, widget: "pers" }));
+    await settle();
+    t.dispatch(toolInput({ data: { name: "Ada" }, widget: "person" }));
+    await settle();
+    const calls = t.requests("tools/call");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.params.arguments).toEqual({ widget: "person", data: { name: "Ada" } });
+    expect(t.root().textContent).toContain("Generating 'person'");
+  });
+
+  it("does not build a built-in preview from a prefix of a stored kind's name", async () => {
+    const t = serverHost();
+    await tick();
+    t.dispatch(toolInputPartial({ widget: "card" }));
+    await settle();
+    expect(t.root().querySelector(".wg-card")).toBeNull();
+    expect(t.root().textContent).toBe("Generating\u2026");
+    t.dispatch(toolInputPartial({ widget: "card-deluxe", data: { title: "T" } }));
+    await settle();
+    expect(t.root().querySelector(".wg-card")).toBeNull();
+    expect(t.requests("tools/call")[0]?.params.arguments).toEqual({ widget: "card-deluxe", data: { title: "T" } });
+  });
+
+  it("previews a settled built-in name at once", async () => {
+    const t = serverHost();
+    await tick();
+    t.dispatch(toolInputPartial({ widget: "table", data: [{ name: "Ada" }] }));
+    await settle();
+    expect(t.root().querySelectorAll(".wg-table-row")).toHaveLength(1);
+  });
+
+  it("shows a group item still naming itself as an unnamed placeholder and leaves it out of the request", async () => {
+    const t = serverHost();
+    await tick();
+    t.dispatch(toolInputPartial({
+      widget: "group",
+      data: { items: [{ kind: "person", data: { name: "Ada" } }, { kind: "car" }] }
+    }));
+    await settle();
+    expect(t.root().textContent).toContain("Generating 'person'");
+    expect(t.root().textContent).toContain("Generating\u2026");
+    expect(t.root().textContent).not.toContain("'car'");
+    expect(t.requests("tools/call")[0]?.params.arguments).toEqual({
+      widget: "group",
+      data: { items: [{ kind: "person", data: { name: "Ada" } }] }
+    });
+  });
+});
+
 describe("keyed results through the template's patcher", () => {
   it("moves keyed table rows with their records", () => {
     const catalog = createCatalog();

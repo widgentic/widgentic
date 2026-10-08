@@ -198,6 +198,26 @@ completions the editor already computes for the item scope; an emptied input del
 `key`. The authoring guide's EACH line gains the optional `key`, and the generated docs
 regenerate from it.
 
+### D10 — Previews use settled names only (live finding, Claude Desktop probe)
+
+The first probe deploy showed Claude Desktop delivering 114 partial snapshots of an agenda
+call without the frame drawing anything, then one `preview_widget` request near the end
+that failed `UNKNOWN_KIND`. Claude had written `data` first and `widget` last, so most
+snapshots named no widget, and the first snapshot that did carried the name cut
+mid-stream. The host side worked: the server logged the frame's `preview_widget` call
+before `render_widget`. The frame now treats a name as settled only in the complete
+input or once another key follows it in the snapshot (snapshots keep the streamed key
+order), for `widget` and for each group item's `kind`. Before that it shows an unnamed
+"Generating…" placeholder, leaves unsettled group items out of a server request, and
+never lets a still-arriving name select a built-in (`card` may be becoming
+`card-deluxe`). `render_widget`'s description now asks agents to write `widget` before
+`data`, so streaming hosts can preview from the first rows.
+
+*Alternatives.* Retrying after `UNKNOWN_KIND` until the name stops growing costs a failed
+call per streamed fragment and still flashes guessed names. Giving the frame the
+catalog's kind names would let it recognize a complete name, but it ships the caller's
+kind list to the host for a check the key order already answers.
+
 ## Risks / Trade-offs
 
 - [Hosts may not proxy an app `tools/call` while input is still streaming] → Probe
