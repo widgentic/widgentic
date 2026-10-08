@@ -134,6 +134,8 @@ cipher port accepts `createKeyVaultCipher` from `@widgentic/mcp/secrets/keyvault
 | `WIDGENTIC_EXECUTE_RATE` | 60 | per-principal action executions and test calls per minute |
 | `WIDGENTIC_PREVIEW_RATE` | 240 | per-principal streaming previews of stored widgets per minute |
 | `WIDGENTIC_SEED_FILE` | unset | JSON file of sample entries loaded into the single principal at boot (see below) |
+| `WIDGENTIC_DEFAULT_KEY_FILE` / `WIDGENTIC_DEFAULT_KEY` | unset | a fixed API key for the single principal, set on the `mcp` service (see below) |
+| `WIDGENTIC_DEFAULT_KEY_SCOPES` | `read` | that key's scopes; add `execute` to let widgets run http actions |
 
 ## MCP-only, without compose
 
@@ -162,6 +164,23 @@ two themes and an agenda and an inbox widget built on them.
 
 ```sh
 WIDGENTIC_SEED_FILE=/srv/docker/seed/demo.json
+```
+
+## A key that survives an empty store
+
+Keys minted in the app live in the store, so a store that starts empty (an
+ephemeral volume, a fresh staging deploy) loses them, and every agent host
+pointed at the deployment needs a new one. Set a deployment key on the `mcp`
+service instead: `WIDGENTIC_DEFAULT_KEY_FILE` (a mounted secret, preferred) or
+`WIDGENTIC_DEFAULT_KEY`, holding a key in the shape the app mints
+(`wgk_` and 64 hex characters). It resolves to the single principal on every
+boot. Configure it once in your hosts and it keeps working across restarts.
+Treat it like any key: whoever holds it reads this deployment's catalog. It is
+read-only unless `WIDGENTIC_DEFAULT_KEY_SCOPES` names `execute`; it is never
+stored, listed in the app or logged. Generate one with:
+
+```sh
+node -e "console.log('wgk_' + require('crypto').randomBytes(32).toString('hex'))" > default-key.txt && chmod 600 default-key.txt
 ```
 
 ## Running against unreleased package changes

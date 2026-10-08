@@ -49,3 +49,26 @@ When `WIDGENTIC_SEED_FILE` names a readable JSON document, the authoring service
 #### Scenario: No seed without configuration
 - **WHEN** the variable is unset, or the service runs in trusted-header mode
 - **THEN** nothing SHALL be written, and in trusted-header mode a log line SHALL say the seed was ignored
+
+### Requirement: A deployment key survives an ephemeral store
+The MCP service SHALL accept one operator-supplied API key — from a mounted file (`WIDGENTIC_DEFAULT_KEY_FILE`, preferred) or a variable (`WIDGENTIC_DEFAULT_KEY`) — that resolves to the single principal on every boot, so hosts configured with it keep working when the store starts empty. The key SHALL have the shape the stores mint (`wgk_` followed by 64 hexadecimal characters); any other value SHALL be ignored with a log line. The service SHALL hold only its digest and SHALL compare a presented key against it in constant time; the key SHALL NOT be written to the store, the volume, any log line, page or diagnostic. Its scopes SHALL come from `WIDGENTIC_DEFAULT_KEY_SCOPES` through the same normalization a key gets at creation: read only by default, `execute` only when the operator names it, and a scope keys cannot hold SHALL leave the key read-only with a log line. A presented key that is not the deployment key SHALL resolve through the store exactly as before. With neither setting configured, nothing SHALL change.
+
+#### Scenario: The deployment key reaches the seeded catalog after a restart
+- **WHEN** the deployment key is configured, the store starts empty and the seed loads, and a host presents that key
+- **THEN** the request SHALL resolve to the single principal and its catalog SHALL include the seeded widgets
+
+#### Scenario: Read only unless execute is named
+- **WHEN** the deployment key is configured without scopes, and again with `read,execute`
+- **THEN** it SHALL resolve with `read` only the first time and `read` and `execute` the second
+
+#### Scenario: A scope keys cannot hold leaves it read-only
+- **WHEN** `WIDGENTIC_DEFAULT_KEY_SCOPES` names `write`
+- **THEN** the key SHALL resolve read-only and a log line SHALL say so
+
+#### Scenario: A malformed or unreadable key is ignored
+- **WHEN** the configured value lacks the minted shape, or the named file cannot be read
+- **THEN** no deployment key SHALL be active, a log line SHALL say why, and no log line SHALL contain the configured value
+
+#### Scenario: Other keys resolve as before
+- **WHEN** a deployment key is configured and a different key is presented
+- **THEN** the presented key SHALL resolve through the store, or to the anonymous catalog when the store does not know it

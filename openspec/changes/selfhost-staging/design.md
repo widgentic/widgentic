@@ -23,8 +23,8 @@ the image runs that branch's code laid out as a published install would be; ever
 starts with the same sample content.
 
 **Non-Goals:** publishing prereleases to npm (the `@next` snapshot path stays a later
-option); persistent storage for the demo; seeding keys, secrets, or principals in
-trusted-header mode; changing the published-package image.
+option); persistent storage for the demo; writing keys or secrets into the store, or
+seeding principals in trusted-header mode; changing the published-package image.
 
 ## Decisions
 
@@ -78,6 +78,21 @@ deployment points `WIDGENTIC_SEED_FILE` at it. The entries are kept verbatim.
 A `selfhost-source-image` job builds `Dockerfile.source` on every pull request. It is not
 a required check: the required `verify` and `docs` gates stay as they are, and a red
 source build is a signal to look, not a merge block.
+
+### D6 — A deployment key at the edge, not in the store
+
+Keys live in the store, so an empty store loses them and every host pointed at the
+deployment needs repointing after each deploy. The MCP service instead accepts one
+operator-supplied key from a mounted file or a variable, held only as its digest and
+compared in constant time, that resolves to the single principal: the principal's id
+derives from its subject, so it is the same on every boot. Scopes go through the same
+normalization a minted key gets, read-only unless the operator names `execute`. An
+operator can reuse the key the hosts already hold, so even the first deploy needs no
+repointing.
+
+*Alternative.* Registering an operator-supplied raw key in the store (an import method
+on the store port) would list it in the app, but changes the port for every adapter and
+still needs the raw value at each boot; the edge check needs neither.
 
 ## Risks / Trade-offs
 
