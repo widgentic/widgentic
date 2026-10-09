@@ -168,3 +168,4 @@
 - [x] 12.3 .NET: `preview_widget` is `render_widget`'s app-only companion. It is registered with `_meta.ui.visibility: ["app"]` and the legacy key, the startup self-check counts companions, and the selection and protocol tests cover it.
 - [x] 12.4 Pin `WidgenticMcpVersion` to `0.9.0`, since 0.8.0 shipped without `./host`. Update the spec deltas, design (A14) and docs for the preview tool.
 - [x] 12.5 Version alignment (owner decision, design A15): `Widgentic.Mcp` 0.9.0, the build-time rule that its major.minor equals `WidgenticMcpVersion`'s, and the package-distribution delta, CHANGELOG, README and CLAUDE.md updated.
+- [x] 12.6 Merge `main` again (streaming-preview image placeholders, 0.8.1). Kept both BACKLOG items (RND-5, NET-1) and synced the lockfile. Only the app template's corpus case went stale; it was regenerated. The placeholder behaviour reaches .NET through the bundled template with no package change.
