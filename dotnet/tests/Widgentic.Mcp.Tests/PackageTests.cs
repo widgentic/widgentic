@@ -7,27 +7,35 @@ using Widgentic.Mcp.Tests.Support;
 
 namespace Widgentic.Mcp.Tests;
 
-/// <summary>The .nupkg is build output only and declares exactly its dependencies.</summary>
+/// <summary>The .nupkg is build output only, declares exactly its dependencies, and versions with its bundle.</summary>
 public sealed class PackageTests : IDisposable
 {
+    private static readonly string Project = Path.Combine(Repo.Root, "dotnet", "src", "Widgentic.Mcp", "Widgentic.Mcp.csproj");
     private readonly string _output = Directory.CreateTempSubdirectory("widgentic-pack-").FullName;
 
     public void Dispose() => Directory.Delete(_output, recursive: true);
 
     [Fact]
+    public async Task TheMinorFollowsTheEmbeddedBundle()
+    {
+        // Explicit versions, so the rule is checked independently of the ones the tree carries.
+        var bumpedPin = await Dotnet("msbuild", Project, "-t:WidgenticRequireAlignedVersion", "-p:Version=0.9.3", "-p:WidgenticMcpVersion=0.10.0", "-nologo");
+        Assert.NotEqual(0, bumpedPin.ExitCode);
+        Assert.Contains("Widgentic.Mcp 0.9.3 must share its major.minor with the @widgentic/mcp it embeds (0.10.0)", bumpedPin.Log, StringComparison.Ordinal);
+
+        var moved = await Dotnet("msbuild", Project, "-t:WidgenticRequireAlignedVersion", "-p:Version=0.10.0", "-p:WidgenticMcpVersion=0.10.0", "-nologo");
+        Assert.True(moved.ExitCode == 0, moved.Log);
+
+        var dotnetOnlyFix = await Dotnet("msbuild", Project, "-t:WidgenticRequireAlignedVersion", "-p:Version=0.9.1", "-p:WidgenticMcpVersion=0.9.0", "-nologo");
+        Assert.True(dotnetOnlyFix.ExitCode == 0, dotnetOnlyFix.Log);
+    }
+
+    [Fact]
     public async Task PacksBuildOutputWithExactlyItsDependencies()
     {
         var configuration = typeof(PackageTests).Assembly.GetCustomAttribute<AssemblyConfigurationAttribute>()!.Configuration;
-        var project = Path.Combine(Repo.Root, "dotnet", "src", "Widgentic.Mcp", "Widgentic.Mcp.csproj");
-        using var pack = Process.Start(new ProcessStartInfo("dotnet", ["pack", project, "-c", configuration, "--no-build", "-o", _output])
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        })!;
-        var log = await pack.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken)
-            + await pack.StandardError.ReadToEndAsync(TestContext.Current.CancellationToken);
-        await pack.WaitForExitAsync(TestContext.Current.CancellationToken);
-        Assert.True(pack.ExitCode == 0, log);
+        var pack = await Dotnet("pack", Project, "-c", configuration, "--no-build", "-o", _output);
+        Assert.True(pack.ExitCode == 0, pack.Log);
 
         var nupkg = Assert.Single(Directory.GetFiles(_output, "Widgentic.Mcp.*.nupkg"));
         using var archive = ZipFile.OpenRead(nupkg);
@@ -70,5 +78,18 @@ public sealed class PackageTests : IDisposable
         {
             context.Unload();
         }
+    }
+
+    private static async Task<(int ExitCode, string Log)> Dotnet(params string[] args)
+    {
+        using var process = Process.Start(new ProcessStartInfo("dotnet", args)
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        })!;
+        var output = process.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken);
+        var error = process.StandardError.ReadToEndAsync(TestContext.Current.CancellationToken);
+        await process.WaitForExitAsync(TestContext.Current.CancellationToken);
+        return (process.ExitCode, await output + await error);
     }
 }

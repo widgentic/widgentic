@@ -253,11 +253,12 @@ Every corpus case is a named test, so a failure names its input.
 dotnet/
   Widgentic.slnx  Directory.Build.props  Directory.Packages.props (exact versions)  README.md  CHANGELOG.md  LICENSE
   src/Widgentic.Mcp/                       options, flags, builder extension, renderer, engine pool, bundle loader
-  tests/Widgentic.Mcp.Tests/               conformance, protocol round trip, selection, config, pool, no-egress
-  samples/Widgentic.Sample.Stdio/          stdio server + generated widgets/*.json + one host tool
+  tests/Widgentic.Mcp.Tests/               conformance, protocol round trip, selection, config, pool, no-egress,
+                                           slimming, sample (both transports), package
+  samples/Widgentic.Sample.Stdio/          stdio or HTTP server + generated seed/{widgets,themes,schemas} + one host tool
 ```
 `ci.yml` gains a `dotnet` job (ubuntu-latest, Node and .NET 10): `npm ci`,
-`npm run build`, `dotnet test dotnet/Widgentic.slnx`. The repository gate in CLAUDE.md
+`npm run build`, then `dotnet test --solution Widgentic.slnx` from `dotnet/`. The repository gate in CLAUDE.md
 adds `dotnet test` when `dotnet/` or the host bundle changes.
 
 `release-dotnet.yml` runs on `main` pushes touching `dotnet/**`, and on manual dispatch.
@@ -386,9 +387,11 @@ lines (D12, D14).
 - **A16. HTTP for the sample, and stateless capabilities (2026-10-08).**
   - **Why HTTP:** the owner recalls Claude not showing widgets for a stdio server; MCP Apps
     hosts that take a URL (Claude's custom connectors, VS Code) are where widgets mount. So
-    the sample also serves Streamable HTTP with `--http`. Stdio stays the default, both modes
-    share one registration, and the HTTP server binds loopback because the sample has no
-    authentication.
+    the sample also serves Streamable HTTP with `--http`. Stdio stays the executable's
+    default, both modes share one registration, and the HTTP server binds loopback because
+    the sample has no authentication. The committed launch profiles make `dotnet run` and F5
+    start HTTP on port 3002: the mode the owner verified live in Claude, VS Code Copilot and
+    ChatGPT.
   - **The finding:** C# SDK 2.2.0 serves HTTP stateless by default (MCP 2026-07-28,
     SEP-2567). A probe showed that such clients send their capabilities in every request's
     `_meta["io.modelcontextprotocol/clientCapabilities"]` while `McpServer.ClientCapabilities`
