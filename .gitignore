@@ -9,9 +9,5 @@ designer.bundle.js
 examples/docker/kek.txt
 examples/docker/.env
 
-# .NET build output
-bin/
-obj/
-*.nupkg
-TestResults/
-artifacts/
+# release-dotnet.yml packs the NuGet package here (the .NET tree's own rules are in dotnet/.gitignore)
+/artifacts/

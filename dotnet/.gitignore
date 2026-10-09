@@ -1,0 +1,13 @@
+# Build and test output (bin/ carries ClearScript's native V8 runtimes, ~40 MB each)
+[Bb]in/
+[Oo]bj/
+TestResults/
+*.nupkg
+*.snupkg
+
+# IDE state
+.vs/
+.idea/
+*.user
+*.suo
+*.DotSettings.user
