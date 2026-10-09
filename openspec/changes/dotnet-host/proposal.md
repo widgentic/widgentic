@@ -36,7 +36,8 @@ imports `node:crypto`.
   including `fr-CA` currency, URL edge cases and the example template widgets. The default
   gate checks the bundle in a bare JavaScript realm against it, and the .NET tests check
   byte-equality against the same file.
-- **`Widgentic.Mcp`, a NuGet package (beta, 0.1.0, `net10.0`) under `dotnet/`.**
+- **`Widgentic.Mcp`, a NuGet package (beta, 0.9.0, `net10.0`) under `dotnet/`.** Its major.minor
+  follows the `@widgentic/mcp` release it embeds, so the first release is 0.9.0.
   - It embeds the host bundle and runs it on ClearScript V8, chosen for parity with Node
     including `Intl`, using a bounded pool of isolated runtimes.
   - It extends the C# SDK's server builder with `WithWidgentic(...)`. That call registers

@@ -8,11 +8,19 @@ groups or your own designer-made widgets, and other hosts get readable text.
 
 The package does not re-implement widgentic. It embeds the published `@widgentic/mcp` host
 bundle and runs it on V8 (ClearScript). Rendering, validation, the tool descriptions, the
-authoring guide and the MCP Apps template all come from that bundle, and the output is
-byte-identical to the Node server's. The repository's conformance corpus checks that on every
+authoring guide and the MCP Apps template all come from that bundle, and renders are
+byte-identical to the Node server's, apart from image inlining, which this render-only release
+does not do. The repository's conformance corpus checks that on every
 build.
 
 Requires .NET 10 and the official C# MCP SDK (`ModelContextProtocol` 2.2).
+
+**Versions.** `Widgentic.Mcp` X.Y.* embeds `@widgentic/mcp` X.Y.*, so `Widgentic.Mcp` 0.9.x
+renders exactly like the Node server of `@widgentic/mcp` 0.9. The patch number moves on its own
+for .NET-only fixes. The tools differ only by scope: this package is render-only (no
+`list_actions` or `execute_action`, no image inlining). The input schemas are the documented
+ones from `@widgentic/mcp`, while the Node server publishes its zod rendering of the same
+schemas.
 
 ## Serve widgentic
 

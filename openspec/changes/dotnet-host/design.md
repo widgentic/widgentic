@@ -372,6 +372,17 @@ lines (D12, D14).
     authoring guide and the app template had drifted from main's changes; render
     outputs for the existing inputs were unchanged.
 
+- **A15. The NuGet version follows its bundle's minor (owner decision, 2026-10-08).**
+  `Widgentic.Mcp` X.Y.* embeds `@widgentic/mcp` X.Y.*: the first release is 0.9.0, not
+  0.1.0, and the patch stays free for .NET-only fixes. The number then answers "which Node
+  server does this behave like" without opening `WidgenticEngineInfo`. Remaining
+  differences are scope (render-only) and the schema spelling noted in the README, never
+  version skew.
+  - An MSBuild target (`WidgenticRequireAlignedVersion`) fails every build whose major.minor
+    disagrees with `WidgenticMcpVersion`, so a pin bump forces the version bump.
+  - *Alternatives:* independent versioning from 0.1.0, where parity is visible only through
+    the pin; or exact lockstep, where a .NET-only fix would need a four-part version.
+
 ## Risks / Trade-offs
 
 - **[ICU/CLDR drift between Node's ICU and ClearScript's V8 build]** A future locale data
@@ -428,7 +439,7 @@ Additive only. Order:
 2. Release `@widgentic/mcp` (minor).
 3. Set the .NET pin to that version.
 4. Complete the owner setup ([USER] items below).
-5. Set `NUGET_PUBLISH=true` and publish `Widgentic.Mcp` 0.1.0.
+5. Set `NUGET_PUBLISH=true` and publish `Widgentic.Mcp` 0.9.0.
 
 Rollback: unlist the NuGet version (nuget.org cannot delete). The npm `./host` entry is
 additive and needs no rollback.

@@ -63,8 +63,8 @@
   - `Directory.Build.props`: `net10.0`, nullable, `TreatWarningsAsErrors`, deterministic builds, `<WidgenticMcpVersion>` pin, repository metadata, MIT license expression.
   - `Directory.Packages.props`: exact versions for `ModelContextProtocol`, `ModelContextProtocol.Extensions.Apps`, ClearScript and the test stack.
   - Resolve whether `Microsoft.ClearScript.V8` brings the native runtimes or each `Microsoft.ClearScript.V8.Native.<rid>` (linux-x64, linux-arm64, win-x64, osx-arm64) must be referenced, and record the answer in design.md's open question.
-- [x] 5.2 `src/Widgentic.Mcp/Widgentic.Mcp.csproj`: package ID `Widgentic.Mcp`, version `0.1.0`, a description stating beta and render-only, `README.md`, `LICENSE`, XML docs, and SourceLink. Embed `$(WidgenticBundlePath)`, defaulting to `../../packages/mcp/dist/host/widgentic-host.js`, as an `EmbeddedResource`. A target fails with "run `npm run build` first" when the file is missing.
-- [x] 5.3 `dotnet/README.md` and `CHANGELOG.md` (0.1.0 entry), plus a `LICENSE` copy.
+- [x] 5.2 `src/Widgentic.Mcp/Widgentic.Mcp.csproj`: package ID `Widgentic.Mcp`, version `0.9.0` (major.minor aligned with the pin, A15), a description stating beta and render-only, `README.md`, `LICENSE`, XML docs, and SourceLink. Embed `$(WidgenticBundlePath)`, defaulting to `../../packages/mcp/dist/host/widgentic-host.js`, as an `EmbeddedResource`. A target fails with "run `npm run build` first" when the file is missing.
+- [x] 5.3 `dotnet/README.md` and `CHANGELOG.md` (0.9.0 entry), plus a `LICENSE` copy.
   - Usage: `AddMcpServer().WithWidgentic(...)`, tool selection, a host tool with `[McpAppUi]`, and widgets from designer exports.
   - The render-only limits and the image/`ResourceDomains` note.
   - Supported RIDs and Debian-based images (no Alpine).
@@ -167,3 +167,4 @@
 - [x] 12.2 The host serves `preview_widget` through `handlePreviewWidget`, marked `visibility: ["app"]` from the shared `APP_ONLY_VISIBILITY` constant (also used by `server.ts`). Covered by host tests and nine new corpus cases; the corpus was regenerated.
 - [x] 12.3 .NET: `preview_widget` is `render_widget`'s app-only companion. It is registered with `_meta.ui.visibility: ["app"]` and the legacy key, the startup self-check counts companions, and the selection and protocol tests cover it.
 - [x] 12.4 Pin `WidgenticMcpVersion` to `0.9.0`, since 0.8.0 shipped without `./host`. Update the spec deltas, design (A14) and docs for the preview tool.
+- [x] 12.5 Version alignment (owner decision, design A15): `Widgentic.Mcp` 0.9.0, the build-time rule that its major.minor equals `WidgenticMcpVersion`'s, and the package-distribution delta, CHANGELOG, README and CLAUDE.md updated.

@@ -214,7 +214,9 @@ otherwise it runs `pack:check`. After a publish, bump the range in
 `Widgentic.Mcp` (NuGet) is outside Changesets: its version is in
 `dotnet/src/Widgentic.Mcp/Widgentic.Mcp.csproj`, its `CHANGELOG.md` is
 hand-written, and `WidgenticMcpVersion` in `dotnet/Directory.Build.props` pins
-the `@widgentic/mcp` release whose bundle it embeds. `release-dotnet.yml`
+the `@widgentic/mcp` release whose bundle it embeds. Its major.minor ALWAYS
+equals the pin's (`Widgentic.Mcp` X.Y.* runs `@widgentic/mcp` X.Y.*; the build
+fails otherwise); the patch is free for .NET-only fixes. `release-dotnet.yml`
 packs on every run but publishes only from `main`, in the GitHub environment
 `nuget` (which the nuget.org trusted-publishing policy names), when
 `NUGET_PUBLISH` is `true` and the version is new, and only if

@@ -1,12 +1,16 @@
 # Widgentic.Mcp
 
-## 0.1.0
+Versions share their major.minor with the `@widgentic/mcp` release whose host bundle they embed:
+`Widgentic.Mcp` X.Y.* runs `@widgentic/mcp` X.Y.*. The patch moves on its own for .NET-only fixes.
 
-First release, beta and render-only.
+## 0.9.0
+
+First release, beta and render-only. Embeds the `@widgentic/mcp` 0.9.0 host bundle.
 
 - Runs the `@widgentic/mcp` host bundle on ClearScript V8, in a bounded pool of isolated
-  runtimes with per-call timeouts and heap limits. Output is byte-identical to the Node server,
-  checked against the repository's conformance corpus.
+  runtimes with per-call timeouts and heap limits. Renders are byte-identical to the Node
+  server's (except that images are not inlined), checked against the repository's conformance
+  corpus.
 - `WithWidgentic(...)` on the C# MCP SDK's server builder registers the selected widgentic tools,
   the MCP Apps template resource (with operator-declared CSP resource domains), and the
   per-kind preview pages. It slims model-facing output for MCP Apps hosts.
