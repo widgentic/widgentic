@@ -4,7 +4,15 @@ using Widgentic.Mcp.Tests.Support;
 
 namespace Widgentic.Mcp.Tests;
 
+/// <summary>
+/// Runs after the parallel tests, alone: the egress observer sees every HttpClient request in the
+/// process, so a concurrent test's requests (the sample over HTTP) would read as the package's.
+/// </summary>
+[CollectionDefinition(nameof(QuietProcess), DisableParallelization = true)]
+public sealed class QuietProcess;
+
 /// <summary>Render-only: no egress, and prompt actions survive while http actions render disabled.</summary>
+[Collection(nameof(QuietProcess))]
 public sealed class RenderOnlyTests
 {
     private static CancellationToken Cancel => TestContext.Current.CancellationToken;
