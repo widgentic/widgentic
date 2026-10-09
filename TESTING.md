@@ -23,7 +23,7 @@ runnable hosts here.
 | Command | Transport | Use for |
 |--|--|--|
 | `npm run mcp` | stdio | Claude Desktop, Claude Code, any stdio client |
-| `dotnet run --project dotnet/samples/Widgentic.Sample.Stdio` | stdio | The same widgets from a .NET server (`Widgentic.Mcp`), plus a host tool that renders its own data (`team_roster`); needs `npm run build` first |
+| `dotnet run --project dotnet/samples/Widgentic.Sample.Stdio` | stdio | The docker demo seed's widgets, themes and shared schemas from a .NET server (`Widgentic.Mcp`), plus a host tool that renders its own data (`team_roster`); needs `npm run build` first |
 | `dotnet run --project dotnet/samples/Widgentic.Sample.Stdio -- --http` | HTTP on `localhost:3002/mcp` | The .NET sample for hosts that connect to a URL, where widgets mount (VS Code; Claude through a tunnel) |
 | `npm run designer` | HTTP on `:8082` | The designers in a demo host (widget + theme + schema + action tabs) with their WebMCP tools registered (the header says `WebMCP tools are available in this browser` in an agent-capable browser, nothing otherwise); `/standalone.html` uses the published browser bundle |
 

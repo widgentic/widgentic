@@ -10,12 +10,13 @@
  * bare realm (packages/mcp/src/host/__tests__) and the .NET package
  * (dotnet/tests). `npm test` fails when the committed corpus is stale.
  *
- * Also derives the .NET sample's widget files from the example widgets, in
- * the designer's export shape.
+ * Also derives the .NET sample's seed from the docker example's demo seed
+ * (examples/docker/seed/demo.json): one file per widget, theme and shared
+ * schema, so the sample serves exactly what the self-host demo does.
  *
  * Run: npm run conformance:generate
  */
-import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createCatalog } from "@widgentic/core";
@@ -24,7 +25,8 @@ import { customWidgets } from "@widgentic-examples/mcp-server/widgets";
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const CORPUS_PATH = join(here, "..", "packages", "mcp", "src", "host", "__tests__", "conformance.json");
-export const SAMPLE_WIDGETS_DIR = join(here, "..", "dotnet", "samples", "Widgentic.Sample.Stdio", "widgets");
+export const DOCKER_SEED_PATH = join(here, "..", "examples", "docker", "seed", "demo.json");
+export const SAMPLE_SEED_DIR = join(here, "..", "dotnet", "samples", "Widgentic.Sample.Stdio", "seed");
 
 export type ConformanceCase =
   | { name: string; op: "call"; tool: string; args: string; slim: boolean; output: string }
@@ -249,24 +251,35 @@ export function buildCorpus(): Corpus {
   return { generatedBy: "npm run conformance:generate", config: configJson, cases };
 }
 
-/** The .NET sample's widget files: one designer export per example widget. */
-export function buildSampleWidgets(): Map<string, string> {
-  return new Map(
-    customWidgets.map((widget) => [`${widget.kind}.json`, `${JSON.stringify(exportShape(widget), null, 2)}\n`])
-  );
+/** The seed sections the .NET sample loads, by the field that names an entry; a render-only host binds no shared actions. */
+const SEED_SECTIONS = { widgets: "kind", themes: "name", schemas: "name" } as const;
+
+/** The .NET sample's seed: each demo-seed entry as `<section>/<name>.json`, keyed by that relative path. */
+export function buildSampleSeed(): Map<string, string> {
+  const seed = JSON.parse(readFileSync(DOCKER_SEED_PATH, "utf8")) as Record<string, unknown>;
+  const files = new Map<string, string>();
+  for (const [section, key] of Object.entries(SEED_SECTIONS)) {
+    const entries = seed[section];
+    if (!Array.isArray(entries)) continue;
+    for (const entry of entries as Record<string, unknown>[]) {
+      files.set(`${section}/${String(entry[key])}.json`, `${JSON.stringify(entry, null, 2)}\n`);
+    }
+  }
+  return files;
 }
 
 export function writeCorpus(): void {
   mkdirSync(dirname(CORPUS_PATH), { recursive: true });
   writeFileSync(CORPUS_PATH, `${JSON.stringify(buildCorpus(), null, 2)}\n`);
-  mkdirSync(SAMPLE_WIDGETS_DIR, { recursive: true });
-  for (const file of readdirSync(SAMPLE_WIDGETS_DIR)) {
-    if (file.endsWith(".json")) rmSync(join(SAMPLE_WIDGETS_DIR, file));
+  rmSync(SAMPLE_SEED_DIR, { recursive: true, force: true });
+  for (const [file, text] of buildSampleSeed()) {
+    const target = join(SAMPLE_SEED_DIR, file);
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, text);
   }
-  for (const [file, text] of buildSampleWidgets()) writeFileSync(join(SAMPLE_WIDGETS_DIR, file), text);
 }
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
   writeCorpus();
-  console.error(`wrote ${CORPUS_PATH} and ${SAMPLE_WIDGETS_DIR}`);
+  console.error(`wrote ${CORPUS_PATH} and ${SAMPLE_SEED_DIR}`);
 }

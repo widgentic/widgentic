@@ -74,11 +74,12 @@ public sealed class ProtocolTests
     [Fact]
     public async Task PreviewsAPartialStoredKind()
     {
-        await using var server = await TestServer.StartAsync(o => o.AddWidgetsFromDirectory(Repo.SampleWidgets));
-        var result = await server.Client.CallToolAsync("preview_widget", Args("""{"widget":"invoice","data":{"customer":"Ada"}}"""), cancellationToken: Cancel);
+        await using var server = await TestServer.StartAsync(o => o.AddSampleSeed());
+        // Only the account has arrived; the schema's other required fields have not.
+        var result = await server.Client.CallToolAsync("preview_widget", Args("""{"widget":"email-inbox-widget","data":{"account":"ada@example.com"}}"""), cancellationToken: Cancel);
         Assert.NotEqual(true, result.IsError);
-        Assert.Equal("Preview of 'invoice'.", Text(result));
-        Assert.Contains("Ada", result.StructuredContent!.Value.GetProperty("tree").GetRawText());
+        Assert.Equal("Preview of 'email-inbox-widget'.", Text(result));
+        Assert.Contains("ada@example.com", result.StructuredContent!.Value.GetProperty("tree").GetRawText());
         Assert.False(result.StructuredContent!.Value.TryGetProperty("payload", out _));
     }
 

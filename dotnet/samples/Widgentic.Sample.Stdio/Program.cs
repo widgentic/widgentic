@@ -1,6 +1,6 @@
-// A .NET MCP server with widgentic: the example widgets (designer exports in widgets/), the
-// render-side widgentic tools, and one tool of the server's own that renders its result as a
-// widget. Two transports, one server:
+// A .NET MCP server with widgentic: the docker example's demo seed (widgets, themes and shared
+// schemas under seed/), the render-side widgentic tools, and one tool of the server's own that
+// renders its result as a widget. Two transports, one server:
 //   (default)  stdio, for hosts that launch the process (Claude Code, VS Code, Inspector)
 //   --http     Streamable HTTP at http://localhost:3002/mcp (or --urls ...), for hosts that
 //              connect to a URL, such as Claude's custom connectors (through a tunnel) and VS Code
@@ -38,8 +38,13 @@ else
 /// <summary>The sample's server, identical over both transports.</summary>
 internal static class SampleServer
 {
+    private static readonly string Seed = Path.Combine(AppContext.BaseDirectory, "seed");
+
     public static IMcpServerBuilder AddSampleServer(this IMcpServerBuilder mcp) =>
-        mcp.WithWidgentic(options => options.AddWidgetsFromDirectory(Path.Combine(AppContext.BaseDirectory, "widgets")))
+        mcp.WithWidgentic(options => options
+                .AddSchemasFromDirectory(Path.Combine(Seed, "schemas"))
+                .AddThemesFromDirectory(Path.Combine(Seed, "themes"))
+                .AddWidgetsFromDirectory(Path.Combine(Seed, "widgets")))
             .WithTools<TeamTools>();
 }
 

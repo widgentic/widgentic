@@ -56,7 +56,7 @@ examples/designer    designer demo host (`npm run designer`; /standalone.html us
 examples/docker      self-hosted deployment: authoring app + MCP endpoint over one SQLite volume (docker compose)
 examples/shared      wiring the example hosts import (designer mount discipline, authoring client, preview-theme merge)
 tools/               boundaries.test.ts, exports.test.ts (snapshots of all 20 entries), pack-check.mjs, docs-generate.ts,
-                     conformance-generate.ts (the host corpus + the .NET sample's widgets), verify-host-pin.mjs (NuGet release gate)
+                     conformance-generate.ts (the host corpus + the .NET sample's seed, from examples/docker/seed), verify-host-pin.mjs (NuGet release gate)
 openspec/            specs/ (current behavior per capability), changes/ (active), changes/archive/ (full history)
 ```
 

@@ -5,9 +5,9 @@
  * Regenerate with `npm run conformance:generate`.
  */
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildCorpus, buildSampleWidgets, CORPUS_PATH, SAMPLE_WIDGETS_DIR } from "./conformance-generate.js";
+import { buildCorpus, buildSampleSeed, CORPUS_PATH, SAMPLE_SEED_DIR } from "./conformance-generate.js";
 import type { Corpus } from "./conformance-generate.js";
 
 const committed = JSON.parse(readFileSync(CORPUS_PATH, "utf8")) as Corpus;
@@ -25,12 +25,15 @@ describe("conformance corpus", () => {
     });
   }
 
-  it("keeps the .NET sample's widget files equal to the example widgets", () => {
-    const expected = buildSampleWidgets();
-    const files = readdirSync(SAMPLE_WIDGETS_DIR).filter((file) => file.endsWith(".json")).sort();
+  it("keeps the .NET sample's seed equal to the docker example's demo seed", () => {
+    const expected = buildSampleSeed();
+    const files = readdirSync(SAMPLE_SEED_DIR, { recursive: true, encoding: "utf8" })
+      .filter((file) => file.endsWith(".json"))
+      .map((file) => file.split(sep).join("/"))
+      .sort();
     expect(files).toEqual([...expected.keys()].sort());
     for (const [file, text] of expected) {
-      expect(JSON.parse(readFileSync(join(SAMPLE_WIDGETS_DIR, file), "utf8")), file).toEqual(JSON.parse(text));
+      expect(JSON.parse(readFileSync(join(SAMPLE_SEED_DIR, file), "utf8")), file).toEqual(JSON.parse(text));
     }
   });
 });

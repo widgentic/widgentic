@@ -15,7 +15,8 @@ First release, beta and render-only. Embeds the `@widgentic/mcp` 0.9.0 host bund
   the MCP Apps template resource (with operator-declared CSP resource domains), and the
   per-kind preview pages. It slims model-facing output for MCP Apps hosts.
 - `IWidgenticRenderer` lets a server's own tools return widgentic results.
-- Widgets, themes and shared schemas load from designer-exported JSON. Any refused entry stops
-  startup with a `WidgenticConfigurationException`.
+- Widgets, themes and shared schemas load from JSON strings or from directories
+  (`AddWidgetsFromDirectory`, `AddThemesFromDirectory`, `AddSchemasFromDirectory`). Any refused
+  entry stops startup with a `WidgenticConfigurationException`.
 - Http actions render disabled; there is no `execute_action`, no `load`, and no outbound
   network access.

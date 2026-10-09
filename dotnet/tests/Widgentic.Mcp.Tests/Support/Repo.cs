@@ -14,7 +14,14 @@ internal static class Repo
 
     public static string CorpusPath => Metadata("WidgenticCorpusPath");
 
-    public static string SampleWidgets => Path.Combine(Root, "dotnet", "samples", "Widgentic.Sample.Stdio", "widgets");
+    /// <summary>The sample's seed (the docker example's demo seed): <c>widgets/</c>, <c>themes/</c>, <c>schemas/</c>.</summary>
+    public static string SampleSeed => Path.Combine(Root, "dotnet", "samples", "Widgentic.Sample.Stdio", "seed");
+
+    /// <summary>The sample's seed, loaded with the three directory helpers.</summary>
+    public static WidgenticOptions AddSampleSeed(this WidgenticOptions options) => options
+        .AddSchemasFromDirectory(Path.Combine(SampleSeed, "schemas"))
+        .AddThemesFromDirectory(Path.Combine(SampleSeed, "themes"))
+        .AddWidgetsFromDirectory(Path.Combine(SampleSeed, "widgets"));
 
     public static string McpPackageVersion =>
         JsonDocument.Parse(File.ReadAllText(Path.Combine(Root, "packages", "mcp", "package.json")))
@@ -40,15 +47,21 @@ internal static class Repo
 internal sealed record Corpus(string Config, IReadOnlyList<CorpusCase> Cases)
 {
     /// <summary>Options carrying the corpus configuration, exactly as a host would configure it.</summary>
-    public WidgenticOptions Options(int poolSize = 1)
+    public WidgenticOptions Options(int poolSize = 1) => Configure(new WidgenticOptions { EnginePoolSize = poolSize });
+
+    /// <summary>Adds the corpus configuration (the example widgets among it) to any options.</summary>
+    public WidgenticOptions Configure(WidgenticOptions options)
     {
         var config = JsonDocument.Parse(Config).RootElement;
-        var options = new WidgenticOptions { EnginePoolSize = poolSize };
         options.AddWidget(config.GetProperty("widgets").GetRawText(), "corpus widgets");
         options.AddTheme(config.GetProperty("themes").GetRawText(), "corpus themes");
         options.AddSchema(config.GetProperty("schemas").GetRawText(), "corpus schemas");
         return options;
     }
+
+    /// <summary>A corpus widget definition by kind.</summary>
+    public JsonElement Widget(string kind) =>
+        JsonDocument.Parse(Config).RootElement.GetProperty("widgets").EnumerateArray().Single(w => w.GetProperty("kind").GetString() == kind);
 }
 
 internal sealed record CorpusCase(string Name, string Op, string? Tool, string? Args, bool Slim, string? Kind, string Output);

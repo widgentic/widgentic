@@ -29,7 +29,11 @@ public sealed class SampleTests
 
         var listing = await client.CallToolAsync("list_widgets", cancellationToken: Cancel);
         var text = Assert.IsType<TextContentBlock>(listing.Content[0]).Text;
-        foreach (var kind in new[] { "invoice", "weather", "x-post" }) Assert.Contains($"\"kind\": \"{kind}\"", text);
+        foreach (var kind in new[] { "appointment-agenda-widget", "email-inbox-widget" }) Assert.Contains($"\"kind\": \"{kind}\"", text);
+        var themes = await client.CallToolAsync("list_themes", cancellationToken: Cancel);
+        Assert.Contains("google-dark", Assert.IsType<TextContentBlock>(themes.Content[0]).Text);
+        var schemas = await client.CallToolAsync("list_schemas", cancellationToken: Cancel);
+        Assert.Contains("email-inbox", Assert.IsType<TextContentBlock>(schemas.Content[0]).Text);
 
         var roster = await client.CallToolAsync("team_roster", cancellationToken: Cancel);
         Assert.Contains("Grace Hopper", roster.StructuredContent!.Value.GetProperty("html").GetString());

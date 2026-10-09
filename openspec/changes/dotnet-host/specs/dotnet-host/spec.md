@@ -105,11 +105,19 @@ The package SHALL register an `IWidgenticRenderer` service. Its `RenderAsync` SH
 - **THEN** `RenderAsync` SHALL return `isError: true` with the `UNKNOWN_KIND` error naming the available kinds, and SHALL NOT throw
 
 ### Requirement: Widgets, themes and schemas load from designer JSON and are refused at the door
-`WidgenticOptions` SHALL accept widget definitions in the designer's export shape, one per JSON document or as a JSON array, from strings and from every `*.json` file in a directory. It SHALL also accept theme entries and shared schema entries as JSON. Every entry SHALL be validated by the bundle at startup. If the bundle reports any problem, the host SHALL fail to start with a `WidgenticConfigurationException` listing each problem's section, source (file path when loaded from a file), index, code and message: no entry is ever accepted and then silently missing. A widget that declares a `load` binding SHALL be accepted, and the package SHALL log once at startup that the binding is inactive in this render-only version.
+`WidgenticOptions` SHALL accept widget definitions in the designer's export shape, one per JSON document or as a JSON array, from strings and from every `*.json` file in a directory (`AddWidgetsFromDirectory`). Theme entries and shared schema entries SHALL be accepted the same two ways: as JSON strings, and from directories (`AddThemesFromDirectory`, `AddSchemasFromDirectory`) in ordinal file-name order, each file holding one entry or an array. Every entry SHALL be validated by the bundle at startup. If the bundle reports any problem, the host SHALL fail to start with a `WidgenticConfigurationException` listing each problem's section, source (file path when loaded from a file), index, code and message: no entry is ever accepted and then silently missing. A widget that declares a `load` binding SHALL be accepted, and the package SHALL log once at startup that the binding is inactive in this render-only version.
 
-#### Scenario: A designer export is served
-- **WHEN** a file holding the designer's export of the example invoice widget is loaded and a client calls `list_widgets`
-- **THEN** `invoice` SHALL be listed with its descriptor, and `render_widget` with its `dataExample` SHALL succeed
+#### Scenario: A seed is served from directories
+- **WHEN** the docker example's demo seed is loaded from its `schemas/`, `themes/` and `widgets/` directories and a client calls `list_widgets`, `list_themes` and `list_schemas`
+- **THEN** `email-inbox-widget` SHALL be listed with its shared schema resolved into `dataSchema`, `google-dark` and `google-light` SHALL be listed, both schemas SHALL be listed, and rendering the widget's `dataExample` with the theme `google-dark` SHALL succeed
+
+#### Scenario: A widget without its shared schema stops startup
+- **WHEN** only the seed's `widgets/` directory is loaded, without the schemas its widgets reference
+- **THEN** startup SHALL fail with `UNKNOWN_SCHEMA` for each widget file, naming the file
+
+#### Scenario: Theme and schema directories name their files
+- **WHEN** a theme directory holds a theme named `dark` and a schema directory holds an array whose second entry has an invalid name
+- **THEN** startup SHALL fail listing `RESERVED_THEME` with that theme's file and `INVALID_IDENTIFIER` with the schema file and its index
 
 #### Scenario: An invalid entry stops startup
 - **WHEN** the configured directory holds a widget whose template uses a forbidden tag
@@ -152,7 +160,7 @@ The package SHALL make no outbound network request. It SHALL NOT register `execu
 - **THEN** the element SHALL carry the prompt descriptor with no `disabled` key
 
 ### Requirement: Protocol round trip and a runnable sample
-`dotnet/samples` SHALL contain a runnable MCP server. It serves over stdio by default, and over Streamable HTTP at `http://localhost:3002/mcp` (or `--urls`) with `--http`. Over HTTP it is stateless for MCP 2026-07-28 clients and keeps a session for clients that initialize, so both kinds reveal their capabilities. Both transports serve the same server. It configures `WithWidgentic` with the example widgets, read from JSON generated out of `examples/mcp-server/widgets` (never hand-copied), and registers one host tool rendering through `IWidgenticRenderer`. The test suite SHALL launch the sample in both modes and drive it with a C# SDK client, and it SHALL connect a C# SDK client to the package's server over an in-process transport and verify `list_widgets`, `render_widget` (success and the `isError` path for an unknown kind), the host tool, and `resources/read` of the app template through the real protocol.
+`dotnet/samples` SHALL contain a runnable MCP server. It serves over stdio by default, and over Streamable HTTP at `http://localhost:3002/mcp` (or `--urls`) with `--http`. Over HTTP it is stateless for MCP 2026-07-28 clients and keeps a session for clients that initialize, so both kinds reveal their capabilities. Both transports serve the same server. It configures `WithWidgentic` with the docker example's demo seed (its widgets, themes and shared schemas). The seed is written one file per entry from `examples/docker/seed/demo.json`, never hand-copied, and loaded with the three directory helpers. The sample also registers one host tool rendering through `IWidgenticRenderer`. The test suite SHALL launch the sample in both modes and drive it with a C# SDK client, and it SHALL connect a C# SDK client to the package's server over an in-process transport and verify `list_widgets`, `render_widget` (success and the `isError` path for an unknown kind), the host tool, and `resources/read` of the app template through the real protocol.
 
 #### Scenario: Protocol round trip
 - **WHEN** an in-process C# SDK client calls `render_widget` with `{ widget: "card", data: { title: "T" } }`
@@ -162,9 +170,9 @@ The package SHALL make no outbound network request. It SHALL NOT register `execu
 - **WHEN** the client calls `render_widget` with an unknown widget id
 - **THEN** the delivered result SHALL have `isError: true` with the `UNKNOWN_KIND` JSON error
 
-#### Scenario: The sample serves the example widgets
-- **WHEN** the sample's generated widget JSON is compared with `examples/mcp-server/widgets` exported through the designer's export shape
-- **THEN** they SHALL be equal, and the sample's `list_widgets` SHALL include `invoice`, `weather` and `x-post`
+#### Scenario: The sample serves the docker demo seed
+- **WHEN** the sample's seed files are compared with `examples/docker/seed/demo.json`
+- **THEN** they SHALL be equal, entry for entry, and the running sample's `list_widgets` SHALL include `appointment-agenda-widget` and `email-inbox-widget`, `list_themes` SHALL include `google-dark`, and `list_schemas` SHALL include `email-inbox`
 
 #### Scenario: The sample serves over HTTP
 - **WHEN** the sample runs with `--http` and an MCP Apps client on the 2026-07-28 revision calls `team_roster`

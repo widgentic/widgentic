@@ -235,9 +235,9 @@ payload block, so the model still sees data that came from the .NET backend.
 ### D13. One conformance corpus, four checks
 `tools/conformance-generate.ts` (`npm run conformance:generate`) writes
 `packages/mcp/src/host/__tests__/conformance.json`, holding config plus
-`[{ name, call, args, slim, output }]`, and the sample's
-`dotnet/samples/Widgentic.Sample.Stdio/widgets/*.json` from `examples/mcp-server/widgets`
-in the designer export shape. Reference outputs come from the facade source running in
+`[{ name, call, args, slim, output }]`, and the sample's seed
+(`dotnet/samples/Widgentic.Sample.Stdio/seed/{widgets,themes,schemas}/*.json`) from
+`examples/docker/seed/demo.json`, one file per entry. Reference outputs come from the facade source running in
 Node, with native `URL` and Node's ICU. The four checks:
 1. The facade's output equals the direct handler output for the same catalog. The
    facade is a pass-through.
@@ -402,6 +402,19 @@ lines (D12, D14).
     theirs. The sample's HTTP test drives all three clients.
   - **The Node side:** the TypeScript SDK (1.31) still negotiates at most 2025-11-25, so the
     Node assembly is unaffected for now; BACKLOG records the follow-up for when it moves.
+
+- **A17. The sample serves the docker demo seed (owner request, 2026-10-09).** The sample
+  now serves what the self-host demo serves: the seed's widgets, themes and shared
+  schemas, written per entry by the generator and guarded by the staleness test.
+  - **Helpers:** `AddThemesFromDirectory` and `AddSchemasFromDirectory` join
+    `AddWidgetsFromDirectory` and share one directory reader, and the sample loads all
+    three. The seed's widgets reference shared schemas by name, so the sample also
+    shows the reference resolving end to end.
+  - **Actions:** the generator skips the seed's shared actions, since a render-only host
+    serves none.
+  - **Tests:** those that need the old example widgets' features (the weather `load`
+    binding, http and prompt actions) use the conformance corpus's configuration, which
+    still carries them.
 
 ## Risks / Trade-offs
 

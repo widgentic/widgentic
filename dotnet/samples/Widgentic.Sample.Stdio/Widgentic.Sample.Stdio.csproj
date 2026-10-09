@@ -13,8 +13,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Generated from examples/mcp-server/widgets by `npm run conformance:generate`; never hand-edited. -->
-    <None Include="widgets/*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The docker example's demo seed, one file per entry, written by `npm run conformance:generate`; never hand-edited. -->
+    <None Include="seed/**/*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

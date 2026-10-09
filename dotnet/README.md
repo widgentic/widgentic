@@ -34,7 +34,9 @@ builder.Services
     .WithStdioServerTransport()          // or WithHttpTransport()
     .WithWidgentic(options =>
     {
-        options.AddWidgetsFromDirectory("widgets");     // designer exports, optional
+        options.AddSchemasFromDirectory("seed/schemas")   // optional: shared schemas,
+               .AddThemesFromDirectory("seed/themes")     // themes,
+               .AddWidgetsFromDirectory("seed/widgets");  // and designer exports
         options.Tools = WidgenticTools.Default & ~WidgenticTools.GetAuthoringGuide;
     });
 ```
@@ -83,8 +85,12 @@ Design widgets in the widgentic designer, export them, and drop the JSON into yo
 
 - `AddWidget(json)` and `AddWidgetsFromDirectory(path)` take the designer's export shape
   `{ kind, template, descriptor, load? }`: one object, or an array.
-- `AddTheme(json)` takes theme entries `{ name, tokens, … }`.
-- `AddSchema(json)` takes shared schemas `{ name, schema, … }`.
+- `AddTheme(json)` and `AddThemesFromDirectory(path)` take theme entries `{ name, tokens, … }`.
+- `AddSchema(json)` and `AddSchemasFromDirectory(path)` take shared schemas `{ name, schema, … }`.
+  A widget whose `descriptor.dataSchemaRef` names a schema needs that schema loaded too.
+
+The directory helpers read every `*.json` file in ordinal name order, and each file holds one
+entry or an array.
 
 Every entry is validated by the bundle at startup. Anything refused (a forbidden tag, a
 reserved kind such as `card`, a theme named `light`, malformed JSON) stops startup with a
@@ -119,8 +125,11 @@ and then silently missing.
 
 ## Sample
 
-[`samples/Widgentic.Sample.Stdio`](samples/Widgentic.Sample.Stdio) serves the example widgets and
-one host tool, over stdio by default or over Streamable HTTP with `--http`:
+[`samples/Widgentic.Sample.Stdio`](samples/Widgentic.Sample.Stdio) serves the docker example's demo
+seed (an appointment agenda and an email inbox, two Google-style themes, and the shared schemas
+the widgets reference) plus one host tool, over stdio by default or over Streamable HTTP with
+`--http`. The seed files under `seed/` are generated from `examples/docker/seed/demo.json` by
+`npm run conformance:generate`:
 
 ```sh
 npm ci && npm run build        # at the repository root: builds the host bundle

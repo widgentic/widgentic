@@ -50,8 +50,9 @@ imports `node:crypto`.
   - An injectable renderer lets a host's OWN tools return widgentic results and render in
     Apps hosts directly, with no extra `render_widget` round trip.
   - Widgets and themes are loaded from designer-exported JSON.
-- **A .NET sample host** (`dotnet/samples`): a stdio server that serves the example
-  widgets from JSON generated out of `examples/mcp-server/widgets`, so the definitions are
+- **A .NET sample host** (`dotnet/samples`): a server, over stdio or Streamable HTTP, that
+  serves the docker example's demo seed (widgets, themes and shared schemas). The seed is
+  written one file per entry from `examples/docker/seed/demo.json`, so the definitions are
   derived, never restated.
 - **Release and CI.** A NuGet release workflow sits outside the Changesets linked group.
   The package embeds the host bundle from a PUBLISHED `@widgentic/mcp` version and is
