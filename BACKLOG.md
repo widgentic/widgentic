@@ -47,6 +47,7 @@ appears. Size: **S** one small change, **M** one change with spec deltas,
 | AGT-3 | Payload inspector in the designer | P3 | M | json-render comparison |
 | STO-1 | DEK unwrap cache | P3 | M | Backlog |
 | STO-2 | Merge two populated accounts | P3 | L | Backlog |
+| RND-5 | More image sources per render | P3 | M | Owner finding, v82 |
 
 **Part 2 · Pairing with other technologies**
 
@@ -216,6 +217,26 @@ are reachable by direct URL.
   `packages/mcp/src/store/`, with the persisted-shape rule. The flow and UI
   live in the apps repository's `widgentic-app` spec.
 - **Origin.** Backlog.
+
+### Rendering and the app template
+
+#### RND-5 · More image sources per render — P3, M
+
+- **Problem.** A render inlines at most 24 distinct image sources. Past that,
+  the lowest-priority sources keep their URL, which the host sandbox blocks,
+  so they show as empty boxes. An org tree with 30 distinct icon photos and a
+  card cover left seven icons external in production (v82, 2026-10-09; the
+  stderr note read `fetch cap: 7, byte budget: 0`).
+- **Direction.** Fetch in priority-ordered waves of bounded concurrency and
+  stop when the 3 MiB substituted-bytes budget is spent, then raise the count
+  cap (for example to 64). Today the cap bounds memory, because all fetches
+  run in parallel at up to 1 MiB each; with waves the budget bounds memory and
+  the cap only bounds outbound requests. The cost is render latency: each
+  wave waits for its slowest fetch (4 s guard), so waves need an overall
+  deadline after which the rest stay external.
+- **Touches.** `packages/mcp/src/server/inline-images.ts` (`resolveSources`),
+  the `mcp-server` inlining requirement, the budget tests.
+- **Origin.** Owner finding after the streaming-preview release (v82).
 
 ### Untriaged
 
