@@ -3,6 +3,7 @@ import type { WidgetNode } from "../node.js";
 import { el } from "../node.js";
 import { applyPattern, formatValue, isPlainObject, linkOrText } from "./format.js";
 import { imageNode, resolveImage } from "./images.js";
+import { keysFromIds } from "./keys.js";
 
 /**
  * `table` renderer.
@@ -10,7 +11,9 @@ import { imageNode, resolveImage } from "./images.js";
  * One row per record; columns are the union of record keys in first-seen
  * order, overridable via `hints.columns`. Non-array data becomes a
  * single-record array; non-object rows are wrapped as `{ value }`. Missing
- * cells render empty. Total: never throws.
+ * cells render empty. Body rows are keyed by record `id` when every record
+ * carries a distinct one, so a reordering re-render moves rows instead of
+ * re-pairing them. Total: never throws.
  */
 export function renderTable(payload: WidgetPayload): WidgetNode {
   const rows = Array.isArray(payload.data) ? payload.data : [payload.data];
@@ -40,6 +43,8 @@ export function renderTable(payload: WidgetPayload): WidgetNode {
       }
     }
   }
+
+  const rowKeys = keysFromIds(records);
 
   // Caption chrome from meta — a table's data has no title slot, so meta
   // is the only source; absence means no caption. <caption> must be the
@@ -74,7 +79,7 @@ export function renderTable(payload: WidgetPayload): WidgetNode {
     el(
       "tbody",
       { class: "wg-table-body" },
-      records.map((record) =>
+      records.map((record, index) =>
         el(
           "tr",
           { class: "wg-table-row" },
@@ -96,7 +101,8 @@ export function renderTable(payload: WidgetPayload): WidgetNode {
               display = linkOrText(column, value, payload.hints, text);
             }
             return el("td", { class: "wg-table-cell" }, [display]);
-          })
+          }),
+          rowKeys?.[index]
         )
       )
     )

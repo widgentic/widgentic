@@ -3,7 +3,7 @@ title: "Run your own server"
 description: "Assemble the widgentic MCP server with createWidgenticServer, pick a transport, add a store for per-principal catalogs, and wire secrets."
 ---
 
-`@widgentic/mcp/sdk` exports one function, `createWidgenticServer(options?)`, returning a connectable `McpServer` from the official `@modelcontextprotocol/sdk` with the full wiring: the eight tools, the MCP Apps declaration, the app template resource, output slimming and image inlining. The SDK packages are optional peers, so install them alongside:
+`@widgentic/mcp/sdk` exports one function, `createWidgenticServer(options?)`, returning a connectable `McpServer` from the official `@modelcontextprotocol/sdk` with the full wiring: the nine tools, the MCP Apps declaration, the app template resource, output slimming and image inlining. The SDK packages are optional peers, so install them alongside:
 
 ```bash
 npm install @widgentic/mcp @modelcontextprotocol/sdk @modelcontextprotocol/ext-apps zod
@@ -72,6 +72,7 @@ With no options the assembly serves the built-ins; everything else is your expli
 | `scopes` | the caller's scopes; `execute` gates `execute_action` and http-bound descriptors |
 | `secrets` | `(name) => Promise<string>` resolving the caller's secret at execution time, `undefined` for an unknown name |
 | `rateLimit` | a `() => boolean` gate for `execute_action`; `false` answers `RATE_LIMITED` |
+| `previewRateLimit` | a `() => boolean` gate for `preview_widget`; `false` answers `RATE_LIMITED` |
 | `fetchDeps` | an injectable transport for tests |
 
 Catalog and themes are passed in because the trust decision belongs where the API key is read.

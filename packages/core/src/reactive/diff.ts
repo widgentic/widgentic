@@ -5,7 +5,10 @@ import { buildDom } from "./build.js";
  * Patch `dom` in place so it reflects `next`, given that it currently
  * reflects `prev`. Returns the node now representing `next` — the same node
  * when patched in place, a freshly built replacement when the shape (tag or
- * node type) changed. Identity is preserved wherever shape matches.
+ * node type) changed. Identity is preserved wherever shape matches. Sibling
+ * lists pair by `key` when every child of both lists is a uniquely keyed
+ * element — existing nodes MOVE with their record — and by position
+ * otherwise. The app template's inline patcher implements the same rule.
  */
 export function patchNode(prev: WidgetNode, next: WidgetNode, dom: Node): Node {
   if (typeof prev === "string" && typeof next === "string") {
@@ -45,6 +48,54 @@ function patchElement(
   patchChildren(prev.children ?? [], next.children ?? [], element);
 }
 
+/**
+ * Key → index for a list in which every child is an element with a unique
+ * key; `undefined` for any other list (text child, unkeyed element,
+ * duplicate key), which then pairs by position.
+ */
+function keyIndex(list: readonly WidgetNode[]): Map<string, number> | undefined {
+  const index = new Map<string, number>();
+  for (let i = 0; i < list.length; i++) {
+    const node = list[i];
+    if (node === undefined || typeof node === "string" || typeof node.key !== "string") {
+      return undefined;
+    }
+    if (index.has(node.key)) return undefined;
+    index.set(node.key, i);
+  }
+  return index;
+}
+
+function patchKeyed(
+  prev: readonly WidgetNode[],
+  next: readonly WidgetElementNode[],
+  prevIndex: Map<string, number>,
+  domChildren: readonly Node[],
+  element: Element
+): void {
+  const doc = element.ownerDocument;
+  const kept = new Set<number>();
+  const placed = next.map((child) => {
+    const i = child.key === undefined ? undefined : prevIndex.get(child.key);
+    const prevChild = i === undefined ? undefined : prev[i];
+    const dom = i === undefined ? undefined : domChildren[i];
+    if (i === undefined || prevChild === undefined || dom === undefined) {
+      return buildDom(child, doc);
+    }
+    kept.add(i);
+    return patchNode(prevChild, child, dom);
+  });
+  domChildren.forEach((dom, i) => {
+    if (!kept.has(i) && dom.parentNode === element) element.removeChild(dom);
+  });
+  // Moving a node keeps its state (a visitor's `open`); only misplaced
+  // nodes are touched.
+  placed.forEach((dom, i) => {
+    const at = element.childNodes[i] ?? null;
+    if (dom !== at) element.insertBefore(dom, at);
+  });
+}
+
 function patchChildren(
   prev: readonly WidgetNode[],
   next: readonly WidgetNode[],
@@ -56,6 +107,13 @@ function patchChildren(
   for (let i = 0; i < element.childNodes.length; i++) {
     const child = element.childNodes[i];
     if (child) domChildren.push(child);
+  }
+
+  const prevIndex = keyIndex(prev);
+  if (prevIndex !== undefined && keyIndex(next) !== undefined) {
+    const elements = next.filter((child): child is WidgetElementNode => typeof child !== "string");
+    patchKeyed(prev, elements, prevIndex, domChildren, element);
+    return;
   }
 
   const shared = Math.min(prev.length, next.length);

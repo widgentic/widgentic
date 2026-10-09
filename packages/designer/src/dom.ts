@@ -425,7 +425,7 @@ ${chromeCss(CHROME_DEFAULTS, {
    panel (fitSelect), so carets hug the text — no flex stretching here. */
 .wgd-node .wgd-tag { flex: 0 0 auto; font-family: var(--wgd-font-mono); font-size: var(--wgd-font-size-xs); color: var(--wgd-accent); background: var(--wgd-accent-bg); border: 1px solid transparent; border-radius: var(--wgd-radius-sm); padding: 0 4px; }
 .wgd-node .wgd-tag:hover, .wgd-node .wgd-tag:focus { border-color: var(--wgd-accent-line); }
-.wgd-node .wgd-path { flex: 0 1 auto; min-width: 6ch; max-width: 100%; font-family: var(--wgd-font-mono); }
+.wgd-node .wgd-path, .wgd-node .wgd-each-key { flex: 0 1 auto; min-width: 6ch; max-width: 100%; font-family: var(--wgd-font-mono); }
 .wgd-node .wgd-select { box-sizing: border-box; }
 /* Theme panel: swatch beside each color token. */
 /* Syntax coloring: <pre> layer behind a transparent-text textarea. Every

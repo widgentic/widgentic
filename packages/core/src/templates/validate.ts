@@ -181,6 +181,13 @@ function check(node: unknown, path: string, depth: number): TemplateError | unde
     }
     const pathError = checkPathSyntax(node.each, path);
     if (pathError) return pathError;
+    if ("key" in node && node.key !== undefined) {
+      if (typeof node.key !== "string") {
+        return nodeError("'key' must be a string path.", path);
+      }
+      const keyError = checkPathSyntax(node.key, path);
+      if (keyError) return keyError;
+    }
     if (!("template" in node)) {
       return nodeError("'each' node requires a 'template'.", path);
     }

@@ -1,6 +1,6 @@
 ---
 title: "What is widgentic"
-description: "A payload contract, a catalog of generic widgets, an MCP server with eight tools and a set of designers — and what widgentic deliberately is not."
+description: "A payload contract, a catalog of generic widgets, an MCP server with nine tools and a set of designers — and what widgentic deliberately is not."
 ---
 
 Agents call tools and APIs that return structured data, and every tool reinvents how to present that data in chat. widgentic replaces the per-tool UI with one contract and a small set of generic widgets, so any MCP-aware host can render rich tool output.
@@ -28,7 +28,7 @@ Four kinds are built in: `card`, `table`, `tree`, and `group`, which shows sever
 
 ### An MCP server
 
-widgentic is itself an MCP server. The hosted endpoint is `https://mcp.widgentic.dev/mcp`, and the same assembly ships in `@widgentic/mcp` so you can run your own. It exposes eight tools:
+widgentic is itself an MCP server. The hosted endpoint is `https://mcp.widgentic.dev/mcp`, and the same assembly ships in `@widgentic/mcp` so you can run your own. It exposes nine tools:
 
 | Tool | Purpose |
 |---|---|
@@ -40,6 +40,7 @@ widgentic is itself an MCP server. The hosted endpoint is `https://mcp.widgentic
 | `get_authoring_guide` | The complete authoring contract for agents drafting widget, theme and schema JSON |
 | `render_widget` | Validate a payload, render it, return the HTML plus the payload |
 | `execute_action` | Run a widget's `http` action server-side; called by the widget, hidden from agents in MCP Apps hosts |
+| `preview_widget` | Preview a stored widget while its input streams; called by the app template, hidden from agents in MCP Apps hosts |
 
 With an API key the catalog is yours: your saved widgets, themes, schemas and actions are composed on top of the built-ins for every request. See [per-principal catalogs](/how-it-works/per-principal-catalogs).
 

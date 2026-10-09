@@ -29,6 +29,7 @@ import {
   LIST_ACTIONS_TOOL,
   GET_AUTHORING_GUIDE_TOOL,
   EXECUTE_ACTION_TOOL,
+  PREVIEW_WIDGET_TOOL,
   WIDGENTIC_UI_URI_PREFIX,
   WIDGENTIC_APP_TEMPLATE_URI
 } from "./definitions.js";
@@ -38,7 +39,8 @@ import {
   handleListThemeTokens,
   handleListThemes,
   handleListSchemas,
-  handleListActions
+  handleListActions,
+  handlePreviewWidget
 } from "./handlers.js";
 import type { RenderActionOptions, StoredSchemaEntry } from "./handlers.js";
 import { handleExecuteAction } from "./actions.js";
@@ -93,6 +95,8 @@ export interface WidgenticServerOptions {
   secrets?: (name: string) => Promise<string | undefined>;
   /** Per-principal rate-limit gate for `execute_action` (`false` = limited). */
   rateLimit?: () => boolean;
+  /** Per-principal rate-limit gate for `preview_widget` (`false` = limited). */
+  previewRateLimit?: () => boolean;
   /** Injectable transport for tests. */
   fetchDeps?: GuardedFetchDeps;
 }
@@ -275,6 +279,49 @@ export function createWidgenticServer(
       if (inlineImages) await inlineRenderResultImages(result, { skipHosts });
       return result;
     }
+  );
+
+  // The template's own preview tool: while a render's input streams, the
+  // frame asks for kinds it cannot build itself. App-only like
+  // execute_action; renders the partial payload and never fetches.
+  registerAppTool(
+    server,
+    PREVIEW_WIDGET_TOOL.name,
+    {
+      description: PREVIEW_WIDGET_TOOL.description,
+      _meta: {
+        ui: { resourceUri: WIDGENTIC_APP_TEMPLATE_URI, visibility: ["app"] }
+      },
+      inputSchema: (() => {
+        const docs = PREVIEW_WIDGET_TOOL.inputSchema.properties as Record<string, { description?: string }>;
+        const doc = (field: string) => docs[field]?.description ?? "";
+        return {
+          widget: z.string().describe(doc("widget")),
+          data: z
+            .union([
+              z.array(z.unknown()),
+              z.record(z.string(), z.unknown()),
+              z.string(),
+              z.number(),
+              z.boolean(),
+              z.null()
+            ])
+            .optional()
+            .describe(doc("data")),
+          hints: z.record(z.string(), z.unknown()).optional().describe(doc("hints")),
+          meta: z.record(z.string(), z.unknown()).optional().describe(doc("meta")),
+          theme: z
+            .union([z.string(), z.record(z.string(), z.unknown())])
+            .optional()
+            .describe(doc("theme"))
+        };
+      })()
+    },
+    (args) =>
+      handlePreviewWidget(catalog, args, {
+        themes,
+        rateLimit: options.previewRateLimit
+      }) as CallToolResult
   );
 
   // The declared app template: Apps hosts fetch this once and mount it in a

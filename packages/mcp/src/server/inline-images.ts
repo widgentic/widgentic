@@ -10,7 +10,10 @@
  *
  * The fetch is SSRF-guarded: https only, private/reserved addresses
  * rejected on every redirect hop, `image/*` content type required, byte
- * and time caps, bounded image count per render. DNS is resolved once and
+ * and time caps. Per render, sources are fetched in shape priority (hero,
+ * then thumbs/avatars/template images, then icons) up to a count cap, and
+ * admitted while the bytes they substitute — charged per occurrence — fit
+ * a budget. DNS is resolved once and
  * the connection pinned to the checked address (guarded-fetch), so a
  * rebinding resolver cannot swap in a private target between check and use.
  */
@@ -32,6 +35,11 @@ const MAX_BYTES = 1024 * 1024;
 // as alt text. Fetches run in parallel under the per-image 1 MiB / 4 s
 // guards, so the cap bounds memory, not wall-clock.
 const MAX_IMAGES_PER_RENDER = 24;
+// Bytes SUBSTITUTED per render, charged per occurrence: a source costs its
+// data URI's length times the number of images using it. 3 MiB fits two
+// images at the 1 MiB fetch cap and stops one repeated icon multiplying
+// through a large tree.
+const MAX_INLINE_BYTES_PER_RENDER = 3 * 1024 * 1024;
 const CACHE_TTL_MS = 5 * 60_000;
 const CACHE_MAX = 50;
 
@@ -182,39 +190,102 @@ function unescapeAttr(value: string): string {
 const IMG_TAG = /<img\b[^>]*>/g;
 const SRC_ATTR = /\bsrc="([^"]*)"/;
 
+const CLASS_ATTR = /\bclass="([^"]*)"/;
+
+/** One `img` use of a source, with its fetch priority. */
+interface Occurrence {
+  url: string;
+  rank: number;
+}
+
+/**
+ * Fetch priority from an image's classes: card heroes first, decorative
+ * tree icons last, everything else (thumbs, avatars, template images) in
+ * between.
+ */
+function shapeRank(classes: string | undefined): number {
+  const list = (classes ?? "").split(/\s+/);
+  if (list.some((name) => name === "wg-img-hero")) return 3;
+  if (list.some((name) => name === "wg-img-icon")) return 1;
+  return 2;
+}
+
+function htmlOccurrences(html: string): Occurrence[] {
+  const out: Occurrence[] = [];
+  for (const tag of html.match(IMG_TAG) ?? []) {
+    const src = SRC_ATTR.exec(tag)?.[1];
+    if (src === undefined) continue;
+    const url = unescapeAttr(src);
+    if (/^https?:\/\//i.test(url)) out.push({ url, rank: shapeRank(CLASS_ATTR.exec(tag)?.[1]) });
+  }
+  return out;
+}
+
+/**
+ * Decide what to inline: unique sources ranked by their best occurrence
+ * (ties in document order), the first {@link MAX_IMAGES_PER_RENDER}
+ * fetched, then admitted in that order while their substituted bytes fit
+ * {@link MAX_INLINE_BYTES_PER_RENDER} — a source that does not fit keeps
+ * its URL and a smaller later one may still be admitted. Sources left
+ * external by either bound are counted on stderr, never by URL.
+ */
+async function resolveSources(
+  occurrences: Occurrence[],
+  deps: InlineImageDeps
+): Promise<Map<string, string>> {
+  const byUrl = new Map<string, { url: string; rank: number; first: number; count: number }>();
+  occurrences.forEach(({ url, rank }, index) => {
+    if (isDeclaredHost(url, deps.skipHosts)) return;
+    const seen = byUrl.get(url);
+    if (seen === undefined) byUrl.set(url, { url, rank, first: index, count: 1 });
+    else {
+      seen.count++;
+      seen.rank = Math.max(seen.rank, rank);
+    }
+  });
+  const ranked = [...byUrl.values()].sort((a, b) => b.rank - a.rank || a.first - b.first);
+  const fetched = ranked.slice(0, MAX_IMAGES_PER_RENDER);
+  const uris = await Promise.all(fetched.map((source) => fetchImageAsDataUri(source.url, deps)));
+  const admitted = new Map<string, string>();
+  let used = 0;
+  let overBudget = 0;
+  fetched.forEach((source, i) => {
+    const uri = uris[i];
+    if (uri === null || uri === undefined) return;
+    const cost = uri.length * source.count;
+    if (used + cost > MAX_INLINE_BYTES_PER_RENDER) {
+      overBudget++;
+      return;
+    }
+    used += cost;
+    admitted.set(source.url, uri);
+  });
+  const overCap = ranked.length - fetched.length;
+  if (overCap + overBudget > 0) {
+    console.error(
+      `widgentic: ${overCap + overBudget} image source(s) left external (fetch cap: ${overCap}, byte budget: ${overBudget})`
+    );
+  }
+  return admitted;
+}
+
 /**
  * Rewrite `img src` attributes in widgentic-serialized HTML, replacing each
- * fetchable `http(s)` source with a `data:` URI. Sources that fail any
- * guard are left untouched (the alt-text fallback remains). At most
- * {@link MAX_IMAGES_PER_RENDER} unique URLs are fetched, in parallel.
+ * fetchable `http(s)` source with a `data:` URI under the same priority
+ * and budgets as a render result. Sources that fail any guard are left
+ * untouched (the alt-text fallback remains).
  */
 export async function inlineImagesInHtml(
   html: string,
   deps: InlineImageDeps = {}
 ): Promise<string> {
-  const sources = new Set<string>();
-  for (const tag of html.match(IMG_TAG) ?? []) {
-    const src = SRC_ATTR.exec(tag)?.[1];
-    if (src !== undefined && /^https?:\/\//i.test(unescapeAttr(src))) {
-      if (isDeclaredHost(unescapeAttr(src), deps.skipHosts)) continue;
-      sources.add(src);
-      if (sources.size >= MAX_IMAGES_PER_RENDER) break;
-    }
-  }
-  if (sources.size === 0) return html;
-
-  const resolved = new Map<string, string>();
-  await Promise.all(
-    [...sources].map(async (src) => {
-      const dataUri = await fetchImageAsDataUri(unescapeAttr(src), deps);
-      if (dataUri !== null) resolved.set(src, dataUri);
-    })
-  );
+  const occurrences = htmlOccurrences(html);
+  if (occurrences.length === 0) return html;
+  const resolved = await resolveSources(occurrences, deps);
   if (resolved.size === 0) return html;
-
   return html.replace(IMG_TAG, (tag) =>
     tag.replace(SRC_ATTR, (full, src: string) => {
-      const dataUri = resolved.get(src);
+      const dataUri = resolved.get(unescapeAttr(src));
       return dataUri === undefined ? full : `src="${dataUri}"`;
     })
   );
@@ -224,14 +295,17 @@ function isElementNode(node: unknown): node is WidgetElementNode {
   return typeof node === "object" && node !== null && !Array.isArray(node);
 }
 
-/** Collect raw http(s) img sources from a render tree. */
-function collectTreeSources(node: WidgetNode, into: Set<string>): void {
-  if (!isElementNode(node)) return;
+/** Collect http(s) img occurrences from a render tree, in document order. */
+function treeOccurrences(node: WidgetNode, into: Occurrence[]): Occurrence[] {
+  if (!isElementNode(node)) return into;
   if (node.tag === "img") {
     const src = node.attrs?.src;
-    if (typeof src === "string" && /^https?:\/\//i.test(src)) into.add(src);
+    if (typeof src === "string" && /^https?:\/\//i.test(src)) {
+      into.push({ url: src, rank: shapeRank(node.attrs?.class) });
+    }
   }
-  for (const child of node.children ?? []) collectTreeSources(child, into);
+  for (const child of node.children ?? []) treeOccurrences(child, into);
+  return into;
 }
 
 /** Rewrite tree img sources in place from resolved raw-URL → data-URI. */
@@ -301,31 +375,14 @@ export async function inlineRenderResultImages(
   }
   const tree = sc?.tree as WidgetNode | undefined;
 
-  // One collection pass over every surface, keyed by RAW url.
-  const raw = new Set<string>();
-  for (const surface of htmlSurfaces) {
-    for (const tag of surface.get().match(IMG_TAG) ?? []) {
-      const src = SRC_ATTR.exec(tag)?.[1];
-      if (src !== undefined) {
-        const unescaped = unescapeAttr(src);
-        if (/^https?:\/\//i.test(unescaped)) raw.add(unescaped);
-      }
-    }
-  }
-  if (tree !== undefined) collectTreeSources(tree, raw);
-  for (const url of raw) {
-    if (isDeclaredHost(url, deps.skipHosts)) raw.delete(url);
-  }
-  if (raw.size === 0) return;
-
-  // One fetch pass (bounded), then rewrite every projection from it.
-  const resolved = new Map<string, string>();
-  await Promise.all(
-    [...raw].slice(0, MAX_IMAGES_PER_RENDER).map(async (url) => {
-      const dataUri = await fetchImageAsDataUri(url, deps);
-      if (dataUri !== null) resolved.set(url, dataUri);
-    })
-  );
+  // Occurrences come from ONE projection — the tree when present, else the
+  // first HTML surface — because every projection carries the same images;
+  // every surface is then rewritten from the same decision.
+  const first = htmlSurfaces[0];
+  const occurrences =
+    tree !== undefined ? treeOccurrences(tree, []) : first !== undefined ? htmlOccurrences(first.get()) : [];
+  if (occurrences.length === 0) return;
+  const resolved = await resolveSources(occurrences, deps);
   if (resolved.size === 0) return;
 
   for (const surface of htmlSurfaces) {

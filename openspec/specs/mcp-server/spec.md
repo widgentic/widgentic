@@ -273,7 +273,7 @@ The server assembly SHALL declare the tool↔UI linkage per the MCP Apps specifi
 - **AND** with no domains configured the key SHALL be absent
 
 ### Requirement: App template loader
-The repository SHALL provide the app template (`ui://widgentic/app.html`): a self-contained document with the widgentic base stylesheet and a minimal inline bridge implementing the MCP Apps iframe protocol — the `ui/initialize` handshake (protocol version `2026-01-26`), the `ui/notifications/initialized` notification, `ping`/`ui/resource-teardown` responders, a streaming input preview — on `ui/notifications/tool-input-partial` (and `tool-input`), built-in kinds (`card`, `table`, `tree`, and `group`s whose items are built-ins) SHALL mount a client-built preview tree from the partial `{ widget, data, hints }` through the same native mounter, marked visibly in-progress, with successive partials patching in place; custom and unknown kinds SHALL show a generating-state skeleton naming the kind, never a guessed render; previews use the built-ins' `wg-*` classes and content but skip image inlining, diagnostics, and validation (the tool result stays the only authority), and the preview state SHALL be replaced by the `tool-result` render (or restored to the placeholder on `tool-cancelled`) — and a `ui/notifications/tool-result` listener that renders `structuredContent` (`css` via style text; the widget mounted natively from `structuredContent.tree` when present — DOM built with `createElement`/`createTextNode`, tag and attribute names held to the serializer's allowlists, `on*` attributes skipped — with subsequent tool-results patching the mounted DOM in place, preserving node identity where shape matches; `html` injected into the root only as the fallback when `tree` is absent), with ResizeObserver-driven `ui/notifications/size-changed` reporting. Anchor clicks SHALL NEVER navigate the frame — the frame is the widget, and an in-frame navigation to an external origin is sandbox-blocked, replacing the widget with an error page: the template SHALL intercept every anchor click, prevent the default, and ask the host to open http(s)/mailto/tel URLs via a `ui/open-link` request, staying intact when the host denies or does not support it. The template SHALL integrate host context (from the initialize result and `host-context-changed`): theme applied as `data-theme`/`color-scheme`, host style variables set on the document root and flowing into the `--wg-*` tokens with widgentic's light literals as final fallback, and safe-area insets applied as body padding. For registry tokens the host bridge does NOT map, the template SHALL flip to the dark preset's values when the host theme is dark (keyed on the applied `data-theme`), so custom widget styles stay coherent in both modes — host-bridged tokens keep their host-derived values, and an explicit widgentic `theme` SHALL still override in both modes. The template SHALL reference no external resources and declare no CSP domains (strictest sandbox).
+The repository SHALL provide the app template (`ui://widgentic/app.html`): a self-contained document with the widgentic base stylesheet and a minimal inline bridge implementing the MCP Apps iframe protocol — the `ui/initialize` handshake (protocol version `2026-01-26`), the `ui/notifications/initialized` notification, `ping`/`ui/resource-teardown` responders, a streaming input preview — on `ui/notifications/tool-input-partial` (and `tool-input`), built-in kinds (`card`, `table`, `tree`, and `group`s whose items are built-ins) SHALL mount a client-built preview tree from the partial `{ widget, data, hints }` through the same native mounter, marked visibly in-progress, with successive partials patching in place; custom and unknown kinds SHALL show a generating-state skeleton naming the kind, never a client-built guess, until a SERVER preview arrives: when the host advertises `serverTools`, the template SHALL request the app-only `preview_widget` tool for any render that names a kind outside the built-ins (alone or as a `group` item) — at most one request in flight per frame, the latest input snapshot sent once the previous request settles, and no request once the tool result has arrived — and SHALL mount each successful answer's `tree` (applying its `css`) through the same native mounter, marked in progress like any preview; an error answer (`RATE_LIMITED` included), a request the host rejects, or a host without `serverTools` SHALL leave the skeleton (or the last successful server preview) on screen and end preview requests for that render, and an answer arriving after the tool result SHALL be discarded. Every preview, client-built or server, SHALL use only a SETTLED widget name: in the complete `tool-input` always, and in a partial snapshot once another argument follows it (snapshots keep the streamed key order); the same rule SHALL apply to each `group` item's `kind`. Until the name settles the frame SHALL show an in-progress placeholder that names no kind, a server request for a `group` SHALL carry only the items whose kind has settled, and a name still arriving SHALL never select a built-in preview, since `card` may be becoming `card-deluxe`; previews use the built-ins' `wg-*` classes and content but skip image inlining, diagnostics, and validation (the tool result stays the only authority), and the preview state SHALL be replaced by the `tool-result` render (or restored to the placeholder on `tool-cancelled`) — and a `ui/notifications/tool-result` listener that renders `structuredContent` (`css` via style text; the widget mounted natively from `structuredContent.tree` when present — DOM built with `createElement`/`createTextNode`, tag and attribute names held to the serializer's allowlists, `on*` attributes skipped — with subsequent tool-results patching the mounted DOM in place, preserving node identity where shape matches and pairing sibling elements by `key` under exactly the rules of the reactive-rendering patcher — keyed when every child of both lists is a uniquely keyed element, by position otherwise — so a reordering result moves DOM nodes instead of re-pairing them; `html` injected into the root only as the fallback when `tree` is absent), with ResizeObserver-driven `ui/notifications/size-changed` reporting. Anchor clicks SHALL NEVER navigate the frame — the frame is the widget, and an in-frame navigation to an external origin is sandbox-blocked, replacing the widget with an error page: the template SHALL intercept every anchor click, prevent the default, and ask the host to open http(s)/mailto/tel URLs via a `ui/open-link` request, staying intact when the host denies or does not support it. The template SHALL integrate host context (from the initialize result and `host-context-changed`): theme applied as `data-theme`/`color-scheme`, host style variables set on the document root and flowing into the `--wg-*` tokens with widgentic's light literals as final fallback, and safe-area insets applied as body padding. For registry tokens the host bridge does NOT map, the template SHALL flip to the dark preset's values when the host theme is dark (keyed on the applied `data-theme`), so custom widget styles stay coherent in both modes — host-bridged tokens keep their host-derived values, and an explicit widgentic `theme` SHALL still override in both modes. The template SHALL reference no external resources and declare no CSP domains (strictest sandbox).
 
 #### Scenario: Host context is honored
 - **WHEN** the host's initialize result or a `host-context-changed` notification carries theme, style variables, or safe-area insets
@@ -331,7 +331,8 @@ The repository SHALL provide the app template (`ui://widgentic/app.html`): a sel
 
 #### Scenario: Custom kinds never get a guessed preview
 - **WHEN** partial input names a kind that is not a built-in
-- **THEN** the frame SHALL show a generating-state skeleton naming that kind
+- **THEN** the frame SHALL show a generating-state skeleton naming that kind until a `preview_widget` answer arrives
+- **AND** the frame SHALL never build a client-side render for that kind
 
 #### Scenario: The result replaces the preview
 - **WHEN** the `tool-result` arrives after previews
@@ -340,6 +341,54 @@ The repository SHALL provide the app template (`ui://widgentic/app.html`): a sel
 #### Scenario: Hosts without input notifications see no change
 - **WHEN** a host sends no input notifications before the result
 - **THEN** the template SHALL behave exactly as before for every existing scenario
+
+#### Scenario: Custom kinds preview through the server
+- **WHEN** the host advertises `serverTools` and partial input names a stored custom kind
+- **THEN** the template SHALL call `tools/call` `preview_widget` with the snapshot's `widget`, `data`, `hints` and `meta`
+- **AND** SHALL mount the answer's `tree` marked in progress, applying its `css`
+- **AND** the tool result SHALL replace that preview through the patcher
+
+#### Scenario: One preview request in flight
+- **WHEN** three further input snapshots arrive while a `preview_widget` request is outstanding
+- **THEN** exactly one further request SHALL be sent after it settles, carrying the latest of the three snapshots
+
+#### Scenario: Preview failures keep the skeleton
+- **WHEN** `preview_widget` answers with `isError` (including `RATE_LIMITED`), or the host lacks `serverTools`
+- **THEN** the skeleton (or the last successful server preview) SHALL stay on screen
+- **AND** no further `preview_widget` request SHALL be sent for that render
+
+#### Scenario: Previews stop at the result
+- **WHEN** the tool result has arrived
+- **THEN** no `preview_widget` request SHALL be sent, and an answer to an earlier request SHALL be discarded without touching the mounted result
+
+#### Scenario: Groups with custom items preview through the server
+- **WHEN** partial input for a `group` includes an item of a stored custom kind and the host advertises `serverTools`
+- **THEN** the template SHALL request a server preview for the whole group, showing the client-built group preview with that item's skeleton until the answer arrives
+
+#### Scenario: Keyed results reorder in place
+- **WHEN** two tool results carry a table whose records have unique `id` values, the second in a different order
+- **THEN** each row element SHALL keep its DOM identity at its new position
+
+#### Scenario: The template's patcher agrees with the core patcher
+- **WHEN** the same sequence of render trees — keyed lists, unkeyed lists, duplicate keys, reorders, insertions and removals — is applied through the core reactive patcher and through the template's mounter
+- **THEN** both SHALL produce the same DOM and preserve the identity of the same elements
+
+#### Scenario: A half-streamed name is never previewed
+- **WHEN** a partial snapshot ends with a `widget` value still arriving, such as `{ "data": {…}, "widget": "appointme" }`
+- **THEN** the frame SHALL show an in-progress placeholder that names no kind and SHALL send no `preview_widget` request
+- **AND** once the name settles, the request SHALL carry the full name
+
+#### Scenario: Data streamed before the name shows that something is coming
+- **WHEN** partial snapshots carry `data` and no `widget` yet
+- **THEN** the frame SHALL show the unnamed in-progress placeholder rather than an empty frame
+
+#### Scenario: A prefix of a stored name never selects a built-in
+- **WHEN** a partial snapshot's only key is `widget: "card"` and the call later settles as `card-deluxe`
+- **THEN** no `card` preview SHALL be built from the prefix, and the settled name SHALL go to the server
+
+#### Scenario: Group items still naming themselves stay out of the request
+- **WHEN** a partial `group` snapshot's last item carries a `kind` still arriving
+- **THEN** that item SHALL preview as an unnamed placeholder and SHALL be left out of the `preview_widget` request
 
 ### Requirement: App template builder is a library export
 The `./mcp-server` entry SHALL export `buildAppTemplate(): string`, producing the app template document (`ui://widgentic/app.html`) described by the app template loader requirement. The builder SHALL depend only on other widgentic public entries — no MCP SDK, no deployment code — so any host can serve the loader without copying files out of a deployment.
@@ -352,8 +401,19 @@ The `./mcp-server` entry SHALL export `buildAppTemplate(): string`, producing th
 - **WHEN** the module providing `buildAppTemplate` is inspected
 - **THEN** it SHALL import only from widgentic public entries and SHALL NOT import from an MCP SDK or from `apps/`
 
+### Requirement: App template size budget
+The served app template SHALL stay within explicit size budgets — 44 KiB of UTF-8 bytes raw and 13 KiB gzipped at the highest compression level — pinned by a test in the default gate. Exceeding either budget SHALL fail the gate, and raising one SHALL be a deliberate, reviewed change to the pinned values, never a side effect.
+
+#### Scenario: The template fits its budgets
+- **WHEN** the gate runs
+- **THEN** `buildAppTemplate()` SHALL measure at most 45,056 bytes raw and at most 13,312 bytes gzipped
+
+#### Scenario: Growth past a budget fails the gate
+- **WHEN** a change makes the template exceed either budget
+- **THEN** the size test SHALL fail, naming the measured size and the budget
+
 ### Requirement: Server-side image inlining for iframe surfaces
-Because Apps-host sandboxes block external `img-src` while permitting `data:`, the runnable server SHALL, when inlining is enabled (the default; `WIDGENTIC_INLINE_IMAGES=0` disables), rewrite `img` sources on the iframe-facing surfaces of a `render_widget` result — the `structuredContent` HTML fragment, the `structuredContent.tree` render tree (element nodes with `tag: "img"`), and the `ui://widgentic/page/<kind>` embedded resource — replacing each `http(s)` source whose fetch succeeds with a `data:<content-type>;base64,` URI; the tree and HTML projections SHALL be rewritten from the same fetch results and never disagree. The model-facing HTML text block and `format: "page"` output SHALL keep original URLs. Each unique URL SHALL be fetched at most once per render. The fetch SHALL be guarded: `https` scheme only; hostnames resolving to loopback, private (RFC1918), link-local (including 169.254.169.254), carrier-grade NAT, or IPv6 unique-local/link-local addresses SHALL be rejected, re-validated on every redirect hop (at most 3); the connection SHALL be made to the exact address that passed validation — the fetch SHALL NOT perform its own name resolution, so a DNS answer that changes between validation and connection has no effect — while TLS server-name and the `Host` header keep the original hostname; the response `Content-Type` MUST be `image/*`; per-image size SHALL be capped (1 MiB) and the fetch SHALL time out (~4 s); at most 24 images SHALL be inlined per render, the first N unique fetchable sources in document order. URLs whose hostname is among the deployment's declared resource domains SHALL be left un-inlined — the frame is allowed to load them natively. Any failure SHALL leave the original URL in place (alt-text fallback) without failing the render.
+Because Apps-host sandboxes block external `img-src` while permitting `data:`, the runnable server SHALL, when inlining is enabled (the default; `WIDGENTIC_INLINE_IMAGES=0` disables), rewrite `img` sources on the iframe-facing surfaces of a `render_widget` result — the `structuredContent` HTML fragment, the `structuredContent.tree` render tree (element nodes with `tag: "img"`), and the `ui://widgentic/page/<kind>` embedded resource — replacing each `http(s)` source whose fetch succeeds with a `data:<content-type>;base64,` URI; the tree and HTML projections SHALL be rewritten from the same fetch results and never disagree. The model-facing HTML text block and `format: "page"` output SHALL keep original URLs. Each unique URL SHALL be fetched at most once per render. The fetch SHALL be guarded: `https` scheme only; hostnames resolving to loopback, private (RFC1918), link-local (including 169.254.169.254), carrier-grade NAT, or IPv6 unique-local/link-local addresses SHALL be rejected, re-validated on every redirect hop (at most 3); the connection SHALL be made to the exact address that passed validation — the fetch SHALL NOT perform its own name resolution, so a DNS answer that changes between validation and connection has no effect — while TLS server-name and the `Host` header keep the original hostname; the response `Content-Type` MUST be `image/*`; per-image size SHALL be capped (1 MiB) and the fetch SHALL time out (~4 s); at most 24 unique sources SHALL be fetched per render, chosen in PRIORITY order: sources used by a `wg-img-hero` image first; then sources used by a `wg-img-thumb` or `wg-img-avatar` image or by an image carrying no `wg-img-*` shape class; then sources used only by `wg-img-icon` images — each source ranked by its highest-priority occurrence, ties broken by its first occurrence in document order. Fetched sources SHALL then be admitted in that same order while the bytes they SUBSTITUTE stay within a per-render budget of 3 MiB, where a source costs the length of its `data:` URI times the number of `img` occurrences it has in the render tree (in the fragment when no tree is present); a source that would exceed the remaining budget SHALL keep its original URL, while later sources that still fit SHALL be admitted. A render that leaves fetchable sources external, under either bound, SHALL write one note to stderr carrying counts only (no URLs); nothing about it SHALL reach the model-facing output. URLs whose hostname is among the deployment's declared resource domains SHALL be left un-inlined — the frame is allowed to load them natively. Any failure SHALL leave the original URL in place (alt-text fallback) without failing the render.
 
 #### Scenario: External image becomes a data URI in iframe surfaces only
 - **WHEN** `render_widget` renders a table whose cell is a fetchable `https` image URL and inlining is enabled
@@ -388,7 +448,22 @@ Because Apps-host sandboxes block external `img-src` while permitting `data:`, t
 
 #### Scenario: Overflow beyond the cap is deterministic
 - **WHEN** a render carries more unique fetchable image sources than the cap
-- **THEN** the first 24 in document order SHALL be inlined and the rest SHALL keep their original URLs (alt-text fallback in sandboxed frames)
+- **THEN** the 24 highest-priority sources (document order within a priority) SHALL be fetched and the rest SHALL keep their original URLs (alt-text fallback in sandboxed frames)
+
+#### Scenario: A hero outranks earlier icons
+- **WHEN** a `group` renders a tree with 30 distinct image icons followed by a card whose hero image is a fetchable `https` URL
+- **THEN** the hero SHALL be fetched and inlined
+- **AND** exactly 23 of the icons, the first 23 in document order, SHALL be fetched
+
+#### Scenario: Repeated sources are charged per occurrence
+- **WHEN** one icon URL appears on 200 tree nodes and its `data:` URI is 20,000 characters, and the same render carries a 100 KB hero image
+- **THEN** the icon SHALL keep its original URL on all 200 nodes (4,000,000 characters exceed the 3 MiB budget)
+- **AND** the hero SHALL still be inlined
+
+#### Scenario: Overflow stays out of the model's view
+- **WHEN** a render leaves fetchable sources external under either bound
+- **THEN** stderr SHALL carry one note with the counts and no URL
+- **AND** the model-facing text and `structuredContent.diagnostics` SHALL be unchanged by it
 
 ### Requirement: Capability-aware default output
 `handleRenderWidget` SHALL accept `options.slim: boolean` (default false). In slim mode, the default-format result's `content` SHALL be a one-line text block — naming the rendered kind, stating that the visual is already displayed to the user, and instructing that the data not be restated as text — followed by the widgentic payload block; the full-HTML text block SHALL be omitted. Explicit `format` values (`html`, `widget`, `page`, `app`) SHALL keep their exact non-slim contracts regardless of `options.slim`, and `structuredContent` SHALL be identical between slim and full modes. The runnable server SHALL resolve the slim signal as: session-negotiated UI capability when available (either direction), else the `WIDGENTIC_ASSUME_UI` environment default (`1`/`true` enables), else full output.
@@ -623,6 +698,34 @@ The runnable HTTP server SHALL derive the caller's scopes from the resolved key 
 #### Scenario: A misconfigured rate never fails closed
 - **WHEN** `WIDGENTIC_EXECUTE_RATE=garbage`
 - **THEN** executions SHALL proceed under the default rate
+
+### Requirement: Widget preview tool
+The server SHALL expose an app-only tool, `preview_widget`, registered with `_meta.ui.resourceUri: "ui://widgentic/app.html"` and `_meta.ui.visibility: ["app"]` so Apps hosts hide it from the model and let the mounted template call it; its description SHALL state that the app template calls it while a render's input streams and that agents should not. Its input SHALL be `{ widget: string, data?: unknown, hints?: object, meta?: object, theme?: string | object }`. The handler SHALL compose the caller's catalog exactly as `render_widget` does, render through it with `partialData: true`, and return `structuredContent: { tree, css }` — the render tree and the kind's (or, for a `group`, every distinct item kind's) registered styles with the resolved theme's declarations — plus a one-line text naming the kind. It SHALL NOT inline images, compute hint diagnostics, emit `load`, or attach the payload; a `theme` that fails to resolve SHALL be ignored rather than fail the preview, since the tool result decides. Contract failures SHALL follow the rendering error contract (`UNKNOWN_KIND`, `MISSING_FIELD`, `INVALID_TYPE`, …). Previewing requires no scope beyond the caller's composed catalog: an anonymous caller previews the built-in kinds. The tool's wire schema descriptions SHALL derive from its exported definition as the other tools' do. The assembly SHALL accept a preview rate gate as it accepts the execution gate; the runnable HTTP server SHALL enforce a per-principal limit on `preview_widget` (default 240 calls per minute, `WIDGENTIC_PREVIEW_RATE`), answering excess calls with `RATE_LIMITED` without rendering, and a non-numeric or non-finite value SHALL fall back to the default.
+
+#### Scenario: The tool is declared for apps only
+- **WHEN** an SDK client lists tools
+- **THEN** `preview_widget` SHALL carry `_meta.ui.resourceUri` for the app template and `_meta.ui.visibility: ["app"]`
+
+#### Scenario: Incomplete data previews a stored kind
+- **WHEN** a principal whose stored kind `person` requires `name` and `email` calls `preview_widget` with `{ widget: "person", data: { name: "Ada" } }`
+- **THEN** the result SHALL carry `structuredContent.tree` rendering `Ada` and `structuredContent.css` with the kind's styles
+- **AND** `render_widget` with the same input SHALL still fail the data-schema check
+
+#### Scenario: Previews never fetch
+- **WHEN** a previewed payload carries an `https` image source
+- **THEN** no request SHALL be made for it and the tree SHALL keep the original URL
+
+#### Scenario: Another principal's kind cannot be previewed
+- **WHEN** principal B calls `preview_widget` for a kind only principal A owns
+- **THEN** the result SHALL be `UNKNOWN_KIND`
+
+#### Scenario: Excess previews are limited, not rendered
+- **WHEN** a principal exceeds the configured previews per minute
+- **THEN** further calls in that window SHALL return `RATE_LIMITED` immediately
+
+#### Scenario: A misconfigured preview rate never fails closed
+- **WHEN** `WIDGENTIC_PREVIEW_RATE=garbage`
+- **THEN** previews SHALL proceed under the default rate
 
 ### Requirement: App template action layer
 The app template SHALL act on action descriptors the way it already acts on links: a delegated listener on `[data-wg-action]` elements (clicks; Enter/Space on any focused host — non-button hosts, action anchors included, SHALL be made focusable with `tabindex="0"` and `role="button"` by the template) that parses and validates the descriptor and never evaluates anything from it. Until the first complete `tool-result` has rendered, and during any streaming preview, descriptors SHALL be inert. For `kind: "prompt"` the template SHALL send `ui/message` with `role: "user"` and one text block carrying the descriptor's text — always enabled (the probe found hosts that support the method without advertising it), with a JSON-RPC error response (`-32601` included) surfacing as an inline alert inside the frame. For `kind: "http"` the template SHALL call `tools/call` `execute_action` with `{ widget: payload.kind, action: id, args, payload }` — enabled only when the initialize result advertised `hostCapabilities.serverTools`, otherwise rendered disabled with an explanatory `title`; descriptors marked `disabled` by the server SHALL render disabled with their reason. While a call is in flight the widget root SHALL carry `aria-busy="true"` and a `wg-busy` class (a pulsing overlay drawn from the status tokens) and the triggering element SHALL be disabled; concurrent activations SHALL be ignored. On success the returned `structuredContent` SHALL be rendered through the same in-place mounter as a tool-result, the frame's held payload SHALL be replaced, and one `ui/update-model-context` SHALL follow carrying both a text block and `structuredContent` (each capped at 8 KiB, truncated with a marker). On failure the previous render SHALL stay, the error text (from the tool result or the JSON-RPC error) SHALL appear in an inline `wg-app-alert` element that the next successful action clears, and the model-context update SHALL NOT be sent. When `structuredContent.load` is present on the first complete tool-result, the template SHALL execute it exactly once per widget instance (never on partial input, never again after a re-render), with the same in-flight, success and failure behavior. Actions on the `format: "app"` embedded page and any surface without the bridge SHALL be inert. The layer SHALL further: never lose a `load` because the first result arrived before the initialize response (the load fires once capabilities are known); discard an in-flight result whose cycle was reset by `tool-input`/`tool-cancelled`; time out a pending action request (30 s) into the alert, clearing the busy state; clear the alert on `tool-input`, `tool-cancelled` and any host-driven render; preserve an author-set `title` (restoring it when the element becomes live again) and remove a stale disabled tooltip; stop a handled activation from also reaching the link interceptor when the element sits inside an `<a href>`; and send one model-context update after a load chain rather than one per item.
