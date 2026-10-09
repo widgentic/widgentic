@@ -6,7 +6,7 @@
   "description": "Sample host: examples/mcp-server",
   "dependencies": {
     "@widgentic/core": "^0.8.0",
-    "@widgentic/mcp": "^0.8.1"
+    "@widgentic/mcp": "^0.9.0"
   },
   "exports": {
     ".": "./main.ts",
