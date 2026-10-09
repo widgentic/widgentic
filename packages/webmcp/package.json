@@ -1,6 +1,6 @@
 {
   "name": "@widgentic/webmcp",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "BETA — expose mounted widgentic designers as WebMCP tools (document.modelContext), so a browser-side agent can draft into the designer the person is looking at. API may change in minor versions before 1.0.",
   "license": "MIT",
   "type": "module",
@@ -41,7 +41,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@widgentic/core": "^0.7.0",
-    "@widgentic/designer": "^0.7.0"
+    "@widgentic/core": "^0.8.0",
+    "@widgentic/designer": "^0.8.0"
   }
 }

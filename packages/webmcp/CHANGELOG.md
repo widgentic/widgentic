@@ -1,5 +1,16 @@
 # @widgentic/webmcp
 
+## 0.2.1
+
+### Patch Changes
+
+- c2aba69: The authoring guide's `each` form documents the optional `key` path, in step with the
+  MCP server's guide.
+- Updated dependencies [c2aba69]
+- Updated dependencies [c2aba69]
+  - @widgentic/core@0.8.0
+  - @widgentic/designer@0.8.0
+
 ## 0.2.0
 
 ### Minor Changes
