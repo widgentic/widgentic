@@ -213,7 +213,8 @@ describe("SDK interoperability (in-memory transport, library assembly)", () => {
     expect(props?.theme?.description).toContain("do NOT reconstruct");
     expect(props?.widget?.description).toBeTruthy();
     expect(props?.data?.description).toBeTruthy();
-    expect(props?.format?.description).toBeTruthy();
+    expect(props?.format?.description).toMatch(/^Leave this out in chat/);
+    expect(props?.format?.description).toContain("MCP Apps hosts render the default inline instead");
     expect(props?.hints?.description).toBeTruthy();
   });
 

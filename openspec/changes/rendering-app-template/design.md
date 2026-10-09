@@ -218,6 +218,17 @@ call per streamed fragment and still flashes guessed names. Giving the frame the
 catalog's kind names would let it recognize a complete name, but it ships the caller's
 kind list to the host for a check the key order already answers.
 
+### D11 — The `format` description steers to the default (live finding, Copilot)
+
+VS Code Copilot Chat's agent passed `format: "app"` on every render, then told the user
+it could not confirm the widget displays inline: `app`'s text line points at "an MCP
+Apps-capable host", and the old description called `app` the format "for inline
+display". The widget did render inline (the frame mounts from `structuredContent` in any
+format), so this is steering, not behavior: the description now leads with "leave this
+out in chat", says the default renders inline in MCP Apps hosts with a one-line context
+cost, and places `app` as the resource for older hosts that mount resources from tool
+results.
+
 ## Risks / Trade-offs
 
 - [Hosts may not proxy an app `tools/call` while input is still streaming] → Probe

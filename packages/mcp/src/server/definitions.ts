@@ -157,12 +157,15 @@ export const RENDER_WIDGET_TOOL: McpToolDefinition = {
         type: "string",
         enum: ["both", "html", "widget", "page", "app"],
         description:
-          "Output selection (default 'both'): 'html' fragment only (no " +
-          "payload block — plain consumers only; strands widgentic-aware " +
-          "hosts), 'widget' payload block only, 'page' a self-contained " +
-          "styled HTML document (plus the payload block), 'app' the page " +
-          "as a ui:// text/html resource for inline display — Apps hosts " +
-          "use the html resource, native hosts the payload block."
+          "Leave this out in chat: the default ('both') renders the widget " +
+          "inline in MCP Apps hosts and keeps your context to one line. Set " +
+          "it only when a specific output is asked for: 'html' the fragment " +
+          "only (no payload block — plain consumers only; strands " +
+          "widgentic-aware hosts), 'widget' the payload block only, 'page' a " +
+          "self-contained styled HTML document to open in a browser (plus " +
+          "the payload block), 'app' the page as an embedded ui:// resource " +
+          "for older hosts that mount resources from tool results — MCP Apps " +
+          "hosts render the default inline instead."
       },
       theme: {
         type: ["object", "string"],

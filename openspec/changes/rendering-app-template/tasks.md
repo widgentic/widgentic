@@ -38,10 +38,11 @@
 
 ## 6. Server previews in the app template (RND-2)
 
-- [ ] 6.1 Probe first, from the apps repository on an instrumented deploy (or `npm link` against basic-host locally): does a `tools/call` sent during `tool-input-partial` resolve before the tool result on claude.ai, VS Code Copilot Chat, ChatGPT and basic-host? Record the outcome per host for the host matrix (task 9.3). The feature ships either way because every failure path keeps the skeleton.
+- [x] 6.1 Probe first, from the apps repository on an instrumented deploy (or `npm link` against basic-host locally): does a `tools/call` sent during `tool-input-partial` resolve before the tool result on claude.ai, VS Code Copilot Chat, ChatGPT and basic-host? Record the outcome per host for the host matrix (task 9.3). The feature ships either way because every failure path keeps the skeleton.
 - [x] 6.2 Bridge: for a snapshot naming any non-built-in kind (alone or as a group item) with `serverTools` available, request `preview_widget`; one request in flight, one pending slot holding the latest snapshot, sent when the previous settles; mount a successful `tree` and apply its `css` through the existing preview path (in-progress marker); end requests for the render on error, timeout, `RATE_LIMITED`, missing `serverTools` or host rejection; clear the slot on the tool result and discard late answers; reset on `tool-cancelled`.
 - [x] 6.3 `bootTemplate()` tests for every new App template loader scenario: custom kinds preview through the server; one request in flight carrying the latest of three snapshots; failures keep the skeleton and stop requests; no request after the result and late answers discarded; a group with a custom item previews through the server, showing the client preview with a skeleton until the answer; "Custom kinds never get a guessed preview" with its new wording.
 - [x] 6.5 Live finding from the 6.1 probe (design D10): previews use settled names only, with an unnamed placeholder before the name settles, unsettled group items left out of server requests, and no built-in preview from a name still arriving; `render_widget`'s description asks for `widget` before `data`. Tests for the four new scenarios, plus the description on the wire.
+- [x] 6.6 Live finding: VS Code Copilot Chat's agent passed `format: "app"` and then doubted the inline display. The `format` description now leads with "leave this out in chat" and places `app` as the older-host resource; a wire test pins it.
 - [x] 6.4 Bridge keyed patch: port design D3 to the inline `patch()`; run the shared fixture table (task 2.5) through the bridge and assert the same DOM and the same preserved nodes as the core patcher ("The template's patcher agrees with the core patcher"); test "Keyed results reorder in place".
 
 ## 7. Occurrence-aware inlining (RND-3)
@@ -62,7 +63,7 @@
 - [x] 9.3 Hand-written docs: the eight-tool counts (README capability row and tool list, `docs/index.mdx`, `docs/get-started/what-is-widgentic.mdx`, `docs/develop/mcp-tools.mdx`, `docs/develop/packages.mdx`, `docs/reference/index.mdx`); `docs/how-it-works/inline-rendering.mdx` (custom-kind server previews, the priority order and byte budget); `docs/how-it-works/host-matrix.mdx` (server previews call `preview_widget` during streaming, marked not yet probed); `docs/design/template-dsl.mdx` (keyed `each`); `docs/develop/self-hosting.mdx` (`WIDGENTIC_PREVIEW_RATE`).
 - [x] 9.4 Changesets: `@widgentic/core` (element `key`, table/tree keys, keyed `each`, keyed patcher, `partialData`), `@widgentic/designer` (key input), `@widgentic/mcp` (`preview_widget`, template keyed patch and previews, size budget, inlining order and budget).
 - [x] 9.5 `TESTING.md`: a dated verification-log entry with the before/after template sizes and mount times, the real-browser checks (1.4, keyed reorder and preview in a browser), and the probe outcome.
-- [ ] 9.7 After 6.1: replace the host matrix's "not yet probed" line with each host's outcome.
+- [x] 9.7 After 6.1: replace the host matrix's "not yet probed" line with each host's outcome.
 - [x] 9.6 `BACKLOG.md`: delete RND-1 to RND-4 and the "Rendering and the app template" section, and drop their summary rows.
 
 ## 10. Gate
