@@ -97,6 +97,15 @@ function build(node) {
   }
   return el;
 }
+function keyIndex(list) {
+  const index = new Map();
+  for (let i = 0; i < list.length; i++) {
+    const node = list[i];
+    if (!isElement(node) || typeof node.key !== "string" || index.has(node.key)) return undefined;
+    index.set(node.key, i);
+  }
+  return index;
+}
 function patch(prev, next, dom) {
   if (typeof prev === "string" && typeof next === "string") {
     if (prev !== next) dom.nodeValue = next;
@@ -123,6 +132,26 @@ function patch(prev, next, dom) {
   const nextKids = Array.isArray(next.children) ? next.children : [];
   const domKids = [];
   for (let i = 0; i < dom.childNodes.length; i++) domKids.push(dom.childNodes[i]);
+  // Keyed lists (every child of both lists a uniquely keyed element) pair
+  // by key and MOVE nodes, exactly as core reactive/diff.ts does.
+  const prevIndex = keyIndex(prevKids);
+  if (prevIndex && keyIndex(nextKids)) {
+    const kept = new Set();
+    const placed = nextKids.map(function (child) {
+      const i = prevIndex.get(child.key);
+      if (i === undefined || !domKids[i]) return build(child);
+      kept.add(i);
+      return patch(prevKids[i], child, domKids[i]);
+    });
+    domKids.forEach(function (d, i) {
+      if (!kept.has(i) && d.parentNode === dom) dom.removeChild(d);
+    });
+    placed.forEach(function (d, i) {
+      const at = dom.childNodes[i] || null;
+      if (d !== at) dom.insertBefore(d, at);
+    });
+    return dom;
+  }
   const shared = Math.min(prevKids.length, nextKids.length, domKids.length);
   for (let i = 0; i < shared; i++) patch(prevKids[i], nextKids[i], domKids[i]);
   for (let i = domKids.length - 1; i >= nextKids.length; i--) {
@@ -581,10 +610,25 @@ function previewTree(data, hints, meta) {
     { tag: "div", attrs: { class: "wg-tree-title" }, children: [fmt(title)] }, list
   ] };
 }
+// Without a settled name the placeholder names no kind: a half-streamed
+// name ("appointme") is not a kind, and naming it would be a guess.
 function skeletonTree(kind) {
   return { tag: "div", attrs: { class: "wg-preview-skeleton" }, children: [
-    "Generating '" + kind + "'\u2026"
+    kind === undefined ? "Generating\u2026" : "Generating '" + kind + "'\u2026"
   ] };
+}
+// A name is SETTLED once no more characters can arrive: in the complete
+// input, or in a partial snapshot where another key already follows it
+// (snapshots keep the streamed key order). A half-streamed "card" may be
+// becoming "card-deluxe", so nothing is previewed or requested until then.
+function settled(obj, key, complete) {
+  if (!isObj(obj) || typeof obj[key] !== "string") return false;
+  if (complete) return true;
+  const keys = Object.keys(obj);
+  return keys.indexOf(key) < keys.length - 1;
+}
+function itemSettled(items, index, complete) {
+  return settled(items[index], "kind", complete) || (index < items.length - 1 && isObj(items[index]) && typeof items[index].kind === "string");
 }
 function previewGroup(data, hints) {
   const layouts = ["stack", "row", "grid"];
@@ -598,8 +642,9 @@ function previewGroup(data, hints) {
   }
   const items = isObj(data) && Array.isArray(data.items) ? data.items : [];
   const children = [];
-  items.forEach(function (item) {
-    if (!isObj(item) || typeof item.kind !== "string") return;
+  items.forEach(function (item, index) {
+    if (!isObj(item)) return;
+    if (!itemSettled(items, index, previewComplete)) { children.push(skeletonTree()); return; }
     const tree = previewFor(item.kind, coerceData(item.data), item.hints, item.meta);
     children.push(tree !== undefined ? tree : skeletonTree(item.kind));
   });
@@ -616,6 +661,7 @@ function previewFor(widget, data, hints, meta) {
 // Coalesced to one preview build per animation frame; the result always
 // wins — a late partial can never overwrite it.
 let previewArgs;
+let previewComplete = false;
 let previewQueued = false;
 const scheduleFrame = typeof window.requestAnimationFrame === "function"
   ? window.requestAnimationFrame.bind(window)
@@ -630,19 +676,85 @@ function mountPreviewTree(tree) {
   }
   mountedTree = tree;
 }
+// Server previews: kinds the frame cannot build (stored templates live on
+// the server) are rendered by the app-only preview_widget tool. One request
+// in flight; snapshots arriving meanwhile overwrite one pending slot. Any
+// failure ends previews for the run and keeps what is on screen. The state
+// object is per streaming run: a new run or a cancel replaces it, so a late
+// answer for an old run is recognised and dropped.
+const BUILT_INS = ["card", "table", "tree", "group"];
+// Group items whose kind is still streaming are left out of a server
+// request; the client preview shows them as unnamed placeholders.
+function settledItems(args) {
+  const items = isObj(args.data) && Array.isArray(args.data.items) ? args.data.items : [];
+  return items.filter(function (item, index) { return itemSettled(items, index, previewComplete); });
+}
+function needsServer(args) {
+  if (BUILT_INS.indexOf(args.widget) === -1) return true;
+  if (args.widget !== "group") return false;
+  return settledItems(args).some(function (item) { return BUILT_INS.indexOf(item.kind) === -1; });
+}
+function newServerPreview() {
+  return { inFlight: false, next: undefined, stopped: false, tree: undefined };
+}
+let serverPreview = newServerPreview();
+function requestServerPreview(args) {
+  const state = serverPreview;
+  if (state.stopped || resultRendered) return;
+  if (!serverToolsAvailable()) { state.stopped = true; return; }
+  if (state.inFlight) { state.next = args; return; }
+  state.inFlight = true;
+  const input = { widget: args.widget };
+  ["data", "hints", "meta", "theme"].forEach(function (field) {
+    if (args[field] !== undefined) input[field] = args[field];
+  });
+  if (args.widget === "group" && isObj(args.data)) {
+    input.data = Object.assign({}, args.data, { items: settledItems(args) });
+  }
+  const live = function () { return state === serverPreview && !resultRendered; };
+  request("tools/call", { name: "preview_widget", arguments: input }, ACTION_TIMEOUT_MS).then(
+    function (result) {
+      if (!live()) return;
+      const sc = result && result.structuredContent;
+      if (!result || result.isError || !sc || !isElement(sc.tree)) { state.stopped = true; return; }
+      state.tree = sc.tree;
+      if (typeof sc.css === "string") dynamicCss.textContent = sc.css;
+      root.setAttribute("data-wgd-preview", "true");
+      mountPreviewTree(sc.tree);
+    },
+    function () { state.stopped = true; }
+  ).then(function () {
+    state.inFlight = false;
+    const next = state.next;
+    state.next = undefined;
+    if (next !== undefined && live()) requestServerPreview(next);
+  });
+}
 function applyPreview() {
   previewQueued = false;
   if (resultRendered || previewArgs === undefined) return;
   root.setAttribute("data-wgd-preview", "true");
   const args = previewArgs;
-  const widget = typeof args.widget === "string" ? args.widget : undefined;
-  if (widget === undefined) return; // nothing nameable yet — height is reserved
+  if (!settled(args, "widget", previewComplete)) {
+    // Input is arriving but the widget is not named yet (agents may write
+    // the data first): show that something is coming, naming nothing.
+    mountPreviewTree(skeletonTree());
+    return;
+  }
+  const widget = args.widget;
+  if (needsServer(args)) {
+    requestServerPreview(args);
+    // The last server preview stays up between answers; a client build
+    // would flicker back to the skeleton.
+    if (serverPreview.tree !== undefined) return;
+  }
   const tree = previewFor(widget, coerceData(args.data), args.hints, args.meta);
   mountPreviewTree(tree !== undefined ? tree : skeletonTree(widget));
 }
-function onToolInput(params) {
-  // Input after a result is a NEW call on a reused frame (basic-host
-  // reuses frames; claude.ai mounts per render) — start a fresh cycle.
+function onToolInput(params, complete) {
+  // Input after a result (or a cancel) is a NEW call on a reused frame
+  // (basic-host reuses frames; claude.ai mounts per render).
+  if (resultRendered || previewArgs === undefined) serverPreview = newServerPreview();
   resultRendered = false;
   heldPayload = undefined;
   loadFired = false;
@@ -650,6 +762,7 @@ function onToolInput(params) {
   cycle++;
   clearAlert();
   previewArgs = params && isObj(params.arguments) ? params.arguments : undefined;
+  previewComplete = complete;
   if (previewArgs === undefined) return;
   if (!previewQueued) {
     previewQueued = true;
@@ -671,13 +784,15 @@ window.addEventListener("message", (event) => {
   }
   if (message.method === "ui/notifications/tool-input-partial" ||
       message.method === "ui/notifications/tool-input") {
-    onToolInput(message.params);
+    onToolInput(message.params, message.method === "ui/notifications/tool-input");
     return;
   }
   if (message.method === "ui/notifications/tool-cancelled") {
     // Back to the pre-input placeholder: an abandoned preview must not
     // linger looking like a rendered widget.
     previewArgs = undefined;
+    previewComplete = false;
+    serverPreview = newServerPreview();
     resultRendered = false;
     heldPayload = undefined;
     loadFired = false;
@@ -881,6 +996,22 @@ body {
     `<!doctype html>\n<meta charset="utf-8">\n<title>widgentic</title>\n` +
     `<style>\n${baseStylesheet}\n${hostTokenBridgeCss}\n${darkOverridesCss}\n</style>\n` +
     `<style id="wg-dynamic-css"></style>\n` +
-    `<body><div id="wg-root"></div>\n<script>${bridge}</script></body>`
+    `<body><div id="wg-root"></div>\n<script>${compactScript(bridge)}</script></body>`
   );
+}
+
+/**
+ * Drop blank lines, full-line comments and leading indentation from the
+ * inline bridge before it is served: maintainer notes stay in source and
+ * cost nothing on the wire. Safe by construction — the bridge lives inside a
+ * TypeScript template literal, so it holds no backtick, so every string in
+ * it is single-line and no line's indentation or `//` prefix can belong to a
+ * string.
+ */
+function compactScript(script: string): string {
+  return script
+    .split("\n")
+    .map((line) => line.trimStart())
+    .filter((line) => line !== "" && !line.startsWith("//"))
+    .join("\n");
 }

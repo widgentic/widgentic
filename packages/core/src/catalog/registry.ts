@@ -62,6 +62,16 @@ export type RenderResult =
   | { ok: true; node: WidgetNode }
   | { ok: false; error: WidgetContractError };
 
+/** Options for one `catalog.render` call. */
+export interface RenderOptions {
+  /**
+   * The data may still be arriving (a streaming preview): skip the
+   * descriptor data-schema check for the payload and every group item. The
+   * payload contract and interpretation bounds still apply.
+   */
+  partialData?: boolean;
+}
+
 export interface WidgetCatalog {
   /**
    * Register a renderer for a new kind, optionally with agent-facing
@@ -83,7 +93,7 @@ export interface WidgetCatalog {
   /** All descriptors, as a fresh array. */
   list(): WidgetDescriptor[];
   /** Validate a payload against the contract (with this catalog's kinds) and render it. Never throws. */
-  render(payload: unknown): RenderResult;
+  render(payload: unknown, options?: RenderOptions): RenderResult;
 }
 
 /**
@@ -115,14 +125,16 @@ export function createCatalog(): WidgetCatalog {
     kinds: () => [...renderers.keys()],
     describe: (kind) => descriptors.get(kind),
     list: () => [...descriptors.values()],
-    render(payload) {
+    render(payload, options = {}) {
       const validated = validateWidgetPayload(payload, {
         knownKinds: new Set(renderers.keys())
       });
       if (!validated.ok) return validated;
       // Opt-in structural validation: kinds with a dataSchema fail fast
       // with a dotted data path instead of rendering a lenient fallback.
-      const schema = descriptors.get(validated.payload.kind)?.dataSchema;
+      const schema = options.partialData === true
+        ? undefined
+        : descriptors.get(validated.payload.kind)?.dataSchema;
       if (schema) {
         const schemaError = validateDataAgainstSchema(
           schema,
@@ -140,12 +152,15 @@ export function createCatalog(): WidgetCatalog {
         const children: WidgetNode[] = [];
         for (let i = 0; i < envelope.items.length; i++) {
           const item = envelope.items[i]!;
-          const sub = catalog.render({
-            kind: item.kind,
-            data: item.data,
-            ...(item.hints !== undefined ? { hints: item.hints } : {}),
-            ...(item.meta !== undefined ? { meta: item.meta } : {})
-          });
+          const sub = catalog.render(
+            {
+              kind: item.kind,
+              data: item.data,
+              ...(item.hints !== undefined ? { hints: item.hints } : {}),
+              ...(item.meta !== undefined ? { meta: item.meta } : {})
+            },
+            options
+          );
           if (!sub.ok) {
             const subPath = sub.error.path;
             return {

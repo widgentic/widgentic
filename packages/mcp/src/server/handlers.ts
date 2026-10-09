@@ -99,7 +99,7 @@ function coerceData(data: unknown): unknown {
  */
 type ToolError =
   | WidgetContractError
-  | { code: "UNKNOWN_THEME"; path: string; message: string }
+  | { code: "UNKNOWN_THEME" | "RATE_LIMITED"; path: string; message: string }
   | { code: "UNKNOWN_TOOL"; path: string; message: string };
 
 /** Structured, agent-correctable failure using the contract vocabulary. */
@@ -373,6 +373,132 @@ function actionNotes(tree: unknown, hasLoad: boolean): string {
 }
 
 /**
+ * Resolve a tool input's `theme`: a string names a registered theme, an
+ * object is an inline token map. Absent resolves to no theme.
+ */
+function resolveThemeInput(
+  value: unknown,
+  themes: ThemeRegistry | undefined
+): { ok: true; theme: WidgetTheme | undefined } | { ok: false; error: ToolError } {
+  if (value === undefined) return { ok: true, theme: undefined };
+  if (typeof value === "string") {
+    const entry = themes?.get(value);
+    if (entry === undefined) {
+      const available = themes?.names().sort().join(", ") ?? "(none)";
+      return {
+        ok: false,
+        error: {
+          code: "UNKNOWN_THEME",
+          path: "theme",
+          message: `Unknown theme '${value}'. Available themes: ${available}.`
+        }
+      };
+    }
+    return { ok: true, theme: entry.tokens };
+  }
+  const validated = validateTheme(value);
+  if (!validated.ok) {
+    return {
+      ok: false,
+      error: {
+        code: "INVALID_TYPE",
+        path: validated.error.token ? `theme.${validated.error.token}` : "theme",
+        message: validated.error.message
+      }
+    };
+  }
+  return { ok: true, theme: validated.theme };
+}
+
+/**
+ * The rendered kind's registered styles — for a group, the union with every
+ * distinct item kind's, first-appearance order, each kind's block once
+ * (custom items keep their look).
+ */
+function kindStylesCss(catalog: WidgetCatalog, widget: string, data: unknown): string {
+  const styleKinds: string[] = [widget];
+  if (widget === "group" && isPlainObject(data) && Array.isArray(data.items)) {
+    for (const item of data.items) {
+      if (isPlainObject(item) && typeof item.kind === "string" && !styleKinds.includes(item.kind)) {
+        styleKinds.push(item.kind);
+      }
+    }
+  }
+  return styleKinds
+    .map((kind) => {
+      const styles = catalog.describe(kind)?.styles;
+      return styles ? widgetStylesToCss(styles) : "";
+    })
+    .filter((part) => part.length > 0)
+    .join("\n");
+}
+
+/** The template channel's CSS: kind styles, then the theme's declarations. */
+function templateCss(styleCss: string, theme: WidgetTheme | undefined): string {
+  // The doubled selector matches the app template's dark-override
+  // specificity (:root[data-theme="dark"]), so an explicit render theme
+  // wins on dark hosts too — same specificity, later style element.
+  const themeCss = theme ? themeToCss(theme, ':root, :root[data-theme="dark"]') : "";
+  return [styleCss, themeCss].filter((part) => part.length > 0).join("\n");
+}
+
+export interface PreviewWidgetOptions {
+  themes?: ThemeRegistry | undefined;
+  /** Per-principal rate-limit gate (`false` refuses with RATE_LIMITED). */
+  rateLimit?: (() => boolean) | undefined;
+}
+
+/**
+ * `preview_widget`: the app template's preview of a streaming render. The
+ * partial payload renders through the caller's catalog with `partialData`
+ * (a required field may not have arrived yet) and only `{ tree, css }`
+ * come back — no image inlining, diagnostics, `load` or payload, so a
+ * preview never fetches and never decides anything the tool result will.
+ */
+export function handlePreviewWidget(
+  catalog: WidgetCatalog,
+  input: unknown,
+  options: PreviewWidgetOptions = {}
+): McpToolResult {
+  if (options.rateLimit !== undefined && !options.rateLimit()) {
+    return errorResult({ code: "RATE_LIMITED", path: "", message: "Too many previews; try again shortly." });
+  }
+  if (!isPlainObject(input)) {
+    return errorResult({ code: "INVALID_TYPE", path: "", message: "Input must be an object with 'widget'." });
+  }
+  const widget = input.widget;
+  if (typeof widget !== "string" || widget.length === 0) {
+    return errorResult({ code: "MISSING_FIELD", path: "widget", message: "'widget' must be a non-empty widget kind id." });
+  }
+  const data = input.data === undefined ? null : input.data;
+  const schema = catalog.describe(widget)?.dataSchema;
+  const payload: Record<string, unknown> = {
+    kind: widget,
+    data: declaresStringOnly(schema) ? data : coerceData(data)
+  };
+  if (input.hints !== undefined) payload.hints = input.hints;
+  if (input.meta !== undefined) payload.meta = input.meta;
+  const rendered = catalog.render(payload, { partialData: true });
+  if (!rendered.ok) {
+    return errorResult(
+      rendered.error.code === "UNKNOWN_KIND" && rendered.error.path === "kind"
+        ? { ...rendered.error, path: "widget" }
+        : rendered.error
+    );
+  }
+  // A half-streamed inline token map is normal here: the result decides.
+  const resolvedTheme = resolveThemeInput(input.theme, options.themes);
+  const theme = resolvedTheme.ok ? resolvedTheme.theme : undefined;
+  return {
+    content: [{ type: "text", text: `Preview of '${widget}'.` }],
+    structuredContent: {
+      tree: rendered.node,
+      css: templateCss(kindStylesCss(catalog, widget, payload.data), theme)
+    }
+  };
+}
+
+/**
  * `render_widget`: validate `{ widget, data, hints?, meta? }` against the
  * catalog and the contract, render, and return the HTML plus the widgentic
  * payload block. Total — any input shape produces a result, never a throw.
@@ -418,32 +544,9 @@ export function handleRenderWidget(
     });
   }
 
-  let theme: WidgetTheme | undefined;
-  if ("theme" in input && input.theme !== undefined) {
-    // A string is a registered theme name; an object is an inline map.
-    if (typeof input.theme === "string") {
-      const entry = options?.themes?.get(input.theme);
-      if (entry === undefined) {
-        const available = options?.themes?.names().sort().join(", ") ?? "(none)";
-        return errorResult({
-          code: "UNKNOWN_THEME",
-          path: "theme",
-          message: `Unknown theme '${input.theme}'. Available themes: ${available}.`
-        });
-      }
-      theme = entry.tokens;
-    } else {
-      const validated = validateTheme(input.theme);
-      if (!validated.ok) {
-        return errorResult({
-          code: "INVALID_TYPE",
-          path: validated.error.token ? `theme.${validated.error.token}` : "theme",
-          message: validated.error.message
-        });
-      }
-      theme = validated.theme;
-    }
-  }
+  const resolvedTheme = resolveThemeInput(input.theme, options?.themes);
+  if (!resolvedTheme.ok) return errorResult(resolvedTheme.error);
+  const theme = resolvedTheme.theme;
 
   // Schema-aware marshalling: kinds declaring string-typed data receive the
   // string verbatim — literal JSON-shaped text stays expressible for them.
@@ -491,21 +594,7 @@ export function handleRenderWidget(
   }
 
   const html = renderToHtml(rendered.node);
-  // Styles channel: the rendered kind's registered styles — and for a
-  // group, the union with every distinct item kind's, first-appearance
-  // order, each kind's block exactly once (custom items keep their look).
-  const styleKinds: string[] = [widget];
-  if (widget === "group" && isPlainObject(payload.data) && Array.isArray(payload.data.items)) {
-    for (const item of payload.data.items) {
-      if (
-        isPlainObject(item) &&
-        typeof item.kind === "string" &&
-        !styleKinds.includes(item.kind)
-      ) {
-        styleKinds.push(item.kind);
-      }
-    }
-  }
+  const styleCss = kindStylesCss(catalog, widget, payload.data);
   const widgetBlock: McpContentBlock = {
     type: "resource",
     resource: {
@@ -518,20 +607,9 @@ export function handleRenderWidget(
   // Presentation channel for the declared MCP Apps template: hosts push the
   // whole result into the mounted iframe via ui/notifications/tool-result,
   // and per the Apps convention structuredContent is not model context.
-  const styleCss = styleKinds
-    .map((kind) => {
-      const styles = catalog.describe(kind)?.styles;
-      return styles ? widgetStylesToCss(styles) : "";
-    })
-    .filter((part) => part.length > 0)
-    .join("\n");
-  // The doubled selector matches the app template's dark-override
-  // specificity (:root[data-theme="dark"]), so an explicit render theme
-  // wins on dark hosts too — same specificity, later style element.
-  const themeCss = theme ? themeToCss(theme, ':root, :root[data-theme="dark"]') : "";
   const structuredContent: Record<string, unknown> = {
     html,
-    css: [styleCss, themeCss].filter((part) => part.length > 0).join("\n"),
+    css: templateCss(styleCss, theme),
     payload,
     // The same render, as data: the app template mounts this natively
     // (DOM from tree, patched in place across results); `html` stays the

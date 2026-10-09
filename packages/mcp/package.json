@@ -1,6 +1,6 @@
 {
   "name": "@widgentic/mcp",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Host the widgentic engine over MCP: tool-output convention, handlers, app template, action execution, official-SDK assembly, per-principal store and secrets.",
   "license": "MIT",
   "type": "module",
@@ -72,7 +72,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@widgentic/core": "^0.7.0"
+    "@widgentic/core": "^0.8.0"
   },
   "peerDependencies": {
     "@azure/cosmos": "^4",
@@ -103,7 +103,7 @@
     }
   },
   "devDependencies": {
-    "@widgentic/designer": "^0.7.0",
+    "@widgentic/designer": "^0.8.0",
     "core-js-pure": "3.50.0"
   }
 }

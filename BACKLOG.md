@@ -40,11 +40,7 @@ appears. Size: **S** one small change, **M** one change with spec deltas,
 | AGT-1 | Measure and publish the token footprint | P1 | S | json-render comparison |
 | ACT-1 | Bounded input for actions | P1 | L | Backlog; A2UI, AG-UI, json-render comparisons |
 | ACT-3 | Transport-free `execute_action` failure texts | P2 | S | `agent-visible-actions` review |
-| RND-1 | Keyed tree diff with stable node ids | P2 | M | `native-widgets-refresh` review; A2UI comparison |
-| RND-3 | Occurrence-aware image inlining budget | P2 | M | `native-widgets-refresh` review |
-| RND-4 | App template size budget | P2 | S | Backlog |
 | DSL-1 | Presentational `format` types | P2 | S | json-render comparison |
-| RND-2 | Custom-kind streaming previews | P3 | L | Backlog |
 | DSL-2 | Markdown bind mode | P3 | M | A2UI comparison |
 | DSL-3 | A contract version marker | P3 | S | AG-UI comparison |
 | AGT-2 | Lossless auto-fix, reported | P3 | M | json-render comparison |
@@ -75,68 +71,6 @@ they stay out of the docs navigation, site search and search engines, but
 are reachable by direct URL.
 
 ## Part 1 · widgentic itself
-
-### Rendering and the app template
-
-#### RND-1 · Keyed tree diff with stable node ids — P2, M
-
-- **Problem.** The reactive diff in `@widgentic/core/reactive` and the
-  bridge's diff pair nodes by position. A reordering action result re-pairs a
-  visitor's `open` toggles by index, so an expanded branch can land on a
-  different logical branch. Nodes carry no identity, which also blocks
-  progressive rendering of custom kinds.
-- **Direction.** An optional stable key on render-tree nodes: from an
-  author-declared key path for `each` items, from structure otherwise. Carry
-  it in `structuredContent.tree` and pair by key in both diffs. Renderers
-  ignore unknown fields, so older hosts are unaffected.
-- **Touches.** `reactive-rendering`, `mcp-server` (app template);
-  `@widgentic/core`, `@widgentic/mcp`. The bridge is an inline JS string (see
-  the escape gotchas in `CLAUDE.md`); test through `bootTemplate()`.
-- **Origin.** 2026-09-01 `native-widgets-refresh` design risks. A2UI
-  comparison, idea 5: A2UI's id-addressed flat component list is what makes
-  its streaming cheap.
-
-#### RND-2 · Custom-kind streaming previews — P3, L
-
-- **Problem.** Partial-input previews cover built-in kinds only. Custom kinds
-  show a labelled skeleton because the frame does not hold stored templates.
-- **Direction.** An app-only `get_widget_template` tool (visibility
-  `["app"]`) returning the caller's composed template, plus a template
-  interpreter embedded in the frame. Hosts size-gate partial input, so the
-  preview stays best-effort and the tool result stays authoritative.
-- **Touches.** `mcp-server`, `template-widgets`; frame size (RND-4). The
-  frame calls tools by name, since app-side `tools/list` is unsupported
-  everywhere. claude.ai mounts a fresh iframe per render, so this costs one
-  extra call per render there. Benefits from RND-1.
-- **Origin.** Backlog; the v2 note in the 2026-08-22
-  `streaming-input-preview` change.
-
-#### RND-3 · Occurrence-aware image inlining budget — P2, M
-
-- **Problem.** A fetched data URI is substituted at every occurrence of its
-  URL: a 200-node tree with one folder icon carries the base64 body 200
-  times. Many distinct small icons also exhaust the 24-URL fetch budget ahead
-  of a hero image.
-- **Direction.** Budget the bytes substituted, not only the URLs fetched, and
-  give images a shape-aware priority: hero and card images before per-row
-  icons. Decide in the same change whether overflow should produce a
-  diagnostic.
-- **Touches.** `mcp-server`; `packages/mcp/src/server/inline-images.ts`.
-- **Origin.** 2026-09-01 `native-widgets-refresh` design risks.
-
-#### RND-4 · App template size budget — P2, S
-
-- **Problem.** `ui://widgentic/app.html` has grown with the bridge, the
-  preview builders and the stylesheet, and every Apps host fetches it once
-  per conversation. Measured on 2026-09-28 from `buildAppTemplate()`: 41,038
-  bytes raw, 11,702 gzipped.
-- **Direction.** A size-budget test in the gate first, then mount-time
-  numbers from the real-browser rig. Minify or prune only against that
-  baseline. The bridge is a hand-written inline string and esbuild is a
-  devDependency, so any minification is a build step that must keep the
-  escape rules intact.
-- **Touches.** `mcp-server`; `packages/mcp/src/server/app-template.ts`.
-- **Origin.** Backlog.
 
 ### Actions and input
 

@@ -132,6 +132,7 @@ cipher port accepts `createKeyVaultCipher` from `@widgentic/mcp/secrets/keyvault
 | `WIDGENTIC_TRUSTED_USER_HEADER` | unset | multi-user via a trusted proxy header; unset = single principal |
 | `WIDGENTIC_WEB_PORT` / `WIDGENTIC_MCP_PORT` | 8080 / 8081 | service ports |
 | `WIDGENTIC_EXECUTE_RATE` | 60 | per-principal action executions and test calls per minute |
+| `WIDGENTIC_PREVIEW_RATE` | 240 | per-principal streaming previews of stored widgets per minute |
 | `WIDGENTIC_SEED_FILE` | unset | JSON file of sample entries loaded into the single principal at boot (see below) |
 | `WIDGENTIC_DEFAULT_KEY_FILE` / `WIDGENTIC_DEFAULT_KEY` | unset | a fixed API key for the single principal, set on the `mcp` service (see below) |
 | `WIDGENTIC_DEFAULT_KEY_SCOPES` | `read` | that key's scopes; add `execute` to let widgets run http actions |

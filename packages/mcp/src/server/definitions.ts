@@ -149,7 +149,9 @@ export const RENDER_WIDGET_TOOL: McpToolDefinition = {
     "embedded widgentic payload block that widgentic-aware hosts can mount " +
     "natively. On invalid input, returns a structured error describing what " +
     "to correct. To show several widgets at once, render ONE 'group' " +
-    "(items of mixed kinds, layout hints) instead of calling repeatedly.",
+    "(items of mixed kinds, layout hints) instead of calling repeatedly. " +
+    "Write 'widget' before 'data' in the arguments: hosts that stream the " +
+    "call can then show the widget while its data arrives.",
   inputSchema: {
     type: "object",
     properties: {
@@ -175,12 +177,15 @@ export const RENDER_WIDGET_TOOL: McpToolDefinition = {
         type: "string",
         enum: ["both", "html", "widget", "page", "app"],
         description:
-          "Output selection (default 'both'): 'html' fragment only (no " +
-          "payload block — plain consumers only; strands widgentic-aware " +
-          "hosts), 'widget' payload block only, 'page' a self-contained " +
-          "styled HTML document (plus the payload block), 'app' the page " +
-          "as a ui:// text/html resource for inline display — Apps hosts " +
-          "use the html resource, native hosts the payload block."
+          "Leave this out in chat: the default ('both') renders the widget " +
+          "inline in MCP Apps hosts and keeps your context to one line. Set " +
+          "it only when a specific output is asked for: 'html' the fragment " +
+          "only (no payload block — plain consumers only; strands " +
+          "widgentic-aware hosts), 'widget' the payload block only, 'page' a " +
+          "self-contained styled HTML document to open in a browser (plus " +
+          "the payload block), 'app' the page as an embedded ui:// resource " +
+          "for older hosts that mount resources from tool results — MCP Apps " +
+          "hosts render the default inline instead."
       },
       theme: {
         type: ["object", "string"],
@@ -243,3 +248,36 @@ export const EXECUTE_ACTION_TOOL: McpToolDefinition = {
     additionalProperties: false
   }
 };
+
+/**
+ * Called by the app template (app-only visibility), never by agents: while
+ * a render's input streams, previews a kind the frame cannot build itself
+ * by rendering the partial payload through the caller's composed catalog.
+ */
+export const PREVIEW_WIDGET_TOOL: McpToolDefinition = {
+  name: "preview_widget",
+  description:
+    "Called by the widgentic app template while a render's input is still " +
+    "streaming, not by agents: renders the partial payload of a stored " +
+    "widget so the frame can show it as it arrives. Agents should call " +
+    "render_widget instead.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      widget: { type: "string", description: "Widget kind id of the streaming render." },
+      data: {
+        type: ["array", "object", "string", "number", "boolean", "null"],
+        description: "The data received so far; it may be incomplete."
+      },
+      hints: { type: "object", description: "The render's hints so far." },
+      meta: { type: "object", description: "The render's metadata so far." },
+      theme: {
+        type: ["object", "string"],
+        description: "The render's theme name or token map so far; ignored when it does not resolve."
+      }
+    },
+    required: ["widget"],
+    additionalProperties: false
+  }
+};
+

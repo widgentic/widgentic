@@ -23,11 +23,12 @@ A string is a text node. `{ "bind": "path" }` renders the value at that path as 
 ```
 </Tab>
 <Tab title="Each">
-Repeats `template` once per array element, with the element as scope. `empty` renders when the array is missing or empty.
+Repeats `template` once per array element, with the element as scope. `empty` renders when the array is missing or empty. The optional `key` names the item path that identifies each element, such as an `id` or a SKU. When an action re-renders the list in a different order, each item's element moves with it and keeps its state, such as a disclosure the reader opened. Without a key, elements are reused by position. A key adds nothing to the output.
 
 ```json
 {
   "each": "lines",
+  "key": "sku",
   "template": { "tag": "li", "children": [{ "bind": "item" }, ": ", { "bind": "amount" }] },
   "empty": "No line items."
 }

@@ -186,9 +186,12 @@ pack:check`, `openspec validate` — all green; plus `dotnet test` when `dotnet/
    piped `curl | grep` is unreliable here), confirm the new revision carries
    traffic, and retest MCP Apps templates in a FRESH conversation (hosts cache
    `ui://` per chat). Reproduce every CRITICAL before reporting it.
-4. Commit/push at archive (one commit per change) or when the user says
-   "commit and push for now"; short imperative subject, a paragraph of what
-   and why. Production must match `main` after every deploy.
+4. Work on a branch from an up-to-date `main` named `feature/<change>`,
+   `bug/<name>` or `hotfix/<name>`; `main` is protected and changes land
+   through a PR with green `verify` and `docs`. Commit/push at archive (one
+   commit per change) or when the user says "commit and push for now";
+   short imperative subject, a paragraph of what and why. Production must
+   match `main` after every deploy.
 5. Closing routine the user expects: everything green → review README /
    TESTING.md for scope → `/opsx:verify` → `/opsx:archive`.
 
