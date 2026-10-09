@@ -133,12 +133,13 @@ the widgets reference) plus one host tool, over stdio by default or over Streama
 
 ```sh
 npm ci && npm run build        # at the repository root: builds the host bundle
-dotnet run --project dotnet/samples/Widgentic.Sample.Stdio                 # stdio
-dotnet run --project dotnet/samples/Widgentic.Sample.Stdio -- --http       # http://localhost:3002/mcp
+dotnet run --project dotnet/samples/Widgentic.Sample.Stdio                          # http://localhost:3002/mcp (profile http, also F5)
+dotnet run --project dotnet/samples/Widgentic.Sample.Stdio --launch-profile stdio   # stdio
 ```
 
-Hosts that connect to a URL, such as VS Code or Claude's custom connectors, are where widgets
-render inline. Over HTTP the sample is stateless for MCP 2026-07-28 clients and keeps a session
+Hosts that connect to a URL are where widgets render inline. Over HTTP the sample has been
+verified in Claude, VS Code Copilot and ChatGPT, its own `team_roster` tool included. The
+built executable still defaults to stdio when run without `--http`. Over HTTP the sample is stateless for MCP 2026-07-28 clients and keeps a session
 for clients that initialize (`SessionMode = StatefulForInitializeClients`). It binds loopback
 only, because it has no authentication.
 
