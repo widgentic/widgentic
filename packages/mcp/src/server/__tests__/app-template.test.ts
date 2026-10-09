@@ -600,10 +600,11 @@ describe("the preview's sanctioned divergence from the renderer", () => {
     document.body.innerHTML = "";
   });
 
-  it("an image-URL icon previews as TEXT while the result renders an img", async () => {
-    // Sanctioned and pinned by name: the preview never emits images (the
-    // sandbox CSP blocks external sources and inlining runs on the RESULT),
-    // so "fixing" the preview to emit <img> would flash broken images.
+  it("an image-URL icon previews as an icon place while the result renders an img", async () => {
+    // Sanctioned and pinned by name: the preview never emits <img> (the
+    // sandbox CSP blocks external sources and inlining runs on the RESULT,
+    // so an img would flash broken) and never shows the URL as text — an
+    // icon-shaped place holds the image's position.
     const payload = {
       kind: "tree",
       data: { label: "docs", icon: "https://cdn.example/folder.png", children: [{ label: "leaf", children: [] }] }
@@ -618,7 +619,8 @@ describe("the preview's sanctioned divergence from the renderer", () => {
     t.dispatch(toolInputPartial({ widget: "tree", data: payload.data }));
     await settle();
     expect(t.root().querySelector("img")).toBeNull();
-    expect(t.root().querySelector(".wg-tree-icon")?.textContent).toBe("https://cdn.example/folder.png");
+    expect(t.root().querySelector("span.wg-img.wg-img-icon.wg-img-pending")).not.toBeNull();
+    expect(t.root().textContent).not.toContain("cdn.example");
   });
 
   it("a deep branch previews as a disclosure with children pending, never as a leaf", async () => {
