@@ -8,3 +8,6 @@ designer.bundle.js
 .vscode/
 examples/docker/kek.txt
 examples/docker/.env
+
+# release-dotnet.yml packs the NuGet package here (the .NET tree's own rules are in dotnet/.gitignore)
+/artifacts/

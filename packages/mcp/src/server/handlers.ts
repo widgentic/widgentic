@@ -99,7 +99,8 @@ function coerceData(data: unknown): unknown {
  */
 type ToolError =
   | WidgetContractError
-  | { code: "UNKNOWN_THEME" | "RATE_LIMITED"; path: string; message: string };
+  | { code: "UNKNOWN_THEME" | "RATE_LIMITED"; path: string; message: string }
+  | { code: "UNKNOWN_TOOL"; path: string; message: string };
 
 /** Structured, agent-correctable failure using the contract vocabulary. */
 function errorResult(error: ToolError): McpToolResult {
@@ -107,6 +108,18 @@ function errorResult(error: ToolError): McpToolResult {
     isError: true,
     content: [{ type: "text", text: JSON.stringify(error) }]
   };
+}
+
+/**
+ * A call to a tool the host does not serve, answered as a result in the
+ * contract vocabulary — dispatchers that take a tool name never throw.
+ */
+export function unknownToolResult(name: string, available: readonly string[]): McpToolResult {
+  return errorResult({
+    code: "UNKNOWN_TOOL",
+    path: "name",
+    message: `Unknown tool '${name}'. Available tools: ${[...available].sort().join(", ")}.`
+  });
 }
 
 /**
@@ -183,7 +196,11 @@ export function handleListThemes(registry: ThemeRegistry): McpToolResult {
 export async function handleListSchemas(
   source: (() => Promise<StoredSchemaEntry[]>) | undefined
 ): Promise<McpToolResult> {
-  const schemas = source === undefined ? [] : await source();
+  return listSchemasResult(source === undefined ? [] : await source());
+}
+
+/** The `list_schemas` result for schemas already in hand (hosts without async sources). */
+export function listSchemasResult(schemas: StoredSchemaEntry[]): McpToolResult {
   const listing = {
     schemas,
     rules:
@@ -731,4 +748,18 @@ export function handleRenderWidget(
         content: [{ type: "text", text: html + hintNotes }, widgetBlock]
       };
   }
+}
+
+/**
+ * The preview page served at `ui://widgentic/page/{kind}`: the kind's
+ * `dataExample` rendered as a self-contained light page, or a one-line
+ * document naming the unknown kind.
+ */
+export function renderWidgetPage(catalog: WidgetCatalog, kind: string): string {
+  const example = catalog.describe(kind)?.dataExample;
+  const result = handleRenderWidget(catalog, { widget: kind, data: example ?? null, format: "page" });
+  const page = result.content.find((block) => block.type === "text");
+  return !result.isError && typeof page?.text === "string"
+    ? page.text
+    : `<!doctype html><body>Unknown widget kind '${kind}'.</body>`;
 }

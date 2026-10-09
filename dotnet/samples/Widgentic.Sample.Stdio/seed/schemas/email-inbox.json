@@ -1,0 +1,61 @@
+{
+  "description": "A mailbox with account context and an ordered collection of email messages.",
+  "label": "Email inbox",
+  "name": "email-inbox",
+  "schema": {
+    "properties": {
+      "account": {
+        "type": "string"
+      },
+      "messages": {
+        "items": {
+          "properties": {
+            "from": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            },
+            "isRead": {
+              "type": "boolean"
+            },
+            "isStarred": {
+              "type": "boolean"
+            },
+            "labels": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "preview": {
+              "type": "string"
+            },
+            "receivedAt": {
+              "type": "string"
+            },
+            "subject": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "from",
+            "subject",
+            "receivedAt",
+            "isRead"
+          ],
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "unreadCount": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "messages"
+    ],
+    "type": "object"
+  }
+}

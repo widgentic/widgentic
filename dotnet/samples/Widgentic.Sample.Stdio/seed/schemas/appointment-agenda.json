@@ -1,0 +1,89 @@
+{
+  "description": "A dated agenda containing scheduled appointments, participants, locations, and attendance state.",
+  "label": "Appointment agenda",
+  "name": "appointment-agenda",
+  "schema": {
+    "properties": {
+      "appointments": {
+        "items": {
+          "properties": {
+            "attendees": {
+              "items": {
+                "properties": {
+                  "email": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "response": {
+                    "enum": [
+                      "accepted",
+                      "declined",
+                      "tentative",
+                      "needsAction"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "description": {
+              "type": "string"
+            },
+            "endsAt": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "meetingUrl": {
+              "type": "string"
+            },
+            "startsAt": {
+              "type": "string"
+            },
+            "status": {
+              "enum": [
+                "confirmed",
+                "tentative",
+                "cancelled"
+              ],
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "title",
+            "startsAt",
+            "endsAt",
+            "status"
+          ],
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "date": {
+        "type": "string"
+      },
+      "timezone": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "appointments"
+    ],
+    "type": "object"
+  }
+}

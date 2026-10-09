@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Widgentic.Mcp.Tests</RootNamespace>
+    <NoWarn>$(NoWarn);MCPEXP003</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Widgentic.Mcp/Widgentic.Mcp.csproj" />
+    <!-- Built first, run as a process: SampleTests drives the real executable over stdio. -->
+    <ProjectReference Include="../../samples/Widgentic.Sample.Stdio/Widgentic.Sample.Stdio.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The corpus is read where the generator writes it, never copied into the .NET tree. -->
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>WidgenticCorpusPath</_Parameter1>
+      <_Parameter2>$(WidgenticRepoRoot)/packages/mcp/src/host/__tests__/conformance.json</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>WidgenticRepoRoot</_Parameter1>
+      <_Parameter2>$(WidgenticRepoRoot)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+</Project>

@@ -40,6 +40,32 @@ export const WIDGENTIC_APP_MIME_TYPE = "text/html;profile=mcp-app";
 /** URI of the declared app template that renders `structuredContent`. */
 export const WIDGENTIC_APP_TEMPLATE_URI = "ui://widgentic/app.html";
 
+/**
+ * MCP Apps visibility of the tools only the mounted template calls
+ * (`execute_action`, `preview_widget`): hosts hide them from the model.
+ */
+export const APP_ONLY_VISIBILITY = ["app"] as const;
+
+/** The app template resource as every assembly registers it (Node and the host bundle alike). */
+export const APP_TEMPLATE_RESOURCE = {
+  name: "Widgentic App",
+  uri: WIDGENTIC_APP_TEMPLATE_URI,
+  mimeType: WIDGENTIC_APP_MIME_TYPE,
+  description: "Widgentic app template — renders render_widget results inline."
+} as const;
+
+/** The per-kind preview page resource template, likewise shared. */
+export const WIDGET_PAGE_RESOURCE = {
+  name: "widget-page",
+  title: "Widgentic widget page",
+  uriTemplate: `${WIDGENTIC_UI_URI_PREFIX}{kind}`,
+  mimeType: "text/html",
+  description:
+    "Self-contained styled preview page for a widget kind, rendered from " +
+    "its descriptor's dataExample. Live renders arrive embedded in " +
+    "render_widget results with format: 'app'."
+} as const;
+
 export const GET_AUTHORING_GUIDE_TOOL: McpToolDefinition = {
   name: "get_authoring_guide",
   description:

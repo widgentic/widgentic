@@ -169,6 +169,7 @@
               "reference/api/webmcp",
               "reference/api/mcp",
               "reference/api/mcp-sdk",
+              "reference/api/mcp-host",
               "reference/api/mcp-authoring",
               "reference/api/mcp-store",
               "reference/api/mcp-store-sqlite",

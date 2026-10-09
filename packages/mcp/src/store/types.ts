@@ -82,32 +82,8 @@ export interface StoredSchema {
   schema: Record<string, unknown>;
 }
 
-/**
- * Structural limits, per principal. Not economics — these exist so one
- * tenant cannot exhaust the server for the rest, and so a corrupt store
- * cannot load unbounded data.
- */
-export interface StoreLimits {
-  maxWidgets: number;
-  maxThemes: number;
-  maxSchemas: number;
-  maxActions: number;
-  maxSecrets: number;
-  /** Serialized bytes of a single entry. */
-  maxEntryBytes: number;
-  /** Template nodes in a single stored template (structure, not output). */
-  maxTemplateNodes: number;
-}
-
-export const DEFAULT_LIMITS: StoreLimits = {
-  maxWidgets: 100,
-  maxThemes: 50,
-  maxSchemas: 50,
-  maxActions: 50,
-  maxSecrets: 50,
-  maxEntryBytes: 65_536,
-  maxTemplateNodes: 2_000
-};
+export type { StoreLimits } from "./limits.js";
+export { DEFAULT_LIMITS } from "./limits.js";
 
 /**
  * The anonymous principal: an unauthenticated caller, or a key that

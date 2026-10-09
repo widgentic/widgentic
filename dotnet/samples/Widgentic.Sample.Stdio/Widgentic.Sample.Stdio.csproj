@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Widgentic.Sample.Stdio</RootNamespace>
+    <!-- [McpAppUi] belongs to the C# SDK's experimental MCP Apps extension. -->
+    <NoWarn>$(NoWarn);MCPEXP003</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ModelContextProtocol.AspNetCore" />
+    <ProjectReference Include="../../src/Widgentic.Mcp/Widgentic.Mcp.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The docker example's demo seed, one file per entry, written by `npm run conformance:generate`; never hand-edited. -->
+    <None Include="seed/**/*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

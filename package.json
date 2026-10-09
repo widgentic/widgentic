@@ -22,6 +22,7 @@
     "mcp": "tsx examples/mcp-server/main.ts",
     "designer": "tsx examples/designer/serve.ts",
     "docs:generate": "tsx tools/docs-generate.ts",
+    "conformance:generate": "tsx tools/conformance-generate.ts",
     "docs:dev": "cd docs && ../node_modules/.bin/mint dev",
     "docs:check": "tsx tools/docs-generate.ts --check && vitest run tools/docs-nav.test.ts && cd docs && ../node_modules/.bin/mint validate && ../node_modules/.bin/mint broken-links --check-anchors && ../node_modules/.bin/mint a11y --fail-on-error"
   },

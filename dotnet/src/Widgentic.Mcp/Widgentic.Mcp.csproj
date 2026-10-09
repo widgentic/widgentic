@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Widgentic.Mcp</RootNamespace>
+    <IsPackable>true</IsPackable>
+    <PackageId>Widgentic.Mcp</PackageId>
+    <!-- Major.minor follows the embedded @widgentic/mcp (WidgenticMcpVersion); the patch is free for .NET-only fixes. -->
+    <Version>0.9.0</Version>
+    <Description>BETA, render-only. widgentic widgets for .NET MCP servers: runs the published @widgentic/mcp host bundle on V8 and wires list_widgets, render_widget and the MCP Apps template onto the C# MCP SDK. Renders are byte-identical to the Node server's (no image inlining). Widgentic.Mcp X.Y.* embeds @widgentic/mcp X.Y.*. The API may change in minor versions.</Description>
+    <PackageTags>mcp;mcp-apps;widgets;agents;widgentic</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- The C# SDK marks its MCP Apps extension experimental; this package is built on it deliberately. -->
+    <NoWarn>$(NoWarn);MCPEXP003</NoWarn>
+    <!-- The host bundle to embed; the release workflow passes the registry copy's path. -->
+    <WidgenticBundlePath Condition="'$(WidgenticBundlePath)' == ''">$(WidgenticRepoRoot)/packages/mcp/dist/host/widgentic-host.js</WidgenticBundlePath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ModelContextProtocol" />
+    <PackageReference Include="ModelContextProtocol.Extensions.Apps" />
+    <PackageReference Include="Microsoft.ClearScript.V8" />
+    <PackageReference Include="Microsoft.ClearScript.V8.Native.linux-x64" />
+    <PackageReference Include="Microsoft.ClearScript.V8.Native.linux-arm64" />
+    <PackageReference Include="Microsoft.ClearScript.V8.Native.win-x64" />
+    <PackageReference Include="Microsoft.ClearScript.V8.Native.osx-arm64" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="$(WidgenticBundlePath)" LogicalName="Widgentic.Mcp.widgentic-host.js" Visible="false" />
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+    <None Include="../../LICENSE" Pack="true" PackagePath="/" />
+    <InternalsVisibleTo Include="Widgentic.Mcp.Tests" />
+  </ItemGroup>
+
+  <!-- The version tells users which bundle they run: Widgentic.Mcp X.Y.* always embeds @widgentic/mcp X.Y.*. -->
+  <Target Name="WidgenticRequireAlignedVersion" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <_WidgenticPackageMinor>$([System.Text.RegularExpressions.Regex]::Match('$(Version)', '^\d+\.\d+').Value)</_WidgenticPackageMinor>
+      <_WidgenticBundleMinor>$([System.Text.RegularExpressions.Regex]::Match('$(WidgenticMcpVersion)', '^\d+\.\d+').Value)</_WidgenticBundleMinor>
+    </PropertyGroup>
+    <Error Condition="'$(_WidgenticPackageMinor)' != '$(_WidgenticBundleMinor)'" Text="Widgentic.Mcp $(Version) must share its major.minor with the @widgentic/mcp it embeds ($(WidgenticMcpVersion)): bump both together, and use the patch for .NET-only fixes." />
+  </Target>
+
+  <Target Name="WidgenticRequireBundle" BeforeTargets="PrepareForBuild" Condition="!Exists('$(WidgenticBundlePath)')">
+    <Error Text="The widgentic host bundle is missing at '$(WidgenticBundlePath)'. Run `npm ci` and `npm run build` at the repository root first." />
+  </Target>
+
+</Project>

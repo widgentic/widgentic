@@ -1,0 +1,158 @@
+{
+  "kind": "email-inbox-widget",
+  "template": {
+    "attrs": {
+      "class": "wg-inbox"
+    },
+    "children": [
+      {
+        "children": [
+          {
+            "children": [
+              "Inbox"
+            ],
+            "tag": "h2"
+          },
+          {
+            "template": {
+              "attrs": {
+                "class": "wg-muted"
+              },
+              "children": [
+                {
+                  "bind": "account"
+                }
+              ],
+              "tag": "p"
+            },
+            "when": "account"
+          }
+        ],
+        "tag": "header"
+      },
+      {
+        "each": "messages",
+        "empty": {
+          "attrs": {
+            "class": "wg-muted"
+          },
+          "children": [
+            "No messages."
+          ],
+          "tag": "p"
+        },
+        "template": {
+          "attrs": {
+            "class": "wg-inbox-email"
+          },
+          "children": [
+            {
+              "attrs": {
+                "class": "wg-inbox-sender",
+                "href": {
+                  "bind": "from",
+                  "prefix": "mailto:"
+                }
+              },
+              "children": [
+                {
+                  "bind": "from"
+                }
+              ],
+              "tag": "a"
+            },
+            {
+              "children": [
+                {
+                  "bind": "subject"
+                }
+              ],
+              "tag": "h3"
+            },
+            {
+              "template": {
+                "attrs": {
+                  "class": "wg-muted"
+                },
+                "children": [
+                  {
+                    "bind": "preview"
+                  }
+                ],
+                "tag": "p"
+              },
+              "when": "preview"
+            },
+            {
+              "attrs": {
+                "class": "wg-muted"
+              },
+              "children": [
+                {
+                  "bind": "receivedAt",
+                  "format": {
+                    "pattern": "yyyy-MM-dd HH:ss",
+                    "type": "date"
+                  }
+                }
+              ],
+              "tag": "small"
+            }
+          ],
+          "tag": "article"
+        }
+      }
+    ],
+    "tag": "section"
+  },
+  "descriptor": {
+    "dataExample": {
+      "account": "alex@example.com",
+      "messages": [
+        {
+          "from": "nora@example.com",
+          "id": "m-101",
+          "isRead": false,
+          "isStarred": true,
+          "labels": [
+            "Work"
+          ],
+          "preview": "The latest draft is ready for review.",
+          "receivedAt": "2026-09-03T09:15:30",
+          "subject": "Project update"
+        },
+        {
+          "from": "team@example.com",
+          "id": "m-102",
+          "isRead": false,
+          "isStarred": false,
+          "labels": [
+            "Planning"
+          ],
+          "preview": "Here are the topics for our weekly planning session.",
+          "receivedAt": "2026-09-03T08:30:00",
+          "subject": "Friday agenda"
+        }
+      ],
+      "unreadCount": 2
+    },
+    "dataSchemaRef": "email-inbox",
+    "dataShape": "{ account?, unreadCount?, messages: [{ id, from, subject, preview?, receivedAt, isRead, isStarred?, labels? }] }",
+    "description": "Displays an email inbox as a readable list, with each sender address as an email link.",
+    "styles": {
+      ".wg-inbox": {
+        "background": "var(--wg-surface)",
+        "border": "var(--wg-border-width) solid var(--wg-border)",
+        "border-radius": "var(--wg-radius-lg)",
+        "padding": "var(--wg-spacing-lg)"
+      },
+      ".wg-inbox-email": {
+        "border-top": "var(--wg-border-width) solid var(--wg-border)",
+        "padding": "var(--wg-spacing)"
+      },
+      ".wg-inbox-sender": {
+        "color": "var(--wg-accent)"
+      }
+    }
+  }
+}

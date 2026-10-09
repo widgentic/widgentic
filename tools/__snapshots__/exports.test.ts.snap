@@ -329,6 +329,12 @@ exports[`published export surfaces > @widgentic/mcp/authoring 1`] = `
 ]
 `;
 
+exports[`published export surfaces > @widgentic/mcp/host 1`] = `
+[
+  "createWidgenticHost",
+]
+`;
+
 exports[`published export surfaces > @widgentic/mcp/sdk 1`] = `
 [
   "createWidgenticServer",

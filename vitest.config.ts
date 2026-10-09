@@ -12,6 +12,7 @@ const src = (pkg: string, rest = "index.ts"): string => resolve(root, "packages"
  */
 const alias = [
   { find: /^@widgentic\/mcp\/sdk$/, replacement: src("mcp", "server/server.ts") },
+  { find: /^@widgentic\/mcp\/host$/, replacement: src("mcp", "host/index.ts") },
   { find: /^@widgentic\/mcp\/authoring$/, replacement: src("mcp", "authoring/index.ts") },
   { find: /^@widgentic\/mcp\/store\/sqlite$/, replacement: src("mcp", "store/sqlite.ts") },
   { find: /^@widgentic\/mcp\/store\/cosmos$/, replacement: src("mcp", "store/cosmos.ts") },
