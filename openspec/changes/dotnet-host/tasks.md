@@ -160,3 +160,10 @@
 - [x] 11.4 `TESTING.md`: an entries table row for `./host` and the .NET suite. A ".NET host" recipe: build order, `dotnet test`, running the sample over stdio in Claude Desktop and VS Code, and isolate memory measured per pooled runtime. A dated verification-log entry.
 - [ ] 11.5 Live check: register the sample (stdio) in a real MCP Apps host and, in a FRESH conversation, call the host tool and `render_widget` for `invoice`. Record what was VISIBLE (mounted widget vs text, dark/light, the disabled http action's state) honestly in the verification log.
 - [x] 11.6 Gate: typecheck, `npm test`, `npm run build`, `npm run pack:check`, `openspec validate --strict dotnet-host`, `openspec validate --specs` and `dotnet test`, all green.
+
+## 12. Merge with main (rendering-app-template, 0.8.0 release)
+
+- [x] 12.1 Merge `main` into `feature/dotnet-host` and resolve the additive conflicts (the handlers' error codes, server imports, mcp devDependencies, the TESTING log). Sync the lockfile with the released ranges.
+- [x] 12.2 The host serves `preview_widget` through `handlePreviewWidget`, marked `visibility: ["app"]` from the shared `APP_ONLY_VISIBILITY` constant (also used by `server.ts`). Covered by host tests and nine new corpus cases; the corpus was regenerated.
+- [x] 12.3 .NET: `preview_widget` is `render_widget`'s app-only companion. It is registered with `_meta.ui.visibility: ["app"]` and the legacy key, the startup self-check counts companions, and the selection and protocol tests cover it.
+- [x] 12.4 Pin `WidgenticMcpVersion` to `0.9.0`, since 0.8.0 shipped without `./host`. Update the spec deltas, design (A14) and docs for the preview tool.

@@ -63,9 +63,11 @@ Every argument and result is a string. `widgets` are designer exports
 (`{ kind, template, descriptor, load? }`), `themes` theme entries, `schemas`
 shared schemas; they go through the same composition and checks as the store.
 The served tools are `list_widgets`, `render_widget`, `list_theme_tokens`,
-`list_themes`, `list_schemas` and `get_authoring_guide`, answered by the same
-handlers the Node assembly wires — output is byte-identical to the Node path,
-checked against a conformance corpus.
+`list_themes`, `list_schemas` and `get_authoring_guide`, plus the template's
+own `preview_widget` (marked `visibility: ["app"]` in `definitions()`; rate
+limiting previews is the embedding server's job). They are answered by the same
+handlers the Node assembly wires, and the output is byte-identical to the Node
+path, checked against a conformance corpus.
 
 The host is **render-only**: http actions render disabled, no `load` runs, and
 `execute_action`/`list_actions` are not served (prompt actions work — the

@@ -14,7 +14,10 @@ public enum WidgenticTools
     /// <summary><c>list_widgets</c>: the widget kinds with their data shapes and hints.</summary>
     ListWidgets = 1 << 0,
 
-    /// <summary><c>render_widget</c>: validate and render a payload, mounted by MCP Apps hosts.</summary>
+    /// <summary>
+    /// <c>render_widget</c>: validate and render a payload, mounted by MCP Apps hosts. Brings the
+    /// app-only <c>preview_widget</c> the template calls while a render's input streams.
+    /// </summary>
     RenderWidget = 1 << 1,
 
     /// <summary><c>list_theme_tokens</c>: the theming vocabulary.</summary>
@@ -46,5 +49,19 @@ internal static class WidgenticToolNames
         [WidgenticTools.GetAuthoringGuide] = "get_authoring_guide",
     };
 
+    /// <summary>App-only tools the template calls, registered with the flag they serve.</summary>
+    public static readonly IReadOnlyDictionary<string, WidgenticTools> CompanionOf = new Dictionary<string, WidgenticTools>
+    {
+        ["preview_widget"] = WidgenticTools.RenderWidget,
+    };
+
     public const string RenderWidget = "render_widget";
+
+    /// <summary>Every tool name this package knows: one per flag, plus the companions.</summary>
+    public static IEnumerable<string> All => ByFlag.Values.Concat(CompanionOf.Keys);
+
+    /// <summary>Whether a selection includes the tool, directly or as a companion.</summary>
+    public static bool IsSelected(string? name, WidgenticTools selection) =>
+        ByFlag.Any(pair => pair.Value == name && selection.HasFlag(pair.Key))
+        || (name is not null && CompanionOf.TryGetValue(name, out var flag) && selection.HasFlag(flag));
 }

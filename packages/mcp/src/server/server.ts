@@ -30,6 +30,7 @@ import {
   GET_AUTHORING_GUIDE_TOOL,
   EXECUTE_ACTION_TOOL,
   PREVIEW_WIDGET_TOOL,
+  APP_ONLY_VISIBILITY,
   WIDGENTIC_APP_TEMPLATE_URI,
   APP_TEMPLATE_RESOURCE,
   WIDGET_PAGE_RESOURCE
@@ -252,7 +253,7 @@ export function createWidgenticServer(
     {
       description: EXECUTE_ACTION_TOOL.description,
       _meta: {
-        ui: { resourceUri: WIDGENTIC_APP_TEMPLATE_URI, visibility: ["app"] }
+        ui: { resourceUri: WIDGENTIC_APP_TEMPLATE_URI, visibility: [...APP_ONLY_VISIBILITY] }
       },
       // Descriptions come from definitions.ts, exactly as render_widget's do,
       // so the wire schema cannot drift from the documented one.
@@ -292,7 +293,7 @@ export function createWidgenticServer(
     {
       description: PREVIEW_WIDGET_TOOL.description,
       _meta: {
-        ui: { resourceUri: WIDGENTIC_APP_TEMPLATE_URI, visibility: ["app"] }
+        ui: { resourceUri: WIDGENTIC_APP_TEMPLATE_URI, visibility: [...APP_ONLY_VISIBILITY] }
       },
       inputSchema: (() => {
         const docs = PREVIEW_WIDGET_TOOL.inputSchema.properties as Record<string, { description?: string }>;

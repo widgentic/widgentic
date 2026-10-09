@@ -354,6 +354,24 @@ lines (D12, D14).
   found, its hash equal to the workspace build's), and against the registry for `0.7.0`
   (predates the bundle) and `0.8.0` (not published).
 
+- **A14. Merging the rendering-app-template change and the 0.8.0 release (2026-10-08).**
+  - **Release:** `@widgentic/mcp` 0.8.0 shipped without `./host`, so this change
+    releases in 0.9.0. `WidgenticMcpVersion` moves to `0.9.0`, and the pin check
+    reports 0.8.0 as predating the bundle.
+  - **The preview tool:** main added the app-only `preview_widget`. It is pure
+    (partial-data render, never fetches) and synchronous, so the host serves it
+    through `handlePreviewWidget`, marked `visibility: ["app"]` from the new
+    `APP_ONLY_VISIBILITY` constant that `server.ts` uses too.
+  - **In .NET**, `preview_widget` is `render_widget`'s companion:
+    `WidgenticToolNames.CompanionOf` maps it to `RenderWidget`, it is registered
+    exactly when that flag is, and the startup self-check counts companions.
+    Previews are not rate-limited in the package. The Node assembly limits them at
+    its HTTP edge, and a .NET host serving HTTP does the same with ASP.NET Core's
+    rate limiting; the engine pool already bounds concurrency.
+  - **Corpus:** it gains nine preview cases and was regenerated. Only the
+    authoring guide and the app template had drifted from main's changes; render
+    outputs for the existing inputs were unchanged.
+
 ## Risks / Trade-offs
 
 - **[ICU/CLDR drift between Node's ICU and ClearScript's V8 build]** A future locale data

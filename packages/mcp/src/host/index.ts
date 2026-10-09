@@ -11,7 +11,9 @@
  * nothing is kept from one call to the next.
  *
  * Render-only: http actions compile disabled (`unresolved`), no `load` is
- * emitted, and neither `execute_action` nor `list_actions` is served.
+ * emitted, and neither `execute_action` nor `list_actions` is served. The
+ * template's own `preview_widget` is served, marked app-only; rate limiting
+ * previews belongs to the embedding server's transport.
  */
 import { isPlainObject } from "@widgentic/core";
 import type { McpToolResult } from "../output/index.js";
@@ -21,7 +23,9 @@ import {
   LIST_THEME_TOKENS_TOOL,
   LIST_THEMES_TOOL,
   LIST_WIDGETS_TOOL,
+  PREVIEW_WIDGET_TOOL,
   RENDER_WIDGET_TOOL,
+  APP_ONLY_VISIBILITY,
   APP_TEMPLATE_RESOURCE,
   WIDGET_PAGE_RESOURCE
 } from "../server/definitions.js";
@@ -30,6 +34,7 @@ import {
   handleListThemeTokens,
   handleListThemes,
   handleListWidgets,
+  handlePreviewWidget,
   handleRenderWidget,
   listSchemasResult,
   renderWidgetPage,
@@ -61,7 +66,11 @@ export interface WidgenticHost {
   version(): string;
   /** JSON array of {@link HostProblem}: the configuration entries that were refused. */
   problems(): string;
-  /** JSON array of the served tools' definitions (name, description, inputSchema). */
+  /**
+   * JSON array of the served tools' definitions (name, description,
+   * inputSchema), with `visibility: ["app"]` on the tools only the mounted
+   * template calls.
+   */
   definitions(): string;
   /** JSON of the served resources (app template, preview-page template): name, URI, MIME type, description. */
   resources(): string;
@@ -73,14 +82,18 @@ export interface WidgenticHost {
   widgetPage(kind: string): string;
 }
 
+/** A served tool: its exported definition, plus its visibility when only the template calls it. */
+type ServedTool = McpToolDefinition & { visibility?: readonly string[] };
+
 /** The tools a host serves, in the order the Node assembly registers them. */
-const SERVED_TOOLS: readonly McpToolDefinition[] = [
+const SERVED_TOOLS: readonly ServedTool[] = [
   LIST_WIDGETS_TOOL,
   LIST_THEME_TOKENS_TOOL,
   LIST_THEMES_TOOL,
   LIST_SCHEMAS_TOOL,
   GET_AUTHORING_GUIDE_TOOL,
-  RENDER_WIDGET_TOOL
+  RENDER_WIDGET_TOOL,
+  { ...PREVIEW_WIDGET_TOOL, visibility: APP_ONLY_VISIBILITY }
 ];
 
 /** The host's documents, registered exactly as the Node assembly registers them. */
@@ -195,7 +208,8 @@ export function createWidgenticHost(configJson: string): WidgenticHost {
     [LIST_THEMES_TOOL.name, () => handleListThemes(registry)],
     [LIST_SCHEMAS_TOOL.name, () => listSchemasResult(schemas)],
     [GET_AUTHORING_GUIDE_TOOL.name, () => handleGetAuthoringGuide()],
-    [RENDER_WIDGET_TOOL.name, (args, slim) => handleRenderWidget(catalog, args, { slim, themes: registry })]
+    [RENDER_WIDGET_TOOL.name, (args, slim) => handleRenderWidget(catalog, args, { slim, themes: registry })],
+    [PREVIEW_WIDGET_TOOL.name, (args) => handlePreviewWidget(catalog, args, { themes: registry })]
   ]);
 
   return {

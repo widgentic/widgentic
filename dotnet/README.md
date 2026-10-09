@@ -36,7 +36,10 @@ builder.Services
   `RenderWidget`, `ListThemeTokens`, `ListThemes`, `ListSchemas` and `GetAuthoringGuide`. The
   default is all six; any subset is valid, including `None`. A tool you leave out is not
   registered at all. The authoring guide may still mention a hidden tool by name: the texts
-  come from the bundle unchanged.
+  come from the bundle unchanged. `RenderWidget` also brings the app-only `preview_widget`,
+  which the template calls while a `render_widget` call is still streaming, so the widget
+  fills in as its data arrives. If you serve over HTTP, rate-limit it at your edge (ASP.NET
+  Core rate limiting), as the Node server does.
 - **The MCP Apps template** (`ui://widgentic/app.html`), always, because your own tools render
   through it.
 - **The preview pages** (`ui://widgentic/page/{kind}`), unless `IncludeWidgetPages = false`.

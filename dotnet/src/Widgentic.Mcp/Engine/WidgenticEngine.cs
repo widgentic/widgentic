@@ -110,11 +110,11 @@ internal sealed class WidgenticEngine : IDisposable
         return problems;
     }
 
-    /// <summary>The flags table must name exactly the bundle's tools, or this package and its bundle disagree.</summary>
+    /// <summary>The flags and companions must name exactly the bundle's tools, or this package and its bundle disagree.</summary>
     private static void CheckToolNames(IReadOnlyList<JsonElement> definitions)
     {
         var bundle = definitions.Select(d => d.GetProperty("name").GetString()).Order(StringComparer.Ordinal).ToArray();
-        var package = WidgenticToolNames.ByFlag.Values.Order(StringComparer.Ordinal).ToArray();
+        var package = WidgenticToolNames.All.Order(StringComparer.Ordinal).ToArray();
         if (!bundle.SequenceEqual(package))
         {
             throw new InvalidOperationException(

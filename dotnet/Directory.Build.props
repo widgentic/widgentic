@@ -23,7 +23,7 @@
       release workflow refuses to publish unless that file is byte-identical to
       the one in this version's registry tarball.
     -->
-    <WidgenticMcpVersion>0.8.0</WidgenticMcpVersion>
+    <WidgenticMcpVersion>0.9.0</WidgenticMcpVersion>
     <WidgenticRepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..'))</WidgenticRepoRoot>
   </PropertyGroup>
 </Project>

@@ -11,7 +11,7 @@ public sealed class SelectionTests
     private static CancellationToken Cancel => TestContext.Current.CancellationToken;
 
     private static readonly string[] RenderSide =
-        ["get_authoring_guide", "list_schemas", "list_theme_tokens", "list_themes", "list_widgets", "render_widget"];
+        ["get_authoring_guide", "list_schemas", "list_theme_tokens", "list_themes", "list_widgets", "preview_widget", "render_widget"];
 
     [Fact]
     public async Task TheDefaultExposesTheRenderSideSet()
@@ -27,7 +27,7 @@ public sealed class SelectionTests
         await using var server = await TestServer.StartAsync(o => o.Tools = WidgenticTools.Default & ~WidgenticTools.GetAuthoringGuide);
         var tools = await server.Client.ListToolsAsync(cancellationToken: Cancel);
         Assert.DoesNotContain(tools, t => t.Name == "get_authoring_guide");
-        Assert.Equal(5, tools.Count);
+        Assert.Equal(6, tools.Count);
         await Assert.ThrowsAsync<McpProtocolException>(async () =>
             await server.Client.CallToolAsync("get_authoring_guide", cancellationToken: Cancel));
     }
@@ -45,10 +45,18 @@ public sealed class SelectionTests
                 .ToArray();
             Assert.DoesNotContain("execute_action", names);
             Assert.DoesNotContain("list_actions", names);
-            Assert.Equal(
-                WidgenticToolNames.ByFlag.Where(pair => selection.HasFlag(pair.Key)).Select(pair => pair.Value).Order(StringComparer.Ordinal),
-                names.Order(StringComparer.Ordinal));
+            var expected = WidgenticToolNames.ByFlag.Where(pair => selection.HasFlag(pair.Key)).Select(pair => pair.Value).ToList();
+            if (selection.HasFlag(WidgenticTools.RenderWidget)) expected.Add("preview_widget");
+            Assert.Equal(expected.Order(StringComparer.Ordinal), names.Order(StringComparer.Ordinal));
         }
+    }
+
+    [Fact]
+    public async Task ThePreviewToolFollowsRenderWidget()
+    {
+        await using var server = await TestServer.StartAsync(o => o.Tools = WidgenticTools.Default & ~WidgenticTools.RenderWidget);
+        var tools = await server.Client.ListToolsAsync(cancellationToken: Cancel);
+        Assert.DoesNotContain(tools, t => t.Name is "render_widget" or "preview_widget");
     }
 
     [Fact]

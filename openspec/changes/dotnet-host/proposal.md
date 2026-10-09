@@ -17,9 +17,9 @@ imports `node:crypto`.
 - **A runtime-neutral host bundle in `@widgentic/mcp` (new `./host` entry).** One
   self-contained ES module with no imports. It needs nothing beyond ECMAScript and `Intl`:
   no `node:` modules, no `process`, no `Buffer`, no web APIs. It exports a JSON-in,
-  JSON-out host: the tool definitions as data, the list tools, `render_widget`, the
-  authoring guide, the app template, the per-kind preview page, and a render call for a
-  host's own tools. Widgets and themes are passed in the designer's export shapes and
+  JSON-out host: the tool definitions as data, the list tools, `render_widget` and the
+  template's app-only `preview_widget`, the authoring guide, the app template, the
+  per-kind preview page, and a render call for a host's own tools. Widgets and themes are passed in the designer's export shapes and
   validated at the door with the same structured codes the store uses. `URL` resolves to
   the platform's implementation when one exists, and otherwise to a bundled,
   spec-compliant implementation. The bundle never mutates globals.

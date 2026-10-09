@@ -40,6 +40,12 @@ export const WIDGENTIC_APP_MIME_TYPE = "text/html;profile=mcp-app";
 /** URI of the declared app template that renders `structuredContent`. */
 export const WIDGENTIC_APP_TEMPLATE_URI = "ui://widgentic/app.html";
 
+/**
+ * MCP Apps visibility of the tools only the mounted template calls
+ * (`execute_action`, `preview_widget`): hosts hide them from the model.
+ */
+export const APP_ONLY_VISIBILITY = ["app"] as const;
+
 /** The app template resource as every assembly registers it (Node and the host bundle alike). */
 export const APP_TEMPLATE_RESOURCE = {
   name: "Widgentic App",

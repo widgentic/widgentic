@@ -1,7 +1,7 @@
 /**
  * The conformance corpus of the runtime-neutral host (`@widgentic/mcp/host`).
  *
- * Inputs cover every served tool, every built-in kind, groups, themes,
+ * Inputs cover every served tool (the template's preview tool included), every built-in kind, groups, themes,
  * contract errors, hint diagnostics, value formats in several locales, URL
  * edge cases, the example template widgets (an http and a prompt action
  * among them) and the documents the host serves. Outputs are recorded from
@@ -216,6 +216,24 @@ export function buildCorpus(): Corpus {
     render(`example ${widget}`, { widget, data });
     render(`example ${widget} slim`, { widget, data }, true);
   }
+
+  // The template's own preview tool, called while a render's input streams.
+  call("preview built-in partial", "preview_widget", { widget: "card", data: { title: "Q" } });
+  call("preview stored kind missing required data", "preview_widget", { widget: "invoice", data: { customer: "Ada" } });
+  call("preview group partial", "preview_widget", {
+    widget: "group",
+    data: { items: [{ kind: "card", data: { title: "A" } }, { kind: "corpus-formats", data: { amount: 1 } }] }
+  });
+  call("preview half-streamed theme ignored", "preview_widget", { widget: "card", data: card, theme: { accent: "#0b" } });
+  call("preview named theme", "preview_widget", { widget: "card", data: card, theme: "corpus-brand" });
+  call("preview no data yet", "preview_widget", { widget: "table" });
+  call("preview image never fetched", "preview_widget", {
+    widget: "card",
+    data: { title: "P", avatar: "https://example.com/u/1.jpg" },
+    hints: { images: { avatar: "avatar" } }
+  });
+  call("preview unknown kind", "preview_widget", { widget: "nope", data: {} });
+  call("preview missing widget", "preview_widget", { data: {} });
 
   cases.push({ name: "app template", op: "appTemplate", output: host.appTemplate() });
   cases.push({ name: "resources", op: "resources", output: host.resources() });

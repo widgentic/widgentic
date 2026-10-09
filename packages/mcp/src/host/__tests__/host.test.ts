@@ -10,10 +10,12 @@ import {
   LIST_THEMES_TOOL,
   LIST_WIDGETS_TOOL,
   RENDER_WIDGET_TOOL,
+  PREVIEW_WIDGET_TOOL,
+  APP_ONLY_VISIBILITY,
   APP_TEMPLATE_RESOURCE,
   WIDGET_PAGE_RESOURCE
 } from "../../server/definitions.js";
-import { handleListWidgets, handleListThemes, handleRenderWidget } from "../../server/handlers.js";
+import { handleListWidgets, handleListThemes, handlePreviewWidget, handleRenderWidget } from "../../server/handlers.js";
 import { composeCatalogEntries, composeThemeEntries } from "../../store/compose.js";
 
 interface ToolResult {
@@ -46,6 +48,10 @@ describe("createWidgenticHost", () => {
     const { registry } = composeThemeEntries(config.themes);
     expect(host.call("list_widgets", "{}", false)).toBe(JSON.stringify(handleListWidgets(catalog)));
     expect(host.call("list_themes", "{}", false)).toBe(JSON.stringify(handleListThemes(registry)));
+    const partial = { widget: "invoice", data: { customer: "Ada" }, theme: "brand" };
+    expect(host.call("preview_widget", JSON.stringify(partial), false)).toBe(
+      JSON.stringify(handlePreviewWidget(catalog, partial, { themes: registry }))
+    );
     for (const slim of [false, true]) {
       for (const args of [
         { widget: "invoice", data: invoiceWidget.descriptor.dataExample },
@@ -101,7 +107,7 @@ describe("createWidgenticHost", () => {
     }
   });
 
-  it("serves the exported definitions of the render-side tools only", () => {
+  it("serves the exported definitions of the render-side tools, the preview marked app-only", () => {
     const definitions = JSON.parse(createWidgenticHost("{}").definitions()) as unknown[];
     expect(definitions).toEqual([
       LIST_WIDGETS_TOOL,
@@ -109,7 +115,8 @@ describe("createWidgenticHost", () => {
       LIST_THEMES_TOOL,
       LIST_SCHEMAS_TOOL,
       GET_AUTHORING_GUIDE_TOOL,
-      RENDER_WIDGET_TOOL
+      RENDER_WIDGET_TOOL,
+      { ...PREVIEW_WIDGET_TOOL, visibility: [...APP_ONLY_VISIBILITY] }
     ]);
     const names = definitions.map((definition) => (definition as { name: string }).name);
     expect(names).not.toContain(EXECUTE_ACTION_TOOL.name);

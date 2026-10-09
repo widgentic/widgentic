@@ -43,9 +43,13 @@ public static class WidgenticBuilderExtensions
         foreach (var definition in SelectDefinitions(engine.Definitions, options.Tools))
         {
             McpServerTool tool = new WidgenticTool(engine, definition, options.AssumeUi);
-            if (tool.ProtocolTool.Name == WidgenticToolNames.RenderWidget)
+            var appOnly = definition.TryGetProperty("visibility", out var visibility);
+            if (appOnly || tool.ProtocolTool.Name == WidgenticToolNames.RenderWidget)
             {
-                tool = McpApps.SetAppUi(tool, new McpUiToolMeta { ResourceUri = engine.Resources.AppTemplateUri });
+                // Tools the template calls declare it, and only the template may call app-only ones.
+                var ui = new McpUiToolMeta { ResourceUri = engine.Resources.AppTemplateUri };
+                if (appOnly) ui.Visibility = [.. visibility.EnumerateArray().Select(v => v.GetString()!)];
+                tool = McpApps.SetAppUi(tool, ui);
                 // The TypeScript helper also writes the pre-2026 flat key; the Node server carries
                 // both, so this server does too.
                 tool.ProtocolTool.Meta![LegacyResourceUriKey] = engine.Resources.AppTemplateUri;
@@ -67,9 +71,5 @@ public static class WidgenticBuilderExtensions
     internal static IEnumerable<System.Text.Json.JsonElement> SelectDefinitions(
         IEnumerable<System.Text.Json.JsonElement> definitions,
         WidgenticTools selection) =>
-        definitions.Where(definition =>
-        {
-            var name = definition.GetProperty("name").GetString();
-            return WidgenticToolNames.ByFlag.Any(pair => pair.Value == name && selection.HasFlag(pair.Key));
-        });
+        definitions.Where(definition => WidgenticToolNames.IsSelected(definition.GetProperty("name").GetString(), selection));
 }

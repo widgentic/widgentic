@@ -46,7 +46,14 @@ public sealed class ProtocolTests
         var render = Assert.Single(tools, t => t.Name == "render_widget");
         Assert.Equal(WidgenticResources.AppTemplateUri, render.ProtocolTool.Meta?["ui"]?["resourceUri"]?.GetValue<string>());
         Assert.Equal(WidgenticResources.AppTemplateUri, render.ProtocolTool.Meta?["ui/resourceUri"]?.GetValue<string>());
-        foreach (var other in tools.Where(t => t.Name != "render_widget"))
+        Assert.Null(render.ProtocolTool.Meta?["ui"]?["visibility"]);
+
+        var preview = Assert.Single(tools, t => t.Name == "preview_widget");
+        Assert.Equal(WidgenticResources.AppTemplateUri, preview.ProtocolTool.Meta?["ui"]?["resourceUri"]?.GetValue<string>());
+        Assert.Equal(WidgenticResources.AppTemplateUri, preview.ProtocolTool.Meta?["ui/resourceUri"]?.GetValue<string>());
+        Assert.Equal(["app"], preview.ProtocolTool.Meta?["ui"]?["visibility"]?.AsArray().Select(v => v!.GetValue<string>()));
+
+        foreach (var other in tools.Where(t => t.Name is not "render_widget" and not "preview_widget"))
         {
             Assert.Null(other.ProtocolTool.Meta?["ui"]);
         }
@@ -62,6 +69,17 @@ public sealed class ProtocolTests
         var payload = Assert.Single(result.Content.OfType<EmbeddedResourceBlock>());
         var text = Assert.IsType<TextResourceContents>(payload.Resource).Text;
         Assert.Equal("card", JsonDocument.Parse(text).RootElement.GetProperty("kind").GetString());
+    }
+
+    [Fact]
+    public async Task PreviewsAPartialStoredKind()
+    {
+        await using var server = await TestServer.StartAsync(o => o.AddWidgetsFromDirectory(Repo.SampleWidgets));
+        var result = await server.Client.CallToolAsync("preview_widget", Args("""{"widget":"invoice","data":{"customer":"Ada"}}"""), cancellationToken: Cancel);
+        Assert.NotEqual(true, result.IsError);
+        Assert.Equal("Preview of 'invoice'.", Text(result));
+        Assert.Contains("Ada", result.StructuredContent!.Value.GetProperty("tree").GetRawText());
+        Assert.False(result.StructuredContent!.Value.TryGetProperty("payload", out _));
     }
 
     [Fact]

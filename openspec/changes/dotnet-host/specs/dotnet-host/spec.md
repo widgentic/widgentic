@@ -28,7 +28,7 @@ Every input of the repository's conformance corpus, run through the package, SHA
 ### Requirement: WithWidgentic wires the widgentic surface onto the C# SDK
 The package SHALL extend the C# SDK's server builder with `WithWidgentic(Action<WidgenticOptions>? configure = null)`. The call SHALL enable the SDK's MCP Apps extension and register:
 - the selected widgentic tools, each answering through the bundle's `call`;
-- `render_widget` with `_meta.ui.resourceUri` set to `ui://widgentic/app.html`;
+- `render_widget` with `_meta.ui.resourceUri` set to `ui://widgentic/app.html`, and the template's own `preview_widget` with the same URI and `_meta.ui.visibility: ["app"]`, both also carrying the legacy `_meta["ui/resourceUri"]` key as the Node assembly's tools do;
 - the app template resource at that URI, with MIME type `text/html;profile=mcp-app` and content equal to the bundle's `appTemplate()`;
 - unless `IncludeWidgetPages` is false, the `ui://widgentic/page/{kind}` resource template, serving the bundle's `widgetPage(kind)`.
 
@@ -37,6 +37,7 @@ The package SHALL extend the C# SDK's server builder with `WithWidgentic(Action<
 #### Scenario: The tool declares its template
 - **WHEN** a C# SDK client lists tools
 - **THEN** `render_widget` SHALL carry `_meta.ui.resourceUri: "ui://widgentic/app.html"`
+- **AND** `preview_widget` SHALL carry the same URI with `_meta.ui.visibility: ["app"]`, and no other widgentic tool SHALL carry `_meta.ui`
 
 #### Scenario: The template is the bundle's
 - **WHEN** the client reads `ui://widgentic/app.html`
@@ -61,11 +62,15 @@ The package SHALL extend the C# SDK's server builder with `WithWidgentic(Action<
 - **THEN** the content SHALL equal the bundle's `widgetPage("card")`
 
 ### Requirement: Hosts choose which tools are exposed
-`WidgenticOptions.Tools` SHALL be a flags value over `ListWidgets`, `RenderWidget`, `ListThemeTokens`, `ListThemes`, `ListSchemas` and `GetAuthoringGuide`. Its default, `WidgenticTools.Default`, SHALL include all six. A tool not selected SHALL NOT be registered: it is absent from `tools/list`, and a call to it is answered as an unknown tool. Any subset SHALL be valid, including `None`. The app template resource SHALL be registered whatever the selection, because a host's own tools render through it. No option SHALL register `execute_action` or `list_actions` in this version.
+`WidgenticOptions.Tools` SHALL be a flags value over `ListWidgets`, `RenderWidget`, `ListThemeTokens`, `ListThemes`, `ListSchemas` and `GetAuthoringGuide`. Its default, `WidgenticTools.Default`, SHALL include all six. `RenderWidget` SHALL also register the template's app-only `preview_widget`, which serves only `render_widget`'s streaming previews. A tool not selected SHALL NOT be registered: it is absent from `tools/list`, and a call to it is answered as an unknown tool. Any subset SHALL be valid, including `None`. The app template resource SHALL be registered whatever the selection, because a host's own tools render through it. No option SHALL register `execute_action` or `list_actions` in this version.
 
 #### Scenario: The default exposes the render-side set
 - **WHEN** a server is configured with `WithWidgentic()` and a client lists tools
-- **THEN** exactly `list_widgets`, `render_widget`, `list_theme_tokens`, `list_themes`, `list_schemas` and `get_authoring_guide` SHALL be listed from widgentic
+- **THEN** exactly `list_widgets`, `render_widget`, `list_theme_tokens`, `list_themes`, `list_schemas` and `get_authoring_guide` SHALL be listed from widgentic, plus the app-only `preview_widget`
+
+#### Scenario: The preview tool follows render_widget
+- **WHEN** the server is configured with `Tools = WidgenticTools.Default & ~WidgenticTools.RenderWidget`
+- **THEN** neither `render_widget` nor `preview_widget` SHALL be listed
 
 #### Scenario: A hidden tool is gone
 - **WHEN** the server is configured with `Tools = WidgenticTools.Default & ~WidgenticTools.GetAuthoringGuide`
