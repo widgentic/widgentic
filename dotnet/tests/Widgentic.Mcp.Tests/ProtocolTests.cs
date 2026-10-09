@@ -195,7 +195,7 @@ public sealed class ProtocolTests
     }
 
     [Fact]
-    public async Task StatelessRequestsFollowAssumeUi()
+    public async Task CallsRevealingNoCapabilitiesFollowAssumeUi()
     {
         var request = new WidgetRenderRequest("card", new JsonObject { ["title"] = "T" });
         await using (var assumed = await TestServer.StartAsync(o => o.AssumeUi = true))

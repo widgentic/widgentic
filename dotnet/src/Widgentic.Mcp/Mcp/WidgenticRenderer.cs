@@ -8,16 +8,28 @@ namespace Widgentic.Mcp.Mcp;
 /// <summary>Renders through the same bundle call as <c>render_widget</c>, so the results are equal by construction.</summary>
 internal sealed class WidgenticRenderer(WidgenticEngine engine, bool assumeUi) : IWidgenticRenderer
 {
-    public async ValueTask<CallToolResult> RenderAsync(
+    public ValueTask<CallToolResult> RenderAsync(
         WidgetRenderRequest request,
         McpServer? session = null,
+        CancellationToken cancellationToken = default) =>
+        RenderAsync(request, Slimming.For(session, null, assumeUi), cancellationToken);
+
+    public ValueTask<CallToolResult> RenderAsync(
+        WidgetRenderRequest request,
+        RequestContext<CallToolRequestParams> context,
         CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return RenderAsync(request, Slimming.For(context.Server, context.Params?.Meta, assumeUi), cancellationToken);
+    }
+
+    private async ValueTask<CallToolResult> RenderAsync(WidgetRenderRequest request, bool slim, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
         var json = await engine.Pool.CallToolAsync(
             WidgenticToolNames.RenderWidget,
             ArgumentsJson(request),
-            Slimming.For(session, assumeUi),
+            slim,
             cancellationToken).ConfigureAwait(false);
         return ToolResults.Parse(json);
     }

@@ -32,7 +32,7 @@ The package SHALL extend the C# SDK's server builder with `WithWidgentic(Action<
 - the app template resource at that URI, with MIME type `text/html;profile=mcp-app` and content equal to the bundle's `appTemplate()`;
 - unless `IncludeWidgetPages` is false, the `ui://widgentic/page/{kind}` resource template, serving the bundle's `widgetPage(kind)`.
 
-`WidgenticOptions.ResourceDomains` SHALL be declared as `_meta.ui.csp.resourceDomains` on the app resource, and the key SHALL be absent when the list is empty. The list is deployment configuration: no widget, theme or render input can extend it. Model-facing output SHALL be slimmed exactly when the calling session's client advertised the Apps UI capability with the app MIME type. When no capabilities were negotiated for the request, as in stateless HTTP, `WidgenticOptions.AssumeUi` (default false) SHALL decide, which is the equivalent of the Node assembly's `WIDGENTIC_ASSUME_UI`.
+`WidgenticOptions.ResourceDomains` SHALL be declared as `_meta.ui.csp.resourceDomains` on the app resource, and the key SHALL be absent when the list is empty. The list is deployment configuration: no widget, theme or render input can extend it. Model-facing output SHALL be slimmed exactly when the call's client advertised the Apps UI capability with the app MIME type. That capability is read from the session's negotiated capabilities when there are any. Otherwise it is read from the capabilities the request carries in `_meta["io.modelcontextprotocol/clientCapabilities"]`, as stateless MCP 2026-07-28 requests do; that revision is the C# SDK's default over HTTP. Only a call revealing neither SHALL fall back to `WidgenticOptions.AssumeUi` (default false), the equivalent of the Node assembly's `WIDGENTIC_ASSUME_UI`.
 
 #### Scenario: The tool declares its template
 - **WHEN** a C# SDK client lists tools
@@ -52,10 +52,15 @@ The package SHALL extend the C# SDK's server builder with `WithWidgentic(Action<
 - **WHEN** a client that advertised the Apps UI capability calls `render_widget` with default format, and a client that did not makes the same call
 - **THEN** the first result SHALL be the slim output and the second the full output, with identical `structuredContent`
 
-#### Scenario: Stateless requests follow AssumeUi
-- **WHEN** a request arrives with no negotiated client capabilities on a server configured with `AssumeUi = true`
+#### Scenario: A stateless request's own capabilities decide
+- **WHEN** a stateless request (no session) carries the Apps UI capability in its `_meta` on a server with `AssumeUi` left false
 - **THEN** `render_widget` with default format SHALL return the slim output
-- **AND** with `AssumeUi` left at its default the same request SHALL return the full output
+- **AND** a stateless request whose `_meta` capabilities lack the UI extension SHALL return the full output even with `AssumeUi = true`
+
+#### Scenario: Requests revealing no capabilities follow AssumeUi
+- **WHEN** a call reveals no client capabilities at all, neither from a session nor in its `_meta`, on a server configured with `AssumeUi = true`
+- **THEN** `render_widget` with default format SHALL return the slim output
+- **AND** with `AssumeUi` left at its default the same call SHALL return the full output
 
 #### Scenario: Preview pages serve the dataExample
 - **WHEN** the client reads `ui://widgentic/page/card`
@@ -85,7 +90,7 @@ The package SHALL extend the C# SDK's server builder with `WithWidgentic(Action<
 - **THEN** neither `execute_action` nor `list_actions` SHALL appear in `tools/list`
 
 ### Requirement: A host's own tools render widgets
-The package SHALL register an `IWidgenticRenderer` service. Its `RenderAsync` SHALL accept the `render_widget` arguments (`widget`, `data`, optional `hints`, `meta`, `format`, `theme`) plus the calling session. It SHALL return a C# SDK `CallToolResult` equal to the result `render_widget` would return for the same arguments in the same session. Invalid input SHALL become an `isError` result with the bundle's structured error, never an exception. The package SHALL expose the app template URI as a public constant, so a host tool declares `[McpAppUi(ResourceUri = ...)]` without restating it. The result's content SHALL keep the widgentic payload block, so the model still sees the data in slim mode.
+The package SHALL register an `IWidgenticRenderer` service. Its `RenderAsync` SHALL accept the `render_widget` arguments (`widget`, `data`, optional `hints`, `meta`, `format`, `theme`) plus either the calling session or the tool call's `RequestContext`; only the latter also sees the capabilities a stateless request carries. It SHALL return a C# SDK `CallToolResult` equal to the result `render_widget` would return for the same arguments in the same session. Invalid input SHALL become an `isError` result with the bundle's structured error, never an exception. The package SHALL expose the app template URI as a public constant, so a host tool declares `[McpAppUi(ResourceUri = ...)]` without restating it. The result's content SHALL keep the widgentic payload block, so the model still sees the data in slim mode.
 
 #### Scenario: A host tool equals render_widget
 - **WHEN** a host tool returns `renderer.RenderAsync(new WidgetRenderRequest("table", rows), session)`, and a client calls both that tool and `render_widget` with the same arguments
@@ -147,7 +152,7 @@ The package SHALL make no outbound network request. It SHALL NOT register `execu
 - **THEN** the element SHALL carry the prompt descriptor with no `disabled` key
 
 ### Requirement: Protocol round trip and a runnable sample
-`dotnet/samples` SHALL contain a runnable stdio MCP server. It configures `WithWidgentic` with the example widgets, read from JSON generated out of `examples/mcp-server/widgets` (never hand-copied), and registers one host tool rendering through `IWidgenticRenderer`. The test suite SHALL connect a C# SDK client to the package's server over an in-process transport and verify `list_widgets`, `render_widget` (success and the `isError` path for an unknown kind), the host tool, and `resources/read` of the app template through the real protocol.
+`dotnet/samples` SHALL contain a runnable MCP server. It serves over stdio by default, and over Streamable HTTP at `http://localhost:3002/mcp` (or `--urls`) with `--http`. Over HTTP it is stateless for MCP 2026-07-28 clients and keeps a session for clients that initialize, so both kinds reveal their capabilities. Both transports serve the same server. It configures `WithWidgentic` with the example widgets, read from JSON generated out of `examples/mcp-server/widgets` (never hand-copied), and registers one host tool rendering through `IWidgenticRenderer`. The test suite SHALL launch the sample in both modes and drive it with a C# SDK client, and it SHALL connect a C# SDK client to the package's server over an in-process transport and verify `list_widgets`, `render_widget` (success and the `isError` path for an unknown kind), the host tool, and `resources/read` of the app template through the real protocol.
 
 #### Scenario: Protocol round trip
 - **WHEN** an in-process C# SDK client calls `render_widget` with `{ widget: "card", data: { title: "T" } }`
@@ -160,3 +165,8 @@ The package SHALL make no outbound network request. It SHALL NOT register `execu
 #### Scenario: The sample serves the example widgets
 - **WHEN** the sample's generated widget JSON is compared with `examples/mcp-server/widgets` exported through the designer's export shape
 - **THEN** they SHALL be equal, and the sample's `list_widgets` SHALL include `invoice`, `weather` and `x-post`
+
+#### Scenario: The sample serves over HTTP
+- **WHEN** the sample runs with `--http` and an MCP Apps client on the 2026-07-28 revision calls `team_roster`
+- **THEN** the result SHALL be the slim output with the table in `structuredContent`
+- **AND** a client without the UI capability SHALL get the full output, and an MCP Apps client on the 2025-11-25 revision, which initializes, SHALL get the slim output through its session

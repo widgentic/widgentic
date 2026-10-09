@@ -38,7 +38,7 @@ internal sealed class WidgenticTool : McpServerTool
         var json = await _engine.Pool.CallToolAsync(
             ProtocolTool.Name,
             ArgumentsJson(request.Params?.Arguments),
-            Slimming.For(request.Server, _assumeUi),
+            Slimming.For(request.Server, request.Params?.Meta, _assumeUi),
             cancellationToken).ConfigureAwait(false);
         return ToolResults.Parse(json);
     }

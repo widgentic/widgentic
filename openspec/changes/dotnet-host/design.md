@@ -383,6 +383,26 @@ lines (D12, D14).
   - *Alternatives:* independent versioning from 0.1.0, where parity is visible only through
     the pin; or exact lockstep, where a .NET-only fix would need a four-part version.
 
+- **A16. HTTP for the sample, and stateless capabilities (2026-10-08).**
+  - **Why HTTP:** the owner recalls Claude not showing widgets for a stdio server; MCP Apps
+    hosts that take a URL (Claude's custom connectors, VS Code) are where widgets mount. So
+    the sample also serves Streamable HTTP with `--http`. Stdio stays the default, both modes
+    share one registration, and the HTTP server binds loopback because the sample has no
+    authentication.
+  - **The finding:** C# SDK 2.2.0 serves HTTP stateless by default (MCP 2026-07-28,
+    SEP-2567). A probe showed that such clients send their capabilities in every request's
+    `_meta["io.modelcontextprotocol/clientCapabilities"]` while `McpServer.ClientCapabilities`
+    stays null. Slimming therefore read nothing and fell back to `AssumeUi`, so an MCP Apps host
+    over HTTP got the full HTML in model context.
+  - **The fix:** slimming reads the session's capabilities, else the request's own, else
+    `AssumeUi`, using the SDK's `MetaKeys.ClientCapabilities`. `IWidgenticRenderer` gains a
+    `RequestContext` overload so host tools see the same capabilities. The sample sets
+    `SessionMode = StatefulForInitializeClients`, which the SDK does not mark obsolete, so
+    hosts still on the initialize-based 2025-11-25 revision keep a session that remembers
+    theirs. The sample's HTTP test drives all three clients.
+  - **The Node side:** the TypeScript SDK (1.31) still negotiates at most 2025-11-25, so the
+    Node assembly is unaffected for now; BACKLOG records the follow-up for when it moves.
+
 ## Risks / Trade-offs
 
 - **[ICU/CLDR drift between Node's ICU and ClearScript's V8 build]** A future locale data

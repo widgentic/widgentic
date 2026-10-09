@@ -287,6 +287,12 @@ into a section above, or into *Not adopted*.
   `examples/docker/mcp.ts`; derive `rejectionStatus` from code families; a
   section factory for the docker client's four list panes (same).
 
+- When the TypeScript SDK adopts MCP 2026-07-28 (stateless HTTP), the Node assembly's
+  slimming must read the capabilities each request carries in
+  `_meta["io.modelcontextprotocol/clientCapabilities"]`. Today it relies on `initialize` or
+  `WIDGENTIC_ASSUME_UI`, and SDK 1.31 negotiates at most 2025-11-25. `Widgentic.Mcp`
+  already does this (found 2026-10-08 during `dotnet-host`, design A16).
+
 - The preview page for an unknown kind echoes the kind into HTML unescaped
   (`renderWidgetPage`: `Unknown widget kind '<b>bold</b>'`). The kind comes
   from the `ui://widgentic/page/{kind}` URI a host reads. Escape it, and

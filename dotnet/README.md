@@ -54,8 +54,9 @@ builder.Services
 - **An `IWidgenticRenderer`** for your own tools (below).
 
 It also enables the SDK's MCP Apps extension. Output for the model is slimmed when the
-client advertises MCP Apps support. For stateless HTTP, where no capabilities are negotiated,
-`AssumeUi` decides.
+client advertises MCP Apps support: from the session when there is one, and otherwise from the
+capabilities each stateless request carries (MCP 2026-07-28, the SDK's HTTP default). Only
+when a call reveals neither does `AssumeUi` decide.
 
 ## Render from your own tools
 
@@ -65,8 +66,9 @@ public sealed class TeamTools
 {
     [McpServerTool(Name = "team_roster", ReadOnly = true), Description("The team as a table.")]
     [McpAppUi(ResourceUri = WidgenticResources.AppTemplateUri)]
-    public static ValueTask<CallToolResult> TeamRoster(IWidgenticRenderer renderer, McpServer server, CancellationToken ct) =>
-        renderer.RenderAsync(new WidgetRenderRequest("table", rows) { Meta = new() { ["title"] = "Team" } }, server, ct);
+    public static ValueTask<CallToolResult> TeamRoster(
+        IWidgenticRenderer renderer, RequestContext<CallToolRequestParams> context, CancellationToken ct) =>
+        renderer.RenderAsync(new WidgetRenderRequest("table", rows) { Meta = new() { ["title"] = "Team" } }, context, ct);
 }
 ```
 
@@ -117,13 +119,19 @@ and then silently missing.
 
 ## Sample
 
-[`samples/Widgentic.Sample.Stdio`](samples/Widgentic.Sample.Stdio) is a stdio server with the
-example widgets and one host tool:
+[`samples/Widgentic.Sample.Stdio`](samples/Widgentic.Sample.Stdio) serves the example widgets and
+one host tool, over stdio by default or over Streamable HTTP with `--http`:
 
 ```sh
 npm ci && npm run build        # at the repository root: builds the host bundle
-dotnet run --project dotnet/samples/Widgentic.Sample.Stdio
+dotnet run --project dotnet/samples/Widgentic.Sample.Stdio                 # stdio
+dotnet run --project dotnet/samples/Widgentic.Sample.Stdio -- --http       # http://localhost:3002/mcp
 ```
+
+Hosts that connect to a URL, such as VS Code or Claude's custom connectors, are where widgets
+render inline. Over HTTP the sample is stateless for MCP 2026-07-28 clients and keeps a session
+for clients that initialize (`SessionMode = StatefulForInitializeClients`). It binds loopback
+only, because it has no authentication.
 
 ## Developing this package
 

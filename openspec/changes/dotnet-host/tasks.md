@@ -169,3 +169,9 @@
 - [x] 12.4 Pin `WidgenticMcpVersion` to `0.9.0`, since 0.8.0 shipped without `./host`. Update the spec deltas, design (A14) and docs for the preview tool.
 - [x] 12.5 Version alignment (owner decision, design A15): `Widgentic.Mcp` 0.9.0, the build-time rule that its major.minor equals `WidgenticMcpVersion`'s, and the package-distribution delta, CHANGELOG, README and CLAUDE.md updated.
 - [x] 12.6 Merge `main` again (streaming-preview image placeholders, 0.8.1). Kept both BACKLOG items (RND-5, NET-1) and synced the lockfile. Only the app template's corpus case went stale; it was regenerated. The placeholder behaviour reaches .NET through the bundled template with no package change.
+
+## 13. Streamable HTTP (live finding: Claude does not mount widgets over stdio)
+
+- [x] 13.1 The sample serves Streamable HTTP with `--http` (loopback `:3002/mcp`, `--urls` to override, `SessionMode = StatefulForInitializeClients`), sharing one server registration with stdio. `ModelContextProtocol.AspNetCore` 2.2.0 is pinned.
+- [x] 13.2 Slimming reads a stateless request's `_meta` client capabilities (`MetaKeys.ClientCapabilities`) when there is no session, and only then falls back to `AssumeUi`. `IWidgenticRenderer` gains the `RequestContext` overload, and the sample's host tool uses it. Covered by `SlimmingTests`.
+- [x] 13.3 The sample is tested over HTTP as a real process with three clients: a 2026-07-28 MCP Apps client (slimmed), a plain client (full), and a 2025-11-25 MCP Apps client (slimmed through its session). The spec delta, design A16, the README, TESTING (recipes for VS Code and Claude) and CLAUDE.md are updated, and the Node follow-up is in BACKLOG.

@@ -27,9 +27,10 @@ public sealed record WidgetRenderRequest(string Widget, JsonNode? Data)
 
 /// <summary>
 /// Renders widgentic results for a host's OWN tools. Declare the tool with
-/// <c>[McpAppUi(ResourceUri = WidgenticResources.AppTemplateUri)]</c> and return
-/// <see cref="RenderAsync"/>'s result: MCP Apps hosts mount it, and the model still sees the data in
-/// the payload block.
+/// <c>[McpAppUi(ResourceUri = WidgenticResources.AppTemplateUri)]</c>, take a
+/// <c>RequestContext&lt;CallToolRequestParams&gt;</c> parameter, and return
+/// <see cref="RenderAsync(WidgetRenderRequest, RequestContext{CallToolRequestParams}, CancellationToken)"/>'s
+/// result: MCP Apps hosts mount it, and the model still sees the data in the payload block.
 /// </summary>
 public interface IWidgenticRenderer
 {
@@ -38,7 +39,21 @@ public interface IWidgenticRenderer
     /// Invalid input is an <c>isError</c> result with a structured code, never an exception.
     /// </summary>
     /// <param name="request">What to render.</param>
-    /// <param name="session">The calling session (slims output for Apps hosts); null applies <see cref="WidgenticOptions.AssumeUi"/>.</param>
+    /// <param name="session">
+    /// The calling session; its negotiated MCP Apps capability slims the output. Stateless requests
+    /// carry their capabilities themselves, which only the <c>RequestContext</c> overload sees; null
+    /// applies <see cref="WidgenticOptions.AssumeUi"/>.
+    /// </param>
     /// <param name="cancellationToken">Cancels waiting for a free engine.</param>
     ValueTask<CallToolResult> RenderAsync(WidgetRenderRequest request, McpServer? session = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// As above, slimming by the calling request's MCP Apps capability, from its session when it has one
+    /// and from the capabilities the request carries otherwise (stateless HTTP); with neither,
+    /// <see cref="WidgenticOptions.AssumeUi"/> decides. Prefer this overload in tools.
+    /// </summary>
+    /// <param name="request">What to render.</param>
+    /// <param name="context">The tool call being answered.</param>
+    /// <param name="cancellationToken">Cancels waiting for a free engine.</param>
+    ValueTask<CallToolResult> RenderAsync(WidgetRenderRequest request, RequestContext<CallToolRequestParams> context, CancellationToken cancellationToken = default);
 }

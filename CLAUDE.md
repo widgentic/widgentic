@@ -277,7 +277,11 @@ and the NuGet version in one commit.
   SDK's MCP Apps API is experimental (`MCPEXP003`, suppressed per project);
   `McpApps.SetResourceUi` writes only the resource-TEMPLATE view (pass `Meta`
   through the create options instead) and `SetAppUi` omits the legacy
-  `ui/resourceUri` key the TS helper writes. Python `write_text` on Windows writes
+  `ui/resourceUri` key the TS helper writes. C# SDK 2.2 serves HTTP STATELESS by
+  default (MCP 2026-07-28): clients send their capabilities in every request's
+  `_meta["io.modelcontextprotocol/clientCapabilities"]` and `McpServer.ClientCapabilities`
+  stays null. Read the request's capabilities (`MetaKeys.ClientCapabilities`), and use
+  `SessionMode = StatefulForInitializeClients` so initialize-based clients keep a session. Python `write_text` on Windows writes
   CRLF — edit with bytes or the editor tools.
 - OpenSpec: a MODIFIED delta carries ALL original scenarios with their
   ORIGINAL titles (renames read as omissions); after big refactors cross-check
