@@ -1,7 +1,7 @@
 # Packs and publishes the Widgentic.Mcp NuGet package (dotnet/). Outside Changesets:
 # the version lives in dotnet/src/Widgentic.Mcp/Widgentic.Mcp.csproj, and the package
 # embeds the host bundle of the @widgentic/mcp version pinned in dotnet/Directory.Build.props.
-#   - package (every run, any branch): build the npm workspace, test the .NET tree, pack,
+#   - package (every run: PRs, main, dispatch): build the npm workspace, test the .NET tree, pack,
 #     and compare the embedded bundle with the pinned version's registry tarball
 #     (tools/verify-host-pin.mjs) — a warning unless this run would publish.
 #   - publish (main only, when the repository variable NUGET_PUBLISH is "true" and the
@@ -18,6 +18,9 @@ on:
   push:
     branches: [main]
     paths: ["dotnet/**", ".github/workflows/release-dotnet.yml"]
+  # The PR run is the dry run: workflow_dispatch only works once this file is on main.
+  pull_request:
+    paths: ["dotnet/**", "packages/mcp/**", "tools/verify-host-pin.mjs", ".github/workflows/release-dotnet.yml"]
   workflow_dispatch:
 permissions:
   contents: read
