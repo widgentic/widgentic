@@ -9,8 +9,11 @@
  * the size budget's measure), whether the bridge completed the
  * `ui/initialize` handshake, the median time from posting a `tool-result`
  * to the mounted DOM for a 200-row table and a 200-node tree, whether a
- * reversed keyed table kept every row element, and whether a stored kind's
- * streaming input produced a `preview_widget` call whose answer mounted. The frame is a same-origin `srcdoc` iframe so the harness
+ * reversed keyed table kept every row element, whether a stored kind's
+ * streaming input produced a `preview_widget` call whose answer mounted, and
+ * the computed boxes of streaming image places (`imagePlaces`: an icon place
+ * and a pending hero, in px — both must be non-zero). The frame is a
+ * same-origin `srcdoc` iframe so the harness
  * can observe its DOM; real hosts sandbox harder, which does not change the
  * mount path. A handshake that never completes means the script did not run
  * — the parse-level failure jsdom cannot see.
@@ -147,6 +150,26 @@ async function serverPreview() {
   frame.remove();
   return ok;
 }
+async function imagePlaces() {
+  const frame = await freshFrame();
+  frame.style.width = "480px";
+  frame.contentWindow.postMessage({ jsonrpc: "2.0", method: "ui/notifications/tool-input-partial",
+    params: { arguments: { widget: "group", data: { items: [
+      { kind: "tree", data: [{ label: "Engineering", icon: "https://example.com/a.png", children: [] }] },
+      { kind: "card", data: { title: "HQ", fields: { cover: "https://example.com/cover" } }, hints: { images: { cover: "hero" } } }
+    ] } } } }, "*");
+  await nextTask();
+  const doc = frame.contentDocument;
+  const box = (selector) => {
+    const el = doc.querySelector(selector);
+    if (el === null) return null;
+    const r = el.getBoundingClientRect();
+    return [Math.round(r.width), Math.round(r.height)];
+  };
+  const out = { icon: box(".wg-img-icon.wg-img-pending"), hero: box(".wg-img-hero.wg-img-pending") };
+  frame.remove();
+  return out;
+}
 window.__probe = (async () => {
   const mountMs = {};
   let handshake = true;
@@ -161,7 +184,8 @@ window.__probe = (async () => {
     samples.sort((a, b) => a - b);
     mountMs[name] = samples.length ? Math.round(samples[samples.length >> 1] * 10) / 10 : null;
   }
-  return { handshake, mountMs, keyedReorder: await keyedReorder(), serverPreview: await serverPreview() };
+  return { handshake, mountMs, keyedReorder: await keyedReorder(), serverPreview: await serverPreview(),
+    imagePlaces: await imagePlaces() };
 })();
 </script></body>`;
 
