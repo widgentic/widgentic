@@ -32,7 +32,8 @@ import type {
   StoredWidget,
   WidgetStore
 } from "./types.js";
-import { DEFAULT_LIMITS, KEY_SCOPES, normalizeKeyScopes, StoreRejectionError } from "./types.js";
+import { KEY_SCOPES, normalizeKeyScopes, StoreRejectionError } from "./types.js";
+import { DEFAULT_LIMITS } from "./limits.js";
 import {
   checkStoredAction,
   checkStoredSchema,

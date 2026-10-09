@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Widgentic.Mcp</RootNamespace>
+    <IsPackable>true</IsPackable>
+    <PackageId>Widgentic.Mcp</PackageId>
+    <Version>0.1.0</Version>
+    <Description>BETA, render-only. widgentic widgets for .NET MCP servers: runs the published @widgentic/mcp host bundle on V8 and wires list_widgets, render_widget and the MCP Apps template onto the C# MCP SDK. Output is byte-identical to the Node path. The API may change in minor versions.</Description>
+    <PackageTags>mcp;mcp-apps;widgets;agents;widgentic</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- The C# SDK marks its MCP Apps extension experimental; this package is built on it deliberately. -->
+    <NoWarn>$(NoWarn);MCPEXP003</NoWarn>
+    <!-- The host bundle to embed; the release workflow passes the registry copy's path. -->
+    <WidgenticBundlePath Condition="'$(WidgenticBundlePath)' == ''">$(WidgenticRepoRoot)/packages/mcp/dist/host/widgentic-host.js</WidgenticBundlePath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ModelContextProtocol" />
+    <PackageReference Include="ModelContextProtocol.Extensions.Apps" />
+    <PackageReference Include="Microsoft.ClearScript.V8" />
+    <PackageReference Include="Microsoft.ClearScript.V8.Native.linux-x64" />
+    <PackageReference Include="Microsoft.ClearScript.V8.Native.linux-arm64" />
+    <PackageReference Include="Microsoft.ClearScript.V8.Native.win-x64" />
+    <PackageReference Include="Microsoft.ClearScript.V8.Native.osx-arm64" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="$(WidgenticBundlePath)" LogicalName="Widgentic.Mcp.widgentic-host.js" Visible="false" />
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+    <None Include="../../LICENSE" Pack="true" PackagePath="/" />
+    <InternalsVisibleTo Include="Widgentic.Mcp.Tests" />
+  </ItemGroup>
+
+  <Target Name="WidgenticRequireBundle" BeforeTargets="PrepareForBuild" Condition="!Exists('$(WidgenticBundlePath)')">
+    <Error Text="The widgentic host bundle is missing at '$(WidgenticBundlePath)'. Run `npm ci` and `npm run build` at the repository root first." />
+  </Target>
+
+</Project>

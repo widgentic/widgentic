@@ -17,6 +17,23 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: npm run pack:check
+  dotnet:
+    # The .NET host (dotnet/): builds the host bundle from this checkout, then
+    # runs the conformance corpus, the protocol tests and the sample on V8.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: dotnet/global.json
+      - run: npm ci
+      - run: npm run build
+      - run: dotnet test --solution Widgentic.slnx -c Release
+        working-directory: dotnet
   docs:
     runs-on: ubuntu-latest
     steps:

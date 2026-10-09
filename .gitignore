@@ -8,3 +8,10 @@ designer.bundle.js
 .vscode/
 examples/docker/kek.txt
 examples/docker/.env
+
+# .NET build output
+bin/
+obj/
+*.nupkg
+TestResults/
+artifacts/

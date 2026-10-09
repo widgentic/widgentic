@@ -10,9 +10,9 @@ repository `widgentic/apps` (local checkout: `/data/source/widgentic-apps`).
 
 | | `widgentic/widgentic` (this repo, public) | `widgentic/apps` (private) |
 |---|---|---|
-| contents | `packages/core`, `packages/designer`, `packages/webmcp`, `packages/mcp`, `examples/*`, `tools/`, `openspec/` | `apps/mcp-server` (mcp.widgentic.dev), `apps/web` (widgentic.dev), `infra/` (Bicep), Dockerfile, `RUNBOOK.md`, own `openspec/` (`widgentic-app` spec) |
+| contents | `packages/core`, `packages/designer`, `packages/webmcp`, `packages/mcp`, `dotnet/` (the `Widgentic.Mcp` NuGet package), `examples/*`, `tools/`, `openspec/` | `apps/mcp-server` (mcp.widgentic.dev), `apps/web` (widgentic.dev), `infra/` (Bicep), Dockerfile, `RUNBOOK.md`, own `openspec/` (`widgentic-app` spec) |
 | consumes | nothing from apps — ever | the PUBLISHED `@widgentic/*` packages (`^x.y.z` from npm); never source paths |
-| releases | Changesets → "Version Packages" PR → `release.yml` publishes with npm provenance | `az acr build` + Bicep deploy from its own checkout (see its `RUNBOOK.md`) |
+| releases | Changesets → "Version Packages" PR → `release.yml` publishes with npm provenance; `release-dotnet.yml` publishes the NuGet package | `az acr build` + Bicep deploy from its own checkout (see its `RUNBOOK.md`) |
 | specs | every capability except `widgentic-app` | `widgentic-app` |
 | testing docs | `TESTING.md` (package-level) | `RUNBOOK.md` (deploys, production, rig, verification log) |
 
@@ -47,12 +47,16 @@ packages/designer   @widgentic/designer   widget/theme/schema/action designers, 
 packages/webmcp     @widgentic/webmcp   BETA: the designers as WebMCP tools (document.modelContext) — descriptor factory, feature-detected registration, dispose; outside the linked release group
 packages/mcp        @widgentic/mcp    output/ (tool-output convention), server/ (handlers, app template, actions, guarded fetch,
                                       server.ts = createWidgenticServer behind ./sdk), authoring/ (./authoring — the hostable write surface),
-                                      store/ (./store, ./store/sqlite, ./store/cosmos), secrets/ (./secrets, ./secrets/keyvault)
+                                      store/ (./store, ./store/sqlite, ./store/cosmos), secrets/ (./secrets, ./secrets/keyvault),
+                                      host/ (./host — the runtime-neutral bundle for embedded engines; scripts/bundle-host.mjs)
+dotnet/              Widgentic.Mcp (NuGet, BETA, render-only): the ./host bundle on ClearScript V8 + WithWidgentic on the C# MCP SDK;
+                     tests/ (conformance corpus, protocol, engine), samples/Widgentic.Sample.Stdio; outside Changesets
 examples/mcp-server  stdio server with compiled-in widgets (`npm run mcp`); also the test-fixture package @widgentic-examples/mcp-server/widgets
 examples/designer    designer demo host (`npm run designer`; /standalone.html uses the published browser bundle)
 examples/docker      self-hosted deployment: authoring app + MCP endpoint over one SQLite volume (docker compose)
 examples/shared      wiring the example hosts import (designer mount discipline, authoring client, preview-theme merge)
-tools/               boundaries.test.ts, exports.test.ts (snapshots of all 19 entries), pack-check.mjs, docs-generate.ts
+tools/               boundaries.test.ts, exports.test.ts (snapshots of all 20 entries), pack-check.mjs, docs-generate.ts,
+                     conformance-generate.ts (the host corpus + the .NET sample's widgets), verify-host-pin.mjs (NuGet release gate)
 openspec/            specs/ (current behavior per capability), changes/ (active), changes/archive/ (full history)
 ```
 
@@ -72,11 +76,14 @@ npm run build          # core → designer (+ browser bundle) → mcp, in that o
 npm run pack:check     # dist-only tarballs, publint --strict, are-the-types-wrong (esm-only)
 npm run mcp            # stdio example server;  npm run designer → http://localhost:8082
 npm run changeset      # every user-visible package change ships with one
+npm run conformance:generate   # after any change to handler output: rewrites the host corpus (npm test fails while it is stale)
+cd dotnet && dotnet test --solution Widgentic.slnx -c Release   # needs `npm run build` first (it embeds the built bundle)
 openspec validate --strict <change> ; openspec validate --specs
 ```
 
 Gate before any commit: typecheck, `npm test`, `npm run build`, `npm run
-pack:check`, `openspec validate` — all green.
+pack:check`, `openspec validate` — all green; plus `dotnet test` when `dotnet/`,
+`packages/mcp/src/host` or anything the host bundle renders changed.
 
 ## Boundaries (enforced by `tools/boundaries.test.ts` — do not weaken it)
 
@@ -85,7 +92,10 @@ pack:check`, `openspec validate` — all green.
   DECLARED `exports` entry); intra-package imports are relative; no deep paths
   into another package.
 - `@widgentic/core`, `@widgentic/designer` and `@widgentic/webmcp` are browser-safe: no `node:`,
-  `Buffer`, `process`. `@widgentic/mcp` requires Node ≥ 22.
+  `Buffer`, `process`. `@widgentic/mcp` requires Node ≥ 22 — except its `./host` bundle, whose
+  static import graph must stay free of `node:`, `Buffer`, `process` and `require` at ANY depth
+  (it runs on bare ECMAScript + `Intl`; `URL` comes from an injected shim, never a global).
+- `dotnet/` reaches into `packages/` only for the built `./host` bundle and the conformance corpus.
 - Zero runtime dependencies. In mcp the MCP SDK, `@modelcontextprotocol/ext-apps`
   and `zod` are OPTIONAL peers used only by `packages/mcp/src/server/server.ts`
   (the `./sdk` entry); the Azure clients are optional peers used only by
@@ -153,7 +163,13 @@ pack:check`, `openspec validate` — all green.
   write and read; anonymous/unknown keys degrade to the built-in catalog,
   never to an error.
 - Server assembly lives behind `@widgentic/mcp/sdk`; store and secrets are
-  subpaths of `@widgentic/mcp`; two repositories, not five; examples stay here.
+  subpaths of `@widgentic/mcp`.
+- Exactly two repositories: this public one holds every package, every
+  language host (`dotnet/`) and the examples; the private `widgentic/apps`
+  holds our deployments. Never a repository per package or per language.
+- Other languages EMBED the `./host` bundle; they never port the engine. Behavior
+  a host needs is specified in `mcp-server`, released in `@widgentic/mcp`, and
+  adopted by bumping the host's pin.
 
 ## Development loop
 
@@ -191,6 +207,17 @@ a pending release. Private workspaces are never versioned. `release.yml` on `mai
 `NPM_PUBLISH` is `true` (npm ≥ 11.5, OIDC trusted publishing, provenance);
 otherwise it runs `pack:check`. After a publish, bump the range in
 `widgentic/apps` and deploy from there.
+
+`Widgentic.Mcp` (NuGet) is outside Changesets: its version is in
+`dotnet/src/Widgentic.Mcp/Widgentic.Mcp.csproj`, its `CHANGELOG.md` is
+hand-written, and `WidgenticMcpVersion` in `dotnet/Directory.Build.props` pins
+the `@widgentic/mcp` release whose bundle it embeds. `release-dotnet.yml`
+packs on every run but publishes only from `main`, in the GitHub environment
+`nuget` (which the nuget.org trusted-publishing policy names), when
+`NUGET_PUBLISH` is `true` and the version is new, and only if
+`tools/verify-host-pin.mjs` finds the embedded bundle byte-identical to the
+pinned registry tarball's. So: release `@widgentic/mcp` first, then bump the pin
+and the NuGet version in one commit.
 
 ## Working with the user
 
@@ -239,6 +266,14 @@ otherwise it runs `pack:check`. After a publish, bump the range in
   --json -w` returns an object keyed by package; a fresh publish can 404 on the
   registry document for minutes while search lists it; provenance binds
   `repository.url` to the publishing repo.
+- .NET: xunit.v3 4.x on the .NET 10 SDK only runs under Microsoft.Testing.Platform,
+  opted in by `dotnet/global.json` — so `dotnet test` must run from `dotnet/`
+  (`--solution Widgentic.slnx`), or the SDK falls back to VSTest and errors. The C#
+  SDK's MCP Apps API is experimental (`MCPEXP003`, suppressed per project);
+  `McpApps.SetResourceUi` writes only the resource-TEMPLATE view (pass `Meta`
+  through the create options instead) and `SetAppUi` omits the legacy
+  `ui/resourceUri` key the TS helper writes. Python `write_text` on Windows writes
+  CRLF — edit with bytes or the editor tools.
 - OpenSpec: a MODIFIED delta carries ALL original scenarios with their
   ORIGINAL titles (renames read as omissions); after big refactors cross-check
   other requirements in the same spec for stale passages.

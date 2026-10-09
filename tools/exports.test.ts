@@ -21,6 +21,7 @@ const ENTRIES = [
   "@widgentic/webmcp",
   "@widgentic/mcp",
   "@widgentic/mcp/sdk",
+  "@widgentic/mcp/host",
   "@widgentic/mcp/authoring",
   "@widgentic/mcp/store",
   "@widgentic/mcp/store/sqlite",

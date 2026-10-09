@@ -1,0 +1,100 @@
+# Packs and publishes the Widgentic.Mcp NuGet package (dotnet/). Outside Changesets:
+# the version lives in dotnet/src/Widgentic.Mcp/Widgentic.Mcp.csproj, and the package
+# embeds the host bundle of the @widgentic/mcp version pinned in dotnet/Directory.Build.props.
+#   - package (every run, any branch): build the npm workspace, test the .NET tree, pack,
+#     and compare the embedded bundle with the pinned version's registry tarball
+#     (tools/verify-host-pin.mjs) — a warning unless this run would publish.
+#   - publish (main only, when the repository variable NUGET_PUBLISH is "true" and the
+#     version is not on nuget.org yet): runs in the GitHub environment "nuget", pushes the
+#     package packed above, then attests its build provenance.
+# Authentication:
+#   - Preferred: NuGet trusted publishing (OIDC). The nuget.org policy names
+#     widgentic/widgentic, release-dotnet.yml and the environment "nuget"; the nuget.org
+#     profile name (not the email) goes in the repository variable NUGET_USER.
+#   - Fallback: an API key scoped to push Widgentic.Mcp only, with an expiry, in the
+#     NUGET_API_KEY secret of the "nuget" environment. When present it is used instead.
+name: Release (.NET)
+on:
+  push:
+    branches: [main]
+    paths: ["dotnet/**", ".github/workflows/release-dotnet.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency: release-dotnet-${{ github.ref }}
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dotnet
+    outputs:
+      version: ${{ steps.versions.outputs.package }}
+      exists: ${{ steps.published.outputs.exists }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: dotnet/global.json
+      - name: Build the host bundle
+        working-directory: .
+        run: npm ci && npm run build
+      - run: dotnet test --solution Widgentic.slnx -c Release
+      - name: Versions
+        id: versions
+        run: |
+          echo "package=$(dotnet msbuild src/Widgentic.Mcp/Widgentic.Mcp.csproj -getProperty:Version)" >> "$GITHUB_OUTPUT"
+          echo "pin=$(dotnet msbuild src/Widgentic.Mcp/Widgentic.Mcp.csproj -getProperty:WidgenticMcpVersion)" >> "$GITHUB_OUTPUT"
+      - name: Compare the embedded bundle with the registry copy
+        continue-on-error: ${{ !(vars.NUGET_PUBLISH == 'true' && github.ref == 'refs/heads/main') }}
+        run: node ../tools/verify-host-pin.mjs "${{ steps.versions.outputs.pin }}" ../packages/mcp/dist/host/widgentic-host.js
+      - run: dotnet pack src/Widgentic.Mcp/Widgentic.Mcp.csproj -c Release --no-build -o ../artifacts
+      - name: Already on nuget.org?
+        id: published
+        run: |
+          v="${{ steps.versions.outputs.package }}"
+          code=$(curl -s -o /dev/null -w '%{http_code}' "https://api.nuget.org/v3-flatcontainer/widgentic.mcp/$v/widgentic.mcp.$v.nupkg")
+          echo "exists=$([ "$code" = 200 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nupkg
+          path: artifacts/*.nupkg
+          if-no-files-found: error
+
+  publish:
+    needs: package
+    if: vars.NUGET_PUBLISH == 'true' && github.ref == 'refs/heads/main' && needs.package.outputs.exists == 'false'
+    runs-on: ubuntu-latest
+    environment: nuget
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    env:
+      NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: nupkg
+          path: artifacts
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: NuGet login (trusted publishing)
+        id: login
+        if: env.NUGET_API_KEY == ''
+        uses: NuGet/login@v1
+        with:
+          user: ${{ vars.NUGET_USER }}
+      - name: Publish
+        env:
+          OIDC_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        run: dotnet nuget push "artifacts/*.nupkg" --api-key "${NUGET_API_KEY:-$OIDC_KEY}" --source https://api.nuget.org/v3/index.json
+      - name: Attest
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: artifacts/*.nupkg

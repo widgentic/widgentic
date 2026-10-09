@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Widgentic.Mcp/Widgentic.Mcp.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Widgentic.Mcp.Tests/Widgentic.Mcp.Tests.csproj" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/Widgentic.Sample.Stdio/Widgentic.Sample.Stdio.csproj" />
+  </Folder>
+</Solution>

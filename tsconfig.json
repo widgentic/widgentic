@@ -37,6 +37,9 @@
       "@widgentic/mcp": [
         "./packages/mcp/src/index.ts"
       ],
+      "@widgentic/mcp/host": [
+        "./packages/mcp/src/host/index.ts"
+      ],
       "@widgentic/mcp/sdk": [
         "./packages/mcp/src/server/server.ts"
       ],

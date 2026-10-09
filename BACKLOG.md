@@ -51,6 +51,7 @@ appears. Size: **S** one small change, **M** one change with spec deltas,
 | AGT-3 | Payload inspector in the designer | P3 | M | json-render comparison |
 | STO-1 | DEK unwrap cache | P3 | M | Backlog |
 | STO-2 | Merge two populated accounts | P3 | L | Backlog |
+| NET-1 | Actions and image inlining for the .NET host | P2 | L | `dotnet-host` design |
 
 **Part 2 · Pairing with other technologies**
 
@@ -283,6 +284,33 @@ are reachable by direct URL.
   live in the apps repository's `widgentic-app` spec.
 - **Origin.** Backlog.
 
+### Language hosts
+
+#### NET-1 · Actions and image inlining for the .NET host — P2, L
+
+- **Problem.** `Widgentic.Mcp` 0.1 is render-only. Http actions render
+  disabled, `load` is inactive, and `execute_action`/`list_actions` are absent.
+  Nothing inlines images, so strict MCP Apps hosts show external images only
+  from operator-declared CSP domains.
+- **Direction.**
+  1. Upstream: split `handleExecuteAction` into a pure *prepare* step (scope,
+     arguments, the built request with secret placeholders) and a *complete*
+     step (fold the JSON response, re-render, redact), both exposed by the
+     `./host` bundle.
+  2. C#: the guarded fetch. Public https only; DNS resolution with
+     private-address rejection that re-checks embedded IPv4 in mapped IPv6;
+     the connection pinned to the vetted address
+     (`SocketsHttpHandler.ConnectCallback`); no redirects, 8 s, 256 KiB, JSON
+     only. It needs a test suite mirroring `guarded-fetch.ts`.
+  3. `execute_action` (app-only) and `load` descriptors behind an execute
+     option, secrets by name through a resolver interface, and a rate limiter.
+  4. Image inlining over the render tree, reusing (2).
+- **Touches.** `mcp-server` (the host bundle's surface), `dotnet-host`, and
+  the action invariants in `CLAUDE.md`: server-side execution, the guarded
+  fetch, declared args only, and secrets never displayed. Roughly the size of
+  `dotnet-host` again, mostly security-critical C#.
+- **Origin.** 2026-10-08 `dotnet-host` design, "Actions later".
+
 ### Untriaged
 
 Deferred in archived change designs and never listed until now. Triage each
@@ -303,6 +331,11 @@ into a section above, or into *Not adopted*.
 - A package-level store-backed MCP edge helper in place of the copy in
   `examples/docker/mcp.ts`; derive `rejectionStatus` from code families; a
   section factory for the docker client's four list panes (same).
+
+- The preview page for an unknown kind echoes the kind into HTML unescaped
+  (`renderWidgetPage`: `Unknown widget kind '<b>bold</b>'`). The kind comes
+  from the `ui://widgentic/page/{kind}` URI a host reads. Escape it, and
+  regenerate the conformance corpus (found 2026-10-08 during `dotnet-host`).
 
 - The bot's Version Packages PRs never get CI: `release.yml` opens them with
   the workflow token, and PRs opened that way trigger no workflows, so the

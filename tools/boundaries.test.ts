@@ -12,9 +12,15 @@
  * Tests (`__tests__`) may additionally use vitest, the SDK client, the
  * example fixtures package and the widgentic packages their own manifest
  * lists as devDependencies; nothing else is exempt.
+ *
+ * The host bundle's static import graph (from `@widgentic/mcp/host`) must
+ * stay runtime-neutral at ANY depth, even where the bundler would drop the
+ * import; and the .NET host under `dotnet/` may reach into `packages/`
+ * only for the built bundle and the conformance corpus.
  */
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const ROOT = resolve(import.meta.dirname, "..");
@@ -59,18 +65,22 @@ const SPECIFIERS = [/^\s*(?:import|export)\b[^;"']*?\bfrom\s+"([^"]+)"/gm, /^\s*
 function stripComments(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'])\/\/[^\n]*/g, "$1");
 }
+/** Repository-relative path with `/` separators on every platform. */
+function repoPath(file: string): string {
+  return relative(ROOT, file).split(sep).join("/");
+}
 function rootOf(file: string): string {
-  const rel = relative(ROOT, file).split("/");
+  const rel = repoPath(file).split("/");
   return rel[0] === "packages" || rel[0] === "examples" ? `${rel[0]}/${rel[1]}` : rel[0] ?? "";
 }
 function packageOf(file: string): string | undefined {
-  return Object.entries(PACKAGES).find(([, dir]) => relative(ROOT, file).startsWith(dir + "/"))?.[0];
+  return Object.entries(PACKAGES).find(([, dir]) => repoPath(file).startsWith(dir + "/"))?.[0];
 }
 
 const files = [...walk(join(ROOT, "packages")), ...walk(join(ROOT, "examples"))];
 const violations: string[] = [];
 for (const file of files) {
-  const rel = relative(ROOT, file);
+  const rel = repoPath(file);
   const isTest = rel.includes("/__tests__/");
   const pkg = packageOf(file);
   const source = readFileSync(file, "utf8");
@@ -114,6 +124,84 @@ for (const file of files) {
   }
 }
 
+/** Import edges that survive compilation: `import type` / `export type` are erased. */
+const RUNTIME_SPECIFIERS = [/^\s*(?:import|export)\s+(?!type\b)[^;"']*?\bfrom\s+"([^"]+)"/gm, /^\s*import\s+"([^"]+)"/gm];
+
+/** A relative `.js` specifier as the TypeScript source it names. */
+function sourceFile(from: string, spec: string): string | undefined {
+  const target = resolve(dirname(from), spec);
+  for (const candidate of [target.replace(/\.js$/, ".ts"), target, join(target, "index.ts")]) {
+    if (existsSync(candidate) && statSync(candidate).isFile()) return candidate;
+  }
+  return undefined;
+}
+
+/**
+ * Walk the static import graph from `entry` and report every Node-only or
+ * third-party edge with the chain that reaches it. `@widgentic/core` (and its
+ * subpaths) resolve to the core sources under `root`; nothing else outside
+ * the entry's own relative graph may be reached.
+ */
+function hostGraphViolations(entry: string, root: string = ROOT): string[] {
+  const found: string[] = [];
+  const parents = new Map<string, string | undefined>([[entry, undefined]]);
+  const queue = [entry];
+  const chain = (file: string): string => {
+    const names: string[] = [];
+    for (let at: string | undefined = file; at !== undefined; at = parents.get(at)) {
+      names.unshift(relative(root, at).split(sep).join("/"));
+    }
+    return names.join(" → ");
+  };
+  while (queue.length > 0) {
+    const file = queue.shift() as string;
+    const code = stripComments(readFileSync(file, "utf8"));
+    if (/\bBuffer\./.test(code)) found.push(`${chain(file)}: uses Buffer`);
+    if (/\bprocess\./.test(code)) found.push(`${chain(file)}: uses process`);
+    if (/\brequire\(/.test(code)) found.push(`${chain(file)}: uses require`);
+    const specs = RUNTIME_SPECIFIERS.flatMap((re) => [...code.matchAll(re)].map((m) => m[1] ?? ""));
+    for (const spec of specs) {
+      let next: string | undefined;
+      if (spec.startsWith(".")) {
+        next = sourceFile(file, spec);
+        if (next === undefined) found.push(`${chain(file)} → ${spec}: unresolved`);
+      } else if (spec === "@widgentic/core" || spec.startsWith("@widgentic/core/")) {
+        const sub = spec.slice("@widgentic/core".length);
+        next = join(root, "packages", "core", "src", sub === "" ? "index.ts" : `${sub.slice(1)}/index.ts`);
+      } else {
+        found.push(`${chain(file)} → ${spec}: ${spec.startsWith("node:") ? "Node-only module" : "not bundled source"}`);
+      }
+      if (next !== undefined && !parents.has(next)) {
+        parents.set(next, file);
+        queue.push(next);
+      }
+    }
+  }
+  return found;
+}
+
+/** Paths into `packages/` the .NET host may reference: the built bundle and the corpus. */
+const DOTNET_ALLOWED = new Set([
+  "packages/mcp/dist/host/widgentic-host.js",
+  "packages/mcp/src/host/__tests__/conformance.json"
+]);
+function* dotnetFiles(dir: string): Generator<string> {
+  if (!existsSync(dir)) return;
+  for (const entry of readdirSync(dir)) {
+    if (entry === "bin" || entry === "obj" || entry.startsWith(".")) continue;
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) yield* dotnetFiles(full);
+    else if (/\.(csproj|props|targets|cs|slnx)$/.test(entry)) yield full;
+  }
+}
+const dotnetViolations: string[] = [];
+for (const file of dotnetFiles(join(ROOT, "dotnet"))) {
+  for (const match of readFileSync(file, "utf8").matchAll(/packages[\\/][^"'<>\s;)]*/g)) {
+    const target = match[0].replaceAll("\\", "/");
+    if (!DOTNET_ALLOWED.has(target)) dotnetViolations.push(`${repoPath(file)}: references ${target}`);
+  }
+}
+
 describe("package boundaries", () => {
   it("scans every source and test file", () => {
     expect(files.length).toBeGreaterThan(100);
@@ -121,6 +209,27 @@ describe("package boundaries", () => {
   it("finds no boundary violation", () => {
     if (violations.length > 0) console.error(violations.join("\n"));
     expect(violations).toEqual([]);
+  });
+  it("keeps the host bundle's import graph runtime-neutral at any depth", () => {
+    expect(hostGraphViolations(join(ROOT, "packages/mcp/src/host/index.ts"))).toEqual([]);
+  });
+  it("catches a Node-only import behind a tree-shakeable re-export", () => {
+    const dir = mkdtempSync(join(tmpdir(), "wg-host-graph-"));
+    try {
+      writeFileSync(join(dir, "entry.ts"), 'import { a } from "./barrel.js";\nimport type { T } from "./typed.js";\nexport const v: T = a;\n');
+      writeFileSync(join(dir, "barrel.ts"), 'export { a } from "./a.js";\nexport { b } from "./uses-node.js";\n');
+      writeFileSync(join(dir, "a.ts"), "export const a = 1;\n");
+      writeFileSync(join(dir, "typed.ts"), 'import { createHash } from "node:crypto";\nexport type T = number;\nexport const h = createHash;\n');
+      writeFileSync(join(dir, "uses-node.ts"), 'import { randomBytes } from "node:crypto";\nexport const b = randomBytes;\n');
+      expect(hostGraphViolations(join(dir, "entry.ts"), dir)).toEqual([
+        "entry.ts → barrel.ts → uses-node.ts → node:crypto: Node-only module"
+      ]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  it("lets the .NET host reach only the built bundle and the corpus", () => {
+    expect(dotnetViolations).toEqual([]);
   });
   it("declares dependencies honestly", () => {
     const core = manifests.get("@widgentic/core") as Manifest & { dependencies?: unknown; peerDependencies?: unknown };

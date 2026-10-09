@@ -36,7 +36,7 @@ import {
   FORMAT_DECIMALS_MIN,
   FORMAT_TYPES
 } from "@widgentic/core";
-import { DEFAULT_LIMITS, SAFE_IDENTIFIER } from "../store/index.js";
+import { DEFAULT_LIMITS, SAFE_IDENTIFIER } from "../store/limits.js";
 import type { McpToolResult } from "../output/index.js";
 
 /**

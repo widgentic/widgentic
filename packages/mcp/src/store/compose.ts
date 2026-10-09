@@ -6,11 +6,16 @@
  * cross-tenant leak waiting for an off-by-one, and compilation is pure and
  * cheap. Every entry is re-validated on the way in — the store is
  * untrusted input, even when it is ours.
+ *
+ * The work itself is synchronous over entry lists (`composeCatalogEntries`,
+ * `composeThemeEntries`) and reports structured problems; the async
+ * store-facing functions read the store, delegate, and format those
+ * problems as diagnostic lines.
  */
 import { errorMessage } from "../internal.js";
 import { createCatalog } from "@widgentic/core";
 import type { WidgetCatalog } from "@widgentic/core";
-import type { ActionBinding, ActionDefinition, StoredAction } from "@widgentic/core";
+import type { ActionBinding, ActionDefinition, ActionDisabledReason, StoredAction } from "@widgentic/core";
 import {
   collectActionRefs,
   DEFAULT_MAX_NODES,
@@ -19,9 +24,10 @@ import {
 } from "@widgentic/core";
 import { isPlainObject } from "@widgentic/core";
 import { createThemeRegistry } from "@widgentic/core";
-import type { ThemeRegistry } from "@widgentic/core";
-import type { StoreLimits, StoredWidget, WidgetStore } from "./types.js";
-import { DEFAULT_LIMITS } from "./types.js";
+import type { ThemeEntry, ThemeRegistry } from "@widgentic/core";
+import type { StoredWidget, WidgetStore } from "./types.js";
+import type { StoreLimits } from "./limits.js";
+import { DEFAULT_LIMITS } from "./limits.js";
 import { checkStoredAction, checkStoredTheme, checkStoredWidget } from "./validate.js";
 
 export interface ComposeOptions {
@@ -71,6 +77,174 @@ function refsOf(entry: unknown): string[] {
   return collectActionRefs(entry.template, entry.load);
 }
 
+/** One entry composition refused or noted, before it becomes a diagnostic line. */
+export interface ComposeProblem {
+  section: "widgets" | "themes" | "actions";
+  /** Position in the list composition was given (for a limit stop: the first entry skipped). */
+  index: number;
+  /** The entry's kind or name as given — possibly malformed. */
+  name: string;
+  /** A store check code, or `UNKNOWN_SCHEMA`, `UNKNOWN_ACTION`, `LIMIT_REACHED`, `REGISTER_FAILED`. */
+  code: string;
+  message: string;
+  /** The entry WAS registered; the condition is only noted (an unknown action renders disabled). */
+  warning?: true;
+}
+
+const SINGULAR = { widgets: "widget", themes: "theme", actions: "action" } as const;
+
+/** The diagnostic line a problem has always been reported as. */
+function diagnosticLine(problem: ComposeProblem): string {
+  if (problem.code === "LIMIT_REACHED" || problem.warning === true) return problem.message;
+  const prefix = `skipped ${SINGULAR[problem.section]} '${problem.name}'`;
+  return problem.code === "REGISTER_FAILED"
+    ? `${prefix}: ${problem.message}`
+    : `${prefix}: ${problem.code} — ${problem.message}`;
+}
+
+export interface CatalogEntries {
+  /** Widget entries in registration order (the deployment's own first). */
+  widgets: readonly unknown[];
+  /** Shared schemas by name, for `descriptor.dataSchemaRef`. */
+  schemas?: ReadonlyMap<string, Record<string, unknown>>;
+  /** Shared action entries; validated here. */
+  actions?: readonly unknown[];
+}
+
+export interface CatalogEntriesOptions {
+  limits?: StoreLimits;
+  /** Node budget for stored templates (default DEFAULT_MAX_NODES). */
+  maxNodes?: number;
+  /** Renders every http descriptor disabled for this reason and omits `load`. */
+  httpDisabled?: ActionDisabledReason;
+}
+
+export interface CatalogEntriesResult {
+  catalog: WidgetCatalog;
+  actions: ActionSource;
+  problems: ComposeProblem[];
+}
+
+/**
+ * The catalog for a list of entries: built-ins, then each valid entry.
+ * Invalid or oversized entries are skipped with a problem; action bindings
+ * compile against the valid shared actions, and unresolvable refs render
+ * disabled (noted as warnings).
+ */
+export function composeCatalogEntries(
+  entries: CatalogEntries,
+  options: CatalogEntriesOptions = {}
+): CatalogEntriesResult {
+  const limits = options.limits ?? DEFAULT_LIMITS;
+  const maxNodes = options.maxNodes ?? DEFAULT_MAX_NODES;
+  const catalog = createCatalog();
+  const problems: ComposeProblem[] = [];
+
+  const actionByName = new Map<string, StoredAction>();
+  for (const [index, action] of (entries.actions ?? []).entries()) {
+    const name = String((action as Partial<StoredAction>)?.name);
+    if (actionByName.size >= limits.maxActions) {
+      problems.push({
+        section: "actions",
+        index,
+        name,
+        code: "LIMIT_REACHED",
+        message: `stopped at the ${limits.maxActions}-action limit; later actions were skipped.`
+      });
+      break;
+    }
+    const problem = checkStoredAction(action, limits);
+    if (problem !== undefined) {
+      problems.push({ section: "actions", index, name, code: problem.code, message: problem.message });
+      continue;
+    }
+    const valid = action as StoredAction;
+    actionByName.set(valid.name, valid);
+  }
+  const resolve = (ref: string): ActionDefinition | undefined => actionByName.get(ref)?.definition;
+
+  const registeredWidgets = new Map<string, StoredWidget>();
+  let registered = 0;
+  for (const [index, entry] of entries.widgets.entries()) {
+    const name = String((entry as Partial<StoredWidget>)?.kind);
+    if (registered >= limits.maxWidgets) {
+      problems.push({
+        section: "widgets",
+        index,
+        name,
+        code: "LIMIT_REACHED",
+        message: `stopped at the ${limits.maxWidgets}-widget limit; later entries were skipped.`
+      });
+      break;
+    }
+    const problem = checkStoredWidget(entry, limits);
+    if (problem !== undefined) {
+      problems.push({ section: "widgets", index, name, code: problem.code, message: problem.message });
+      continue;
+    }
+    const widget = entry as StoredWidget;
+    // References resolve HERE and nowhere later: the registered
+    // descriptor carries the resolved dataSchema, never the ref —
+    // downstream (catalog, renderer, wire, agents) refs do not exist.
+    let descriptor = widget.descriptor;
+    const ref = descriptor.dataSchemaRef;
+    if (ref !== undefined) {
+      const resolved = entries.schemas?.get(ref);
+      if (resolved === undefined) {
+        problems.push({
+          section: "widgets",
+          index,
+          name,
+          code: "UNKNOWN_SCHEMA",
+          message: `references missing schema '${ref}'.`
+        });
+        continue;
+      }
+      const { dataSchemaRef: _ref, ...rest } = descriptor;
+      descriptor = { ...rest, dataSchema: resolved };
+    }
+    // Dangling action refs are NOT fatal: the element renders disabled
+    // (`unresolved`) and the condition is visible here.
+    for (const actionRef of collectActionRefs(widget.template, widget.load)) {
+      if (!actionByName.has(actionRef)) {
+        problems.push({
+          section: "widgets",
+          index,
+          name,
+          code: "UNKNOWN_ACTION",
+          message: `widget '${widget.kind}' references unknown action '${actionRef}'; its element renders disabled.`,
+          warning: true
+        });
+      }
+    }
+    try {
+      registerTemplate(catalog, widget.kind, widget.template, descriptor, {
+        maxNodes,
+        actions: resolve,
+        ...(options.httpDisabled === undefined ? {} : { httpDisabled: options.httpDisabled })
+      });
+      registeredWidgets.set(widget.kind, widget);
+      registered++;
+    } catch (error) {
+      // Duplicate kinds within one entry set, or anything the catalog
+      // refuses: skip and keep going.
+      problems.push({ section: "widgets", index, name, code: "REGISTER_FAILED", message: errorMessage(error) });
+    }
+  }
+
+  const actions: ActionSource = {
+    bindingAt: (kind, id) => {
+      const widget = registeredWidgets.get(kind);
+      return widget === undefined ? undefined : findActionBinding(widget.template, id);
+    },
+    load: (kind) => registeredWidgets.get(kind)?.load,
+    resolve,
+    executeAllowed: options.httpDisabled === undefined
+  };
+
+  return { catalog, actions, problems };
+}
+
 /**
  * Catalog for one principal: built-ins, then the deployment's own widgets,
  * then the principal's stored ones. Invalid or oversized entries are
@@ -82,117 +256,81 @@ export async function composeCatalog(
   principalId: string,
   options: ComposeOptions = {}
 ): Promise<CatalogComposeResult> {
-  const limits = options.limits ?? DEFAULT_LIMITS;
-  const maxNodes = options.maxNodes ?? DEFAULT_MAX_NODES;
-  const executeAllowed = options.executeAllowed ?? true;
-  const catalog = createCatalog();
-  const diagnostics: string[] = [];
-
   const stored = store === undefined ? [] : await store.widgets(principalId);
-  const entries = [...(options.extraWidgets ?? []), ...stored];
+  const widgets = [...(options.extraWidgets ?? []), ...stored];
 
   // Shared schemas load once per compose, and only when some widget carries a ref.
-  const needsSchemas = entries.some(
+  const needsSchemas = widgets.some(
     (entry) => (entry as StoredWidget)?.descriptor?.dataSchemaRef !== undefined
   );
-  const schemaByName = new Map<string, Record<string, unknown>>();
+  const schemas = new Map<string, Record<string, unknown>>();
   if (needsSchemas && store !== undefined) {
     for (const schema of await store.schemas(principalId)) {
-      schemaByName.set(schema.name, schema.schema);
+      schemas.set(schema.name, schema.schema);
     }
   }
 
   // Shared actions likewise: one read, only when some widget binds by `ref`
   // (inline definitions need nothing from the store).
-  const needsActions = entries.some((entry) => refsOf(entry).length > 0);
-  const actionByName = new Map<string, StoredAction>();
-  if (needsActions && store !== undefined) {
-    for (const action of await store.actions(principalId)) {
-      if (actionByName.size >= limits.maxActions) {
-        diagnostics.push(`stopped at the ${limits.maxActions}-action limit; later actions were skipped.`);
-        break;
-      }
-      const problem = checkStoredAction(action, limits);
-      if (problem !== undefined) {
-        diagnostics.push(
-          `skipped action '${String((action as Partial<StoredAction>)?.name)}': ${problem.code} — ${problem.message}`
-        );
-        continue;
-      }
-      actionByName.set(action.name, action);
-    }
-  }
-  const resolve = (ref: string): ActionDefinition | undefined => actionByName.get(ref)?.definition;
+  const needsActions = widgets.some((entry) => refsOf(entry).length > 0);
+  const actions = needsActions && store !== undefined ? await store.actions(principalId) : [];
 
-  const registeredWidgets = new Map<string, StoredWidget>();
+  const composed = composeCatalogEntries(
+    { widgets, schemas, actions },
+    {
+      ...(options.limits === undefined ? {} : { limits: options.limits }),
+      ...(options.maxNodes === undefined ? {} : { maxNodes: options.maxNodes }),
+      ...((options.executeAllowed ?? true) ? {} : { httpDisabled: "scope" as const })
+    }
+  );
+  return {
+    value: composed.catalog,
+    diagnostics: composed.problems.map(diagnosticLine),
+    actions: composed.actions
+  };
+}
+
+export interface ThemeEntriesResult {
+  registry: ThemeRegistry;
+  problems: ComposeProblem[];
+}
+
+/** The theme registry for a list of entries: built-ins plus each valid entry. */
+export function composeThemeEntries(
+  entries: readonly unknown[],
+  options: Pick<ComposeOptions, "limits"> = {}
+): ThemeEntriesResult {
+  const limits = options.limits ?? DEFAULT_LIMITS;
+  const registry = createThemeRegistry();
+  const problems: ComposeProblem[] = [];
+
   let registered = 0;
-  for (const entry of entries) {
-    if (registered >= limits.maxWidgets) {
-      diagnostics.push(
-        `stopped at the ${limits.maxWidgets}-widget limit; later entries were skipped.`
-      );
+  for (const [index, entry] of entries.entries()) {
+    const name = String((entry as Partial<ThemeEntry>)?.name);
+    if (registered >= limits.maxThemes) {
+      problems.push({
+        section: "themes",
+        index,
+        name,
+        code: "LIMIT_REACHED",
+        message: `stopped at the ${limits.maxThemes}-theme limit; later entries were skipped.`
+      });
       break;
     }
-    const problem = checkStoredWidget(entry, limits);
+    const problem = checkStoredTheme(entry, limits);
     if (problem !== undefined) {
-      diagnostics.push(
-        `skipped widget '${String((entry as StoredWidget)?.kind)}': ${problem.code} — ${problem.message}`
-      );
+      problems.push({ section: "themes", index, name, code: problem.code, message: problem.message });
       continue;
     }
-    // References resolve HERE and nowhere later: the registered
-    // descriptor carries the resolved dataSchema, never the ref —
-    // downstream (catalog, renderer, wire, agents) refs do not exist.
-    let descriptor = entry.descriptor;
-    const ref = descriptor.dataSchemaRef;
-    if (ref !== undefined) {
-      const resolved = schemaByName.get(ref);
-      if (resolved === undefined) {
-        diagnostics.push(
-          `skipped widget '${entry.kind}': UNKNOWN_SCHEMA — references missing schema '${ref}'.`
-        );
-        continue;
-      }
-      const { dataSchemaRef: _ref, ...rest } = descriptor;
-      descriptor = { ...rest, dataSchema: resolved };
-    }
-    // Dangling action refs are NOT fatal: the element renders disabled
-    // (`unresolved`) and the condition is visible here.
-    for (const actionRef of collectActionRefs(entry.template, entry.load)) {
-      if (!actionByName.has(actionRef)) {
-        diagnostics.push(
-          `widget '${entry.kind}' references unknown action '${actionRef}'; its element renders disabled.`
-        );
-      }
-    }
     try {
-      registerTemplate(catalog, entry.kind, entry.template, descriptor, {
-        maxNodes,
-        actions: resolve,
-        ...(executeAllowed ? {} : { httpDisabled: "scope" as const })
-      });
-      registeredWidgets.set(entry.kind, entry);
+      registry.register(entry as ThemeEntry);
       registered++;
     } catch (error) {
-      // Duplicate kinds within a principal's own set, or anything the
-      // catalog refuses: skip and keep going.
-      diagnostics.push(
-        `skipped widget '${entry.kind}': ${errorMessage(error)}`
-      );
+      problems.push({ section: "themes", index, name, code: "REGISTER_FAILED", message: errorMessage(error) });
     }
   }
 
-  const actions: ActionSource = {
-    bindingAt: (kind, id) => {
-      const widget = registeredWidgets.get(kind);
-      return widget === undefined ? undefined : findActionBinding(widget.template, id);
-    },
-    load: (kind) => registeredWidgets.get(kind)?.load,
-    resolve,
-    executeAllowed
-  };
-
-  return { value: catalog, diagnostics, actions };
+  return { registry, problems };
 }
 
 /** Theme registry for one principal: built-ins plus their stored themes. */
@@ -201,33 +339,10 @@ export async function composeThemes(
   principalId: string,
   options: ComposeOptions = {}
 ): Promise<ComposeResult<ThemeRegistry>> {
-  const limits = options.limits ?? DEFAULT_LIMITS;
-  const registry = createThemeRegistry();
-  const diagnostics: string[] = [];
-
   const stored = store === undefined ? [] : await store.themes(principalId);
-  let registered = 0;
-  for (const entry of stored) {
-    if (registered >= limits.maxThemes) {
-      diagnostics.push(
-        `stopped at the ${limits.maxThemes}-theme limit; later entries were skipped.`
-      );
-      break;
-    }
-    const problem = checkStoredTheme(entry, limits);
-    if (problem !== undefined) {
-      diagnostics.push(
-        `skipped theme '${String(entry?.name)}': ${problem.code} — ${problem.message}`
-      );
-      continue;
-    }
-    try {
-      registry.register(entry);
-      registered++;
-    } catch (error) {
-      diagnostics.push(`skipped theme '${entry.name}': ${errorMessage(error)}`);
-    }
-  }
-
-  return { value: registry, diagnostics };
+  const composed = composeThemeEntries(
+    stored,
+    options.limits === undefined ? {} : { limits: options.limits }
+  );
+  return { value: composed.registry, diagnostics: composed.problems.map(diagnosticLine) };
 }

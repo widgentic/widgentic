@@ -29,8 +29,9 @@ import {
   LIST_ACTIONS_TOOL,
   GET_AUTHORING_GUIDE_TOOL,
   EXECUTE_ACTION_TOOL,
-  WIDGENTIC_UI_URI_PREFIX,
-  WIDGENTIC_APP_TEMPLATE_URI
+  WIDGENTIC_APP_TEMPLATE_URI,
+  APP_TEMPLATE_RESOURCE,
+  WIDGET_PAGE_RESOURCE
 } from "./definitions.js";
 import {
   handleListWidgets,
@@ -38,7 +39,8 @@ import {
   handleListThemeTokens,
   handleListThemes,
   handleListSchemas,
-  handleListActions
+  handleListActions,
+  renderWidgetPage
 } from "./handlers.js";
 import type { RenderActionOptions, StoredSchemaEntry } from "./handlers.js";
 import { handleExecuteAction } from "./actions.js";
@@ -282,11 +284,10 @@ export function createWidgenticServer(
   // ui/notifications/tool-result (structuredContent: { html, css, payload }).
   registerAppResource(
     server,
-    "Widgentic App",
-    WIDGENTIC_APP_TEMPLATE_URI,
+    APP_TEMPLATE_RESOURCE.name,
+    APP_TEMPLATE_RESOURCE.uri,
     {
-      description:
-        "Widgentic app template — renders render_widget results inline.",
+      description: APP_TEMPLATE_RESOURCE.description,
       // Operator-declared CSP domains: hosts the frame may load assets
       // from directly (images on them skip inlining). Absent when empty.
       ...(resourceDomains.length > 0
@@ -303,36 +304,17 @@ export function createWidgenticServer(
   // Per-kind preview pages (light theme, rendered from each descriptor's
   // dataExample) for hosts that browse ui://widgentic/page/{kind}.
   server.registerResource(
-    "widget-page",
-    new ResourceTemplate(`${WIDGENTIC_UI_URI_PREFIX}{kind}`, { list: undefined }),
+    WIDGET_PAGE_RESOURCE.name,
+    new ResourceTemplate(WIDGET_PAGE_RESOURCE.uriTemplate, { list: undefined }),
     {
-      title: "Widgentic widget page",
-      description:
-        "Self-contained styled preview page for a widget kind, rendered from " +
-        "its descriptor's dataExample. Live renders arrive embedded in " +
-        "render_widget results with format: 'app'.",
-      mimeType: "text/html"
+      title: WIDGET_PAGE_RESOURCE.title,
+      description: WIDGET_PAGE_RESOURCE.description,
+      mimeType: WIDGET_PAGE_RESOURCE.mimeType
     },
     async (uri, variables) => {
       const kind = String(variables.kind ?? "");
-      const example = catalog.describe(kind)?.dataExample;
-      const result = handleRenderWidget(catalog, {
-        widget: kind,
-        data: example ?? null,
-        format: "page"
-      });
-      const page = result.content.find((block) => block.type === "text");
       return {
-        contents: [
-          {
-            uri: uri.href,
-            mimeType: "text/html",
-            text:
-              !result.isError && typeof page?.text === "string"
-                ? page.text
-                : `<!doctype html><body>Unknown widget kind '${kind}'.</body>`
-          }
-        ]
+        contents: [{ uri: uri.href, mimeType: WIDGET_PAGE_RESOURCE.mimeType, text: renderWidgetPage(catalog, kind) }]
       };
     }
   );

@@ -1,0 +1,29 @@
+<Project>
+  <!-- Shared settings for every project in the .NET tree. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Deterministic>true</Deterministic>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <IsPackable>false</IsPackable>
+
+    <Authors>Diego Hoyos</Authors>
+    <Copyright>Copyright (c) 2026 Diego Hoyos</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://widgentic.dev</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/widgentic/widgentic</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+
+    <!--
+      The @widgentic/mcp release whose host bundle the NuGet package embeds.
+      Dev and CI builds embed the bundle built in this workspace; the
+      release workflow refuses to publish unless that file is byte-identical to
+      the one in this version's registry tarball.
+    -->
+    <WidgenticMcpVersion>0.8.0</WidgenticMcpVersion>
+    <WidgenticRepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..'))</WidgenticRepoRoot>
+  </PropertyGroup>
+</Project>

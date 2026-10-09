@@ -9,8 +9,9 @@ import { countTemplateNodes, validateTemplate, parsePath } from "@widgentic/core
 import { ACTION_NAME, validateActionDefinition, validateLoadBinding } from "@widgentic/core";
 import { createThemeRegistry, validateTheme } from "@widgentic/core";
 import type { ThemeEntry } from "@widgentic/core";
-import type { StoreLimits, StoredSchema, StoredWidget } from "./types.js";
-import { DEFAULT_LIMITS } from "./types.js";
+import type { StoredSchema, StoredWidget } from "./types.js";
+import type { StoreLimits } from "./limits.js";
+import { DEFAULT_LIMITS, SAFE_IDENTIFIER } from "./limits.js";
 import { isPlainObject } from "@widgentic/core";
 
 /** Kind names the built-ins own; a stored widget may never shadow them. */
@@ -43,17 +44,25 @@ export interface EntryProblem {
   message: string;
 }
 
+export { SAFE_IDENTIFIER };
+
 /**
- * One identifier charset for every adapter: the file store's path guard.
- * Backends encode identifiers differently (the Cosmos adapter embeds them
- * in document ids, where `/ \ # ?` are illegal); enforcing the rule at the
- * port means memory, file, and Cosmos accept and reject identically.
+ * UTF-8 length counted by code point, so the limit holds without Node's
+ * `Buffer` (the host bundle runs these checks in engines that have none).
+ * A lone surrogate counts 3, as its U+FFFD replacement encodes.
  */
-export const SAFE_IDENTIFIER = /^[a-zA-Z0-9._-]+$/;
+function utf8ByteLength(text: string): number {
+  let bytes = 0;
+  for (const char of text) {
+    const code = char.codePointAt(0) ?? 0;
+    bytes += code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4;
+  }
+  return bytes;
+}
 
 function serializedBytes(value: unknown): number {
   try {
-    return Buffer.byteLength(JSON.stringify(value) ?? "", "utf8");
+    return utf8ByteLength(JSON.stringify(value) ?? "");
   } catch {
     return Number.POSITIVE_INFINITY; // unserializable is over any limit
   }

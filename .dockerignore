@@ -9,6 +9,9 @@
 .claude
 docs
 openspec
+# The .NET host is built by its own workflow; its bin/obj carry native V8.
+dotnet
+artifacts
 examples/docker/data
 examples/docker/kek.txt
 examples/docker/.env
