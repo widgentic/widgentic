@@ -142,7 +142,6 @@ The repository SHALL provide the app template (`ui://widgentic/app.html`): a sel
 - **WHEN** the same sequence of render trees — keyed lists, unkeyed lists, duplicate keys, reorders, insertions and removals — is applied through the core reactive patcher and through the template's mounter
 - **THEN** both SHALL produce the same DOM and preserve the identity of the same elements
 
-
 #### Scenario: A half-streamed name is never previewed
 - **WHEN** a partial snapshot ends with a `widget` value still arriving, such as `{ "data": {…}, "widget": "appointme" }`
 - **THEN** the frame SHALL show an in-progress placeholder that names no kind and SHALL send no `preview_widget` request
