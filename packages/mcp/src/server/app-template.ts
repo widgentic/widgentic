@@ -476,6 +476,75 @@ function cellNode(key, raw, hints, cls) {
   }
   return { tag: "td", attrs: { class: cls }, children: [text] };
 }
+// Image places: a preview never shows an image source as text and never
+// mounts an external one (the sandbox blocks it; inlining runs over the
+// result only). Where the renderer draws an image, a box of the same shape
+// holds its place. The decision mirrors core's resolveImage (pinned by an
+// agreement test against the real renderers).
+const IMAGE_SHAPES = ["avatar", "thumb", "hero"];
+function cleanSrc(value) { return value.replace(/[\\u0000-\\u0020]+/g, ""); }
+function safeImageSrc(value) {
+  const cleaned = cleanSrc(value);
+  return /^data:image\\/[a-z0-9.+-]+;base64,[a-z0-9+\\/=]*$/i.test(cleaned) || /^https?:\\/\\//i.test(cleaned);
+}
+function looksLikeImage(value) {
+  const cleaned = cleanSrc(value);
+  if (!safeImageSrc(cleaned)) return false;
+  if (cleaned.toLowerCase().indexOf("data:image/") === 0) return true;
+  try { return /\\.(png|jpe?g|gif|webp|avif|svg)$/i.test(new URL(cleaned).pathname); } catch (e) { return false; }
+}
+function imageShape(key, value, hints, fallback) {
+  if (typeof value !== "string") return undefined;
+  const images = isObj(hints) && isObj(hints.images) ? hints.images : undefined;
+  const hint = images ? images[key] : undefined;
+  if (hint === false) return undefined;
+  if (typeof hint === "string" && IMAGE_SHAPES.indexOf(hint) !== -1) return safeImageSrc(value) ? hint : undefined;
+  if (hint === true) return safeImageSrc(value) ? fallback : undefined;
+  return looksLikeImage(value) ? fallback : undefined;
+}
+function imagePlace(classes) {
+  return { tag: "span", attrs: { class: (classes ? classes + " " : "") + "wg-img-pending" }, children: [] };
+}
+// Server previews are never inlined: every image not already a data: URI
+// mounts as a place keeping its classes.
+function holdImages(node) {
+  if (!isElement(node)) return node;
+  if (node.tag.toLowerCase() === "img") {
+    const attrs = isObj(node.attrs) ? node.attrs : {};
+    if (typeof attrs.src === "string" && /^data:/i.test(cleanSrc(attrs.src))) return node;
+    return imagePlace(typeof attrs.class === "string" ? attrs.class : "");
+  }
+  if (!Array.isArray(node.children)) return node;
+  return Object.assign({}, node, { children: node.children.map(holdImages) });
+}
+// Snapshots keep the streamed key order, so only the LAST value can still be
+// growing. A string there that starts a URL is held back until another value
+// follows it: half a URL is neither an image nor a link yet.
+// Begins with http(s):// or data:, or is still a prefix of one (h, ht, ... da).
+function startsUrl(text) {
+  return /^(https?:\\/\\/|data:)/i.test(text) ||
+    /^(h(t(t(p(s?(:\\/{0,2})?)?)?)?)?|d(a(t(a)?)?)?)$/i.test(text);
+}
+function withoutGrowingUrl(value) {
+  if (Array.isArray(value)) {
+    if (value.length === 0) return value;
+    const last = value[value.length - 1];
+    if (typeof last === "string") return startsUrl(last) ? value.slice(0, -1) : value;
+    return value.slice(0, -1).concat([withoutGrowingUrl(last)]);
+  }
+  if (!isObj(value)) return value;
+  const keys = Object.keys(value);
+  if (keys.length === 0) return value;
+  const lastKey = keys[keys.length - 1];
+  const last = value[lastKey];
+  const copy = Object.assign({}, value);
+  if (typeof last === "string") {
+    if (startsUrl(last)) delete copy[lastKey];
+  } else {
+    copy[lastKey] = withoutGrowingUrl(last);
+  }
+  return copy;
+}
 function previewCard(data, hints, meta) {
   let title, subtitle, entries = [], value;
   if (isObj(data)) {
@@ -505,10 +574,13 @@ function previewCard(data, hints, meta) {
   if (entries.length > 0) {
     children.push({ tag: "dl", attrs: { class: "wg-card-fields" },
       children: entries.map(function (entry) {
-        const valueCell = cellNode(entry[0], entry[1], hints, "x");
+        const shape = imageShape(entry[0], entry[1], hints, "thumb");
+        const display = shape !== undefined
+          ? [imagePlace("wg-img wg-img-" + shape)]
+          : cellNode(entry[0], entry[1], hints, "x").children;
         return { tag: "div", attrs: { class: "wg-card-field" }, children: [
           { tag: "dt", attrs: { class: "wg-card-field-key" }, children: [entry[0]] },
-          { tag: "dd", attrs: { class: "wg-card-field-value" }, children: valueCell.children }
+          { tag: "dd", attrs: { class: "wg-card-field-value" }, children: display }
         ] };
       }) });
   }
@@ -554,6 +626,10 @@ function previewTable(data, hints, meta) {
           if (!(column in record)) {
             return { tag: "td", attrs: { class: "wg-table-cell" }, children: [""] };
           }
+          const shape = imageShape(column, record[column], hints, "avatar");
+          if (shape !== undefined) {
+            return { tag: "td", attrs: { class: "wg-table-cell" }, children: [imagePlace("wg-img wg-img-" + shape)] };
+          }
           return cellNode(column, record[column], hints, "wg-table-cell");
         }) };
     }) });
@@ -561,9 +637,8 @@ function previewTable(data, hints, meta) {
 }
 // Branches preview as OPEN disclosures: partial input has no meaningful
 // collapse state, and an open branch keeps the shape identical to the result
-// so the result patch lands on matching structure. A node icon previews as
-// text even when it is an image URL - like card fields and table cells, the
-// preview never emits images (server-side inlining runs over the result).
+// so the result patch lands on matching structure. An image icon previews as
+// an icon-shaped place, an emoji icon as text.
 function previewTreeLabel(node) {
   if (!isObj(node)) return fmt(node);
   if (node.label !== undefined) return fmt(node.label);
@@ -579,7 +654,9 @@ function previewTreeNode(node, depth) {
   const hasChildren = isObj(node) && Array.isArray(node.children) && node.children.length > 0;
   const labelParts = [];
   if (isObj(node) && typeof node.icon === "string") {
-    labelParts.push({ tag: "span", attrs: { class: "wg-tree-icon" }, children: [node.icon] });
+    labelParts.push(imageShape("", node.icon, undefined, "icon") !== undefined
+      ? imagePlace("wg-img wg-img-icon")
+      : { tag: "span", attrs: { class: "wg-tree-icon" }, children: [node.icon] });
   }
   labelParts.push(previewTreeLabel(node));
   if (!hasChildren) {
@@ -717,10 +794,10 @@ function requestServerPreview(args) {
       if (!live()) return;
       const sc = result && result.structuredContent;
       if (!result || result.isError || !sc || !isElement(sc.tree)) { state.stopped = true; return; }
-      state.tree = sc.tree;
+      state.tree = holdImages(sc.tree);
       if (typeof sc.css === "string") dynamicCss.textContent = sc.css;
       root.setAttribute("data-wgd-preview", "true");
-      mountPreviewTree(sc.tree);
+      mountPreviewTree(state.tree);
     },
     function () { state.stopped = true; }
   ).then(function () {
@@ -762,6 +839,7 @@ function onToolInput(params, complete) {
   cycle++;
   clearAlert();
   previewArgs = params && isObj(params.arguments) ? params.arguments : undefined;
+  if (previewArgs !== undefined && !complete) previewArgs = withoutGrowingUrl(previewArgs);
   previewComplete = complete;
   if (previewArgs === undefined) return;
   if (!previewQueued) {
@@ -923,6 +1001,23 @@ body {
      start collapses the iframe and every arrival jolts it. Reserve
      breathing room while previewing. */
   min-height: 96px;
+}
+/* An image's place while previewing: the shape classes size avatars, thumbs
+   and icons. A hero has no intrinsic size until its image arrives, and a
+   card value cell sizes to its content, so the cell grows instead. */
+.wg-img-pending {
+  display: inline-block;
+  vertical-align: middle;
+  background: var(--wg-border, #e2e8f0);
+}
+.wg-img-hero.wg-img-pending {
+  display: block;
+  width: 100%;
+  min-width: 8em;
+  aspect-ratio: 16 / 9;
+}
+.wg-card-field-value:has(> .wg-img-hero.wg-img-pending) {
+  flex: 1;
 }
 @keyframes wg-preview-pulse {
   0%, 100% { opacity: 0.78; }
