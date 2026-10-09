@@ -1,5 +1,17 @@
 # @widgentic/designer
 
+## 0.8.0
+
+### Minor Changes
+
+- c2aba69: The template tree's `each` rows author the optional `key` path beside the array path,
+  completing from the item's paths; choosing "no key" or emptying the input removes it.
+
+### Patch Changes
+
+- Updated dependencies [c2aba69]
+  - @widgentic/core@0.8.0
+
 ## 0.7.0
 
 ### Minor Changes
