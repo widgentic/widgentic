@@ -144,7 +144,7 @@
   - Publish only when `vars.NUGET_PUBLISH == 'true'` and the version is absent from nuget.org, via `NuGet/login` (OIDC) and `dotnet nuget push`.
   - Run `actions/attest-build-provenance` on the `.nupkg`.
   - `permissions: id-token: write, attestations: write, contents: read`.
-- [ ] 10.3 A dry run of `release-dotnet.yml` on the PR from `feature/dotnet-host` (`workflow_dispatch` only works once the file is on `main`): the `package` job builds, tests and packs and reports the pin-check warning, and `publish` is skipped. Record the run in TESTING.md.
+- [x] 10.3 A dry run of `release-dotnet.yml` on the PR from `feature/dotnet-host` (`workflow_dispatch` only works once the file is on `main`): the `package` job builds, tests and packs and reports the pin-check warning, and `publish` is skipped. Record the run in TESTING.md.
 
 ## 11. Docs and verification
 
