@@ -49,6 +49,7 @@ appears. Size: **S** one small change, **M** one change with spec deltas,
 | STO-1 | DEK unwrap cache | P3 | M | Backlog |
 | STO-2 | Merge two populated accounts | P3 | L | Backlog |
 | NET-1 | Actions and image inlining for the .NET host | P2 | L | `dotnet-host` design |
+| NET-2 | .NET patches against an older pin | P3 | M | `mcp-sdk-v2` release review |
 | RND-5 | More image sources per render | P3 | M | Owner finding, v82 |
 
 **Part 2 · Pairing with other technologies**
@@ -291,6 +292,27 @@ are reachable by direct URL.
   fetch, declared args only, and secrets never displayed. Roughly the size of
   `dotnet-host` again, mostly security-critical C#.
 - **Origin.** 2026-10-08 `dotnet-host` design, "Actions later".
+
+#### NET-2 · .NET patches against an older pin — P3, M
+
+- **Problem.** `release-dotnet.yml` packs the host bundle built from the
+  checkout, and the pin check refuses to publish unless that bundle equals
+  the pinned release's. Once `main`'s `@widgentic/mcp` moves past the pin, the
+  checkout's bundle carries the newer version stamp. A .NET-only patch on the
+  old minor (0.9.1 while `main` is on 0.10) then cannot be published from
+  `main`, although `package-distribution` ("A .NET-only fix is a patch") says
+  it can. Bumping the pin with every `@widgentic/mcp` minor avoids the case,
+  which is the current practice.
+- **Direction.** Either pack the pinned release's bundle: fetch it from the
+  registry tarball (as `tools/verify-host-pin.mjs` does) and pass it as
+  `WidgenticBundlePath`. The .NET tests would then need the corpus that
+  release was generated with, not the checkout's. Or narrow the spec
+  scenario to patches released while `main` is still on the pinned minor.
+- **Touches.** `package-distribution` (the NuGet release scenarios),
+  `release-dotnet.yml`, `tools/verify-host-pin.mjs`.
+- **Origin.** 2026-10-09, reviewing what the 0.10.0 npm release means for
+  `Widgentic.Mcp`. The workflow's pin check also blocked runs that publish
+  nothing, which is fixed separately.
 
 ### Untriaged
 
