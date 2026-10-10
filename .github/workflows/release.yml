@@ -2,7 +2,8 @@
 #   - On every push to main with pending changesets: opens/updates the
 #     "Version Packages" PR (versions + CHANGELOGs). Requires the org and
 #     repo setting "Allow GitHub Actions to create and approve pull requests".
-#   - When that PR merges: publishes to npm with provenance — only once the
+#   - When that PR merges: publishes to npm with provenance, then pushes each
+#     published package's tag and creates its GitHub release — only once the
 #     repository variable NPM_PUBLISH is "true". Until then the step runs
 #     pack:check instead, so the pipeline is exercised without a release.
 # Authentication:
@@ -40,10 +41,12 @@ jobs:
       - run: npm ci
       - run: npm run build
       - name: Version or publish
-        uses: changesets/action@v1
+        # v2 because @changesets/cli 3 reports what it published only through the
+        # CHANGESETS_OUTPUT file: without it no tag is pushed and no GitHub release is made.
+        uses: changesets/action@v2
         with:
-          version: npm run version
-          publish: ${{ vars.NPM_PUBLISH == 'true' && 'npm run release' || 'npm run pack:check' }}
+          version-script: npm run version
+          publish-script: ${{ vars.NPM_PUBLISH == 'true' && 'npm run release' || 'npm run pack:check' }}
+          push-with-git-cli: true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_PROVENANCE: "true"
