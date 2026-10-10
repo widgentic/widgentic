@@ -38,5 +38,9 @@
 ## 6. Staging (`selfhost-staging`)
 
 - [x] 6.1 Build `Dockerfile.source` locally from this branch. Run it shaped like the demo (the web proxy, the seed, a deployment key) and drive a 2025-era client and a 2026-07-28 Apps client through the proxy. The Docker daemon was down, so the Dockerfile's steps were replayed by hand: pack, the `/srv` layout, the manifest rewrite, `npm install --omit=dev --install-links`, and the import smoke. CI's `selfhost-source-image` builds the real image.
-- [ ] 6.2 Stage on `demo.widgentic.dev`: `az acr build` of `Dockerfile.source` from this branch, then a `selfhost.bicep` deploy from the apps repo. Read the served bytes per the runbook.
-- [ ] 6.3 Retest the hosts on staging in fresh conversations: Claude, VS Code Copilot and ChatGPT. Record each host's protocol era and output shape in the TESTING log.
+- [x] 6.2 Stage on `demo.widgentic.dev`: `az acr build` of `Dockerfile.source` from this branch, then a `selfhost.bicep` deploy from the apps repo. Read the served bytes per the runbook. Image `mcp-sdk-v2-cc39e7b` is live; both eras answer on the demo, a raw 2026-07-28 Apps request gets the slim output, and the seed and deployment key are active (recorded in the apps RUNBOOK).
+- [x] 6.3 Retest the hosts on staging in fresh conversations: Claude, VS Code Copilot and ChatGPT. Record each host's protocol era and output shape in the TESTING log.
+  - All three mounted the widgets inline, and Claude's streaming previews worked.
+  - Copilot's first call passed `kind` instead of `widget`. It got the SDK's input-validation error, the same as on 0.9.0, and corrected itself; this is noted under AGT-4.
+  - All three still speak the 2025 era: the window holds nine `initialize` handshakes, and nothing marks 2026-07-28 traffic.
+  - Their `MCP Apps:` log lines all said "lacks the UI capability", because the instance that receives the `initialized` notification never saw `initialize`. The line now stays silent there (design D2), with a test.

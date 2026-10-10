@@ -380,8 +380,12 @@ export function createWidgenticServer(
   );
 
   // 2025-era sessions negotiate once: tell the operator what this one gets.
+  // Stateless HTTP hands the initialized notification to a fresh instance
+  // that never saw initialize, so there is nothing true to report there.
   server.server.oninitialized = () => {
-    const ui = getUiCapability(server.server.getClientCapabilities());
+    const capabilities = server.server.getClientCapabilities();
+    if (capabilities === undefined) return;
+    const ui = getUiCapability(capabilities);
     console.error(
       ui?.mimeTypes?.includes(RESOURCE_MIME_TYPE) ?? false
         ? "MCP Apps: host advertises UI support — render_widget mounts in the declared template (slim model output)."

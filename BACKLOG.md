@@ -209,6 +209,13 @@ are reachable by direct URL.
   zod to the SDK's JSON Schema validator, so the error texts agents see for
   malformed arguments change. Check them against the handler's own
   structured errors.
+- **A finding that belongs here.** On the `mcp-sdk-v2` staging retest,
+  Copilot's first `render_widget` call passed `kind` (the payload contract's
+  field) instead of `widget`. It got the SDK's generic `widget: Invalid input:
+  expected string, received undefined` and corrected itself. 0.9.0 answers the
+  same call the same way, so it is not a regression. Once validation is ours,
+  that error can name the mix-up in the tool's own vocabulary
+  (`render_widget` takes `widget`; `kind` is the payload's field).
 - **Touches.** `mcp-server` (the assembly), `package-distribution` (the zod
   peer), and the "derived, never restated" convention in `CLAUDE.md`.
 - **Origin.** 2026-10-09 `mcp-sdk-v2` design, Non-Goals.

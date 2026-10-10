@@ -124,6 +124,29 @@ describe("slimming through the HTTP serving entry", () => {
   });
 });
 
+describe("the session log line", () => {
+  const sessionLines = (spy: { mock: { calls: unknown[][] } }) =>
+    spy.mock.calls.map((call) => String(call[0])).filter((line) => line.startsWith("MCP Apps:"));
+
+  it("reports what an initialized session negotiated", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await session(APPS_UI);
+    await session();
+    // The initialized notification is asynchronous; let it land.
+    await vi.waitFor(() => expect(sessionLines(spy)).toHaveLength(2));
+    expect(sessionLines(spy)[0]).toContain("host advertises UI support");
+    expect(sessionLines(spy)[1]).toContain("host lacks the UI capability");
+    spy.mockRestore();
+  });
+
+  it("stays silent where the instance never saw initialize (stateless HTTP)", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await renderDefault(await overHttp("legacy", APPS_UI));
+    expect(sessionLines(spy)).toEqual([]);
+    spy.mockRestore();
+  });
+});
+
 describe("both protocol eras through one assembly", () => {
   it("lists the same tools and renders the same structuredContent", async () => {
     const modern = await overHttp("modern", APPS_UI);
