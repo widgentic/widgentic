@@ -30,6 +30,8 @@ None.
   - **Capability-aware default output:** slimming also reads a request's own 2026-07-28 capabilities, and is decided per call.
   - **Server assembly is a library export:** the assembly is an SDK 2.x `McpServer` that serves both eras, and no source imports the 1.x SDK.
   - **Runnable server and SDK interoperability:** the stdio example serves both eras.
+- `mcp-widget-output`:
+  - **Host capability negotiation:** support is advertised in the client's capabilities, at initialization or in a 2026-07-28 request's `_meta`.
 - `package-distribution`:
   - **Dependencies are declared honestly:** the optional peers are the SDK 2.x server package, ext-apps 2 and zod 4.2+.
 

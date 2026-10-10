@@ -381,7 +381,7 @@ workspace and the sample first, then point at the built DLL):
     - a 2025-era client and a 2026-07-28 Apps client each listed 9 tools and the two seeded widgets, and read the app template;
     - the 2025-era client got the full output, the 2026-07-28 client the slim output;
     - raw smokes 2 and 4 passed, and neither log carries the key.
-  - **Staged and retested (2026-10-10).** The branch ran on the self-host demo, built from source. Served bytes are recorded in the apps RUNBOOK. In fresh conversations, Claude, VS Code Copilot and ChatGPT each mounted the widgets inline, and Claude's streaming previews worked. Copilot's first call passed `kind` instead of `widget`; 0.9.0 answers that call with the same input-validation error, and Copilot corrected itself (BACKLOG AGT-4).
+  - **Staged and retested (2026-10-09).** The branch ran on the self-host demo, built from source. Served bytes are recorded in the apps RUNBOOK. In fresh conversations, Claude, VS Code Copilot and ChatGPT each mounted the widgets inline, and Claude's streaming previews worked. Copilot's first call passed `kind` instead of `widget`; 0.9.0 answers that call with the same input-validation error, and Copilot corrected itself (BACKLOG AGT-4).
   - **All three hosts still open with `initialize`**, so the live retest exercised the 2025-era path on SDK 2.x, including the SSE answers. The 2026-07-28 path is proven by the tests and by raw smoke 4 against the demo, not yet by a host.
   - **A log line fixed.** Over stateless HTTP every session's `MCP Apps:` line said "lacks the UI capability", Apps hosts included: the instance receiving `initialized` never saw `initialize`. It now reports only negotiated capabilities.
 
