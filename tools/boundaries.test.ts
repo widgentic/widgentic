@@ -65,7 +65,6 @@ const SPECIFIERS = [/^\s*(?:import|export)\b[^;"']*?\bfrom\s+"([^"]+)"/gm, /^\s*
 function stripComments(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'])\/\/[^\n]*/g, "$1");
 }
-/** Repository-relative path with `/` separators on every platform. */
 /**
  * The superseded 1.x SDK stays installed through the docs tooling, so a stale
  * import would still resolve and typecheck: every source uses the 2.x packages.
@@ -76,6 +75,7 @@ function supersededSdkImports(rel: string, source: string): string[] {
     .filter((spec) => SUPERSEDED_SDK.test(spec))
     .map((spec) => `${rel}: imports the superseded 1.x SDK ${spec}; use @modelcontextprotocol/server, client or node`);
 }
+/** Repository-relative path with `/` separators on every platform. */
 function repoPath(file: string): string {
   return relative(ROOT, file).split(sep).join("/");
 }
