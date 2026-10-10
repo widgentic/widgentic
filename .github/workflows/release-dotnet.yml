@@ -52,16 +52,19 @@ jobs:
         run: |
           echo "package=$(dotnet msbuild src/Widgentic.Mcp/Widgentic.Mcp.csproj -getProperty:Version)" >> "$GITHUB_OUTPUT"
           echo "pin=$(dotnet msbuild src/Widgentic.Mcp/Widgentic.Mcp.csproj -getProperty:WidgenticMcpVersion)" >> "$GITHUB_OUTPUT"
-      - name: Compare the embedded bundle with the registry copy
-        continue-on-error: ${{ !(vars.NUGET_PUBLISH == 'true' && github.ref == 'refs/heads/main') }}
-        run: node ../tools/verify-host-pin.mjs "${{ steps.versions.outputs.pin }}" ../packages/mcp/dist/host/widgentic-host.js
-      - run: dotnet pack src/Widgentic.Mcp/Widgentic.Mcp.csproj -c Release --no-build -o ../artifacts
       - name: Already on nuget.org?
         id: published
         run: |
           v="${{ steps.versions.outputs.package }}"
           code=$(curl -s -o /dev/null -w '%{http_code}' "https://api.nuget.org/v3-flatcontainer/widgentic.mcp/$v/widgentic.mcp.$v.nupkg")
           echo "exists=$([ "$code" = 200 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      # Blocking exactly when the publish job will run: once main's @widgentic/mcp moves
+      # past the pin, the checkout's bundle no longer matches it, and that must not fail
+      # runs that publish nothing.
+      - name: Compare the embedded bundle with the registry copy
+        continue-on-error: ${{ !(vars.NUGET_PUBLISH == 'true' && github.ref == 'refs/heads/main' && steps.published.outputs.exists == 'false') }}
+        run: node ../tools/verify-host-pin.mjs "${{ steps.versions.outputs.pin }}" ../packages/mcp/dist/host/widgentic-host.js
+      - run: dotnet pack src/Widgentic.Mcp/Widgentic.Mcp.csproj -c Release --no-build -o ../artifacts
       - uses: actions/upload-artifact@v7
         with:
           name: nupkg
