@@ -3,6 +3,13 @@
 Versions share their major.minor with the `@widgentic/mcp` release whose host bundle they embed:
 `Widgentic.Mcp` X.Y.* runs `@widgentic/mcp` X.Y.*. The patch moves on its own for .NET-only fixes.
 
+## 0.10.0
+
+Embeds the `@widgentic/mcp` 0.10.0 host bundle. No behavior change: the bundle's code is
+0.9.0's, and only its version stamp moves. `@widgentic/mcp` 0.10 moves its Node server assembly
+(`@widgentic/mcp/sdk`) to the MCP TypeScript SDK 2.x. This package runs on the C# SDK instead,
+and already reads a stateless request's own client capabilities when deciding whether to slim.
+
 ## 0.9.0
 
 First release, beta and render-only. Embeds the `@widgentic/mcp` 0.9.0 host bundle.
