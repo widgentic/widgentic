@@ -56,7 +56,7 @@ A client that does not advertise the Apps capability (`extensions["io.modelconte
 
 ## Model-context slimming
 
-In an Apps host the person already sees the widget, so the model does not need the markup. The default-format result replaces the full-HTML text block with a one-line confirmation naming the kind, stating that the visual is already displayed and instructing the model not to restate the data. The payload block and `structuredContent` are unchanged, and the `Hint notes:` and `Action notes:` tails still reach the model. The signal is the session-negotiated UI capability, or `WIDGENTIC_ASSUME_UI=1` where negotiation cannot happen. Explicit formats are never slimmed.
+In an Apps host the person already sees the widget, so the model does not need the markup. The default-format result replaces the full-HTML text block with a one-line confirmation naming the kind, stating that the visual is already displayed and instructing the model not to restate the data. The payload block and `structuredContent` are unchanged, and the `Hint notes:` and `Action notes:` tails still reach the model. The signal is the client's UI capability: negotiated once by a 2025-era session, or carried in every 2026-07-28 request's `_meta`. `WIDGENTIC_ASSUME_UI=1` covers calls that reveal neither, such as stateless 2025-era HTTP. Explicit formats are never slimmed.
 
 ## Script-free, network-free content
 

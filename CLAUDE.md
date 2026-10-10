@@ -271,6 +271,11 @@ and the NuGet version in one commit.
   --json -w` returns an object keyed by package; a fresh publish can 404 on the
   registry document for minutes while search lists it; provenance binds
   `repository.url` to the publishing repo.
+- MCP TS SDK 2.x:
+  - A server connected directly to a transport, and `InMemoryTransport`, speak the 2025 era only. Serve through `createMcpHandler`/`serveStdio`, and test 2026-07-28 in process by giving `StreamableHTTPClientTransport` a `fetch` that calls `handler.fetch`, with a client pinned via `versionNegotiation: { mode: { pin: "2026-07-28" } }`.
+  - On 2026-07-28 `getClientCapabilities()` is undefined. The request's envelope is `ctx.mcpReq.envelope`, but the declaration bundle types `RequestMetaEnvelope` as `{}`, so read `CLIENT_CAPABILITIES_META_KEY` through `isPlainObject`.
+  - The stateless legacy fallback answers 2025-era requests with SSE, and has no JSON option.
+  - `mint` keeps `@modelcontextprotocol/sdk` 1.x installed, so a stale 1.x import still typechecks. The boundary check refuses it.
 - .NET: xunit.v3 4.x on the .NET 10 SDK only runs under Microsoft.Testing.Platform,
   opted in by `dotnet/global.json` — so `dotnet test` must run from `dotnet/`
   (`--solution Widgentic.slnx`), or the SDK falls back to VSTest and errors. The C#

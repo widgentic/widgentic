@@ -1,7 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { createWidgenticServer } from "../../server/server.js";
 import { composeCatalog, composeThemes, createMemoryStore } from "../index.js";
 import type { MemorySeedPrincipal, StoredWidget, WidgetStore } from "../index.js";

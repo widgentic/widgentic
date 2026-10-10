@@ -63,7 +63,7 @@ Requires Node 22 or later (it relies on `net.BlockList`, `AbortSignal.timeout` a
 | Entry | What it holds | Needs | Exports |
 |---|---|---|---|
 | `@widgentic/mcp` | the tool-output convention (`toWidgetResult`, `extractWidgetPayload`, `hostSupportsWidgets`), the nine tool definitions and their SDK-free handlers, `buildAppTemplate`, action execution with the guarded fetch, the execution limiter and body cap | nothing beyond core | [mcp](/reference/api/mcp) |
-| `@widgentic/mcp/sdk` | `createWidgenticServer()`, the full assembly on the official SDK | `@modelcontextprotocol/sdk`, `@modelcontextprotocol/ext-apps`, `zod` | [mcp-sdk](/reference/api/mcp-sdk) |
+| `@widgentic/mcp/sdk` | `createWidgenticServer()`, the full assembly on the official MCP TypeScript SDK 2.x | `@modelcontextprotocol/server` 2.3+, `@modelcontextprotocol/ext-apps` 2, `zod` 4.2+ | [mcp-sdk](/reference/api/mcp-sdk) |
 | `@widgentic/mcp/store` | the per-principal store port, `createMemoryStore`, `createFileStore`, `composeCatalog`, `composeThemes`, key hashing | nothing beyond core; no network I/O | [mcp-store](/reference/api/mcp-store) |
 | `@widgentic/mcp/store/cosmos` | `createCosmosStore` | `@azure/cosmos`, `@azure/identity` | [mcp-store-cosmos](/reference/api/mcp-store-cosmos) |
 | `@widgentic/mcp/secrets` | envelope encryption: `encryptSecret`, `decryptSecret`, `rewrapSecret`, `createLocalCipher` | nothing beyond core | [mcp-secrets](/reference/api/mcp-secrets) |
@@ -72,7 +72,7 @@ Requires Node 22 or later (it relies on `net.BlockList`, `AbortSignal.timeout` a
 The base entry and `./store` import with none of the peers installed. To run a server, install the SDK peers alongside:
 
 ```bash
-npm install @widgentic/mcp @modelcontextprotocol/sdk @modelcontextprotocol/ext-apps zod
+npm install @widgentic/mcp @modelcontextprotocol/server @modelcontextprotocol/ext-apps zod
 ```
 
 Install the Azure clients only if you import the Cosmos or Key Vault entries. See [Run your own server](/develop/run-your-own-server).

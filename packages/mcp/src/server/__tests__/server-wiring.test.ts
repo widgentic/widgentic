@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { Client, InMemoryTransport, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
+import { createMcpHandler } from "@modelcontextprotocol/server";
 import { EXTENSION_ID, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { createWidgenticServer } from "../server.js";
 import { buildAppTemplate, WIDGENTIC_APP_TEMPLATE_URI } from "../index.js";
@@ -62,11 +62,81 @@ describe("capability-aware slim wiring", () => {
     expect(textOf(result)).toContain('class="wg-card"');
   });
 
-  // The env-assumption path (WIDGENTIC_ASSUME_UI slimming an un-negotiated
-  // instance) cannot be observed through an in-memory session — connect()
-  // always runs initialize, which authoritatively overwrites the default.
-  // That path exists precisely for stateless HTTP tools/call and is
-  // verified against the deployed endpoint (see TESTING.md).
+});
+
+/**
+ * A client reaching createWidgenticServer through the SDK's HTTP serving
+ * entry, in process: the transport's fetch calls the handler directly.
+ * `modern` pins protocol revision 2026-07-28 (capabilities ride every
+ * request's _meta envelope); `legacy` is a 2025-era client, which the entry
+ * serves statelessly (a fresh instance per request, never initialized).
+ */
+async function overHttp(era: "modern" | "legacy", clientCapabilities?: Record<string, unknown>) {
+  const handler = createMcpHandler(() => createWidgenticServer());
+  const client = new Client(
+    { name: "wiring-test", version: "0.0.0" },
+    {
+      ...(clientCapabilities === undefined ? {} : { capabilities: clientCapabilities }),
+      ...(era === "modern" ? { versionNegotiation: { mode: { pin: "2026-07-28" } } } : {})
+    }
+  );
+  await client.connect(
+    new StreamableHTTPClientTransport(new URL("http://widgentic.test/mcp"), {
+      fetch: (url, init) => handler.fetch(new Request(url, init))
+    })
+  );
+  closers.push(async () => {
+    await client.close();
+    await handler.close();
+  });
+  expect(client.getProtocolEra()).toBe(era);
+  return client;
+}
+
+const closers: (() => Promise<void>)[] = [];
+afterEach(async () => {
+  for (const close of closers.splice(0)) await close();
+});
+
+const APPS_UI = { extensions: { [EXTENSION_ID]: { mimeTypes: [RESOURCE_MIME_TYPE] } } };
+
+describe("slimming through the HTTP serving entry", () => {
+  it("slims a 2026-07-28 request whose own capabilities advertise the Apps UI", async () => {
+    const result = await renderDefault(await overHttp("modern", APPS_UI));
+    expect(textOf(result)).toContain("do not restate this data as text");
+    expect(textOf(result)).not.toContain("<div");
+  });
+
+  it("keeps full output for a 2026-07-28 request without the capability, even when UI is assumed", async () => {
+    process.env.WIDGENTIC_ASSUME_UI = "1";
+    const result = await renderDefault(await overHttp("modern"));
+    expect(textOf(result)).toContain('class="wg-card"');
+  });
+
+  it("follows WIDGENTIC_ASSUME_UI for stateless 2025-era requests, which reveal no capabilities", async () => {
+    process.env.WIDGENTIC_ASSUME_UI = "1";
+    const assumed = await renderDefault(await overHttp("legacy"));
+    expect(textOf(assumed)).toContain("do not restate this data as text");
+
+    delete process.env.WIDGENTIC_ASSUME_UI;
+    const unassumed = await renderDefault(await overHttp("legacy"));
+    expect(textOf(unassumed)).toContain('class="wg-card"');
+  });
+});
+
+describe("both protocol eras through one assembly", () => {
+  it("lists the same tools and renders the same structuredContent", async () => {
+    const modern = await overHttp("modern", APPS_UI);
+    const { client: legacy } = await session(APPS_UI);
+    const shape = (tools: Awaited<ReturnType<Client["listTools"]>>["tools"]) =>
+      tools.map(({ name, description, inputSchema, _meta }) => ({ name, description, inputSchema, _meta }));
+    expect(shape((await modern.listTools()).tools)).toEqual(shape((await legacy.listTools()).tools));
+
+    const args = { name: "render_widget", arguments: { widget: "card", data: { title: "T" } } };
+    const modernResult = await modern.callTool(args);
+    expect(modernResult.structuredContent).toEqual((await legacy.callTool(args)).structuredContent);
+    expect(JSON.stringify(modernResult.structuredContent)).toContain('class=\\"wg-card\\"');
+  });
 });
 
 describe("library assembly defaults", () => {

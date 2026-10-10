@@ -7,8 +7,10 @@ Everything needed to host the widgentic engine over MCP:
   execution with the SSRF-guarded fetch, and the edge helpers (execution
   limiter, body cap). Framework-agnostic: no MCP SDK is imported here.
 - `@widgentic/mcp/sdk` — `createWidgenticServer()`, the full assembly on the
-  official `@modelcontextprotocol/sdk` (optional peer, with
-  `@modelcontextprotocol/ext-apps` and `zod`).
+  official MCP TypeScript SDK 2.x: optional peers `@modelcontextprotocol/server`
+  2.3+, `@modelcontextprotocol/ext-apps` 2 and `zod` 4.2+. Served through the
+  SDK's entries, it speaks protocol revision 2026-07-28 and the 2025-era
+  revisions alike.
 - `@widgentic/mcp/authoring` — the write side as a hostable HTTP surface:
   widgets, themes, schemas, shared actions, the guarded action test call,
   write-only secrets and API keys, as a pure request handler plus a
@@ -28,15 +30,20 @@ Everything needed to host the widgentic engine over MCP:
 Requires Node 22 or later — except `@widgentic/mcp/host`, which needs no Node.
 
 ```sh
-npm install @widgentic/mcp @modelcontextprotocol/sdk @modelcontextprotocol/ext-apps zod
+npm install @widgentic/mcp @modelcontextprotocol/server @modelcontextprotocol/ext-apps zod
 ```
 
 ```ts
 import { createWidgenticServer } from "@widgentic/mcp/sdk";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { serveStdio } from "@modelcontextprotocol/server/stdio";
 
-await createWidgenticServer().connect(new StdioServerTransport());
+serveStdio(() => createWidgenticServer());
 ```
+
+Over Streamable HTTP, serve the same factory with `createMcpHandler` from
+`@modelcontextprotocol/server` (wrapped with `toNodeHandler` from
+`@modelcontextprotocol/node` on Node). It builds a server per request, so
+resolve the caller's API key in the factory.
 
 ## `@widgentic/mcp/host` — widgentic in any JavaScript engine
 
