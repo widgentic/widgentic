@@ -9,14 +9,16 @@
  *   3. hand that catalog to the library's server assembly
  *      (`@widgentic/mcp/sdk` — the MCP SDK packages are optional
  *      peer dependencies, installed by hosts like this one),
- *   4. connect whatever transport your host speaks.
+ *   4. serve it over the transport your host speaks. Here that is stdio,
+ *      through the SDK's `serveStdio`, which answers both 2025-era clients
+ *      and protocol revision 2026-07-28.
  *
  * Everything imports public `@widgentic/*` entries only: copy this folder,
  * swap the widgets, and you have your own deployment. The hosted server
  * (private repository widgentic/apps) is the same assembly fed from a per-principal store
  * instead of compiled-in modules.
  */
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { createWidgenticServer } from "@widgentic/mcp/sdk";
 import { createCatalog } from "@widgentic/core";
 import { findActionBinding, registerTemplate } from "@widgentic/core";
@@ -31,7 +33,9 @@ for (const widget of customWidgets) {
 // refs), so the action source is a walk over the same definitions. A
 // stdio host is the operator's own machine: execution is allowed.
 const byKind = new Map(customWidgets.map((widget) => [widget.kind, widget]));
-const server = createWidgenticServer({
+// serveStdio builds one instance per connection (and one for a 2026-07-28
+// discovery probe), so the server is a factory over the catalog built above.
+serveStdio(() => createWidgenticServer({
   catalog,
   actions: {
     bindingAt: (kind, id) => {
@@ -42,8 +46,7 @@ const server = createWidgenticServer({
     resolve: () => undefined
   },
   scopes: ["read", "execute"]
-});
-await server.connect(new StdioServerTransport());
+}));
 console.error(
-  "widgentic MCP server ready on stdio (tools: list_widgets, list_schemas, list_actions, list_themes, list_theme_tokens, render_widget, get_authoring_guide, execute_action)"
+  "widgentic MCP server ready on stdio (tools: list_widgets, list_schemas, list_actions, list_themes, list_theme_tokens, render_widget, get_authoring_guide, execute_action, preview_widget)"
 );

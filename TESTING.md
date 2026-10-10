@@ -56,10 +56,26 @@ curl -s -X POST "$URL/mcp" -H 'Content-Type: application/json' \
   grep -o 'pass the NAME'   # non-empty = the steering is live
 ```
 
-The listing carries EIGHT tools: `list_widgets`, `list_schemas`,
+The listing carries NINE tools: `list_widgets`, `list_schemas`,
 `list_actions`, `list_themes`, `list_theme_tokens`, `get_authoring_guide`,
-`render_widget` and `execute_action` (app-only — the SDK lists it; Apps
-hosts hide it from the model).
+`render_widget`, and the app-only `execute_action` and `preview_widget` (the
+SDK lists them; Apps hosts hide them from the model). These requests carry no
+protocol envelope, so the server answers them as 2025-era requests. A server
+on the SDK's HTTP entry answers those with a single-event SSE stream
+(`event: message` / `data: {…}`); the greps read either form.
+
+```sh
+# 4. Protocol revision 2026-07-28: the request carries the client's
+#    capabilities in its own _meta (no initialize ever runs), and an MCP Apps
+#    client must get the SLIM output. Proves the per-request slimming path.
+UI='{"extensions":{"io.modelcontextprotocol/ui":{"mimeTypes":["text/html;profile=mcp-app"]}}}'
+curl -s -X POST "$URL/mcp" -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -H 'MCP-Protocol-Version: 2026-07-28' -H 'Mcp-Method: tools/call' -H 'Mcp-Name: render_widget' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"render_widget","arguments":{"widget":"card","data":{"title":"T"}},"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":'"$UI"'}}}' \
+  > /tmp/modern.json
+grep -c 'do not restate' /tmp/modern.json   # 1 = slimmed from the request's own capabilities
+```
 
 ```sh
 # 3. list_actions serves the CONTRACT, never the transport. Against a key
@@ -346,6 +362,28 @@ workspace and the sample first, then point at the built DLL):
 ```
 
 ## Verification log
+
+- **The Node assembly on SDK 2.x, both protocol eras (2026-10-09, change `mcp-sdk-v2`, `@widgentic/mcp` minor pending release)** — Windows 11, Node 24.
+  - **Wire schemas.** The published 0.9.0 (SDK 1.31) and this assembly list the same nine tools, with identical names, descriptions, `_meta` and input properties. The one difference is `$schema` on the three zod-backed inputs: JSON Schema 2020-12 instead of draft-07.
+  - **In process** (`server-wiring`), through `createMcpHandler`:
+    - a 2026-07-28 MCP Apps client gets the slim output;
+    - a 2026-07-28 client without UI gets the full output, even with `WIDGENTIC_ASSUME_UI=1`;
+    - a stateless 2025-era client follows `WIDGENTIC_ASSUME_UI` both ways;
+    - both eras list the same tools and render the same `structuredContent`.
+  - **Examples, smoke-run with real clients.** stdio (`serveStdio`) and the docker service (`createMcpHandler` + `toNodeHandler`) each served a 2025-era client (full output) and a 2026-07-28 Apps client (slim output). The docker preflight allows `Mcp-Method`. Raw smokes 2 and 4 above passed against the docker service: 9 tools with the steering text, and slim from the request's own capabilities.
+  - **Response shape.** 2025-era responses over HTTP are now single-event SSE (the SDK's stateless fallback) instead of JSON.
+  - **Staging-shaped run, local.** The `Dockerfile.source` steps were replayed without Docker:
+    - the four packages packed from the branch;
+    - the docker example's manifest rewritten to the tarballs;
+    - `npm install --omit=dev --install-links`.
+
+    The result: one copy of `@widgentic/mcp`, SDK `server`/`node`/`client`/`core` 2.x, `ext-apps` 2.0.3, no 1.x SDK, and the import smoke passes. `web` and `mcp` ran as on the demo, with the `/mcp` proxy, the `demo.json` seed (6 written) and a throwaway deployment key from a file (`read, execute`). Through the proxy, with that key:
+    - a 2025-era client and a 2026-07-28 Apps client each listed 9 tools and the two seeded widgets, and read the app template;
+    - the 2025-era client got the full output, the 2026-07-28 client the slim output;
+    - raw smokes 2 and 4 passed, and neither log carries the key.
+  - **Staged and retested (2026-10-09).** The branch ran on the self-host demo, built from source. Served bytes are recorded in the apps RUNBOOK. In fresh conversations, Claude, VS Code Copilot and ChatGPT each mounted the widgets inline, and Claude's streaming previews worked. Copilot's first call passed `kind` instead of `widget`; 0.9.0 answers that call with the same input-validation error, and Copilot corrected itself (BACKLOG AGT-4).
+  - **All three hosts still open with `initialize`**, so the live retest exercised the 2025-era path on SDK 2.x, including the SSE answers. The 2026-07-28 path is proven by the tests and by raw smoke 4 against the demo, not yet by a host.
+  - **A log line fixed.** Over stateless HTTP every session's `MCP Apps:` line said "lacks the UI capability", Apps hosts included: the instance receiving `initialized` never saw `initialize`. It now reports only negotiated capabilities.
 
 - **WebMCP tools carry the authoring contract (2026-09-03, change `webmcp-authoring-contract`, `@widgentic/webmcp` 0.2.0 pending release)** — from the owner's first round in ChatGPT Desktop's browser: the agent used the tools but drafted worse than after reading the MCP authoring guide, because the tool descriptions named shapes and not rules; and asked to "create a widget" it loaded through our tools and then CLICKED Save with the host's own page tools. Two reference tools join (fourteen in all): `<prefix>_authoring_guide` — the MCP guide's structure, derived from core's constants (reserved kinds from the catalog, tokens from `TOKEN_SPECS`, format examples rendered by the engine), workflow rewritten for the browser — and `<prefix>_widget_definition_check` — the load's verdict with no side effect. Every editing description carries a DSL cheat sheet (`bind`/`each`/`when`, `map`/`prefix`/`format` one-per-value, forbidden tags/attributes, `.wg-` styles with `var(--wg-*)`, required descriptor fields, identifier rule) and names the guide and check tools under the configured prefix. Tests pin the term list under both prefixes, the guide's derivation (kinds, tokens, forms, rendered `$3,207` and `01-09-2026 02:04`), and the check tool's verdicts. The host write path is stated, not fought: docs, READMEs and the host matrix say a host agent that can operate the page may press Save under the person's session, that the draft is visible first, and that "draft it, I will save" keeps the click. Duplication of the guide text from `@widgentic/mcp` is deliberate for now (that package is Node-only); a browser-safe guide module in core is queued. Second live round is the owner's, comparing output against the MCP-guide baseline.
 - **Self-host README loop, run as a judge would (2026-09-02, local Docker 29.7 / Compose 5.4, unmodified image)** — `docker compose up --build -d` from `examples/docker` with an existing `kek.txt`: both services up (`web` :8080, `mcp` :8081). Served: `/healthz` 200, the page carries `#key-connect` and NO endpoint meta (no upstream configured → the page fell back to `http://localhost:8081/mcp`, which the Keys pane then showed with both key forms), `POST /mcp` on the web port 404 (forward off, as documented), `:8081/mcp initialize` → `serverInfo widgentic 0.1.0`, keyless `tools/list` 8. `POST /api/keys` → 201 with `entry`, `key`, `notice` (raw key kept in a file, never printed). Headless Chrome 151 with the testing flag on `http://localhost:8080/`: header `WebMCP tools are available in this browser …`, 12 tools; `widgentic_widget_draft_load` with a `judge-card` definition → `ok: true, previewable`, the kind input and the preview showed it; clicking `#widget-save` → status `saved judge-card — it is in your MCP catalog now`, the list shows `judge-card`. MCP with the key: anonymous `list_widgets` does NOT contain `judge-card`, the keyed call does; `render_widget { widget: "judge-card", data, format: "page" }` → 7160 B page carrying the title and `wg-card` (screenshotted; a `kind` argument is refused with `-32602`). Three screenshots (designer after save, Keys pane, rendered page) went to the owner. Conclusion: the deployed demo is this image unchanged; the README reproduces it.

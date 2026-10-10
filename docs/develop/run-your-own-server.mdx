@@ -3,19 +3,19 @@ title: "Run your own server"
 description: "Assemble the widgentic MCP server with createWidgenticServer, pick a transport, add a store for per-principal catalogs, and wire secrets."
 ---
 
-`@widgentic/mcp/sdk` exports one function, `createWidgenticServer(options?)`, returning a connectable `McpServer` from the official `@modelcontextprotocol/sdk` with the full wiring: the nine tools, the MCP Apps declaration, the app template resource, output slimming and image inlining. The SDK packages are optional peers, so install them alongside:
+`@widgentic/mcp/sdk` exports one function, `createWidgenticServer(options?)`, returning a connectable `McpServer` from the official MCP TypeScript SDK 2.x (`@modelcontextprotocol/server`) with the full wiring: the nine tools, the MCP Apps declaration, the app template resource, output slimming and image inlining. The SDK packages are optional peers, so install them alongside:
 
 ```bash
-npm install @widgentic/mcp @modelcontextprotocol/sdk @modelcontextprotocol/ext-apps zod
+npm install @widgentic/mcp @modelcontextprotocol/server @modelcontextprotocol/ext-apps zod
 ```
 
-The smallest server serves exactly the built-in kinds and themes over stdio:
+The smallest server serves exactly the built-in kinds and themes over stdio, to clients on protocol revision 2026-07-28 and on the 2025-era revisions alike:
 
 ```ts
 import { createWidgenticServer } from "@widgentic/mcp/sdk";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { serveStdio } from "@modelcontextprotocol/server/stdio";
 
-await createWidgenticServer().connect(new StdioServerTransport());
+serveStdio(() => createWidgenticServer());
 ```
 
 ## The stdio example
@@ -29,7 +29,7 @@ claude mcp add widgentic -- npx tsx /path/to/widgentic/examples/mcp-server/main.
 Author widgets in the designer, export them as TypeScript (the export matches the example's `widgets/` module shape), register them into a catalog and hand it to the assembly. Compiled-in widgets bind their actions inline, so the action source walks the same definitions:
 
 ```ts
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { createWidgenticServer } from "@widgentic/mcp/sdk";
 import { createCatalog, findActionBinding, registerTemplate } from "@widgentic/core";
 import { customWidgets } from "./widgets/index.js";
@@ -40,7 +40,7 @@ for (const widget of customWidgets) {
 }
 
 const byKind = new Map(customWidgets.map((widget) => [widget.kind, widget]));
-const server = createWidgenticServer({
+serveStdio(() => createWidgenticServer({
   catalog,
   actions: {
     bindingAt: (kind, id) => {
@@ -51,8 +51,7 @@ const server = createWidgenticServer({
     resolve: () => undefined
   },
   scopes: ["read", "execute"]
-});
-await server.connect(new StdioServerTransport());
+}));
 ```
 
 A stdio server runs on the operator's own machine, which is why the example grants `execute`.
@@ -79,11 +78,27 @@ Catalog and themes are passed in because the trust decision belongs where the AP
 
 ## Transports and environment
 
-The assembly is transport-agnostic; hosts connect it to stdio, Streamable HTTP or in-memory pipes. Over Streamable HTTP, resolve the caller's principal from the presented API key before constructing that request's server and connect a fresh one per request — composition caches nothing, so one principal's widgets never reach another's session. A key that resolves to no principal degrades to the anonymous catalog, never to an error, and is never logged.
+The assembly is transport-agnostic. Serve it through the SDK's entries, which speak protocol revision 2026-07-28 and the 2025-era revisions from the same factory: `serveStdio(factory)` over stdio, and `createMcpHandler(factory)` over Streamable HTTP. A server connected to a transport directly (in-memory pipes in tests, for example) speaks the 2025 era only.
+
+Over HTTP the handler calls the factory once per request with the inbound `Request`. Resolve the caller's principal from the presented API key there, and build that request's server. Composition caches nothing, so one principal's widgets never reach another's session. A key that resolves to no principal degrades to the anonymous catalog, never to an error, and is never logged. On Node, wrap the handler with `toNodeHandler` from `@modelcontextprotocol/node`:
+
+```ts
+import { createServer } from "node:http";
+import { createMcpHandler } from "@modelcontextprotocol/server";
+import { toNodeHandler } from "@modelcontextprotocol/node";
+
+// serverFor: see "Give it a store" below.
+const handler = createMcpHandler(({ requestInfo }) =>
+  serverFor(requestInfo?.headers.get("x-api-key") ?? undefined)
+);
+createServer(toNodeHandler(handler)).listen(8081, "127.0.0.1");
+```
+
+The handler verifies no token and validates no `Host` or `Origin` header. Put your own checks, CORS and body limit in front of it, as the [self-hosting example](/develop/self-hosting) does. Browser hosts on 2026-07-28 send `Mcp-Method` and `Mcp-Name` headers, so allow them in CORS.
 
 Two environment variables are read each time a server is constructed:
 
-- `WIDGENTIC_ASSUME_UI` — `1` or `true` slims the default-format `render_widget` result (a one-line confirmation instead of the full HTML text block) when no UI capability could be negotiated — on stateless HTTP the `tools/call` request builds a server that never saw `initialize`. A negotiated capability overrides it in either direction; explicit `format` values are never slimmed.
+- `WIDGENTIC_ASSUME_UI` — `1` or `true` slims the default-format `render_widget` result (a one-line confirmation instead of the full HTML text block) for calls that reveal no client capabilities. The client's own capabilities always decide first, in either direction: those a 2025-era session negotiated at `initialize`, or those a 2026-07-28 request carries in its `_meta`. The fallback matters for stateless 2025-era HTTP, where each request builds a server that never saw `initialize`. Explicit `format` values are never slimmed.
 - `WIDGENTIC_INLINE_IMAGES` — `0` or `false` disables server-side image inlining. By default the iframe-facing surfaces of a result (`structuredContent.html`, `structuredContent.tree` and the `ui://widgentic/page/<kind>` resource) get `https` image sources rewritten to `data:` URIs through the guarded fetch, because Apps-host sandboxes block external images.
 
 ## Give it a store

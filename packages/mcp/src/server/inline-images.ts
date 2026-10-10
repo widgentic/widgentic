@@ -17,6 +17,7 @@
  * the connection pinned to the checked address (guarded-fetch), so a
  * rebinding resolver cannot swap in a private target between check and use.
  */
+import { isPlainObject } from "@widgentic/core";
 import type { WidgetElementNode, WidgetNode } from "@widgentic/core";
 import { WIDGENTIC_APP_MIME_TYPE } from "./definitions.js";
 import {
@@ -332,7 +333,7 @@ function rewriteTreeImages(node: WidgetNode, resolved: Map<string, string>): voi
 export async function inlineRenderResultImages(
   result: {
     content?: unknown;
-    structuredContent?: Record<string, unknown> | undefined;
+    structuredContent?: unknown;
     isError?: boolean | undefined;
   },
   deps: InlineImageDeps = {}
@@ -341,7 +342,7 @@ export async function inlineRenderResultImages(
 
   // HTML-string surfaces (escaped attributes) as get/set accessors.
   const htmlSurfaces: { get(): string; set(value: string): void }[] = [];
-  const sc = result.structuredContent;
+  const sc = isPlainObject(result.structuredContent) ? result.structuredContent : undefined;
   if (sc !== undefined && typeof sc.html === "string") {
     htmlSurfaces.push({
       get: () => sc.html as string,

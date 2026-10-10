@@ -1,6 +1,7 @@
 /**
- * The MCP service: Streamable HTTP, stateless — a fresh server + transport
- * per request, per the SDK's stateless pattern. Holds a READ-ONLY handle on
+ * The MCP service: Streamable HTTP through the SDK's serving entry, which
+ * answers protocol revision 2026-07-28 per request and 2025-era clients
+ * statelessly — a fresh server per request either way. Holds a READ-ONLY handle on
  * the shared store (the type carries no write operation; the authoring app
  * is the only writer) and resolves the presented API key to a principal
  * exactly as production does: an unknown key degrades to the anonymous
@@ -10,8 +11,9 @@
  */
 import { createServer as createHttpServer } from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
+import { createMcpHandler } from "@modelcontextprotocol/server";
+import { toNodeHandler } from "@modelcontextprotocol/node";
+import type { NodeIncomingMessageLike } from "@modelcontextprotocol/node";
 import { createWidgenticServer } from "@widgentic/mcp/sdk";
 import {
   BodyTooLargeError,
@@ -43,12 +45,56 @@ const store: WidgetStore = openDeployment("mcp").store;
 // An operator-supplied key that survives an ephemeral store (optional).
 const deploymentKey = loadDeploymentKey(process.env);
 
-function requestKey(req: IncomingMessage): string | undefined {
-  const header = req.headers["x-api-key"];
-  if (typeof header === "string") return header;
-  const query = new URL(req.url ?? "/", "http://localhost").searchParams.get("key");
-  return query ?? undefined;
+function requestKey(request: Request): string | undefined {
+  return request.headers.get("x-api-key") ?? new URL(request.url).searchParams.get("key") ?? undefined;
 }
+
+// One handler for every request: it builds a fresh server per request from
+// this factory, which receives the inbound request.
+const handler = createMcpHandler(
+  async ({ requestInfo }) => {
+    // Resolve the principal BEFORE building the server, so the trust
+    // decision happens where the key is read. No key at all is the normal
+    // anonymous path and logs nothing; only a PRESENTED key that resolves
+    // to nobody is worth an operator's attention.
+    let principal: Principal = ANONYMOUS_PRINCIPAL;
+    const presentedKey = requestInfo === undefined ? undefined : requestKey(requestInfo);
+    if (presentedKey !== undefined && presentedKey !== "") {
+      const resolved = deploymentKey?.match(presentedKey) ?? (await store.resolvePrincipal(presentedKey));
+      if (resolved === undefined) {
+        console.error("widgentic mcp: presented key resolved to no principal; serving the anonymous catalog.");
+      } else {
+        principal = resolved;
+      }
+    }
+
+    // Per-request composition, no caches: one principal's widgets can never
+    // reach another's session.
+    const executeAllowed = principal.scopes.includes("execute");
+    const [catalogResult, themeResult] = await Promise.all([
+      composeCatalog(store, principal.id, { executeAllowed }),
+      composeThemes(store, principal.id)
+    ]);
+    for (const diagnostic of [...catalogResult.diagnostics, ...themeResult.diagnostics]) {
+      console.error(`widgentic store [${principal.id}]: ${diagnostic}`);
+    }
+
+    const principalRef = principal;
+    return createWidgenticServer({
+      catalog: catalogResult.value,
+      themes: themeResult.value,
+      ...(catalogResult.actions === undefined ? {} : { actions: catalogResult.actions }),
+      schemas: () => store.schemas(principalRef.id),
+      sharedActions: () => store.actions(principalRef.id),
+      secrets: (name: string) => store.secretValue(principalRef.id, name),
+      scopes: principal.scopes,
+      rateLimit: () => limiter.take(principalRef.id),
+      previewRateLimit: () => previewLimiter.take(principalRef.id)
+    });
+  },
+  { onerror: (error) => console.error("request failed:", error) }
+);
+const serveMcp = toNodeHandler(handler, { onerror: (error) => console.error("request failed:", error) });
 
 const httpServer = createHttpServer(async (req: IncomingMessage, res: ServerResponse) => {
   // Permissive CORS for browser hosts (e.g. the MCP Apps basic host).
@@ -56,7 +102,8 @@ const httpServer = createHttpServer(async (req: IncomingMessage, res: ServerResp
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, Accept, X-Api-Key, Mcp-Session-Id, Mcp-Protocol-Version"
+    // Mcp-Method and Mcp-Name ride every 2026-07-28 request.
+    "Content-Type, Accept, X-Api-Key, Mcp-Session-Id, Mcp-Protocol-Version, Mcp-Method, Mcp-Name"
   );
   res.setHeader("Access-Control-Expose-Headers", "Mcp-Session-Id");
   if (req.method === "OPTIONS") {
@@ -86,54 +133,10 @@ const httpServer = createHttpServer(async (req: IncomingMessage, res: ServerResp
       throw error;
     }
     const body: unknown = raw.length > 0 ? JSON.parse(raw) : undefined;
-
-    // Resolve the principal BEFORE building the server, so the trust
-    // decision happens where the key is read. No key at all is the normal
-    // anonymous path and logs nothing; only a PRESENTED key that resolves
-    // to nobody is worth an operator's attention.
-    let principal: Principal = ANONYMOUS_PRINCIPAL;
-    const presentedKey = requestKey(req);
-    if (presentedKey !== undefined && presentedKey !== "") {
-      const resolved = deploymentKey?.match(presentedKey) ?? (await store.resolvePrincipal(presentedKey));
-      if (resolved === undefined) {
-        console.error("widgentic mcp: presented key resolved to no principal; serving the anonymous catalog.");
-      } else {
-        principal = resolved;
-      }
-    }
-
-    // Per-request composition, no caches: one principal's widgets can never
-    // reach another's session.
-    const executeAllowed = principal.scopes.includes("execute");
-    const [catalogResult, themeResult] = await Promise.all([
-      composeCatalog(store, principal.id, { executeAllowed }),
-      composeThemes(store, principal.id)
-    ]);
-    for (const diagnostic of [...catalogResult.diagnostics, ...themeResult.diagnostics]) {
-      console.error(`widgentic store [${principal.id}]: ${diagnostic}`);
-    }
-
-    const principalRef = principal;
-    const server = createWidgenticServer({
-      catalog: catalogResult.value,
-      themes: themeResult.value,
-      ...(catalogResult.actions === undefined ? {} : { actions: catalogResult.actions }),
-      schemas: () => store.schemas(principalRef.id),
-      sharedActions: () => store.actions(principalRef.id),
-      secrets: (name: string) => store.secretValue(principalRef.id, name),
-      scopes: principal.scopes,
-      rateLimit: () => limiter.take(principalRef.id),
-      previewRateLimit: () => previewLimiter.take(principalRef.id)
-    });
-    const transport = new StreamableHTTPServerTransport({ enableJsonResponse: true });
-    res.on("close", () => {
-      void transport.close();
-      void server.close();
-    });
-    // Cast: the transport's accessor types clash with the Transport
-    // interface under exactOptionalPropertyTypes; runtime shape is correct.
-    await server.connect(transport as unknown as Transport);
-    await transport.handleRequest(req, res, body);
+    // Node types `method` as `string | undefined` where the adapter's shape
+    // declares it optional, which exactOptionalPropertyTypes keeps apart; the
+    // object is exactly what the adapter reads.
+    await serveMcp(req as NodeIncomingMessageLike, res, body);
   } catch (error) {
     console.error("request failed:", error);
     if (!res.headersSent) {
@@ -145,5 +148,5 @@ const httpServer = createHttpServer(async (req: IncomingMessage, res: ServerResp
 });
 
 httpServer.listen(PORT, () => {
-  console.error(`widgentic MCP endpoint on http://localhost:${PORT}/mcp (stateless)`);
+  console.error(`widgentic MCP endpoint on http://localhost:${PORT}/mcp (2026-07-28 and 2025-era clients)`);
 });

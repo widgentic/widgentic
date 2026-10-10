@@ -65,6 +65,16 @@ const SPECIFIERS = [/^\s*(?:import|export)\b[^;"']*?\bfrom\s+"([^"]+)"/gm, /^\s*
 function stripComments(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'])\/\/[^\n]*/g, "$1");
 }
+/**
+ * The superseded 1.x SDK stays installed through the docs tooling, so a stale
+ * import would still resolve and typecheck: every source uses the 2.x packages.
+ */
+const SUPERSEDED_SDK = /^@modelcontextprotocol\/sdk(?:\/|$)/;
+function supersededSdkImports(rel: string, source: string): string[] {
+  return SPECIFIERS.flatMap((re) => [...source.matchAll(re)].map((m) => m[1] ?? ""))
+    .filter((spec) => SUPERSEDED_SDK.test(spec))
+    .map((spec) => `${rel}: imports the superseded 1.x SDK ${spec}; use @modelcontextprotocol/server, client or node`);
+}
 /** Repository-relative path with `/` separators on every platform. */
 function repoPath(file: string): string {
   return relative(ROOT, file).split(sep).join("/");
@@ -85,6 +95,7 @@ for (const file of files) {
   const pkg = packageOf(file);
   const source = readFileSync(file, "utf8");
   const specs = SPECIFIERS.flatMap((re) => [...source.matchAll(re)].map((m) => m[1] ?? ""));
+  violations.push(...supersededSdkImports(rel, source));
   for (const spec of specs) {
     if (spec.startsWith(".")) {
       const target = resolve(dirname(file), spec);
@@ -210,6 +221,13 @@ describe("package boundaries", () => {
     if (violations.length > 0) console.error(violations.join("\n"));
     expect(violations).toEqual([]);
   });
+  it("refuses the superseded 1.x SDK in any source, naming the file", () => {
+    const stale = 'import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";\n';
+    expect(supersededSdkImports("examples/any/main.ts", stale)).toEqual([
+      "examples/any/main.ts: imports the superseded 1.x SDK @modelcontextprotocol/sdk/server/stdio.js; use @modelcontextprotocol/server, client or node"
+    ]);
+    expect(supersededSdkImports("examples/any/main.ts", 'import { McpServer } from "@modelcontextprotocol/server";\n')).toEqual([]);
+  });
   it("keeps the host bundle's import graph runtime-neutral at any depth", () => {
     expect(hostGraphViolations(join(ROOT, "packages/mcp/src/host/index.ts"))).toEqual([]);
   });
@@ -248,5 +266,13 @@ describe("package boundaries", () => {
     for (const peer of Object.keys(mcp.peerDependencies ?? {})) {
       expect(mcp.peerDependenciesMeta?.[peer]?.optional, peer).toBe(true);
     }
+    // The ./sdk entry is built on SDK 2.x: its server package, ext-apps 2 and
+    // a zod with Standard JSON Schema; never the superseded 1.x package.
+    expect(mcp.peerDependencies).toMatchObject({
+      "@modelcontextprotocol/server": "^2.3.0",
+      "@modelcontextprotocol/ext-apps": "^2",
+      zod: "^4.2.0"
+    });
+    expect(mcp.peerDependencies).not.toHaveProperty(["@modelcontextprotocol/sdk"]);
   });
 });

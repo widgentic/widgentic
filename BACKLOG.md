@@ -45,6 +45,7 @@ appears. Size: **S** one small change, **M** one change with spec deltas,
 | DSL-3 | A contract version marker | P3 | S | AG-UI comparison |
 | AGT-2 | Lossless auto-fix, reported | P3 | M | json-render comparison |
 | AGT-3 | Payload inspector in the designer | P3 | M | json-render comparison |
+| AGT-4 | Wire input schemas from the exported definitions | P3 | M | `mcp-sdk-v2` design |
 | STO-1 | DEK unwrap cache | P3 | M | Backlog |
 | STO-2 | Merge two populated accounts | P3 | L | Backlog |
 | NET-1 | Actions and image inlining for the .NET host | P2 | L | `dotnet-host` design |
@@ -194,6 +195,31 @@ are reachable by direct URL.
 - **Touches.** `widget-designer`.
 - **Origin.** json-render comparison, idea 6 (`@json-render/devtools`).
 
+#### AGT-4 · Wire input schemas from the exported definitions — P3, M
+
+- **Problem.** The SDK assembly declares `render_widget`, `execute_action` and
+  `preview_widget` inputs as zod objects that mirror the JSON Schemas in
+  `definitions.ts` by hand. Only the field descriptions are derived. A new
+  field or constraint has to be written twice, and the `./host` bundle already
+  serves the definitions' own schemas.
+- **Direction.** SDK 2.x accepts any Standard JSON Schema, and its
+  `fromJsonSchema` turns a JSON Schema into one. Register the exported
+  definitions directly, and drop zod from the assembly (and perhaps from the
+  peers, if ext-apps no longer needs it). Argument validation then moves from
+  zod to the SDK's JSON Schema validator, so the error texts agents see for
+  malformed arguments change. Check them against the handler's own
+  structured errors.
+- **A finding that belongs here.** On the `mcp-sdk-v2` staging retest,
+  Copilot's first `render_widget` call passed `kind` (the payload contract's
+  field) instead of `widget`. It got the SDK's generic `widget: Invalid input:
+  expected string, received undefined` and corrected itself. 0.9.0 answers the
+  same call the same way, so it is not a regression. Once validation is ours,
+  that error can name the mix-up in the tool's own vocabulary
+  (`render_widget` takes `widget`; `kind` is the payload's field).
+- **Touches.** `mcp-server` (the assembly), `package-distribution` (the zod
+  peer), and the "derived, never restated" convention in `CLAUDE.md`.
+- **Origin.** 2026-10-09 `mcp-sdk-v2` design, Non-Goals.
+
 ### Store, secrets and accounts
 
 #### STO-1 · DEK unwrap cache — P3, M (investigate)
@@ -286,12 +312,6 @@ into a section above, or into *Not adopted*.
 - A package-level store-backed MCP edge helper in place of the copy in
   `examples/docker/mcp.ts`; derive `rejectionStatus` from code families; a
   section factory for the docker client's four list panes (same).
-
-- When the TypeScript SDK adopts MCP 2026-07-28 (stateless HTTP), the Node assembly's
-  slimming must read the capabilities each request carries in
-  `_meta["io.modelcontextprotocol/clientCapabilities"]`. Today it relies on `initialize` or
-  `WIDGENTIC_ASSUME_UI`, and SDK 1.31 negotiates at most 2025-11-25. `Widgentic.Mcp`
-  already does this (found 2026-10-08 during `dotnet-host`, design A16).
 
 - The preview page for an unknown kind echoes the kind into HTML unescaped
   (`renderWidgetPage`: `Unknown widget kind '<b>bold</b>'`). The kind comes

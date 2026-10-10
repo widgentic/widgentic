@@ -1,16 +1,18 @@
 /**
  * Widgentic MCP server assembly: wires the dependency-free tool
- * definitions and handlers onto the official SDK, with the formal MCP
- * Apps declaration. Transport-agnostic — hosts connect it to stdio,
- * Streamable HTTP, or in-memory pipes.
+ * definitions and handlers onto the official MCP TypeScript SDK 2.x, with
+ * the formal MCP Apps declaration. Transport-agnostic: hosts serve it
+ * through the SDK's entries (`createMcpHandler` over HTTP, `serveStdio`
+ * over stdio), which speak both the 2025-era revisions and 2026-07-28, or
+ * connect it to a transport directly (in-memory pipes, 2025 era).
  *
  * This module ships from its own entry (`@widgentic/mcp/sdk`); the
  * MCP SDK packages are optional peer dependencies installed only by
  * hosts that import it. The base `@widgentic/mcp` entry stays
  * SDK-free.
  */
-import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { CLIENT_CAPABILITIES_META_KEY, McpServer, ResourceTemplate } from "@modelcontextprotocol/server";
+import type { CallToolResult, ClientCapabilities, ServerContext } from "@modelcontextprotocol/server";
 import {
   registerAppTool,
   registerAppResource,
@@ -18,7 +20,7 @@ import {
   RESOURCE_MIME_TYPE
 } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
-import { createCatalog } from "@widgentic/core";
+import { createCatalog, isPlainObject } from "@widgentic/core";
 import type { StoredAction, WidgetCatalog } from "@widgentic/core";
 import {
   LIST_WIDGETS_TOOL,
@@ -113,11 +115,10 @@ export function createWidgenticServer(
   const catalog = options.catalog ?? createCatalog();
   // Named themes: agents can pass `theme: "dark"` instead of a token map.
   const themes = options.themes ?? createThemeRegistry();
-  // Model-context slimming signal: session-negotiated UI capability wins in
-  // either direction; the env assumption (WIDGENTIC_ASSUME_UI, read per
-  // construction) covers un-negotiated instances — on stateless HTTP the
-  // tools/call POST builds a fresh server that never saw initialize.
-  let slim = ["1", "true"].includes(
+  // The slimming fallback for calls that reveal no client capabilities:
+  // stateless 2025-era HTTP builds a fresh instance per request that never
+  // saw initialize. Read per construction, like every env knob here.
+  const assumeUi = ["1", "true"].includes(
     (process.env.WIDGENTIC_ASSUME_UI ?? "").toLowerCase()
   );
   // Read per construction, exactly like WIDGENTIC_ASSUME_UI: every env
@@ -141,6 +142,17 @@ export function createWidgenticServer(
         };
 
   const server = new McpServer({ name: "widgentic", version: "0.1.0" });
+
+  // Slim exactly when the caller's client advertises the Apps UI with the app
+  // MIME type, in either direction. A 2025-era session negotiated its
+  // capabilities at initialize; a 2026-07-28 request never initializes and
+  // carries them in its own _meta envelope. A call revealing neither follows
+  // WIDGENTIC_ASSUME_UI.
+  const slimFor = (ctx: ServerContext): boolean => {
+    const capabilities = server.server.getClientCapabilities() ?? requestCapabilities(ctx);
+    if (capabilities === undefined) return assumeUi;
+    return getUiCapability(capabilities)?.mimeTypes?.includes(RESOURCE_MIME_TYPE) ?? false;
+  };
 
   server.registerTool(
     LIST_WIDGETS_TOOL.name,
@@ -201,7 +213,7 @@ export function createWidgenticServer(
           { description?: string }
         >;
         const doc = (field: string) => docs[field]?.description ?? "";
-        return {
+        return z.object({
           widget: z.string().describe(doc("widget")),
           // Typed union (mirrors RENDER_WIDGET_TOOL.inputSchema) so the wire
           // schema tells clients to send structured JSON, not a string.
@@ -225,12 +237,12 @@ export function createWidgenticServer(
             .union([z.string(), z.record(z.string(), z.string())])
             .optional()
             .describe(doc("theme"))
-        };
+        });
       })()
     },
-    async (args) => {
+    async (args, ctx) => {
       const result = handleRenderWidget(catalog, args, {
-        slim,
+        slim: slimFor(ctx),
         themes,
         actions: renderActions
       }) as CallToolResult;
@@ -260,14 +272,14 @@ export function createWidgenticServer(
       inputSchema: (() => {
         const docs = EXECUTE_ACTION_TOOL.inputSchema.properties as Record<string, { description?: string }>;
         const doc = (field: string) => docs[field]?.description ?? "";
-        return {
+        return z.object({
           widget: z.string().describe(doc("widget")),
           action: z.string().describe(doc("action")),
           args: z.record(z.string(), z.unknown()).optional().describe(doc("args")),
           payload: z.record(z.string(), z.unknown()).describe(doc("payload")),
           at: z.string().optional().describe(doc("at")),
           item: z.string().optional().describe(doc("item"))
-        };
+        });
       })()
     },
     async (args) => {
@@ -298,7 +310,7 @@ export function createWidgenticServer(
       inputSchema: (() => {
         const docs = PREVIEW_WIDGET_TOOL.inputSchema.properties as Record<string, { description?: string }>;
         const doc = (field: string) => docs[field]?.description ?? "";
-        return {
+        return z.object({
           widget: z.string().describe(doc("widget")),
           data: z
             .union([
@@ -317,7 +329,7 @@ export function createWidgenticServer(
             .union([z.string(), z.record(z.string(), z.unknown())])
             .optional()
             .describe(doc("theme"))
-        };
+        });
       })()
     },
     (args) =>
@@ -367,16 +379,15 @@ export function createWidgenticServer(
     }
   );
 
+  // 2025-era sessions negotiate once: tell the operator what this one gets.
+  // Stateless HTTP hands the initialized notification to a fresh instance
+  // that never saw initialize, so there is nothing true to report there.
   server.server.oninitialized = () => {
     const capabilities = server.server.getClientCapabilities();
-    // Normalized: getUiCapability only reads `extensions`, and the SDK type's
-    // optional field clashes with exactOptionalPropertyTypes otherwise.
-    const ui = getUiCapability({ extensions: capabilities?.extensions ?? {} });
-    // Negotiation is authoritative for this session, overriding ASSUME_UI
-    // in both directions.
-    slim = ui?.mimeTypes?.includes(RESOURCE_MIME_TYPE) ?? false;
+    if (capabilities === undefined) return;
+    const ui = getUiCapability(capabilities);
     console.error(
-      slim
+      ui?.mimeTypes?.includes(RESOURCE_MIME_TYPE) ?? false
         ? "MCP Apps: host advertises UI support — render_widget mounts in the declared template (slim model output)."
         : "MCP Apps: host lacks the UI capability — text/page/widget outputs remain the fallback."
     );
@@ -384,3 +395,16 @@ export function createWidgenticServer(
 
   return server;
 }
+
+/**
+ * The client capabilities a 2026-07-28 request carries in its `_meta`
+ * envelope. The SDK lifts the reserved keys into `ctx.mcpReq.envelope`, but
+ * its published declarations type that envelope as an empty object, so the
+ * key is read through a plain-object narrowing.
+ */
+const requestCapabilities = (ctx: ServerContext): ClientCapabilities | undefined => {
+  const envelope: unknown = ctx.mcpReq.envelope;
+  if (!isPlainObject(envelope)) return undefined;
+  const capabilities = envelope[CLIENT_CAPABILITIES_META_KEY];
+  return isPlainObject(capabilities) ? capabilities : undefined;
+};
