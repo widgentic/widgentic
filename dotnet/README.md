@@ -15,8 +15,8 @@ build.
 
 Requires .NET 10 and the official C# MCP SDK (`ModelContextProtocol` 2.2).
 
-**Versions.** `Widgentic.Mcp` X.Y.* embeds `@widgentic/mcp` X.Y.*, so `Widgentic.Mcp` 0.9.x
-renders exactly like the Node server of `@widgentic/mcp` 0.9. The patch number moves on its own
+**Versions.** `Widgentic.Mcp` X.Y.* embeds `@widgentic/mcp` X.Y.*, so `Widgentic.Mcp` 0.10.x
+renders exactly like the Node server of `@widgentic/mcp` 0.10. The patch number moves on its own
 for .NET-only fixes. The tools differ only by scope: this package is render-only (no
 `list_actions` or `execute_action`, no image inlining). The input schemas are the documented
 ones from `@widgentic/mcp`, while the Node server publishes its zod rendering of the same
