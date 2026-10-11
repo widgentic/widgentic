@@ -32,6 +32,26 @@ async function connect() {
 }
 
 describe("SDK interoperability (in-memory transport, library assembly)", () => {
+  it("delivers malformed arguments to the handler, whose structured errors come back", async () => {
+    const { client } = await connect();
+    const kindForWidget = (await client.callTool({
+      name: "render_widget",
+      arguments: { kind: "card", data: 1 }
+    })) as DeliveredResult;
+    expect(kindForWidget.isError).toBe(true);
+    const named = JSON.parse(textOf(kindForWidget));
+    expect(named).toMatchObject({ code: "MISSING_FIELD", path: "widget" });
+    expect(named.message).toContain("'kind' is the payload's field");
+
+    const badFormat = (await client.callTool({
+      name: "render_widget",
+      arguments: { widget: "card", data: 1, format: "pdf" }
+    })) as DeliveredResult;
+    expect(badFormat.isError).toBe(true);
+    expect(JSON.parse(textOf(badFormat))).toMatchObject({ code: "INVALID_TYPE", path: "format" });
+    expect(textOf(badFormat)).not.toContain("Input validation error");
+  });
+
   it("list_widgets round-trips the descriptor list", async () => {
     const { client } = await connect();
     const result = (await client.callTool({

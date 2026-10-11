@@ -363,6 +363,11 @@ workspace and the sample first, then point at the built DLL):
 
 ## Verification log
 
+- **Wire schemas from the exported definitions (2026-10-11, change `derived-input-schemas`, `@widgentic/mcp` minor pending release)**
+  - **The wire.** `server-wiring` lists the tools of `createWidgenticServer()` and finds every `inputSchema` and description equal to the exported definition's, for all nine tools: nothing added (no `$schema`), nothing missing.
+  - **One validation path.** Over the protocol, `{ kind: "card", data: 1 }` comes back as the handler's `MISSING_FIELD` on `widget`, naming the mix-up, and `format: "pdf"` as `INVALID_TYPE` on `format`. Neither is the SDK's "Input validation error".
+  - **The corpus** gains the mix-up cases for `render_widget` and `preview_widget`, so `.NET` is held to the same message.
+  - **`execute_action`** refuses a string, array or null `args`, a numeric `at` and a numeric `item` with `INVALID_TYPE` on that path, with nothing fetched.
 - **The Node assembly on SDK 2.x, both protocol eras (2026-10-09, change `mcp-sdk-v2`, `@widgentic/mcp` minor pending release)** — Windows 11, Node 24.
   - **Wire schemas.** The published 0.9.0 (SDK 1.31) and this assembly list the same nine tools, with identical names, descriptions, `_meta` and input properties. The one difference is `$schema` on the three zod-backed inputs: JSON Schema 2020-12 instead of draft-07.
   - **In process** (`server-wiring`), through `createMcpHandler`:

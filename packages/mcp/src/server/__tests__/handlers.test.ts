@@ -193,6 +193,15 @@ describe("handleRenderWidget", () => {
     });
   });
 
+  it("names the payload's field when 'kind' stands in for 'widget'", () => {
+    const error = JSON.parse(textOf(handleRenderWidget(catalog, { kind: "card", data: { title: "T" } })));
+    expect(error).toMatchObject({ code: "MISSING_FIELD", path: "widget" });
+    expect(error.message).toContain("'kind' is the payload's field");
+    expect(error.message).toContain('widget: "card"');
+    // No kind at all: the plain message.
+    expect(JSON.parse(textOf(handleRenderWidget(catalog, { data: 1 }))).message).not.toContain("'kind'");
+  });
+
   it("is total over garbage input", () => {
     for (const input of [null, 42, "str", [], undefined]) {
       const result = handleRenderWidget(catalog, input);

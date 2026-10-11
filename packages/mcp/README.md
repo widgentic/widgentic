@@ -8,7 +8,8 @@ Everything needed to host the widgentic engine over MCP:
   limiter, body cap). Framework-agnostic: no MCP SDK is imported here.
 - `@widgentic/mcp/sdk` — `createWidgenticServer()`, the full assembly on the
   official MCP TypeScript SDK 2.x: optional peers `@modelcontextprotocol/server`
-  2.3+, `@modelcontextprotocol/ext-apps` 2 and `zod` 4.2+. Served through the
+  2.3+ and `@modelcontextprotocol/ext-apps` 2 (which needs `zod` 4.2+). Every tool
+  advertises its exported definition's input schema. Served through the
   SDK's entries, it speaks protocol revision 2026-07-28 and the 2025-era
   revisions alike.
 - `@widgentic/mcp/authoring` — the write side as a hostable HTTP surface:

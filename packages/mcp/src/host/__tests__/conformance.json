@@ -267,6 +267,14 @@
       "output": "{\"isError\":true,\"content\":[{\"type\":\"text\",\"text\":\"{\\\"code\\\":\\\"MISSING_FIELD\\\",\\\"path\\\":\\\"widget\\\",\\\"message\\\":\\\"'widget' must be a non-empty widget kind id (see list_widgets).\\\"}\"}]}"
     },
     {
+      "name": "error payload kind passed for widget",
+      "op": "call",
+      "tool": "render_widget",
+      "args": "{\"kind\":\"card\",\"data\":{\"title\":\"Quarterly\",\"subtitle\":\"Q3\",\"fields\":{\"revenue\":\"1.2M\"}}}",
+      "slim": false,
+      "output": "{\"isError\":true,\"content\":[{\"type\":\"text\",\"text\":\"{\\\"code\\\":\\\"MISSING_FIELD\\\",\\\"path\\\":\\\"widget\\\",\\\"message\\\":\\\"'widget' is required: 'kind' is the payload's field; pass the kind id as 'widget' (widget: \\\\\\\"card\\\\\\\").\\\"}\"}]}"
+    },
+    {
       "name": "hints misaimed",
       "op": "call",
       "tool": "render_widget",
@@ -561,6 +569,14 @@
       "args": "{\"data\":{}}",
       "slim": false,
       "output": "{\"isError\":true,\"content\":[{\"type\":\"text\",\"text\":\"{\\\"code\\\":\\\"MISSING_FIELD\\\",\\\"path\\\":\\\"widget\\\",\\\"message\\\":\\\"'widget' must be a non-empty widget kind id.\\\"}\"}]}"
+    },
+    {
+      "name": "preview payload kind passed for widget",
+      "op": "call",
+      "tool": "preview_widget",
+      "args": "{\"kind\":\"card\",\"data\":{}}",
+      "slim": false,
+      "output": "{\"isError\":true,\"content\":[{\"type\":\"text\",\"text\":\"{\\\"code\\\":\\\"MISSING_FIELD\\\",\\\"path\\\":\\\"widget\\\",\\\"message\\\":\\\"'widget' is required: 'kind' is the payload's field; pass the kind id as 'widget' (widget: \\\\\\\"card\\\\\\\").\\\"}\"}]}"
     },
     {
       "name": "app template",
