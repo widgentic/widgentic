@@ -96,8 +96,8 @@ pack:check`, `openspec validate` — all green; plus `dotnet test` when `dotnet/
   static import graph must stay free of `node:`, `Buffer`, `process` and `require` at ANY depth
   (it runs on bare ECMAScript + `Intl`; `URL` comes from an injected shim, never a global).
 - `dotnet/` reaches into `packages/` only for the built `./host` bundle and the conformance corpus.
-- Zero runtime dependencies. In mcp the MCP SDK, `@modelcontextprotocol/ext-apps`
-  and `zod` are OPTIONAL peers used only by `packages/mcp/src/server/server.ts`
+- Zero runtime dependencies. In mcp the MCP SDK and `@modelcontextprotocol/ext-apps`
+  are OPTIONAL peers used only by `packages/mcp/src/server/server.ts`
   (the `./sdk` entry); the Azure clients are optional peers used only by
   `./store/cosmos` and `./secrets/keyvault`. The base `@widgentic/mcp` entry
   must stay importable with none of them installed.

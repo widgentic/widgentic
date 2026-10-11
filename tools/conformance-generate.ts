@@ -174,6 +174,7 @@ export function buildCorpus(): Corpus {
   call("error args not an object", "render_widget", "[]");
   call("error args unparseable", "render_widget", "{");
   call("error args empty", "render_widget", {});
+  render("error payload kind passed for widget", { kind: "card", data: card });
 
   render("hints misaimed", { widget: "table", data: [{ a: 1, b: 2 }], hints: { colums: ["a"] } });
   render("data as JSON string", { widget: "table", data: JSON.stringify([{ a: 1 }]) });
@@ -236,6 +237,7 @@ export function buildCorpus(): Corpus {
   });
   call("preview unknown kind", "preview_widget", { widget: "nope", data: {} });
   call("preview missing widget", "preview_widget", { data: {} });
+  call("preview payload kind passed for widget", "preview_widget", { kind: "card", data: {} });
 
   cases.push({ name: "app template", op: "appTemplate", output: host.appTemplate() });
   cases.push({ name: "resources", op: "resources", output: host.resources() });

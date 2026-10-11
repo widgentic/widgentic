@@ -102,6 +102,21 @@ type ToolError =
   | { code: "UNKNOWN_THEME" | "RATE_LIMITED"; path: string; message: string }
   | { code: "UNKNOWN_TOOL"; path: string; message: string };
 
+/**
+ * The payload contract calls the kind `kind`, and the tools take it as
+ * `widget`. An agent that knows the contract can mix the two up, so a missing
+ * `widget` next to a string `kind` gets an error that says so.
+ */
+function missingWidget(input: Record<string, unknown>, message: string): ToolError {
+  const kind = input.kind;
+  const named =
+    typeof kind === "string" && kind.length > 0
+      ? `'widget' is required: 'kind' is the payload's field; pass the kind id as 'widget'` +
+        (kind.length <= 80 ? ` (widget: ${JSON.stringify(kind)}).` : ".")
+      : message;
+  return { code: "MISSING_FIELD", path: "widget", message: named };
+}
+
 /** Structured, agent-correctable failure using the contract vocabulary. */
 function errorResult(error: ToolError): McpToolResult {
   return {
@@ -468,7 +483,7 @@ export function handlePreviewWidget(
   }
   const widget = input.widget;
   if (typeof widget !== "string" || widget.length === 0) {
-    return errorResult({ code: "MISSING_FIELD", path: "widget", message: "'widget' must be a non-empty widget kind id." });
+    return errorResult(missingWidget(input, "'widget' must be a non-empty widget kind id."));
   }
   const data = input.data === undefined ? null : input.data;
   const schema = catalog.describe(widget)?.dataSchema;
@@ -521,11 +536,7 @@ export function handleRenderWidget(
   }
   const widget = input.widget;
   if (typeof widget !== "string" || widget.length === 0) {
-    return errorResult({
-      code: "MISSING_FIELD",
-      path: "widget",
-      message: "'widget' must be a non-empty widget kind id (see list_widgets)."
-    });
+    return errorResult(missingWidget(input, "'widget' must be a non-empty widget kind id (see list_widgets)."));
   }
   if (!("data" in input) || input.data === undefined) {
     return errorResult({

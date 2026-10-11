@@ -4,7 +4,9 @@
  * the formal MCP Apps declaration. Transport-agnostic: hosts serve it
  * through the SDK's entries (`createMcpHandler` over HTTP, `serveStdio`
  * over stdio), which speak both the 2025-era revisions and 2026-07-28, or
- * connect it to a transport directly (in-memory pipes, 2025 era).
+ * connect it to a transport directly (in-memory pipes, 2025 era). Every
+ * tool is registered with its exported definition's input schema, and its
+ * handler validates the arguments.
  *
  * This module ships from its own entry (`@widgentic/mcp/sdk`); the
  * MCP SDK packages are optional peer dependencies installed only by
@@ -12,14 +14,18 @@
  * SDK-free.
  */
 import { CLIENT_CAPABILITIES_META_KEY, McpServer, ResourceTemplate } from "@modelcontextprotocol/server";
-import type { CallToolResult, ClientCapabilities, ServerContext } from "@modelcontextprotocol/server";
+import type {
+  CallToolResult,
+  ClientCapabilities,
+  ServerContext,
+  StandardSchemaWithJSON
+} from "@modelcontextprotocol/server";
 import {
   registerAppTool,
   registerAppResource,
   getUiCapability,
   RESOURCE_MIME_TYPE
 } from "@modelcontextprotocol/ext-apps/server";
-import { z } from "zod";
 import { createCatalog, isPlainObject } from "@widgentic/core";
 import type { StoredAction, WidgetCatalog } from "@widgentic/core";
 import {
@@ -37,6 +43,7 @@ import {
   APP_TEMPLATE_RESOURCE,
   WIDGET_PAGE_RESOURCE
 } from "./definitions.js";
+import type { McpToolDefinition } from "./definitions.js";
 import {
   handleListWidgets,
   handleRenderWidget,
@@ -156,7 +163,7 @@ export function createWidgenticServer(
 
   server.registerTool(
     LIST_WIDGETS_TOOL.name,
-    { description: LIST_WIDGETS_TOOL.description },
+    { description: LIST_WIDGETS_TOOL.description, inputSchema: fromDefinition(LIST_WIDGETS_TOOL) },
     // Handler results use widgentic's structural MCP types; they are shaped
     // as CallToolResult content, asserted at this wiring boundary.
     () => handleListWidgets(catalog) as CallToolResult
@@ -164,31 +171,31 @@ export function createWidgenticServer(
 
   server.registerTool(
     LIST_THEME_TOKENS_TOOL.name,
-    { description: LIST_THEME_TOKENS_TOOL.description },
+    { description: LIST_THEME_TOKENS_TOOL.description, inputSchema: fromDefinition(LIST_THEME_TOKENS_TOOL) },
     () => handleListThemeTokens() as CallToolResult
   );
 
   server.registerTool(
     LIST_THEMES_TOOL.name,
-    { description: LIST_THEMES_TOOL.description },
+    { description: LIST_THEMES_TOOL.description, inputSchema: fromDefinition(LIST_THEMES_TOOL) },
     () => handleListThemes(themes) as CallToolResult
   );
 
   server.registerTool(
     LIST_SCHEMAS_TOOL.name,
-    { description: LIST_SCHEMAS_TOOL.description },
+    { description: LIST_SCHEMAS_TOOL.description, inputSchema: fromDefinition(LIST_SCHEMAS_TOOL) },
     async () => (await handleListSchemas(options.schemas)) as CallToolResult
   );
 
   server.registerTool(
     LIST_ACTIONS_TOOL.name,
-    { description: LIST_ACTIONS_TOOL.description },
+    { description: LIST_ACTIONS_TOOL.description, inputSchema: fromDefinition(LIST_ACTIONS_TOOL) },
     async () => (await handleListActions(options.sharedActions)) as CallToolResult
   );
 
   server.registerTool(
     GET_AUTHORING_GUIDE_TOOL.name,
-    { description: GET_AUTHORING_GUIDE_TOOL.description },
+    { description: GET_AUTHORING_GUIDE_TOOL.description, inputSchema: fromDefinition(GET_AUTHORING_GUIDE_TOOL) },
     () => handleGetAuthoringGuide() as CallToolResult
   );
 
@@ -202,43 +209,7 @@ export function createWidgenticServer(
     {
       description: RENDER_WIDGET_TOOL.description,
       _meta: { ui: { resourceUri: WIDGENTIC_APP_TEMPLATE_URI } },
-      // zod flavor of RENDER_WIDGET_TOOL.inputSchema (the SDK requires zod
-      // shapes). Field DESCRIPTIONS come from definitions.ts — the wire
-      // schema is what agents actually read, and an undescribed field is
-      // steering nobody (observed live: agents inlined token maps for
-      // saved themes because the wire never carried the name preference).
-      inputSchema: (() => {
-        const docs = RENDER_WIDGET_TOOL.inputSchema.properties as Record<
-          string,
-          { description?: string }
-        >;
-        const doc = (field: string) => docs[field]?.description ?? "";
-        return z.object({
-          widget: z.string().describe(doc("widget")),
-          // Typed union (mirrors RENDER_WIDGET_TOOL.inputSchema) so the wire
-          // schema tells clients to send structured JSON, not a string.
-          data: z
-            .union([
-              z.array(z.unknown()),
-              z.record(z.string(), z.unknown()),
-              z.string(),
-              z.number(),
-              z.boolean(),
-              z.null()
-            ])
-            .describe(doc("data")),
-          hints: z.record(z.string(), z.unknown()).optional().describe(doc("hints")),
-          meta: z.record(z.string(), z.unknown()).optional().describe(doc("meta")),
-          format: z
-            .enum(["both", "html", "widget", "page", "app"])
-            .optional()
-            .describe(doc("format")),
-          theme: z
-            .union([z.string(), z.record(z.string(), z.string())])
-            .optional()
-            .describe(doc("theme"))
-        });
-      })()
+      inputSchema: fromDefinition(RENDER_WIDGET_TOOL)
     },
     async (args, ctx) => {
       const result = handleRenderWidget(catalog, args, {
@@ -267,20 +238,7 @@ export function createWidgenticServer(
       _meta: {
         ui: { resourceUri: WIDGENTIC_APP_TEMPLATE_URI, visibility: [...APP_ONLY_VISIBILITY] }
       },
-      // Descriptions come from definitions.ts, exactly as render_widget's do,
-      // so the wire schema cannot drift from the documented one.
-      inputSchema: (() => {
-        const docs = EXECUTE_ACTION_TOOL.inputSchema.properties as Record<string, { description?: string }>;
-        const doc = (field: string) => docs[field]?.description ?? "";
-        return z.object({
-          widget: z.string().describe(doc("widget")),
-          action: z.string().describe(doc("action")),
-          args: z.record(z.string(), z.unknown()).optional().describe(doc("args")),
-          payload: z.record(z.string(), z.unknown()).describe(doc("payload")),
-          at: z.string().optional().describe(doc("at")),
-          item: z.string().optional().describe(doc("item"))
-        });
-      })()
+      inputSchema: fromDefinition(EXECUTE_ACTION_TOOL)
     },
     async (args) => {
       const result = (await handleExecuteAction(catalog, args, {
@@ -307,30 +265,7 @@ export function createWidgenticServer(
       _meta: {
         ui: { resourceUri: WIDGENTIC_APP_TEMPLATE_URI, visibility: [...APP_ONLY_VISIBILITY] }
       },
-      inputSchema: (() => {
-        const docs = PREVIEW_WIDGET_TOOL.inputSchema.properties as Record<string, { description?: string }>;
-        const doc = (field: string) => docs[field]?.description ?? "";
-        return z.object({
-          widget: z.string().describe(doc("widget")),
-          data: z
-            .union([
-              z.array(z.unknown()),
-              z.record(z.string(), z.unknown()),
-              z.string(),
-              z.number(),
-              z.boolean(),
-              z.null()
-            ])
-            .optional()
-            .describe(doc("data")),
-          hints: z.record(z.string(), z.unknown()).optional().describe(doc("hints")),
-          meta: z.record(z.string(), z.unknown()).optional().describe(doc("meta")),
-          theme: z
-            .union([z.string(), z.record(z.string(), z.unknown())])
-            .optional()
-            .describe(doc("theme"))
-        });
-      })()
+      inputSchema: fromDefinition(PREVIEW_WIDGET_TOOL)
     },
     (args) =>
       handlePreviewWidget(catalog, args, {
@@ -408,3 +343,19 @@ const requestCapabilities = (ctx: ServerContext): ClientCapabilities | undefined
   const capabilities = envelope[CLIENT_CAPABILITIES_META_KEY];
   return isPlainObject(capabilities) ? capabilities : undefined;
 };
+
+/**
+ * A tool's exported `inputSchema` as the Standard Schema the SDK registers:
+ * advertised in `tools/list` exactly as exported (the schemas the `./host`
+ * bundle serves), and validating nothing. The handlers validate every
+ * argument themselves, with structured codes in the tool's own vocabulary,
+ * so malformed calls get the same answer from every host.
+ */
+const fromDefinition = (tool: McpToolDefinition): StandardSchemaWithJSON => ({
+  "~standard": {
+    version: 1,
+    vendor: "widgentic",
+    jsonSchema: { input: () => tool.inputSchema, output: () => tool.inputSchema },
+    validate: (value) => ({ value })
+  }
+});

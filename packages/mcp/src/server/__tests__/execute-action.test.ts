@@ -257,6 +257,11 @@ describe("hardening: execute_action input and error hygiene", () => {
     const { run, calls } = await rig();
     expect(errorOf(await run({ widget: "weather", action: "", payload }, () => jsonResponse(200, {}))).code).toBe("MISSING_FIELD");
     expect(errorOf(await run({ widget: "weather", action: "children.1", at: "meta.x", item: "weather", args: { city: "Oslo" }, payload }, () => jsonResponse(200, {})))).toMatchObject({ code: "INVALID_TYPE", path: "at" });
+    // Present but mistyped optional arguments are refused, never ignored.
+    for (const [field, value] of [["args", "city=Oslo"], ["args", ["Oslo"]], ["args", null], ["at", 1], ["item", 2]] as const) {
+      const call = { widget: "weather", action: "children.1", args: { city: "Oslo" }, payload, [field]: value };
+      expect(errorOf(await run(call, () => jsonResponse(200, {}))), field).toMatchObject({ code: "INVALID_TYPE", path: field });
+    }
     expect(calls).toHaveLength(0);
   });
 
