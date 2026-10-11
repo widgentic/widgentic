@@ -24,7 +24,7 @@ import {
 } from "@widgentic/core";
 import { isPlainObject } from "@widgentic/core";
 import { createThemeRegistry } from "@widgentic/core";
-import type { ThemeEntry, ThemeRegistry } from "@widgentic/core";
+import type { ThemeEntry, ThemeMode, ThemeRegistry } from "@widgentic/core";
 import type { StoredWidget, WidgetStore } from "./types.js";
 import type { StoreLimits } from "./limits.js";
 import { DEFAULT_LIMITS } from "./limits.js";
@@ -94,6 +94,9 @@ export interface ComposeProblem {
 const SINGULAR = { widgets: "widget", themes: "theme", actions: "action" } as const;
 
 /** The diagnostic line a problem has always been reported as. */
+/** The modes a default theme is chosen for, in reporting order. */
+const THEME_MODES: readonly ThemeMode[] = ["light", "dark"];
+
 function diagnosticLine(problem: ComposeProblem): string {
   if (problem.code === "LIMIT_REACHED" || problem.warning === true) return problem.message;
   const prefix = `skipped ${SINGULAR[problem.section]} '${problem.name}'`;
@@ -333,7 +336,12 @@ export function composeThemeEntries(
   return { registry, problems };
 }
 
-/** Theme registry for one principal: built-ins plus their stored themes. */
+/**
+ * Theme registry for one principal: built-ins plus their stored themes,
+ * with the default per mode their settings choose. A default naming a theme
+ * the registry does not hold (missing, or skipped as invalid) keeps the
+ * built-in and is reported, never fatal.
+ */
 export async function composeThemes(
   store: WidgetStore | undefined,
   principalId: string,
@@ -344,5 +352,16 @@ export async function composeThemes(
     stored,
     options.limits === undefined ? {} : { limits: options.limits }
   );
-  return { value: composed.registry, diagnostics: composed.problems.map(diagnosticLine) };
+  const diagnostics = composed.problems.map(diagnosticLine);
+  const defaults = store === undefined ? undefined : (await store.settings(principalId)).defaultThemes;
+  for (const mode of THEME_MODES) {
+    const name = defaults?.[mode];
+    if (name === undefined) continue;
+    if (composed.registry.get(name) === undefined) {
+      diagnostics.push(`default ${mode} theme '${name}' is not available; the built-in ${mode} theme stays the default.`);
+      continue;
+    }
+    composed.registry.setDefault(mode, name);
+  }
+  return { value: composed.registry, diagnostics };
 }

@@ -1,6 +1,6 @@
 /**
- * widgentic/designer — the embeddable designers: widget, theme, schema and
- * action, each mountable standalone or as a custom element.
+ * widgentic/designer — the embeddable designers: widget, theme, schema,
+ * action and settings, each mountable standalone or as a custom element.
  *
  * Import discipline: this capability consumes the rest of widgentic ONLY
  * through public package entries (`@widgentic/core/catalog`, `@widgentic/core/templates`,
@@ -28,11 +28,20 @@ export {
   defineThemeDesignerElement,
   defineSchemaDesignerElement,
   defineActionDesignerElement,
+  defineSettingsDesignerElement,
   DEFAULT_TAG,
   DEFAULT_THEME_TAG,
   DEFAULT_SCHEMA_TAG,
-  DEFAULT_ACTION_TAG
+  DEFAULT_ACTION_TAG,
+  DEFAULT_SETTINGS_TAG
 } from "./element.js";
+export { createSettingsDesigner } from "./settings-designer.js";
+export type {
+  SettingsDesignerHandle,
+  SettingsDesignerOptions,
+  SettingsLoadResult,
+  SettingsRecord
+} from "./settings-designer.js";
 export { createActionDesigner, checkActionEntry } from "./action-designer.js";
 export type {
   ActionDesignerHandle,

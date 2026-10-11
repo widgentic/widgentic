@@ -146,13 +146,37 @@ export function buildAuthoringGuide(): Record<string, unknown> {
     theme: {
       shape: {
         description:
-          "A theme entry is one JSON object: { name, label?, description?, tokens }.",
+          "A theme entry is one JSON object: { name, label?, description?, tokens, styles? }.",
         name: `String identifier matching ${SAFE_IDENTIFIER.source}.`,
         label: "OPTIONAL human-readable display name.",
         tokens:
           "Record of registry token names (bare, no --wg- prefix) and/or " +
-          "custom variables to string values."
+          "custom variables to string values.",
+        styles:
+          "OPTIONAL shared classes, in the same shape as a widget's " +
+          "descriptor.styles: { \"<selector>\": { \"<cssProperty>\": \"<value>\" } }."
       },
+      styles: {
+        purpose:
+          "A theme's styles define classes every widget rendered under the " +
+          "theme can use (e.g. .wg-btn for buttons), so a look is written " +
+          "once instead of copied into each widget. They are emitted before " +
+          "the widget's own styles, so a widget's rule wins a tie.",
+        // Derived from the same guards as widget styles: one rule for both.
+        selectors:
+          "Every selector (and every comma-separated part) must target a .wg- class.",
+        banned:
+          `Selectors, properties, or values matching ${UNSAFE.source} — or ` +
+          "containing 'url(' or 'expression(' — are dropped.",
+        propertyNames:
+          `Property names must match ${PROPERTY_NAME.source} (letters and ` +
+          "hyphens, optionally leading '-'); anything else is dropped."
+      },
+      defaults:
+        "Which theme dresses renders that name no theme — one for light " +
+        "hosts, one for dark — is a setting the user chooses in Settings " +
+        "at widgentic.dev, not part of the theme entry. list_themes shows " +
+        "the current defaults.",
       tokens: Object.entries(TOKEN_SPECS).map(([name, spec]) => ({
         name,
         type: spec.type,

@@ -7,7 +7,7 @@
 import { createCatalog } from "@widgentic/core";
 import { countTemplateNodes, validateTemplate, parsePath } from "@widgentic/core";
 import { ACTION_NAME, validateActionDefinition, validateLoadBinding } from "@widgentic/core";
-import { createThemeRegistry, validateTheme } from "@widgentic/core";
+import { createThemeRegistry, isStyleMap, validateTheme } from "@widgentic/core";
 import type { ThemeEntry } from "@widgentic/core";
 import type { StoredSchema, StoredWidget } from "./types.js";
 import type { StoreLimits } from "./limits.js";
@@ -183,6 +183,14 @@ export function checkStoredTheme(
     return {
       code: "INVALID_THEME",
       message: `${theme.error.code} — ${theme.error.message}`
+    };
+  }
+  // Shape only, as for a widget's styles: unsafe entries inside a
+  // well-shaped map are stored and dropped when CSS is generated.
+  if (entry.styles !== undefined && !isStyleMap(entry.styles)) {
+    return {
+      code: "INVALID_THEME",
+      message: "'styles' must map selectors to objects of property/value strings."
     };
   }
   const bytes = serializedBytes(entry);

@@ -67,11 +67,15 @@ import {
   checkStoredTheme,
   checkStoredWidget
 } from "./validate.js";
+import { applySettingsUpdate, readSettings, refuseThemeInUse } from "./settings.js";
 
 /** Bumped only with a persisted-shape change, which ships with its seam. */
 const SCHEMA_VERSION = 1;
 
-type EntryKind = "widget" | "theme" | "schema" | "action" | "secret";
+type EntryKind = "widget" | "theme" | "schema" | "action" | "secret" | "settings";
+
+/** The settings record's row: one per principal, beside its entries. */
+const SETTINGS_ROW = "principal";
 
 export interface SqliteStoreOptions {
   limits?: StoreLimits;
@@ -564,7 +568,31 @@ export function createSqliteStore(
 
     async removeTheme(principalId, name) {
       tx(() => {
+        // Same transaction as the delete: a default set concurrently cannot
+        // slip past the check.
+        refuseThemeInUse(rawEntry(principalId, "settings", SETTINGS_ROW), name);
         db.prepare("DELETE FROM entries WHERE principal_id = ? AND kind = 'theme' AND name = ?").run(principalId, name);
+      });
+    },
+
+    async settings(principalId) {
+      return readSettings(rawEntry(principalId, "settings", SETTINGS_ROW));
+    },
+
+    async putSettings(principalId, update) {
+      tx(() => {
+        requirePrincipal(principalId);
+        const themeNames = new Set(
+          (db
+            .prepare("SELECT name FROM entries WHERE principal_id = ? AND kind = 'theme'")
+            .all(principalId) as Array<{ name: string }>).map((row) => row.name)
+        );
+        const next = applySettingsUpdate(rawEntry(principalId, "settings", SETTINGS_ROW), update, themeNames);
+        if (next === undefined) {
+          db.prepare("DELETE FROM entries WHERE principal_id = ? AND kind = 'settings' AND name = ?").run(principalId, SETTINGS_ROW);
+        } else {
+          upsertEntry(principalId, "settings", SETTINGS_ROW, next);
+        }
       });
     },
 

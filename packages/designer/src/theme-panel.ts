@@ -40,11 +40,13 @@ export function mountThemePanel(
   themeSelect.addEventListener("change", () => {
     const entry = themes.find((candidate) => candidate.name === themeSelect.value);
     store.update((draft) => {
-      if (entry === undefined) {
-        const { theme: _gone, ...rest } = draft;
-        return rest;
-      }
-      return { ...draft, theme: entry.tokens };
+      const { theme: _theme, themeStyles: _styles, ...rest } = draft;
+      if (entry === undefined) return rest;
+      // The entry's shared styles dress the preview too, so its classes
+      // look in the draft as they will under this theme.
+      return entry.styles === undefined
+        ? { ...rest, theme: entry.tokens }
+        : { ...rest, theme: entry.tokens, themeStyles: entry.styles };
     });
   });
 

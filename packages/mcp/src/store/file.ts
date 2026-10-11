@@ -41,6 +41,7 @@ import {
   checkStoredWidget,
   SAFE_IDENTIFIER
 } from "./validate.js";
+import { readSettings } from "./settings.js";
 
 interface PrincipalRow extends Principal {
   keyDigest: string;
@@ -149,6 +150,12 @@ export function createFileStore(
         out.push(entry as ThemeEntry);
       }
       return out.slice(0, limits.maxThemes);
+    },
+
+    async settings(principalId) {
+      const id = safeId(principalId);
+      if (id === undefined) return {};
+      return readSettings(await readJson(join(dir, id, "settings.json")));
     },
 
     async schemas(principalId) {

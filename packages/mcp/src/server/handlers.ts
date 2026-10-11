@@ -4,7 +4,7 @@ import { analyzeHints, renderToHtml, widgetStylesToCss } from "@widgentic/core";
 import type { WidgetContractError } from "@widgentic/core";
 import type { McpToolResult, McpContentBlock } from "../output/index.js";
 import { WIDGENTIC_MIME_TYPE, WIDGENTIC_URI } from "../output/index.js";
-import type { ThemeRegistry, WidgetTheme } from "@widgentic/core";
+import type { ThemeEntry, ThemeRegistry, WidgetStyles, WidgetTheme } from "@widgentic/core";
 import type { WidgetPayload } from "@widgentic/core";
 import type { ActionBinding, ActionDefinition, StoredAction } from "@widgentic/core";
 import { resolveActionDescriptor } from "@widgentic/core";
@@ -14,6 +14,7 @@ import {
   TOKEN_SPECS,
   baseStylesheet,
   darkTheme,
+  themeStylesToCss,
   themeToCss,
   validateTheme
 } from "@widgentic/core";
@@ -52,17 +53,23 @@ const PAGE_BODY_CSS =
   `  margin: calc(var(--wg-spacing, ${TOKEN_DEFAULTS.spacing}) * 2);\n` +
   `}`;
 
-/** Self-contained styled document for `format: "page"`. */
+/**
+ * Self-contained styled document for `format: "page"` and `"app"`. A
+ * document carries no host colour scheme, so without an explicit theme it
+ * takes the light default only.
+ */
 function composePage(
   fragment: string,
-  theme: WidgetTheme | undefined,
+  themes: RenderThemes,
   styleCss: string
 ): string {
+  const theme = themes.explicit ?? themes.light;
   const parts = [
     baseStylesheet,
     PAGE_BODY_CSS,
+    ...(theme?.styles ? [themeStylesToCss(theme.styles)].filter((css) => css.length > 0) : []),
     ...(styleCss ? [styleCss] : []),
-    ...(theme ? [themeToCss(theme, ":root")] : [])
+    ...(theme ? [themeToCss(theme.tokens, ":root")] : [])
   ];
   return (
     `<!doctype html>\n<meta charset="utf-8">\n<title>widgentic</title>\n` +
@@ -162,7 +169,7 @@ export function handleListThemeTokens(): McpToolResult {
       "of CSS value it expects (color, dimension, number, font-family, " +
       "font-weight, shadow). When you build a theme the user may want to " +
       "KEEP, also deliver it as the importable entry " +
-      "{ name, label?, description?, tokens } and point them to Import in " +
+      "{ name, label?, description?, tokens, styles? } and point them to Import in " +
       "the theme designer at widgentic.dev — the inline map only styles " +
       "one render (see get_authoring_guide)."
   };
@@ -189,11 +196,16 @@ export function handleListWidgets(catalog: WidgetCatalog): McpToolResult {
 export function handleListThemes(registry: ThemeRegistry): McpToolResult {
   const listing = {
     themes: registry.list(),
+    defaults: registry.defaults(),
     rules:
       "Pass any 'name' above as render_widget's 'theme' input. Tokens are " +
-      "shown for reference; a token map may still be passed inline. A new " +
-      "theme the user wants to keep belongs in the designer: deliver it as " +
-      "{ name, label?, description?, tokens } for Import at widgentic.dev " +
+      "shown for reference; a token map may still be passed inline. A " +
+      "theme's 'styles' define shared .wg- classes (a .wg-btn, say) that " +
+      "any widget rendered under it can use in its template. 'defaults' " +
+      "names the theme each host mode uses when a render names none — the " +
+      "user chooses them in Settings. A new theme the user wants to keep " +
+      "belongs in the designer: deliver it as " +
+      "{ name, label?, description?, tokens, styles? } for Import at widgentic.dev " +
       "(see get_authoring_guide)."
   };
   return {
@@ -387,6 +399,43 @@ function actionNotes(tree: unknown, hasLoad: boolean): string {
   return `\n\nAction notes: the widget has ${parts.join("; ")}. You do not call execute_action yourself — the widget does.`;
 }
 
+/** A theme as a render emits it: its tokens and, for a named one, its styles. */
+interface ResolvedTheme {
+  tokens: WidgetTheme;
+  styles?: WidgetStyles;
+}
+
+/**
+ * What a render dresses itself with: the explicit `theme` input, or —
+ * when there is none — the registry's default per mode. A default that is
+ * the built-in is left out, so the template's own behavior for that mode
+ * stands and output without chosen defaults stays byte-identical.
+ */
+interface RenderThemes {
+  explicit?: ResolvedTheme;
+  light?: ResolvedTheme;
+  dark?: ResolvedTheme;
+}
+
+const LIGHT_SCOPE = ':root:not([data-theme="dark"])';
+const DARK_SCOPE = ':root[data-theme="dark"]';
+
+function fromEntry(entry: ThemeEntry): ResolvedTheme {
+  return entry.styles === undefined ? { tokens: entry.tokens } : { tokens: entry.tokens, styles: entry.styles };
+}
+
+function renderThemes(explicit: ResolvedTheme | undefined, registry: ThemeRegistry | undefined): RenderThemes {
+  if (explicit !== undefined) return { explicit };
+  if (registry === undefined) return {};
+  const defaults = registry.defaults();
+  const out: RenderThemes = {};
+  if (defaults.light !== "light") out.light = fromEntry(registry.getDefault("light"));
+  if (defaults.dark !== "dark") out.dark = fromEntry(registry.getDefault("dark"));
+  // One theme for both modes is emitted as an explicit theme is.
+  if (out.light !== undefined && defaults.light === defaults.dark) return { explicit: out.light };
+  return out;
+}
+
 /**
  * Resolve a tool input's `theme`: a string names a registered theme, an
  * object is an inline token map. Absent resolves to no theme.
@@ -394,7 +443,7 @@ function actionNotes(tree: unknown, hasLoad: boolean): string {
 function resolveThemeInput(
   value: unknown,
   themes: ThemeRegistry | undefined
-): { ok: true; theme: WidgetTheme | undefined } | { ok: false; error: ToolError } {
+): { ok: true; theme: ResolvedTheme | undefined } | { ok: false; error: ToolError } {
   if (value === undefined) return { ok: true, theme: undefined };
   if (typeof value === "string") {
     const entry = themes?.get(value);
@@ -409,7 +458,7 @@ function resolveThemeInput(
         }
       };
     }
-    return { ok: true, theme: entry.tokens };
+    return { ok: true, theme: fromEntry(entry) };
   }
   const validated = validateTheme(value);
   if (!validated.ok) {
@@ -422,7 +471,7 @@ function resolveThemeInput(
       }
     };
   }
-  return { ok: true, theme: validated.theme };
+  return { ok: true, theme: { tokens: validated.theme } };
 }
 
 /**
@@ -448,13 +497,32 @@ function kindStylesCss(catalog: WidgetCatalog, widget: string, data: unknown): s
     .join("\n");
 }
 
-/** The template channel's CSS: kind styles, then the theme's declarations. */
-function templateCss(styleCss: string, theme: WidgetTheme | undefined): string {
-  // The doubled selector matches the app template's dark-override
-  // specificity (:root[data-theme="dark"]), so an explicit render theme
-  // wins on dark hosts too — same specificity, later style element.
-  const themeCss = theme ? themeToCss(theme, ':root, :root[data-theme="dark"]') : "";
-  return [styleCss, themeCss].filter((part) => part.length > 0).join("\n");
+/**
+ * The template channel's CSS: theme styles, then kind styles (a widget's
+ * own rule wins a tie), then theme declarations. An explicit theme applies
+ * in both modes; defaults apply each in its own mode.
+ */
+function templateCss(styleCss: string, themes: RenderThemes): string {
+  const { explicit, light, dark } = themes;
+  if (explicit !== undefined) {
+    // The doubled selector matches the app template's dark-override
+    // specificity (:root[data-theme="dark"]), so an explicit render theme
+    // wins on dark hosts too — same specificity, later style element.
+    return [
+      explicit.styles ? themeStylesToCss(explicit.styles) : "",
+      styleCss,
+      themeToCss(explicit.tokens, `:root, ${DARK_SCOPE}`)
+    ].filter((part) => part.length > 0).join("\n");
+  }
+  // :not() keeps the light default out of dark mode wherever the dark side
+  // sets nothing; both selectors outweigh the template's :root bridge.
+  return [
+    light?.styles ? themeStylesToCss(light.styles, LIGHT_SCOPE) : "",
+    dark?.styles ? themeStylesToCss(dark.styles, DARK_SCOPE) : "",
+    styleCss,
+    light ? themeToCss(light.tokens, LIGHT_SCOPE) : "",
+    dark ? themeToCss(dark.tokens, DARK_SCOPE) : ""
+  ].filter((part) => part.length > 0).join("\n");
 }
 
 export interface PreviewWidgetOptions {
@@ -503,12 +571,12 @@ export function handlePreviewWidget(
   }
   // A half-streamed inline token map is normal here: the result decides.
   const resolvedTheme = resolveThemeInput(input.theme, options.themes);
-  const theme = resolvedTheme.ok ? resolvedTheme.theme : undefined;
+  const themes = renderThemes(resolvedTheme.ok ? resolvedTheme.theme : undefined, options.themes);
   return {
     content: [{ type: "text", text: `Preview of '${widget}'.` }],
     structuredContent: {
       tree: rendered.node,
-      css: templateCss(kindStylesCss(catalog, widget, payload.data), theme)
+      css: templateCss(kindStylesCss(catalog, widget, payload.data), themes)
     }
   };
 }
@@ -557,7 +625,7 @@ export function handleRenderWidget(
 
   const resolvedTheme = resolveThemeInput(input.theme, options?.themes);
   if (!resolvedTheme.ok) return errorResult(resolvedTheme.error);
-  const theme = resolvedTheme.theme;
+  const themes = renderThemes(resolvedTheme.theme, options?.themes);
 
   // Schema-aware marshalling: kinds declaring string-typed data receive the
   // string verbatim — literal JSON-shaped text stays expressible for them.
@@ -570,7 +638,7 @@ export function handleRenderWidget(
   if ("meta" in input && input.meta !== undefined) payload.meta = input.meta;
   // The theme rides the payload as an unknown-field passthrough, so hosts
   // that mount the widget natively can honor it (advisory, any format).
-  if (theme !== undefined) payload.theme = theme;
+  if (resolvedTheme.theme !== undefined) payload.theme = resolvedTheme.theme.tokens;
 
   // Contract validation (kind membership, hints/meta shape) + rendering.
   const rendered = catalog.render(payload);
@@ -620,7 +688,7 @@ export function handleRenderWidget(
   // and per the Apps convention structuredContent is not model context.
   const structuredContent: Record<string, unknown> = {
     html,
-    css: templateCss(styleCss, theme),
+    css: templateCss(styleCss, themes),
     payload,
     // The same render, as data: the app template mounts this natively
     // (DOM from tree, patched in place across results); `html` stays the
@@ -708,7 +776,7 @@ export function handleRenderWidget(
       return {
         structuredContent,
         content: [
-          { type: "text", text: composePage(html, theme, styleCss) },
+          { type: "text", text: composePage(html, themes, styleCss) },
           widgetBlock
         ]
       };
@@ -729,7 +797,7 @@ export function handleRenderWidget(
             resource: {
               uri: `${WIDGENTIC_UI_URI_PREFIX}${widget}`,
               mimeType: WIDGENTIC_APP_MIME_TYPE,
-              text: composePage(html, theme, styleCss)
+              text: composePage(html, themes, styleCss)
             }
           },
           widgetBlock

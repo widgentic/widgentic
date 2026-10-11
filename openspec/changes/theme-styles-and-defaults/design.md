@@ -1,0 +1,230 @@
+## Context
+
+See proposal.md for the motivation. What shapes the approach:
+
+- **Themes.** A theme is a registry entry `{ name, label?, description?, tokens, extends? }`.
+  The core registry merges `extends` at registration. `composeThemes` builds a fresh
+  registry per request from the built-ins plus the principal's stored themes.
+- **Widget styles.** Widget styles are `Record<selector, Record<property, value>>` on the
+  descriptor:
+  - `widgetStylesToCss` drops unsafe entries at emission, and the store does not refuse
+    them.
+  - The widget designer audits them (`auditStyles`) and edits them with
+    `createStylesEditor` (Tree and JSON tabs, wired in `panels.ts`).
+- **Renders that name no theme.** The server emits no theme CSS, and the app template
+  supplies the look:
+  - **Base:** the base stylesheet.
+  - **Host bridge:** a `:root` rule mapping host style variables onto eight `--wg-*`
+    tokens.
+  - **Dark block:** `:root[data-theme="dark"]` with the dark preset's values for the
+    unbridged tokens. The template sets `data-theme` from the host context.
+  - **Explicit themes** go in the per-render `css` under `:root, :root[data-theme="dark"]`,
+    in a later style element, so they win in both modes.
+- **The `ui://` template is the same document for everyone**, and hosts cache it per
+  conversation. Anything per principal must travel in each result's `css`.
+- **Stores keep each entry as its own record:**
+  - Cosmos: documents `<kind>:<name>` in the principal's partition, queried by id prefix.
+  - SQLite: `entries` rows keyed by `(principal_id, kind, name)`.
+  - Files: `<dir>/<principal>/<kind>s/*.json`.
+  - There is no per-principal record for anything but identity (profiles, keys).
+- **Designers.** The designer package has four designers, each a factory plus an opt-in
+  custom element. Hosts own Save, and the authoring surface owns persistence.
+- **Branch base.** This branch is based on `staging`, which already carries
+  `derived-input-schemas` (tool registration from the exported schemas).
+
+## Goals / Non-Goals
+
+**Goals:**
+- One rule set for styles, whether they sit on a widget or a theme: same shape, guards,
+  editor and audit.
+- A settings record that later preferences join without new store methods, routes or
+  adapters.
+- Defaults resolved in one place (the registry) and applied identically by every output.
+- Zero output change for callers with no default themes and no theme styles, so the host
+  bundle's conformance corpus and the .NET host stay byte-identical.
+
+**Non-Goals:**
+- A dark mode for `page`/`app` documents (`prefers-color-scheme`); they have none today.
+- Preselecting the default theme as the widget designer's preview theme.
+- Import/export for settings, and WebMCP tools for the settings designer: settings are
+  saved by the person, and nothing drafts them.
+- A `.NET` option for default themes (`WidgenticOptions`); it follows on the NuGet
+  package's own cadence.
+
+## Decisions
+
+### D1 — One settings record per principal, made of named sections
+
+Each principal has one record, `{ defaultThemes?: { light?, dark? } }` today.
+
+Why not flags on theme entries:
+- **Uniqueness by construction.** The section holds one name per mode, so at most one
+  theme is a mode's default.
+- **Atomic writes.** Changing a default is one write in every adapter.
+- **Later settings need no new plumbing.** They join as sections, not as new ports.
+- **The flag alternative was rejected:** a `default` flag on each entry, with `putTheme`
+  clearing it from the others, means several Cosmos writes, and concurrent saves could
+  leave two defaults.
+
+Write semantics: `putSettings(update)` replaces the sections present, removes a section
+given as `null`, and keeps the rest.
+- **Why section-level:** an older client that knows only `defaultThemes` can never erase a
+  section a newer server added. A whole-record replace would.
+- **Within a section, replace:** `{ light: "b" }` unsets `dark`.
+
+Validation:
+- **On write:** an unknown section name is refused (`INVALID_SHAPE`), so nothing is "saved
+  but vanished".
+- **On read:** an unknown section is ignored, so data written by a later version still
+  loads.
+
+Storage per adapter:
+- **Memory:** a map.
+- **File:** `<dir>/<principal>/settings.json`.
+- **SQLite:** an `entries` row with kind `settings` and name `principal`, which needs no
+  schema migration. Entry listings and limits filter by their own kinds.
+- **Cosmos:** a document `settings` in the principal's partition. Its id lies outside
+  every `<kind>:` prefix the entry queries match.
+
+### D2 — The registry carries the defaults
+
+`createThemeRegistry()` gains `setDefault(mode, name)`, `getDefault(mode)` and
+`defaults()`, which start as the built-ins, and `composeThemes` applies
+`settings.defaultThemes`.
+- **No new plumbing.** Handlers, the server assembly, `preview_widget` and the host bundle
+  already receive a registry, so none of their signatures change.
+- **Byte-identical without defaults.** The emitters treat a built-in default as "emit
+  nothing", so output is unchanged when nothing is set.
+- **Alternative rejected:** a separate defaults option threaded through every consumer.
+
+### D3 — Mode scoping by selector, styles scoped with `:where()`
+
+Light-mode declarations go under `:root:not([data-theme="dark"])` and dark-mode ones
+under `:root[data-theme="dark"]`:
+- **Light stays out of dark mode.** The `:not()` keeps a light default's tokens out of
+  dark mode wherever the dark side sets nothing.
+- **Both beat the template's static rules.** Both selectors weigh (0,2,0), which beats the
+  static `:root` bridge. The dark selector ties with the static dark block, and the later
+  style element wins.
+
+Theme styles are scoped as `:where(<mode selector>) <part>` on every comma-separated
+part, inside `themeStylesToCss` (core) with the widget generator's guards. A scoped rule
+weighs exactly what its author wrote. A theme that is the default for both modes is
+emitted unscoped, exactly as an explicit theme is.
+
+*Alternative rejected:* `@media (prefers-color-scheme: dark)`. It follows the OS, not the
+host; the template already mirrors the host in `data-theme`.
+
+### D4 — Order: theme styles, then kind styles, then token declarations
+
+A theme defines shared classes and a widget refines them, so a widget's own rule wins a
+tie of equal weight. Token declarations only set custom properties, so their position
+doesn't matter; they stay last, where explicit themes already put them.
+
+### D5 — Theme styles follow widget styles: refuse bad shape, drop unsafe entries
+
+- **Bad shape is refused.** The store refuses a `styles` value that is not a map of maps
+  of strings (`INVALID_THEME`), and the registry throws on a bad shape, so out-of-band
+  data is skipped at composition.
+- **Unsafe entries are kept.** Entries the guards would drop are stored and dropped at
+  emission; the designer's audit flags them.
+- **Alternative rejected:** refusing unsafe entries on write, which would make theme
+  styles stricter than widget styles for no gain.
+- **Apply note: one shape predicate.** The registry, the store's write check and the
+  theme designer's import all need the same "map of maps of strings" test. Rather than
+  three copies, `@widgentic/core` exports `isStyleMap` from `./catalog`, beside
+  `widgetStylesToCss`. It is a public export the specs don't list, reviewed through the
+  `tools/exports.test.ts` snapshot.
+
+### D6 — A theme named in settings cannot be removed
+
+`removeTheme` answers `THEME_IN_USE` while `defaultThemes` names it, like the other
+`*_IN_USE` refusals.
+- **Rename:** the host saves the new name, updates Settings, then deletes the old name.
+- **Alternative rejected:** clearing the setting on delete, a silent side effect.
+
+### D7 — The settings designer is the fifth designer
+
+`createSettingsDesigner` / `defineSettingsDesignerElement` follow the other four (handle,
+`readOnly`, `subscribe`, `widgentic-change`, `dispose`, chrome options).
+- **Default themes subsection.** One select per mode: the built-in, then the host-supplied
+  theme entries. The host saves through `PUT /settings`.
+- **Missing themes stay visible.** A record naming a theme the host did not supply shows
+  as "unavailable" rather than being dropped.
+- **Unedited sections pass through untouched.**
+- **No theme-designer marks.** The theme designer carries no default marks: one place
+  decides defaults, and a select per mode makes "only one per mode" visible.
+
+### D8 — Documents use the light default
+
+`page` and `app` documents never receive a host theme. They take the light default's
+tokens at `:root` and its styles unscoped, and ignore the dark default.
+
+### D9 — Agents read styles and effective defaults, never settings
+
+- **`list_themes`:** lists each theme's `styles` (so a drafted widget can use `.wg-btn`)
+  and `defaults` with the effective names.
+- **Guides:** `get_authoring_guide` and the WebMCP guide copy describe `styles` from the
+  same `UNSAFE` / `PROPERTY_NAME` constants.
+- **WebMCP:** `<prefix>_theme_load` passes `styles` through the designer's validation.
+  There is no settings tool.
+
+### D10 — The host bundle and .NET stay untouched in API
+
+The bundle composes a registry from config themes, with no settings, so its output
+changes only when a configured theme has styles. The conformance corpus gains one render
+under a styled theme. `npm run conformance:generate` and `dotnet test` run in the gate.
+
+### D11 — widgentic.dev adopts through the release, in a companion change
+
+Per the cross-repository protocol:
+1. This change releases the packages.
+2. The apps repository then opens its own change, a `widgentic-app` delta: a Settings
+   section in `apps/web` mounting the settings designer against the mounted authoring
+   surface (`/api/settings`), the Themes list showing defaults, and `THEME_IN_USE`
+   surfaced through the existing feedback banner.
+3. The apps change is deployed as the next `vNN`.
+
+Before the release, the same UI is exercised in the self-host example, which shares the
+designer package and the authoring surface.
+
+## Risks / Trade-offs
+
+- **A default theme overrides host-bridged colors** (`bg`, `fg`, …) in its mode, as an
+  explicit theme does today. → Documented in the theming docs; that is what choosing a
+  default means.
+- **Broad theme selectors restyle every widget**, including built-ins (`.wg-card`).
+  → Intended. The theme designer previews any kind under the theme.
+- **Saving a renamed default takes three steps** (theme, settings, delete).
+  → Each step is validated and refusals are shown; the hosts sequence them.
+- **Hosts that never report a theme always get the light default.** → Same as built-in
+  behavior today.
+- **A future partition-wide Cosmos scan would meet the `settings` document.**
+  → The contract tests list every kind after settings are written, so a stray read fails
+  a test.
+- **The settings designer offers only the themes the host passes.** → Hosts pass the
+  stored list; an absent name shows as "unavailable".
+- **Apply note: a seeded section comes back once it is fully cleared.** The seed writes a
+  settings section only when the principal lacks it, and setting both modes to the
+  built-in removes `defaultThemes`. A persistent self-host store with a seed file
+  therefore re-applies the seed's defaults on the next restart. Changing one mode
+  survives restarts. → Accepted for a demo convenience: staging's store is empty on
+  every revision anyway, and the README says to unset `WIDGENTIC_SEED_FILE` once
+  the content is yours.
+
+## Migration Plan
+
+No data migration:
+- **Theme entries:** gain an optional key.
+- **Settings record:** absent reads as `{}`.
+- **Old-shape tests:** each adapter loads pre-change themes and reports empty settings.
+
+Rollback by redeploying the previous version:
+- **Old code ignores `styles`:** themes validate on tokens only.
+- **Old code never reads the settings record:** the SQLite row has its own kind, the
+  Cosmos document sits outside the entry prefixes, and the file store ignores a top-level
+  `settings.json`.
+
+Release:
+- core, designer and mcp minor, webmcp patch.
+- After publishing, the apps companion change adopts the new versions and deploys.

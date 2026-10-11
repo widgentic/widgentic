@@ -463,3 +463,26 @@ textarea.wgd-hl-input {
 `;
   doc.head.appendChild(style);
 }
+
+/** Tabbed container: first tab visible, buttons switch panes. */
+export function tabs(entries: { label: string; element: HTMLElement }[]): HTMLElement {
+  const buttons = entries.map((entry, index) => {
+    const button = h(
+      "button",
+      { class: `wgd-button wgd-tab${index === 0 ? " wgd-tab-active" : ""}`, type: "button" },
+      [entry.label]
+    );
+    button.addEventListener("click", () => {
+      entries.forEach((other, i) => {
+        other.element.hidden = i !== index;
+        buttons[i]?.classList.toggle("wgd-tab-active", i === index);
+      });
+    });
+    entry.element.hidden = index !== 0;
+    return button;
+  });
+  return h("div", { class: "wgd-tabs" }, [
+    h("div", { class: "wgd-row" }, buttons),
+    ...entries.map((entry) => entry.element)
+  ]);
+}

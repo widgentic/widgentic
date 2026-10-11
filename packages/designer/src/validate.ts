@@ -83,7 +83,7 @@ const BASE_KINDS = new Set(createCatalog().kinds());
  * generator: a probe that produces no CSS was filtered by the safety
  * guards. Selector and per-declaration issues are reported separately.
  */
-function auditStyles(styles: WidgetStyles | undefined): StyleIssue[] {
+export function auditStyles(styles: WidgetStyles | undefined): StyleIssue[] {
   if (!isPlainObject(styles)) return [];
   const issues: StyleIssue[] = [];
   for (const [selector, declarations] of Object.entries(styles)) {

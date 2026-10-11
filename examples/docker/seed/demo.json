@@ -601,5 +601,11 @@
         }
       }
     }
-  ]
+  ],
+  "settings": {
+    "defaultThemes": {
+      "light": "google-light",
+      "dark": "google-dark"
+    }
+  }
 }

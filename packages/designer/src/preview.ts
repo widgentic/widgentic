@@ -15,7 +15,7 @@ import type { WidgetPayload } from "@widgentic/core";
 import { mountWidget } from "@widgentic/core";
 import type { WidgetMount } from "@widgentic/core";
 import { compileTemplate, validateTemplate } from "@widgentic/core";
-import { applyTheme, injectBaseStyles } from "@widgentic/core";
+import { applyTheme, injectBaseStyles, themeStylesToCss } from "@widgentic/core";
 import { h } from "./dom.js";
 import type { WidgetDraft } from "./store.js";
 import type { DesignerDiagnostics } from "./validate.js";
@@ -64,14 +64,21 @@ export interface PreviewController {
   dispose(): void;
 }
 
+/** Distinguishes previews on one page, so a theme's styles stay in theirs. */
+let previewCount = 0;
+
 export function createPreview(options: PreviewOptions = {}): PreviewController {
   injectBaseStyles(document);
 
   const banner = h("div", { class: "wgd-banner" });
   banner.hidden = true;
+  // Theme styles first: the previewed kind's own rule wins a tie, as it
+  // does in a render.
+  const themeStyles = h("style");
   const kindStyles = h("style");
-  const mountRoot = h("div", { class: "wgd-preview" });
-  const pane = h("div", { class: "wgd-preview-pane" }, [banner, kindStyles, mountRoot]);
+  const scope = `wgd-preview-${++previewCount}`;
+  const mountRoot = h("div", { class: "wgd-preview", "data-wgd-scope": scope });
+  const pane = h("div", { class: "wgd-preview-pane" }, [banner, themeStyles, kindStyles, mountRoot]);
 
   const catalog = createCatalog();
   let renderer: WidgetRenderer = () => ({ tag: "div", children: ["…"] });
@@ -167,6 +174,10 @@ export function createPreview(options: PreviewOptions = {}): PreviewController {
       : customStyles.get(previewKind as string) ?? "";
     // Unsafe values are also skipped inside applyTheme (lenient layer).
     applyTheme(mountRoot, draft.theme ?? {});
+    // Scoped to this preview at no added weight; the guards drop unsafe entries.
+    themeStyles.textContent = draft.themeStyles
+      ? themeStylesToCss(draft.themeStyles, `[data-wgd-scope="${scope}"]`)
+      : "";
 
     const payload = {
       kind: renderingDraft ? PREVIEW_KIND : (previewKind as string),

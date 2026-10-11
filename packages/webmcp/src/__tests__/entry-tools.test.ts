@@ -30,6 +30,18 @@ describe("theme designer tools", () => {
     expect(theme.getTheme().name).toBe("ocean");
   });
 
+  it("round-trips a theme's styles and keeps them through a token merge", async () => {
+    const styles = { ".wg-btn": { padding: "4px 8px" } };
+    const loaded = await run(tools, "widgentic_theme_load", { entry: { name: "ocean", tokens: { bg: "#001b2e" }, styles } });
+    expect(loaded.ok).toBe(true);
+    expect(((await run(tools, "widgentic_theme_get")).entry as { styles?: unknown }).styles).toEqual(styles);
+    expect((await run(tools, "widgentic_theme_tokens_set", { tokens: { accent: "#0a84ff" } })).ok).toBe(true);
+    expect(theme.getTheme().styles).toEqual(styles);
+    const refused = await run(tools, "widgentic_theme_load", { entry: { name: "bad", tokens: {}, styles: { ".wg-btn": "x" } } });
+    expect(refused.ok).toBe(false);
+    expect(theme.getTheme().name).toBe("ocean");
+  });
+
   it("merges tokens into the current entry, exactly", async () => {
     theme.loadTheme({ name: "t", tokens: { bg: "#fff", fg: "#000" } });
     const result = await run(tools, "widgentic_theme_tokens_set", { tokens: { accent: "#0a84ff" }, remove: ["fg"] });

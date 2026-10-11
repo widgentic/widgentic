@@ -42,6 +42,8 @@ import {
   checkStoredTheme,
   checkStoredWidget
 } from "./validate.js";
+import { applySettingsUpdate, readSettings, refuseThemeInUse } from "./settings.js";
+import type { PrincipalSettingsUpdate } from "./settings.js";
 
 /** A principal plus its material, as callers seed it. */
 export interface MemorySeedPrincipal {
@@ -52,6 +54,8 @@ export interface MemorySeedPrincipal {
   themes?: ThemeEntry[];
   schemas?: StoredSchema[];
   actions?: StoredAction[];
+  /** Settings sections, applied after the entries through the same checks. */
+  settings?: PrincipalSettingsUpdate;
 }
 
 export interface MemoryStoreOptions {
@@ -73,6 +77,8 @@ interface Record_ {
   schemas: Map<string, StoredSchema>;
   actions: Map<string, StoredAction>;
   secrets: Map<string, StoredSecret>;
+  /** The raw settings record; absent when nothing is set. */
+  settings?: Record<string, unknown>;
 }
 
 export interface MemoryStore extends WritableWidgetStore {
@@ -176,6 +182,10 @@ export function createMemoryStore(
         throw new StoreRejectionError(problem.code, `${theme.name}: ${problem.message}`);
       }
       created.themes.set(theme.name, clone(theme));
+    }
+    if (entry.settings !== undefined) {
+      const next = applySettingsUpdate(undefined, entry.settings, new Set(created.themes.keys()));
+      if (next !== undefined) created.settings = next;
     }
   }
 
@@ -338,7 +348,19 @@ export function createMemoryStore(
       record(principalId)?.widgets.delete(kind);
     },
     async removeTheme(principalId, name) {
-      record(principalId)?.themes.delete(name);
+      const target = record(principalId);
+      if (target === undefined) return;
+      refuseThemeInUse(target.settings, name);
+      target.themes.delete(name);
+    },
+    async settings(principalId) {
+      return readSettings(record(principalId)?.settings);
+    },
+    async putSettings(principalId, update) {
+      const target = requireRecord(principalId);
+      const next = applySettingsUpdate(target.settings, clone(update), new Set(target.themes.keys()));
+      if (next === undefined) delete target.settings;
+      else target.settings = next;
     },
     async removeSchema(principalId, name) {
       const target = record(principalId);

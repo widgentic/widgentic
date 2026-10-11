@@ -73,6 +73,7 @@ import {
   checkStoredTheme,
   checkStoredWidget
 } from "./validate.js";
+import { applySettingsUpdate, readSettings, refuseThemeInUse } from "./settings.js";
 
 /* ------------------------------------------------------------------ */
 /* Structural client types — satisfied by the real @azure/cosmos client
@@ -172,6 +173,13 @@ interface ThemeDoc {
   id: string;
   principalId: string;
   theme: ThemeEntry;
+}
+
+/** The principal's settings record: one document beside its entries. */
+interface SettingsDoc {
+  id: "settings";
+  principalId: string;
+  settings: Record<string, unknown>;
 }
 
 interface SchemaDoc {
@@ -298,6 +306,11 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
       )
       .fetchAll();
     return resources;
+  }
+
+  async function rawSettings(principalId: string): Promise<unknown> {
+    const { resource } = await data.item("settings", principalId).read();
+    return (resource as Partial<SettingsDoc> | undefined)?.settings;
   }
 
   // Integrity scans read RAW docs: a widget the validator rejects today
@@ -669,11 +682,38 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
     },
 
     async removeTheme(principalId, name) {
+      refuseThemeInUse(await rawSettings(principalId), name);
       try {
         await data.item(`theme:${name}`, principalId).delete();
       } catch (error) {
         if (isServiceError(error) && String(error.code) === "404") return;
         throw operationError("removeTheme", error);
+      }
+    },
+
+    async settings(principalId) {
+      return readSettings(await rawSettings(principalId));
+    },
+
+    async putSettings(principalId, update) {
+      await requirePrincipal(principalId);
+      // Raw theme names: a theme the validator rejects today is still theirs.
+      const themeNames = new Set<string>();
+      for (const raw of await listByPrefix(principalId, "theme:")) {
+        const name = (raw as Partial<ThemeDoc>).theme?.name;
+        if (typeof name === "string") themeNames.add(name);
+      }
+      const next = applySettingsUpdate(await rawSettings(principalId), update, themeNames);
+      try {
+        if (next === undefined) {
+          await data.item("settings", principalId).delete();
+        } else {
+          const doc: SettingsDoc = { id: "settings", principalId, settings: next };
+          await data.items.upsert(doc);
+        }
+      } catch (error) {
+        if (next === undefined && isServiceError(error) && String(error.code) === "404") return;
+        throw operationError("putSettings", error);
       }
     },
 

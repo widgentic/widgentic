@@ -29,7 +29,7 @@ const ticketWidget: StoredWidget = {
 };
 const brandTheme: ThemeEntry = { name: "brand", tokens: { accent: "#ff5a1f" } };
 
-/** The actions/secrets half of the read port, for fakes that only test widgets and themes. */
+/** The actions/secrets/settings half of the read port, for fakes that only test widgets and themes. */
 const inertExtras = {
   async actions() {
     return [];
@@ -39,6 +39,9 @@ const inertExtras = {
   },
   async secretValue() {
     return undefined;
+  },
+  async settings() {
+    return {};
   }
 };
 
@@ -199,6 +202,21 @@ describe("file store", () => {
     expect((await store.resolvePrincipal(KEY_A))?.id).toBe("alice");
     expect((await store.widgets("alice")).map((w) => w.kind)).toEqual(["report"]);
     expect((await store.themes("alice")).map((t) => t.name)).toEqual(["brand"]);
+  });
+
+  it("reads settings beside the entries, ignoring a later version's section", async () => {
+    const dir = await seeded();
+    await writeFile(
+      join(dir, "alice", "settings.json"),
+      JSON.stringify({ defaultThemes: { light: "brand", dark: "ghost" }, fonts: { body: "Inter" } })
+    );
+    const store = createFileStore(dir);
+    expect(await store.settings("alice")).toEqual({ defaultThemes: { light: "brand", dark: "ghost" } });
+    const composed = await composeThemes(store, "alice");
+    expect(composed.value.defaults()).toEqual({ light: "brand", dark: "dark" });
+    expect(composed.diagnostics.join("\n")).toContain("'ghost'");
+    expect(await store.settings("nobody")).toEqual({});
+    expect(await store.settings("..")).toEqual({});
   });
 
   it("treats missing paths as empty, not as errors", async () => {

@@ -20,6 +20,7 @@ import type {
 import { hashKey } from "../keys.js";
 import { DEFAULT_LIMITS } from "../types.js";
 import { describeStoreContract } from "./contract.js";
+import { composeThemes } from "../compose.js";
 import { createLocalCipher, generateLocalKek } from "../../secrets/index.js";
 
 /* ---------------------------- fake client ---------------------------- */
@@ -346,5 +347,34 @@ describe.skipIf(!EMULATOR)("cosmos adapter against a live emulator", () => {
     expect((await store.resolvePrincipal(key))?.id).toBe(p.id);
     await store.revokeKey(p.id, entry.id);
     expect(await store.resolvePrincipal(key)).toBeUndefined();
+  });
+});
+
+describe("cosmos settings written out of band", () => {
+  it("ignores a later version's section, keeps it on write, and drops a dangling default", async () => {
+    const { client, data } = fakeCosmos();
+    const store = createCosmosStore({ client, log: () => {} });
+    const p = await store.ensurePrincipal("cosmos:settings-oob");
+    await store.putTheme(p.id, { name: "a", tokens: {} });
+    data.seed({ id: "theme:legacy", principalId: p.id, theme: { name: "legacy", tokens: { accent: "#123456" } } });
+    data.seed({ id: "settings", principalId: p.id, settings: { defaultThemes: { light: "a", dark: "ghost" }, fonts: { body: "Inter" } } });
+    expect(await store.settings(p.id)).toEqual({ defaultThemes: { light: "a", dark: "ghost" } });
+    const composed = await composeThemes(store, p.id);
+    expect(composed.value.defaults()).toEqual({ light: "a", dark: "dark" });
+    expect(composed.diagnostics.join("\n")).toContain("'ghost'");
+    expect(composed.value.get("legacy")?.styles).toBeUndefined();
+    await store.putSettings(p.id, { defaultThemes: { light: "legacy" } });
+    const stored = (await data.item("settings", p.id).read()).resource;
+    expect(stored?.settings).toEqual({ defaultThemes: { light: "legacy" }, fonts: { body: "Inter" } });
+    // The settings document is no entry of any kind.
+    expect((await store.themes(p.id)).map((t) => t.name).sort()).toEqual(["a", "legacy"]);
+  });
+
+  it("a principal written before settings reads as empty settings", async () => {
+    const { client } = fakeCosmos();
+    const store = createCosmosStore({ client, log: () => {} });
+    const p = await store.ensurePrincipal("cosmos:settings-none");
+    expect(await store.settings(p.id)).toEqual({});
+    expect(await store.settings("usr_unknown")).toEqual({});
   });
 });

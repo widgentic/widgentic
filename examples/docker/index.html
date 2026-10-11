@@ -32,6 +32,7 @@
   .list { display: flex; flex-direction: column; gap: 4px; }
   .row { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid var(--host-border); border-radius: var(--host-radius); background: var(--host-panel); }
   .row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+  .row .badge { font-size: 11.5px; color: var(--host-muted); white-space: nowrap; }
   .row.selected { border-color: var(--host-accent); }
   .row button { padding: 1px 7px; font-size: 12px; }
   .muted { color: var(--host-muted); }
@@ -54,6 +55,7 @@
       <button id="tab-actions" type="button">Actions</button>
       <button id="tab-secrets" type="button">Secrets</button>
       <button id="tab-keys" type="button">Keys</button>
+      <button id="tab-settings" type="button">Settings</button>
     </nav>
     <span id="status"></span>
     <span id="agent-status" class="muted" title="WebMCP: the designers on this page are tools your browser's agent can use; you save."></span>
@@ -124,6 +126,13 @@
     </form>
     <div id="key-reveal" class="reveal" hidden></div>
     <div id="key-list" class="list"></div>
+  </section>
+
+  <section id="pane-settings" hidden>
+    <div class="controls">
+      <button id="settings-save" type="button" class="primary">Save settings</button>
+    </div>
+    <div id="settings-designer"></div>
   </section>
 
   <script type="module" src="/app.bundle.js"></script>

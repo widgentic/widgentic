@@ -22,4 +22,5 @@ export {
   DuplicateThemeError,
   InvalidThemeEntryError
 } from "./registry.js";
-export type { ThemeEntry, ThemeEntryInput, ThemeRegistry } from "./registry.js";
+export type { ThemeEntry, ThemeEntryInput, ThemeMode, ThemeRegistry } from "./registry.js";
+export { themeStylesToCss } from "./styles.js";

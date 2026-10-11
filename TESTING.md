@@ -363,6 +363,23 @@ workspace and the sample first, then point at the built DLL):
 
 ## Verification log
 
+- **Theme styles, settings and default themes (2026-10-11, change `theme-styles-and-defaults`; core, designer and mcp minor, webmcp patch pending release)**
+  - **Core.** The registry merges `extends` styles per selector, then per property; refuses a malformed `styles` map with `INVALID_THEME`; and holds one default per mode (built-ins until set, unregistered names refused). `themeStylesToCss` matches the widget generator unscoped and prefixes every selector part with `:where(<scope>) ` when scoped. A computed-value check in happy-dom (fresh document per case) shows a scoped rule applying only inside its scope and losing a tie to a later widget rule.
+  - **Store.** The contract suite runs on memory, SQLite and Cosmos. It covers: settings round-trip; section-level replace, where `null` and an empty section remove; refusals that change nothing (`UNKNOWN_THEME`, `INVALID_SHAPE`, `UNKNOWN_PRINCIPAL`); `THEME_IN_USE` naming both modes; no crossing between principals; and the settings record leaking into no entry listing. Out-of-band tests on SQLite, Cosmos and the file store cover a later version's section (ignored on read, kept on write), a dangling default (diagnostic, built-in kept) and a pre-styles theme row loading unchanged. A malformed out-of-band `styles` is skipped with a diagnostic.
+  - **Authoring.** `styles` round-trips through `PUT /themes/<name>`. `/settings` is read and replaced; a smuggled `principalId` is ignored; `THEME_IN_USE` maps to 409; and the core handler answers as the Node adapter does.
+  - **Output.**
+    - **Theme styles.** They come before kind styles, then the theme's declarations, in the template channel, `page`/`app` documents and `preview_widget`; unsafe entries reach no output.
+    - **Defaults.** Light-only, dark-only and both-modes defaults; an explicit theme replaces the defaults (deep-equal to a registry without them); documents use the light default only.
+    - **No change without defaults.** With no defaults set, output is deep-equal across all five formats.
+    - **App template.** Booted with its static stylesheet, a light default reaches `--wg-accent` on a light host and not on a dark host.
+    - **Conformance corpus.** It gains a styled theme (`corpus-styled`: two renders and a preview). Its diff touches only `list_themes`, `list_theme_tokens`, `get_authoring_guide`, the `theme unknown` message (which lists the themes) and the three new cases; no existing render changed. `dotnet test` passes 123 of 123 on the regenerated corpus.
+  - **Designer.**
+    - **Theme designer.** Edits styles in the shared Styles panel; the Tree and JSON views keep each other in step. Export omits an emptied `styles`, and a malformed import is refused. The preview shows a theme rule's computed colour and flags a `body` rule while keeping it out of the CSS.
+    - **Widget designer.** The selected theme's class colours the draft, and the draft's own rule wins. Choosing "none" removes the rule and the draft's `themeStyles`.
+    - **Settings designer.** Mounts alone; registers its element only on the explicit call; edits and notifies; lets one theme serve both modes; shows a missing theme as unavailable; passes unknown sections through; refuses a malformed record; is inert when read-only.
+    - **WebMCP.** `theme_load`/`theme_get` round-trip `styles`, and a token merge keeps them.
+  - **Self-host example.** The seed writes `settings` after the themes, never over a held section; refusals are logged per section, and the demo seed sets `google-light`/`google-dark` (7 written). An in-browser app test boots `main.ts` in happy-dom against the real authoring handler and checks: the Themes list marks the default; picking a default in Settings and saving moves the mark; deleting the default shows `THEME_IN_USE`; a newly saved theme becomes a choice.
+  - **Not verified yet:** the hosts. Staging on `demo.widgentic.dev`, and widgentic.dev's Settings section, follow.
 - **Wire schemas from the exported definitions (2026-10-11, change `derived-input-schemas`, `@widgentic/mcp` minor pending release)**
   - **The wire.** `server-wiring` lists the tools of `createWidgenticServer()` and finds every `inputSchema` and description equal to the exported definition's, for all nine tools: nothing added (no `$schema`), nothing missing.
   - **One validation path.** Over the protocol, `{ kind: "card", data: 1 }` comes back as the handler's `MISSING_FIELD` on `widget`, naming the mix-up, and `format: "pdf"` as `INVALID_TYPE` on `format`. Neither is the SDK's "Input validation error".

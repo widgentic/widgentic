@@ -13,7 +13,9 @@
 import { describe, expect, it } from "vitest";
 import type { WritableWidgetStore } from "../types.js";
 import { StoreRejectionError } from "../types.js";
-import type { StoredAction, StoredWidget } from "../types.js";
+import type { PrincipalSettingsUpdate, StoredAction, StoredWidget } from "../types.js";
+import type { ThemeEntry } from "@widgentic/core";
+import { composeThemes } from "../compose.js";
 
 export interface ContractContext {
   /** Built WITH a secret cipher — the suite exercises secrets. */
@@ -341,6 +343,95 @@ export function describeStoreContract(
       await expect(store.createKey(p.id, "writer", ["write"])).rejects.toMatchObject({ code: "INVALID_SCOPES" });
       const listed = await store.listKeys(p.id);
       expect(listed.find((k) => k.name === "runner")?.scopes).toEqual(["read", "execute"]);
+    });
+
+    it("themes round-trip their styles; a malformed styles section is refused", async () => {
+      const { store } = await factory();
+      const p = await store.ensurePrincipal("contract:theme-styles");
+      const styles = { ".wg-btn": { padding: "4px 8px" } };
+      await store.putTheme(p.id, { name: "brand", tokens: { accent: "#ff5a1f" }, styles });
+      expect((await store.themes(p.id)).find((t) => t.name === "brand")?.styles).toEqual(styles);
+      const malformed = { name: "bad", tokens: {}, styles: { ".wg-btn": "padding: 4px" } };
+      await expect(store.putTheme(p.id, malformed as unknown as ThemeEntry)).rejects.toMatchObject({ code: "INVALID_THEME" });
+      expect((await store.themes(p.id)).map((t) => t.name)).toEqual(["brand"]);
+      const composed = await composeThemes(store, p.id);
+      expect(composed.value.get("brand")?.styles).toEqual(styles);
+    });
+
+    it("settings: default themes round-trip, replace, and reach the composed registry", async () => {
+      const { store } = await factory();
+      const p = await store.ensurePrincipal("contract:settings");
+      expect(await store.settings(p.id)).toEqual({});
+      await store.putTheme(p.id, { name: "a", tokens: {} });
+      await store.putTheme(p.id, { name: "b", tokens: {} });
+      await store.putSettings(p.id, { defaultThemes: { light: "a", dark: "b" } });
+      await store.putSettings(p.id, { defaultThemes: { light: "b" } });
+      expect(await store.settings(p.id)).toEqual({ defaultThemes: { light: "b" } });
+      expect((await composeThemes(store, p.id)).value.defaults()).toEqual({ light: "b", dark: "dark" });
+      // One theme may serve both modes.
+      await store.putSettings(p.id, { defaultThemes: { light: "a", dark: "a" } });
+      expect((await composeThemes(store, p.id)).value.defaults()).toEqual({ light: "a", dark: "a" });
+    });
+
+    it("settings: unmentioned sections are kept, null and an empty section remove", async () => {
+      const { store } = await factory();
+      const p = await store.ensurePrincipal("contract:settings-sections");
+      await store.putTheme(p.id, { name: "a", tokens: {} });
+      await store.putSettings(p.id, { defaultThemes: { light: "a" } });
+      await store.putSettings(p.id, {});
+      expect(await store.settings(p.id)).toEqual({ defaultThemes: { light: "a" } });
+      await store.putSettings(p.id, { defaultThemes: null });
+      expect(await store.settings(p.id)).toEqual({});
+      await store.putSettings(p.id, { defaultThemes: { light: "a" } });
+      await store.putSettings(p.id, { defaultThemes: {} });
+      expect(await store.settings(p.id)).toEqual({});
+    });
+
+    it("settings: refusals change nothing", async () => {
+      const { store } = await factory();
+      const p = await store.ensurePrincipal("contract:settings-refusals");
+      await store.putTheme(p.id, { name: "a", tokens: {} });
+      await store.putSettings(p.id, { defaultThemes: { light: "a" } });
+      await expect(store.putSettings(p.id, { defaultThemes: { dark: "missing" } })).rejects.toMatchObject({ code: "UNKNOWN_THEME" });
+      const sepia = { defaultThemes: { sepia: "a" } } as unknown as PrincipalSettingsUpdate;
+      await expect(store.putSettings(p.id, sepia)).rejects.toMatchObject({ code: "INVALID_SHAPE" });
+      const fonts = { fonts: {} } as unknown as PrincipalSettingsUpdate;
+      await expect(store.putSettings(p.id, fonts)).rejects.toMatchObject({ code: "INVALID_SHAPE" });
+      const numeric = { defaultThemes: { light: 7 } } as unknown as PrincipalSettingsUpdate;
+      await expect(store.putSettings(p.id, numeric)).rejects.toMatchObject({ code: "INVALID_SHAPE" });
+      expect(await store.settings(p.id)).toEqual({ defaultThemes: { light: "a" } });
+      await expect(store.putSettings("usr_nobody", { defaultThemes: null })).rejects.toMatchObject({ code: "UNKNOWN_PRINCIPAL" });
+    });
+
+    it("settings: a default theme cannot be removed until it is unset", async () => {
+      const { store } = await factory();
+      const p = await store.ensurePrincipal("contract:settings-in-use");
+      await store.putTheme(p.id, { name: "a", tokens: {} });
+      await store.putSettings(p.id, { defaultThemes: { light: "a", dark: "a" } });
+      const refusal = store.removeTheme(p.id, "a");
+      await expect(refusal).rejects.toMatchObject({ code: "THEME_IN_USE" });
+      await expect(refusal).rejects.toThrow(/light and dark/);
+      expect((await store.themes(p.id)).map((t) => t.name)).toEqual(["a"]);
+      await store.putSettings(p.id, { defaultThemes: null });
+      await store.removeTheme(p.id, "a");
+      expect(await store.themes(p.id)).toEqual([]);
+    });
+
+    it("settings never cross principals and leave entry listings alone", async () => {
+      const { store } = await factory();
+      const a = await store.ensurePrincipal("contract:settings-a");
+      const b = await store.ensurePrincipal("contract:settings-b");
+      await store.putTheme(a.id, { name: "brand", tokens: {} });
+      await store.putTheme(b.id, { name: "brand", tokens: {} });
+      await store.putSettings(a.id, { defaultThemes: { light: "brand" } });
+      expect(await store.settings(b.id)).toEqual({});
+      expect((await composeThemes(store, b.id)).value.defaults()).toEqual({ light: "light", dark: "dark" });
+      // The settings record is not an entry of any kind.
+      expect((await store.themes(a.id)).map((t) => t.name)).toEqual(["brand"]);
+      expect(await store.widgets(a.id)).toEqual([]);
+      expect(await store.schemas(a.id)).toEqual([]);
+      expect(await store.actions(a.id)).toEqual([]);
+      expect(await store.listSecrets(a.id)).toEqual([]);
     });
   });
 }

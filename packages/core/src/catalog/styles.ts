@@ -4,6 +4,8 @@
  * so selectors, properties, and values are all guarded, and unsafe entries
  * are skipped rather than emitted.
  */
+import { isPlainObject } from "../shared/plain-object.js";
+
 export type WidgetStyles = Record<string, Record<string, string>>;
 
 /** Substrings that disqualify a selector, property or value. Exported
@@ -11,6 +13,20 @@ export type WidgetStyles = Record<string, Record<string, string>>;
 export const UNSAFE = /[;{}<>@\\]/;
 /** The property-name allowlist: not merely "no banned characters". */
 export const PROPERTY_NAME = /^-?[a-zA-Z][a-zA-Z-]*$/;
+
+/**
+ * The shape both widget and theme styles must have: selectors mapping to
+ * property/value strings. Shape only — unsafe entries pass here and are
+ * dropped by the generator, so one rule decides what reaches CSS.
+ */
+export function isStyleMap(value: unknown): value is WidgetStyles {
+  if (!isPlainObject(value)) return false;
+  return Object.values(value).every(
+    (declarations) =>
+      isPlainObject(declarations) &&
+      Object.values(declarations).every((v) => typeof v === "string")
+  );
+}
 
 /** Every comma-separated selector part must target a .wg- class. */
 function isSafeSelector(selector: string): boolean {
@@ -32,6 +48,16 @@ function isSafeValue(value: string): boolean {
  * reference theme tokens via `var(--wg-*)`. Never throws.
  */
 export function widgetStylesToCss(styles: WidgetStyles): string {
+  return guardedStylesToCss(styles, undefined);
+}
+
+/**
+ * The one generator behind widget and theme styles. A `scope` (always a
+ * caller constant, never style data) prefixes every selector part with
+ * `:where(<scope>) `, so the rule applies inside the scope at the weight
+ * its author wrote.
+ */
+export function guardedStylesToCss(styles: WidgetStyles, scope: string | undefined): string {
   const rules: string[] = [];
   for (const [selector, declarations] of Object.entries(styles)) {
     if (!isSafeSelector(selector)) continue;
@@ -43,7 +69,10 @@ export function widgetStylesToCss(styles: WidgetStyles): string {
       lines.push(`  ${property}: ${value};`);
     }
     if (lines.length > 0) {
-      rules.push(`${selector} {\n${lines.join("\n")}\n}`);
+      const scoped = scope === undefined
+        ? selector
+        : selector.split(",").map((part) => `:where(${scope}) ${part.trim()}`).join(", ");
+      rules.push(`${scoped} {\n${lines.join("\n")}\n}`);
     }
   }
   return rules.join("\n");

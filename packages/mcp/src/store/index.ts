@@ -10,6 +10,8 @@
 export type {
   CreatedKey,
   Principal,
+  PrincipalSettings,
+  PrincipalSettingsUpdate,
   Scope,
   SecretCipher,
   SecretEntry,

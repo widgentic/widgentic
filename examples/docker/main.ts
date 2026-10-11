@@ -15,12 +15,13 @@ import type {
   DesignerHandle,
   SchemaDesignerHandle,
   SchemaEntry,
+  SettingsDesignerHandle,
   ThemeDesignerHandle
 } from "@widgentic/designer";
 import type { HttpActionDefinition } from "@widgentic/core";
 import { authoringClient as api, AuthoringApiError } from "@widgentic-examples/shared/client";
-import type { KeyEntry, SecretEntry, WidgetEntry } from "@widgentic-examples/shared/client";
-import { mountAction, mountSchema, mountTheme, mountWidget, previewThemes } from "@widgentic-examples/shared/designers";
+import type { KeyEntry, SecretEntry, Settings, WidgetEntry } from "@widgentic-examples/shared/client";
+import { mountAction, mountSchema, mountSettings, mountTheme, mountWidget, previewThemes } from "@widgentic-examples/shared/designers";
 import { describeAgentTools, designerSources } from "@widgentic-examples/shared/webmcp";
 import { exposeDesigners } from "@widgentic/webmcp";
 import { invoiceWidget } from "@widgentic-examples/mcp-server/widgets";
@@ -55,6 +56,7 @@ let myThemes: ThemeEntry[] = [];
 let mySchemas: SchemaEntry[] = [];
 let myActions: StoredAction[] = [];
 let mySecrets: SecretEntry[] = [];
+let mySettings: Settings = {};
 let secretsEnabled = false;
 
 
@@ -67,7 +69,8 @@ function renderList(
   emptyText: string,
   onOpen: (name: string) => void,
   onEdit: (name: string) => void,
-  onRemove: (name: string) => void
+  onRemove: (name: string) => void,
+  badge: (name: string) => string | undefined = () => undefined
 ): void {
   const list = $(listId);
   list.replaceChildren();
@@ -85,6 +88,14 @@ function renderList(
     label.className = "name";
     label.textContent = name;
     label.addEventListener("click", () => onOpen(name));
+    const note = badge(name);
+    const extra: HTMLElement[] = [];
+    if (note !== undefined) {
+      const tag = document.createElement("span");
+      tag.className = "badge";
+      tag.textContent = note;
+      extra.push(tag);
+    }
     const edit = document.createElement("button");
     edit.type = "button";
     edit.textContent = "Edit";
@@ -94,7 +105,7 @@ function renderList(
     remove.className = "danger";
     remove.textContent = "Delete";
     remove.addEventListener("click", () => onRemove(name));
-    row.append(label, edit, remove);
+    row.append(label, ...extra, edit, remove);
     list.append(row);
   }
 }
@@ -207,14 +218,23 @@ function showThemes(): void {
       showThemes();
     },
     (name) => {
+      // A default theme is refused with THEME_IN_USE; attempt() shows why.
       void attempt(() => api.removeTheme(name)).then(async (done) => {
         if (done === undefined) return;
         status(`removed ${name}`);
         await refreshThemes();
       });
-    }
+    },
+    defaultBadge
   );
   $("theme-save").hidden = themeMode === "viewing";
+}
+
+/** "default light", "default dark" or both, for a theme the settings name. */
+function defaultBadge(name: string): string | undefined {
+  const defaults = mySettings.defaultThemes ?? {};
+  const modes = (["light", "dark"] as const).filter((mode) => defaults[mode] === name);
+  return modes.length === 0 ? undefined : `default ${modes.join(" & ")}`;
 }
 
 async function refreshThemes(): Promise<void> {
@@ -488,9 +508,37 @@ async function createKey(): Promise<void> {
   await refreshKeys();
 }
 
+/* ------------------------------- settings ------------------------------- */
+
+let settingsDesigner: SettingsDesignerHandle | undefined;
+
+function openSettingsDesigner(): void {
+  // Choices are the themes saved right now; an unsaved pick survives the remount.
+  const current = settingsDesigner?.getSettings() ?? mySettings;
+  settingsDesigner = mountSettings($("settings-designer"), settingsDesigner, {
+    themes: myThemes,
+    initialSettings: current
+  });
+}
+
+async function refreshSettings(): Promise<void> {
+  mySettings = (await attempt(() => api.getSettings())) ?? mySettings;
+}
+
+async function saveSettings(): Promise<void> {
+  if (settingsDesigner === undefined) return;
+  const saved = await attempt(() => api.saveSettings(settingsDesigner?.getSettings() ?? {}));
+  if (saved === undefined) return;
+  mySettings = saved;
+  settingsDesigner = undefined; // reopen from the stored record
+  openSettingsDesigner();
+  showThemes();
+  status("saved settings");
+}
+
 /* ---------------------------------- tabs --------------------------------- */
 
-const SECTIONS = ["widgets", "themes", "schemas", "actions", "secrets", "keys"] as const;
+const SECTIONS = ["widgets", "themes", "schemas", "actions", "secrets", "keys", "settings"] as const;
 
 function showTab(name: (typeof SECTIONS)[number]): void {
   for (const section of SECTIONS) {
@@ -502,6 +550,8 @@ function showTab(name: (typeof SECTIONS)[number]): void {
   // the in-progress draft, which must survive a trip to the Schemas tab
   // (the store itself forces that trip for a dangling schema ref).
   if (name === "widgets" && widgetMode === "new") openWidgetDesigner(widgetDesigner?.getDraft());
+  // Themes saved meanwhile become choices.
+  if (name === "settings") openSettingsDesigner();
 }
 
 for (const section of SECTIONS) {
@@ -529,6 +579,7 @@ $("theme-new").addEventListener("click", () => {
   showThemes();
 });
 $("theme-save").addEventListener("click", () => void saveTheme());
+$("settings-save").addEventListener("click", () => void saveSettings());
 $("schema-new").addEventListener("click", () => {
   selectedSchema = undefined;
   schemaMode = "new";
@@ -565,7 +616,8 @@ $("key-form").addEventListener("submit", (event) => {
 async function boot(): Promise<void> {
   const me = await attempt(() => api.me());
   if (me !== undefined) secretsEnabled = me.secretsEnabled;
-  await Promise.all([refreshWidgets(), refreshThemes(), refreshSchemas(), refreshActions(), refreshSecrets(), refreshKeys()]);
+  await Promise.all([refreshWidgets(), refreshSettings(), refreshSchemas(), refreshActions(), refreshSecrets(), refreshKeys()]);
+  await refreshThemes(); // after settings, so the list shows the defaults
   openThemeDesigner();
   openSchemaDesigner();
   openActionDesigner();

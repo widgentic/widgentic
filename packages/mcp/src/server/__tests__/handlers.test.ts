@@ -770,13 +770,13 @@ describe("list_theme_tokens documents custom variables", () => {
     // steer agents to deliver the { name, ..., tokens } entry for designer
     // import, not just the one-render inline map.
     const tokens = JSON.parse(textOf(handleListThemeTokens())) as { rules: string };
-    expect(tokens.rules).toContain("{ name, label?, description?, tokens }");
+    expect(tokens.rules).toContain("{ name, label?, description?, tokens, styles? }");
     expect(tokens.rules).toContain("widgentic.dev");
     expect(tokens.rules).toContain("get_authoring_guide");
     const themes = JSON.parse(textOf(handleListThemes(createThemeRegistry()))) as {
       rules: string;
     };
-    expect(themes.rules).toContain("{ name, label?, description?, tokens }");
+    expect(themes.rules).toContain("{ name, label?, description?, tokens, styles? }");
     expect(themes.rules).toContain("get_authoring_guide");
   });
 });

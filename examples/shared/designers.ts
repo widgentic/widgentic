@@ -17,6 +17,7 @@ import {
   createActionDesigner,
   createDesigner,
   createSchemaDesigner,
+  createSettingsDesigner,
   createThemeDesigner
 } from "@widgentic/designer";
 import type {
@@ -26,6 +27,8 @@ import type {
   DesignerOptions,
   SchemaDesignerHandle,
   SchemaDesignerOptions,
+  SettingsDesignerHandle,
+  SettingsDesignerOptions,
   ThemeDesignerHandle,
   ThemeDesignerOptions
 } from "@widgentic/designer";
@@ -60,6 +63,15 @@ export function mountSchema(
 ): SchemaDesignerHandle {
   clear(host, previous);
   return createSchemaDesigner(host, options);
+}
+
+export function mountSettings(
+  host: HTMLElement,
+  previous: SettingsDesignerHandle | undefined,
+  options: SettingsDesignerOptions = {}
+): SettingsDesignerHandle {
+  clear(host, previous);
+  return createSettingsDesigner(host, options);
 }
 
 export function mountAction(

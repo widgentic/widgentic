@@ -17,6 +17,7 @@
  * A pure function of its inputs: no sockets, no `IncomingMessage`, no
  * cookies. `node.js` beside it adapts the standard server.
  */
+import { isPlainObject } from "@widgentic/core";
 import type { ThemeEntry } from "@widgentic/core";
 import { testHttpAction } from "../server/index.js";
 import { normalizeKeyScopes, principalIdForSubject, StoreRejectionError } from "../store/types.js";
@@ -54,6 +55,7 @@ export function rejectionStatus(code: string): number {
   if (code === "TOO_MANY_WIDGETS" || code === "TOO_MANY_THEMES" || code === "TOO_MANY_SCHEMAS") return 409;
   if (code === "TOO_MANY_ACTIONS" || code === "TOO_MANY_SECRETS") return 409;
   if (code === "SCHEMA_IN_USE" || code === "ACTION_IN_USE" || code === "SECRET_IN_USE") return 409; // conflict: re-point first
+  if (code === "THEME_IN_USE") return 409; // conflict: choose another default first
   if (code === "NO_CIPHER") return 503; // the deployment cannot hold secrets
   if (code === "FORBIDDEN") return 403;
   if (code === "STORE_ERROR") return 502;
@@ -143,6 +145,22 @@ export async function handleAuthoringRequest(
       if (method === "DELETE" && id !== "") {
         await store.removeTheme(principalId, id);
         return ok(200, { removed: id });
+      }
+    }
+
+    if (resource === "settings" && id === "") {
+      if (method === "GET") {
+        return ok(200, await store.settings(principalId));
+      }
+      if (method === "PUT") {
+        if (!isPlainObject(body)) {
+          return refusal(400, "INVALID_BODY", "Expected a settings JSON object of named sections.");
+        }
+        // Sections only: a smuggled principal field is dropped, never
+        // honored and never mistaken for a section.
+        const { principalId: _principalId, principal: _principal, ...update } = body;
+        await store.putSettings(principalId, update);
+        return ok(200, { saved: "settings", settings: await store.settings(principalId) });
       }
     }
 

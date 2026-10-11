@@ -1,8 +1,9 @@
 /**
  * Standalone theme designer: edits a NAMED theme entry
- * (`{ name, label?, description?, tokens }` — the theme registry's shape,
- * which is also what a host persists) with live preview against any
- * catalog kind.
+ * (`{ name, label?, description?, tokens, styles? }` — the theme
+ * registry's shape, which is also what a host persists) with live preview
+ * against any catalog kind. Its styles are edited with the widget
+ * designer's own styles panel: one shape, one rule set, one editor.
  *
  * Split from the widget designer on purpose: an app routes to "design a
  * theme" and "design a widget" as separate destinations, and a host
@@ -16,15 +17,18 @@ import {
   TOKEN_DEFAULTS,
   TOKEN_SPECS,
   isSafeTokenValue,
+  isStyleMap,
   validateTheme
 } from "@widgentic/core";
-import type { ThemeEntry, WidgetThemeInput } from "@widgentic/core";
+import type { ThemeEntry, WidgetStyles, WidgetThemeInput } from "@widgentic/core";
 import { applyChrome, diagnosticLine, h, injectDesignerStyles, section, textField, requireChild } from "./dom.js";
 import type { ChromeOptions } from "./dom.js";
 import { createPreview } from "./preview.js";
 import type { PreviewWidget } from "./preview.js";
 import { starterDraft } from "./store.js";
 import type { WidgetDraft } from "./store.js";
+import { createStylesPanel } from "./styles-panel.js";
+import { auditStyles } from "./validate.js";
 
 const BASE_KINDS = createCatalog().kinds();
 
@@ -91,6 +95,9 @@ export function checkThemeEntry(entry: unknown): string[] {
   if (!validated.ok) {
     errors.push(`tokens: ${validated.error.code} — ${validated.error.message}`);
   }
+  if (candidate.styles !== undefined && !isStyleMap(candidate.styles)) {
+    errors.push("styles: must map selectors to objects of property/value strings.");
+  }
   return errors;
 }
 
@@ -122,7 +129,8 @@ export function createThemeDesigner(
 
   /** A draft carrying only what the preview needs: kind + this theme. */
   function previewDraft(): WidgetDraft {
-    return { ...starterDraft(), theme: entry.tokens };
+    const draft: WidgetDraft = { ...starterDraft(), theme: entry.tokens };
+    return entry.styles === undefined ? draft : { ...draft, themeStyles: entry.styles };
   }
 
   function refresh(): void {
@@ -379,7 +387,17 @@ export function createThemeDesigner(
   ]);
   exportPanel.classList.add("wgd-view-only");
 
-  panels.append(identity, tokenPanel, customPanel, importPanel, exportPanel);
+  // Shared classes for every widget the theme dresses — the widget
+  // designer's own panel, so the shape, guards and audit are identical.
+  const stylesPanel = createStylesPanel(entry.styles, (styles: WidgetStyles | undefined) => {
+    const { styles: _previous, ...rest } = entry;
+    entry = styles === undefined ? rest : { ...rest, styles };
+    stylesPanel.setIssues(auditStyles(entry.styles));
+    refresh();
+  });
+  stylesPanel.setIssues(auditStyles(entry.styles));
+
+  panels.append(identity, tokenPanel, customPanel, stylesPanel.element, importPanel, exportPanel);
 
   function loadTheme(input: unknown): ThemeLoadResult {
     const errors = checkThemeEntry(input);
@@ -388,6 +406,8 @@ export function createThemeDesigner(
     for (const refreshIdentity of identityRefreshers) refreshIdentity();
     for (const refreshToken of tokenRefreshers) refreshToken();
     renderCustom();
+    stylesPanel.setValue(entry.styles);
+    stylesPanel.setIssues(auditStyles(entry.styles));
     refresh();
     return { ok: true };
   }

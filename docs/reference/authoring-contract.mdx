@@ -70,13 +70,14 @@ Call list\_actions first: it lists what the user already has, as the CONTRACT (n
 
 ## Theme entry
 
-A theme entry is one JSON object: \{ name, label?, description?, tokens \}.
+A theme entry is one JSON object: \{ name, label?, description?, tokens, styles? \}.
 
 | Field | Meaning |
 | -- | -- |
 | `name` | String identifier matching ^\[a-zA-Z0-9.\_-\]+\$. |
 | `label` | OPTIONAL human-readable display name. |
 | `tokens` | Record of registry token names (bare, no --wg- prefix) and/or custom variables to string values. |
+| `styles` | OPTIONAL shared classes, in the same shape as a widget's descriptor.styles: \{ "\<selector\>": \{ "\<cssProperty\>": "\<value\>" \} \}. |
 
 ### Custom variables
 

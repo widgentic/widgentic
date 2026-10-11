@@ -106,7 +106,15 @@ const schemaWidget = {
 
 const config = {
   widgets: [...customWidgets.map(exportShape), formatsWidget, linksWidget, schemaWidget],
-  themes: [{ name: "corpus-brand", label: "Corpus brand", tokens: { accent: "#0b6e4f" } }],
+  themes: [
+    { name: "corpus-brand", label: "Corpus brand", tokens: { accent: "#0b6e4f" } },
+    {
+      name: "corpus-styled",
+      label: "Corpus styled",
+      tokens: { accent: "#7a3cff" },
+      styles: { ".wg-card-title": { "letter-spacing": "0.02em" }, ".wg-btn, .wg-link": { color: "var(--wg-accent)" } }
+    }
+  ],
   schemas: [
     {
       name: "person",
@@ -164,6 +172,8 @@ export function buildCorpus(): Corpus {
   const card = { title: "Quarterly", subtitle: "Q3", fields: { revenue: "1.2M" } };
   render("theme by name dark", { widget: "card", data: card, theme: "dark" });
   render("theme by name configured", { widget: "card", data: card, theme: "corpus-brand" });
+  render("theme with styles", { widget: "card", data: card, theme: "corpus-styled" });
+  render("theme with styles as a page", { widget: "card", data: card, theme: "corpus-styled", format: "page" });
   render("theme inline", { widget: "card", data: card, theme: { accent: "#c0ffee", bg: "#101010" } });
   render("theme unknown", { widget: "card", data: card, theme: "nope" });
   render("theme invalid inline", { widget: "card", data: card, theme: { notAToken: "x" } });
@@ -229,6 +239,7 @@ export function buildCorpus(): Corpus {
   });
   call("preview half-streamed theme ignored", "preview_widget", { widget: "card", data: card, theme: { accent: "#0b" } });
   call("preview named theme", "preview_widget", { widget: "card", data: card, theme: "corpus-brand" });
+  call("preview theme with styles", "preview_widget", { widget: "card", data: card, theme: "corpus-styled" });
   call("preview no data yet", "preview_widget", { widget: "table" });
   call("preview image never fetched", "preview_widget", {
     widget: "card",
