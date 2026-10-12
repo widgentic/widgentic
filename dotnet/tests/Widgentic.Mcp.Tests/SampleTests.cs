@@ -35,6 +35,7 @@ public sealed class SampleTests
         foreach (var kind in new[] { "appointment-agenda-widget", "email-inbox-widget" }) Assert.Contains($"\"kind\": \"{kind}\"", text);
         var themes = await client.CallToolAsync("list_themes", cancellationToken: Cancel);
         Assert.Contains("google-dark", Assert.IsType<TextContentBlock>(themes.Content[0]).Text);
+        Assert.Equal(("google-light", "google-dark"), await Defaults(client));
         var schemas = await client.CallToolAsync("list_schemas", cancellationToken: Cancel);
         Assert.Contains("email-inbox", Assert.IsType<TextContentBlock>(schemas.Content[0]).Text);
 
@@ -105,6 +106,7 @@ public sealed class SampleTests
             Assert.Equal(seedInbox, Assert.Single(widgets, w => w.Kind == "email-inbox-widget").Description);
             Assert.Contains(widgets, w => w.Kind == "appointment-agenda-widget");
             Assert.DoesNotContain(widgets, w => w.Kind == "release-notes-widget");
+            Assert.Equal(("google-light", "google-dark"), await Defaults(keyless));
         }
         // Merge, keyed by header: the seed, with the principal's inbox in place of the seed's, and its theme.
         await using (var merge = await McpClient.CreateAsync(sample.Transport(headers: new() { ["x-api-key"] = mergeKey }), cancellationToken: Cancel))
@@ -117,6 +119,7 @@ public sealed class SampleTests
             var themeText = Assert.IsType<TextContentBlock>(themes.Content[0]).Text;
             Assert.Contains("merge-demo-dark", themeText);
             Assert.Contains("google-dark", themeText);
+            Assert.Equal(("google-light", "merge-demo-dark"), await Defaults(merge));
         }
         // Replace, keyed in the URL as hosts that only take a URL send it: the built-ins and its own widget.
         await using (var replace = await McpClient.CreateAsync(sample.Transport(query: $"?key={replaceKey}"), cancellationToken: Cancel))
@@ -125,6 +128,8 @@ public sealed class SampleTests
             Assert.Contains(widgets, w => w.Kind == "release-notes-widget");
             Assert.Contains(widgets, w => w.Kind == "card");
             Assert.DoesNotContain(widgets, w => w.Kind is "email-inbox-widget" or "appointment-agenda-widget");
+            // Replace composes no startup entries, so the seed's defaults never apply.
+            Assert.Equal(("light", "dark"), await Defaults(replace));
             var data = new Dictionary<string, object?>
             {
                 ["product"] = "Sample",
@@ -148,6 +153,15 @@ public sealed class SampleTests
         var listing = await client.CallToolAsync("list_widgets", cancellationToken: Cancel);
         using var json = JsonDocument.Parse(Assert.IsType<TextContentBlock>(listing.Content[0]).Text);
         return [.. json.RootElement.EnumerateArray().Select(w => (w.GetProperty("kind").GetString()!, w.TryGetProperty("description", out var d) ? d.GetString() : null))];
+    }
+
+    /// <summary>The effective default theme names <c>list_themes</c> reports to this client.</summary>
+    private static async Task<(string Light, string Dark)> Defaults(McpClient client)
+    {
+        var listing = await client.CallToolAsync("list_themes", cancellationToken: Cancel);
+        using var json = JsonDocument.Parse(Assert.IsType<TextContentBlock>(listing.Content[0]).Text);
+        var defaults = json.RootElement.GetProperty("defaults");
+        return (defaults.GetProperty("light").GetString()!, defaults.GetProperty("dark").GetString()!);
     }
 
     private static string? Description(string widgetJson)

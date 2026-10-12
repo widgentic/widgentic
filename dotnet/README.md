@@ -15,8 +15,8 @@ build.
 
 Requires .NET 10 and the official C# MCP SDK (`ModelContextProtocol` 2.2).
 
-**Versions.** `Widgentic.Mcp` X.Y.* embeds `@widgentic/mcp` X.Y.*, so `Widgentic.Mcp` 0.10.x
-renders exactly like the Node server of `@widgentic/mcp` 0.10. The patch number moves on its own
+**Versions.** `Widgentic.Mcp` X.Y.* embeds `@widgentic/mcp` X.Y.*, so `Widgentic.Mcp` 0.11.x
+renders exactly like the Node server of `@widgentic/mcp` 0.11. The patch number moves on its own
 for .NET-only fixes. The tools differ only by scope: this package is render-only (no
 `list_actions` or `execute_action`, no image inlining). The input schemas are the exported
 ones from `@widgentic/mcp`, the same ones its Node server advertises (from 0.11), and malformed
@@ -87,7 +87,9 @@ Design widgets in the widgentic designer, export them, and drop the JSON into yo
 
 - `AddWidget(json)` and `AddWidgetsFromDirectory(path)` take the designer's export shape
   `{ kind, template, descriptor, load? }`: one object, or an array.
-- `AddTheme(json)` and `AddThemesFromDirectory(path)` take theme entries `{ name, tokens, … }`.
+- `AddTheme(json)` and `AddThemesFromDirectory(path)` take theme entries `{ name, tokens, styles?, … }`.
+  An entry is complete as given: to base one theme on another, merge the base's tokens and
+  styles into it first.
 - `AddSchema(json)` and `AddSchemasFromDirectory(path)` take shared schemas `{ name, schema, … }`.
   A widget whose `descriptor.dataSchemaRef` names a schema needs that schema loaded too.
 
@@ -98,6 +100,24 @@ Every entry is validated by the bundle at startup. Anything refused (a forbidden
 reserved kind such as `card`, a theme named `light`, malformed JSON) stops startup with a
 `WidgenticConfigurationException` listing every problem with its file. Nothing is accepted
 and then silently missing.
+
+## Default themes
+
+A render that names no theme takes the default theme for the host's colour scheme: the
+built-in `light` and `dark`, unless a settings record chooses others. The record has the
+widgentic store's shape:
+
+```json
+{ "defaultThemes": { "light": "google-light", "dark": "google-dark" } }
+```
+
+Set it at startup with `UseSettings(json)` or `UseSettingsFromFile(path)`. Each default must name
+a configured theme, and a refused setting stops startup like a refused entry.
+
+- **Which output takes which default.** The light default dresses light hosts and the dark
+  default dark hosts. Page documents and preview pages take the light default.
+- **An explicit `theme` input** replaces both defaults.
+- **`list_themes`** reports the effective `defaults`.
 
 ## A catalog per caller
 
@@ -131,6 +151,14 @@ sets the default, and a catalog's own `Composition` overrides it for its caller:
 
 Built-in kinds and the `light`/`dark` themes stay reserved in both modes.
 
+A catalog may also carry the caller's settings record (`Settings`, or `UseSettings(json)`).
+- **In `Merge`,** each section the caller's record defines replaces the startup record's whole.
+  So `{ "defaultThemes": { "dark": "night" } }` leaves the light mode on the built-in even when
+  the startup record sets one. A caller without a record keeps the startup defaults.
+- **In `Replace`,** only the caller's record applies.
+- **Resolution.** Defaults name themes of the caller's composed catalog. A default that names
+  none is skipped and logged, and that mode keeps its built-in.
+
 `list_widgets`, `render_widget`, `preview_widget`, `list_themes`, `list_schemas`, the preview
 pages and the renderer's `RequestContext` overload answer from the caller's catalog. `tools/list`,
 `list_theme_tokens`, `get_authoring_guide` and the app template are the same for every caller
@@ -150,6 +178,10 @@ and never call the source.
 - **Limits.** The composed set counts against the limits of 100 widgets and 50 themes. In
   `Merge` the startup entries come first, so a large startup set leaves each caller less room;
   entries past a limit are refused with `LIMIT_REACHED`.
+- **Themes saved under older token rules are refused whole.** If a theme has a token value
+  that today's rules refuse, .NET refuses the whole theme and logs it. The widgentic store
+  instead trims the value and keeps serving the theme. If your source reads a widgentic
+  store's data, re-save such themes in the designer.
 
 ## Render-only, for now
 
@@ -180,8 +212,8 @@ and never call the source.
 ## Sample
 
 [`samples/Widgentic.Sample.Stdio`](samples/Widgentic.Sample.Stdio) serves the docker example's demo
-seed (an appointment agenda and an email inbox, two Google-style themes, and the shared schemas
-the widgets reference) plus one host tool, over stdio by default or over Streamable HTTP with
+seed (an appointment agenda and an email inbox, two Google-style themes as the light and dark
+defaults, and the shared schemas the widgets reference) plus one host tool, over stdio by default or over Streamable HTTP with
 `--http`. The seed files under `seed/` are generated from `examples/docker/seed/demo.json` by
 `npm run conformance:generate`:
 
@@ -208,8 +240,10 @@ dotnet run --project dotnet/samples/Widgentic.Sample.Stdio -- --http \
 ```
 
 - **`merge-demo`** gets the seed, with its own `email-inbox-widget` in place of the seed's and a
-  `merge-demo-dark` theme, a copy of `google-dark` with a green accent.
-- **`replace-demo`** gets the built-ins and its own `release-notes-widget` only.
+  `merge-demo-dark` theme, a copy of `google-dark` with a green accent. Its settings make
+  `merge-demo-dark` its dark default.
+- **`replace-demo`** gets the built-ins and its own `release-notes-widget` only, with the
+  built-in defaults.
 - **Callers without a known key** get the seed.
 
 Keys are never logged; the request-start log, which would print `?key=`, is turned off. The keys

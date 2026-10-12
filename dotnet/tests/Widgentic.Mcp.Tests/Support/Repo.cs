@@ -37,25 +37,29 @@ internal static class Repo
             c.TryGetProperty("args", out var args) ? args.GetString() : null,
             c.TryGetProperty("slim", out var slim) && slim.GetBoolean(),
             c.TryGetProperty("kind", out var kind) ? kind.GetString() : null,
-            c.GetProperty("output").GetString()!)).ToArray();
-        return new Corpus(root.GetProperty("config").GetString()!, cases);
+            c.GetProperty("output").GetString()!,
+            c.TryGetProperty("config", out var named) ? named.GetString() : null)).ToArray();
+        var configs = root.GetProperty("configs").EnumerateObject().ToDictionary(c => c.Name, c => c.Value.GetString()!, StringComparer.Ordinal);
+        return new Corpus(root.GetProperty("config").GetString()!, configs, cases);
     });
 
     public static Corpus Corpus => LoadedCorpus.Value;
 }
 
-internal sealed record Corpus(string Config, IReadOnlyList<CorpusCase> Cases)
+internal sealed record Corpus(string Config, IReadOnlyDictionary<string, string> Configs, IReadOnlyList<CorpusCase> Cases)
 {
-    /// <summary>Options carrying the corpus configuration, exactly as a host would configure it.</summary>
-    public WidgenticOptions Options(int poolSize = 1) => Configure(new WidgenticOptions { EnginePoolSize = poolSize });
+    /// <summary>Options carrying the corpus configuration (or the named one), exactly as a host would configure it.</summary>
+    public WidgenticOptions Options(int poolSize = 1, string? config = null) =>
+        Configure(new WidgenticOptions { EnginePoolSize = poolSize }, config);
 
-    /// <summary>Adds the corpus configuration (the example widgets among it) to any options.</summary>
-    public WidgenticOptions Configure(WidgenticOptions options)
+    /// <summary>Adds the corpus configuration (the example widgets among it), or the named one, to any options.</summary>
+    public WidgenticOptions Configure(WidgenticOptions options, string? config = null)
     {
-        var config = JsonDocument.Parse(Config).RootElement;
-        options.AddWidget(config.GetProperty("widgets").GetRawText(), "corpus widgets");
-        options.AddTheme(config.GetProperty("themes").GetRawText(), "corpus themes");
-        options.AddSchema(config.GetProperty("schemas").GetRawText(), "corpus schemas");
+        var root = JsonDocument.Parse(config is null ? Config : Configs[config]).RootElement;
+        if (root.TryGetProperty("widgets", out var widgets)) options.AddWidget(widgets.GetRawText(), "corpus widgets");
+        if (root.TryGetProperty("themes", out var themes)) options.AddTheme(themes.GetRawText(), "corpus themes");
+        if (root.TryGetProperty("schemas", out var schemas)) options.AddSchema(schemas.GetRawText(), "corpus schemas");
+        if (root.TryGetProperty("settings", out var settings)) options.UseSettings(settings.GetRawText(), "corpus settings");
         return options;
     }
 
@@ -64,4 +68,5 @@ internal sealed record Corpus(string Config, IReadOnlyList<CorpusCase> Cases)
         JsonDocument.Parse(Config).RootElement.GetProperty("widgets").EnumerateArray().Single(w => w.GetProperty("kind").GetString() == kind);
 }
 
-internal sealed record CorpusCase(string Name, string Op, string? Tool, string? Args, bool Slim, string? Kind, string Output);
+/// <summary>One corpus case; <c>Config</c> names the configuration it runs against, null for the main one.</summary>
+internal sealed record CorpusCase(string Name, string Op, string? Tool, string? Args, bool Slim, string? Kind, string Output, string? Config);

@@ -4,7 +4,9 @@
  * Inputs cover every served tool (the template's preview tool included), every built-in kind, groups, themes,
  * contract errors, hint diagnostics, value formats in several locales, URL
  * edge cases, the example template widgets (an http and a prompt action
- * among them) and the documents the host serves. Outputs are recorded from
+ * among them) and the documents the host serves, plus default themes chosen
+ * by a settings record, each under its own named configuration (`configs`;
+ * a case names the one it runs against). Outputs are recorded from
  * the host facade running from SOURCE in Node — native `URL`, Node's ICU —
  * and every other runtime must reproduce them byte for byte: the bundle in a
  * bare realm (packages/mcp/src/host/__tests__) and the .NET package
@@ -12,7 +14,8 @@
  *
  * Also derives the .NET sample's seed from the docker example's demo seed
  * (examples/docker/seed/demo.json): one file per widget, theme and shared
- * schema, so the sample serves exactly what the self-host demo does.
+ * schema, plus its settings record, so the sample serves exactly what the
+ * self-host demo does.
  *
  * Run: npm run conformance:generate
  */
@@ -28,15 +31,19 @@ export const CORPUS_PATH = join(here, "..", "packages", "mcp", "src", "host", "_
 export const DOCKER_SEED_PATH = join(here, "..", "examples", "docker", "seed", "demo.json");
 export const SAMPLE_SEED_DIR = join(here, "..", "dotnet", "samples", "Widgentic.Sample.Stdio", "seed");
 
-export type ConformanceCase =
+/** `config`, when present, names the entry of `Corpus.configs` the case runs against; absent, the main one. */
+export type ConformanceCase = { config?: string } & (
   | { name: string; op: "call"; tool: string; args: string; slim: boolean; output: string }
   | { name: string; op: "appTemplate"; output: string }
   | { name: string; op: "resources"; output: string }
-  | { name: string; op: "widgetPage"; kind: string; output: string };
+  | { name: string; op: "widgetPage"; kind: string; output: string }
+);
 
 export interface Corpus {
   generatedBy: string;
   config: string;
+  /** Further configurations by name: default themes from settings, one record each. */
+  configs: Record<string, string>;
   cases: ConformanceCase[];
 }
 
@@ -122,6 +129,27 @@ const config = {
       schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] }
     }
   ]
+};
+
+/** Themes the settings configurations choose from: a styled light theme, a styled dark one and a plain one. */
+const SETTINGS_THEMES = [
+  config.themes[0],
+  config.themes[1],
+  {
+    name: "corpus-night",
+    label: "Corpus night",
+    tokens: { bg: "#101418", fg: "#e8eaed", accent: "#8ab4f8" },
+    styles: { ".wg-card": { "border-style": "dashed" } }
+  }
+];
+
+/** One configuration per way a settings record chooses default themes. */
+const SETTINGS_CONFIGS: Record<string, Record<string, string>> = {
+  "settings light default": { light: "corpus-styled" },
+  "settings dark default": { dark: "corpus-night" },
+  "settings two defaults with styles": { light: "corpus-styled", dark: "corpus-night" },
+  "settings two defaults, one with styles": { light: "corpus-brand", dark: "corpus-night" },
+  "settings one theme for both": { light: "corpus-styled", dark: "corpus-styled" }
 };
 
 const URL_ROWS = [
@@ -250,6 +278,27 @@ export function buildCorpus(): Corpus {
   call("preview missing widget", "preview_widget", { data: {} });
   call("preview payload kind passed for widget", "preview_widget", { kind: "card", data: {} });
 
+  // Default themes from settings: a render, a page, a preview, the listing and a widget page each.
+  const configs: Record<string, string> = {};
+  for (const [label, defaultThemes] of Object.entries(SETTINGS_CONFIGS)) {
+    const json = JSON.stringify({ themes: SETTINGS_THEMES, settings: { defaultThemes } });
+    const settingsHost = createWidgenticHost(json);
+    if (settingsHost.problems() !== "[]") {
+      throw new Error(`the '${label}' configuration must compose cleanly: ${settingsHost.problems()}`);
+    }
+    configs[label] = json;
+    const run = (name: string, tool: string, args: unknown): void => {
+      const argsJson = JSON.stringify(args);
+      cases.push({ config: label, name: `${label}: ${name}`, op: "call", tool, args: argsJson, slim: false, output: settingsHost.call(tool, argsJson, false) });
+    };
+    run("render", "render_widget", { widget: "card", data: card });
+    run("page", "render_widget", { widget: "card", data: card, format: "page" });
+    run("preview", "preview_widget", { widget: "card", data: card });
+    run("explicit theme wins", "render_widget", { widget: "card", data: card, theme: "corpus-brand" });
+    run("listing", "list_themes", {});
+    cases.push({ config: label, name: `${label}: widget page`, op: "widgetPage", kind: "card", output: settingsHost.widgetPage("card") });
+  }
+
   cases.push({ name: "app template", op: "appTemplate", output: host.appTemplate() });
   cases.push({ name: "resources", op: "resources", output: host.resources() });
   for (const kind of ["card", "invoice", "nope", "<b>bold</b>"]) {
@@ -261,13 +310,13 @@ export function buildCorpus(): Corpus {
     if (names.has(entry.name)) throw new Error(`duplicate corpus case name '${entry.name}'`);
     names.add(entry.name);
   }
-  return { generatedBy: "npm run conformance:generate", config: configJson, cases };
+  return { generatedBy: "npm run conformance:generate", config: configJson, configs, cases };
 }
 
 /** The seed sections the .NET sample loads, by the field that names an entry; a render-only host binds no shared actions. */
 const SEED_SECTIONS = { widgets: "kind", themes: "name", schemas: "name" } as const;
 
-/** The .NET sample's seed: each demo-seed entry as `<section>/<name>.json`, keyed by that relative path. */
+/** The .NET sample's seed: each demo-seed entry as `<section>/<name>.json`, and its settings record as `settings.json`, keyed by relative path. */
 export function buildSampleSeed(): Map<string, string> {
   const seed = JSON.parse(readFileSync(DOCKER_SEED_PATH, "utf8")) as Record<string, unknown>;
   const files = new Map<string, string>();
@@ -278,6 +327,7 @@ export function buildSampleSeed(): Map<string, string> {
       files.set(`${section}/${String(entry[key])}.json`, `${JSON.stringify(entry, null, 2)}\n`);
     }
   }
+  if (seed.settings !== undefined) files.set("settings.json", `${JSON.stringify(seed.settings, null, 2)}\n`);
   return files;
 }
 

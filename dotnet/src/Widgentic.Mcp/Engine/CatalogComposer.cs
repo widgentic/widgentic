@@ -5,14 +5,17 @@ namespace Widgentic.Mcp.Engine;
 
 /// <summary>
 /// Builds the configuration one call composes for its caller: the caller's entries alone
-/// (Replace), or with the startup entries the caller does not redefine (Merge). Only identifiers
-/// are read here (a widget's <c>kind</c>, a theme's or schema's <c>name</c>); every check runs in
-/// the bundle. Each composed entry remembers where it came from, so the bundle's problems are
-/// reported against the caller's own catalog.
+/// (Replace), or with the startup entries the caller does not redefine (Merge). Settings records
+/// combine by section the same way: in Merge each section the caller defines replaces the
+/// startup record's. Only identifiers and section names are read here (a widget's <c>kind</c>, a
+/// theme's or schema's <c>name</c>); every check runs in the bundle. Each composed entry and
+/// section remembers where it came from, so the bundle's problems are reported against the
+/// caller's own catalog or the startup configuration.
 /// </summary>
 internal sealed class CatalogComposer
 {
     private readonly Section[] _sections;
+    private readonly JsonNode? _startupSettings;
 
     public CatalogComposer(WidgenticOptions options)
     {
@@ -22,6 +25,7 @@ internal sealed class CatalogComposer
             new Section("themes", "name", options.Themes),
             new Section("schemas", "name", options.Schemas),
         ];
+        _startupSettings = options.SettingsEntry?.Value?.DeepClone();
     }
 
     public ComposedConfig Compose(WidgenticCatalog catalog, WidgenticComposition mode)
@@ -56,7 +60,40 @@ internal sealed class CatalogComposer
             config[section.Name] = array;
             origins[section.Name] = from;
         }
-        return new ComposedConfig(config.ToJsonString(), origins, unreadable);
+        var (settings, settingsOrigin) = ComposeSettings(catalog.Settings, mode, unreadable);
+        if (settings is not null) config["settings"] = settings;
+        return new ComposedConfig(config.ToJsonString(), origins, unreadable, settingsOrigin);
+    }
+
+    /// <summary>
+    /// The settings record one call composes with. Replace uses the caller's record alone. Merge
+    /// keeps the startup record, each section the caller defines replacing the startup one whole,
+    /// so a caller's section reads as the store's own write would apply it. A caller record that
+    /// is not an object replaces the startup record whole and goes to the bundle, which reports it.
+    /// </summary>
+    private (JsonNode? Record, SettingsOrigin Origin) ComposeSettings(string? callerJson, WidgenticComposition mode, List<CallerProblem> unreadable)
+    {
+        if (callerJson is null)
+        {
+            return mode == WidgenticComposition.Merge ? (_startupSettings?.DeepClone(), SettingsOrigin.Startup) : (null, SettingsOrigin.Startup);
+        }
+        JsonNode? caller;
+        try
+        {
+            caller = JsonNode.Parse(callerJson);
+        }
+        catch (JsonException)
+        {
+            unreadable.Add(new CallerProblem("settings", -1, "settings", "INVALID_JSON"));
+            return (null, SettingsOrigin.Caller);
+        }
+        if (mode == WidgenticComposition.Replace || caller is not JsonObject sections)
+        {
+            return (caller?.DeepClone(), SettingsOrigin.Caller);
+        }
+        var merged = _startupSettings is JsonObject startup ? (JsonObject)startup.DeepClone() : new JsonObject();
+        foreach (var (name, value) in sections) merged[name] = value?.DeepClone();
+        return (merged, new SettingsOrigin(Whole: false, sections.Select(section => section.Key).ToHashSet(StringComparer.Ordinal)));
     }
 
     /// <summary>The caller's strings as entries, an array contributing each element; text that is not JSON is reported, not composed.</summary>
@@ -113,6 +150,20 @@ internal sealed class CatalogComposer
 /// <summary>Where a composed entry came from: the caller's catalog (its index there) or the startup configuration (its source).</summary>
 internal readonly record struct EntryOrigin(bool FromCaller, int CallerIndex, string StartupSource);
 
+/// <summary>
+/// Which parts of a composed settings record came from the caller: all of it, or the named
+/// sections (the rest is the startup record's).
+/// </summary>
+internal sealed record SettingsOrigin(bool Whole, IReadOnlySet<string> Sections)
+{
+    public static readonly SettingsOrigin Startup = new(false, new HashSet<string>());
+
+    public static readonly SettingsOrigin Caller = new(true, new HashSet<string>());
+
+    /// <summary>Whether the problem named <paramref name="name"/> (the record, a section, or <c>section.mode</c>) is the caller's.</summary>
+    public bool FromCaller(string name) => Whole || Sections.Contains(name.Split('.')[0]);
+}
+
 /// <summary>A refused caller entry, reported by section, index, name and code; never its contents.</summary>
 internal readonly record struct CallerProblem(string Section, int Index, string Name, string Code);
 
@@ -120,7 +171,8 @@ internal readonly record struct CallerProblem(string Section, int Index, string 
 internal sealed record ComposedConfig(
     string Json,
     IReadOnlyDictionary<string, IReadOnlyList<EntryOrigin>> Origins,
-    IReadOnlyList<CallerProblem> Unreadable)
+    IReadOnlyList<CallerProblem> Unreadable,
+    SettingsOrigin SettingsOrigin)
 {
     /// <summary>The bundle's problems for this composition, each attributed to the caller's entry or the startup entry it names.</summary>
     public IEnumerable<(EntryOrigin Origin, CallerProblem Problem)> Attribute(string problemsJson)
@@ -131,6 +183,11 @@ internal sealed record ComposedConfig(
             var index = problem.GetProperty("index").GetInt32();
             var name = problem.TryGetProperty("name", out var named) ? named.GetString() ?? "" : "";
             var code = problem.GetProperty("code").GetString() ?? "";
+            if (section == "settings")
+            {
+                yield return (new EntryOrigin(SettingsOrigin.FromCaller(name), -1, "settings"), new CallerProblem(section, -1, name, code));
+                continue;
+            }
             var origin = Origins.TryGetValue(section, out var list) && index >= 0 && index < list.Count
                 ? list[index]
                 : new EntryOrigin(FromCaller: true, index, "");

@@ -9,9 +9,14 @@ namespace Widgentic.Mcp.Tests;
 /// </summary>
 public sealed class ConformanceTests : IClassFixture<ConformanceTests.Engine>
 {
+    private readonly Engine _engines;
     private readonly WidgenticEngine _engine;
 
-    public ConformanceTests(Engine engine) => _engine = engine.Value;
+    public ConformanceTests(Engine engine)
+    {
+        _engines = engine;
+        _engine = engine.Value;
+    }
 
     public static TheoryData<string> CaseNames() => [.. Repo.Corpus.Cases.Select(c => c.Name)];
 
@@ -20,13 +25,14 @@ public sealed class ConformanceTests : IClassFixture<ConformanceTests.Engine>
     public async Task ReproducesTheNodeOutput(string name)
     {
         var entry = Repo.Corpus.Cases.Single(c => c.Name == name);
+        var engine = entry.Config is null ? _engine : _engines.For(entry.Config);
         var cancel = TestContext.Current.CancellationToken;
         var output = entry.Op switch
         {
-            "call" => await _engine.Pool.CallToolAsync(entry.Tool!, entry.Args!, entry.Slim, cancel),
-            "appTemplate" => await _engine.Pool.InvokeAsync("appTemplate", cancel),
-            "resources" => await _engine.Pool.InvokeAsync("resources", cancel),
-            "widgetPage" => await _engine.Pool.InvokeAsync("widgetPage", cancel, entry.Kind!),
+            "call" => await engine.Pool.CallToolAsync(entry.Tool!, entry.Args!, entry.Slim, cancel),
+            "appTemplate" => await engine.Pool.InvokeAsync("appTemplate", cancel),
+            "resources" => await engine.Pool.InvokeAsync("resources", cancel),
+            "widgetPage" => await engine.Pool.InvokeAsync("widgetPage", cancel, entry.Kind!),
             _ => throw new InvalidOperationException($"unknown corpus op '{entry.Op}'"),
         };
         Assert.Equal(entry.Output, output);
@@ -41,11 +47,31 @@ public sealed class ConformanceTests : IClassFixture<ConformanceTests.Engine>
         Assert.DoesNotContain("CA$", output);
     }
 
-    /// <summary>One engine over the corpus configuration, shared by the class.</summary>
+    /// <summary>One engine over the corpus configuration, and one per named configuration, shared by the class.</summary>
     public sealed class Engine : IDisposable
     {
+        private readonly Dictionary<string, WidgenticEngine> _named = new(StringComparer.Ordinal);
+
         internal WidgenticEngine Value { get; } = WidgenticEngine.Create(Repo.Corpus.Options(poolSize: 2));
 
-        public void Dispose() => Value.Dispose();
+        /// <summary>The engine over a named configuration, created on first use.</summary>
+        internal WidgenticEngine For(string config)
+        {
+            lock (_named)
+            {
+                if (!_named.TryGetValue(config, out var engine))
+                {
+                    engine = WidgenticEngine.Create(Repo.Corpus.Options(poolSize: 1, config));
+                    _named.Add(config, engine);
+                }
+                return engine;
+            }
+        }
+
+        public void Dispose()
+        {
+            Value.Dispose();
+            foreach (var engine in _named.Values) engine.Dispose();
+        }
     }
 }

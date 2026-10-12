@@ -287,6 +287,10 @@ The suite covers:
 - **Per-principal catalogs.** Merge and Replace and the per-catalog override,
   refusals logged without contents, a failing source, the global surfaces, two
   principals concurrently on one pool, and nothing kept between calls.
+- **Default themes from settings.** Startup defaults, a refused startup setting,
+  a caller's section replacing the startup one in Merge, Replace, refused caller
+  settings logged, and previews and pages following the caller. The corpus's
+  named settings configurations run on V8 too.
 - **Render-only.** No HTTP request, and prompt actions live while http actions
   render disabled.
 - **The `.nupkg` shape.**
@@ -377,6 +381,25 @@ workspace and the sample first, then point at the built DLL):
 ```
 
 ## Verification log
+
+- **Default themes from settings, in the host bundle and .NET (2026-10-12, change `dotnet-principal-catalogs`, on `feature/dotnet-principal-catalogs`, `@widgentic/mcp` minor and `Widgentic.Mcp` 0.11.0 pending release)**
+  - **The bundle.** `createWidgenticHost` takes a `settings` record.
+    - **Same as the Node path.** For `{ light }`, `{ dark }`, two defaults and one theme for both modes, the host's `render_widget` (slim and as a page), `preview_widget` and `list_themes` output equals the Node path for a principal whose stored settings choose the same defaults (memory store and `composeThemes`).
+    - **Refusals.** A default naming `ghost`, `light` or `dark`, or a configured `dark` that was refused, is reported as `UNKNOWN_THEME` under section `settings` and keeps the built-in. A malformed record is reported as `INVALID_SHAPE`. `null`, `{}` and no record leave every output unchanged.
+    - **Node-free.** The rules moved to `store/settings-rules.ts`. The boundary test keeps the bundle's graph free of `node:`, and the store's refusals are unchanged.
+  - **The corpus.** Five named settings configurations (light only, dark only, two defaults with styles, two defaults with one styled, one theme for both), each with a render, a page, a preview, an explicit theme, the listing and a widget page: 30 cases.
+    - **The rules hold.** A lone styled default's styles are unscoped. Two styled defaults scope with `:where()`. One theme for both is emitted as explicit. An explicit theme drops the defaults. Pages take the light default only.
+    - **Every runtime agrees.** The bare realm and V8 in .NET reproduce all 30 byte for byte. No existing case changed.
+  - **.NET.** 177 of 177 on Windows 11, .NET SDK 10.0.401.
+    - **Startup.** The seed's `google-light`/`google-dark` settings put each token block under its mode selector. `ghost` stops startup with `UNKNOWN_THEME` naming `settings JSON`, and an unreadable file stops it with `INVALID_JSON` naming the file.
+    - **Merge and Replace.** A principal's `{ dark: "night" }` gave `light`/`night` while another principal kept the seed's defaults. Replace gave the built-ins.
+    - **Refused settings.** A principal's `dark: "ghost"` was logged as `the caller's setting 'defaultThemes.dark'`, and an unreadable record as `INVALID_JSON`; neither log line carried the name. A principal's refused `google-dark` left the startup dark default unresolved, which was logged as a startup setting skipped for that caller.
+    - **Previews and pages** carried the caller's light default and not another caller's.
+  - **The sample** loads the seed's settings. Over stdio and HTTP it reports `google-light`/`google-dark`; `merge-demo` reports `google-light`/`merge-demo-dark` and `replace-demo` the built-ins.
+  - **The owner's local retest (task 6.4).** The sample ran over HTTP on `localhost:3002` with demo keys, and each principal was connected as its own server, each in a fresh conversation. No staging deploy, by the owner's decision.
+    - **No key:** the seed's two widgets and the `google-light`/`google-dark` defaults.
+    - **`merge-demo`:** its own inbox, headed "Merge demo inbox", in place of the seed's, and `merge-demo-dark`'s green accent as the default on a dark host.
+    - **`replace-demo`:** only the built-in kinds and `release-notes-widget`, under the built-in dark theme.
 
 - **Theme styles, settings and default themes (2026-10-11, change `theme-styles-and-defaults`; core, designer and mcp minor, webmcp patch pending release)**
   - **Core.** The registry merges `extends` styles per selector, then per property; refuses a malformed `styles` map with `INVALID_THEME`; and holds one default per mode (built-ins until set, unregistered names refused). `themeStylesToCss` matches the widget generator unscoped and prefixes every selector part with `:where(<scope>) ` when scoped. A computed-value check in happy-dom (fresh document per case) shows a scoped rule applying only inside its scope and losing a tie to a later widget rule.

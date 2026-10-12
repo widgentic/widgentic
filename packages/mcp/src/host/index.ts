@@ -5,17 +5,18 @@
  * of this module on V8).
  *
  * The configuration (designer-exported widgets, theme entries, shared
- * schemas) is composed once per host by the store's own composition and
- * checks; refused entries are skipped and listed by `problems()`, never
- * thrown. Calls dispatch to the same handlers the Node assembly wires, and
- * nothing is kept from one call to the next.
+ * schemas, and a settings record choosing default themes) is composed once
+ * per host by the store's own composition and checks; refused entries and
+ * settings are skipped and listed by `problems()`, never thrown. Calls
+ * dispatch to the same handlers the Node assembly wires, and nothing is
+ * kept from one call to the next.
  *
  * Render-only: http actions compile disabled (`unresolved`), no `load` is
  * emitted, and neither `execute_action` nor `list_actions` is served. The
  * template's own `preview_widget` is served, marked app-only; rate limiting
  * previews belongs to the embedding server's transport.
  */
-import { isPlainObject } from "@widgentic/core";
+import { createThemeRegistry, isPlainObject } from "@widgentic/core";
 import type { McpToolResult } from "../output/index.js";
 import {
   GET_AUTHORING_GUIDE_TOOL,
@@ -46,12 +47,13 @@ import { buildAppTemplate } from "../server/app-template.js";
 import { composeCatalogEntries, composeThemeEntries } from "../store/compose.js";
 import type { ComposeProblem } from "../store/compose.js";
 import { checkStoredSchema } from "../store/validate.js";
+import { THEME_MODES, checkSettings } from "../store/settings-rules.js";
 import { DEFAULT_LIMITS } from "../store/limits.js";
 
 /** Replaced with the package version when the bundle is built. */
 declare const WIDGENTIC_HOST_VERSION: string | undefined;
 
-/** One refused configuration entry. `index` is -1 when the section itself is malformed. */
+/** One refused configuration entry or setting. `index` is -1 for a malformed section and for settings. */
 export interface HostProblem {
   section: string;
   index: number;
@@ -162,6 +164,9 @@ function composeSchemas(entries: readonly unknown[], problems: HostProblem[]): S
   return schemas;
 }
 
+/** The built-in theme names, read from a fresh registry so they cannot drift from it. */
+const BUILT_IN_THEMES: ReadonlySet<string> = new Set(createThemeRegistry().names());
+
 /** Refusals only: an unknown action ref is a warning, and every http action is disabled here anyway. */
 function refusals(problems: readonly ComposeProblem[]): HostProblem[] {
   return problems
@@ -171,7 +176,10 @@ function refusals(problems: readonly ComposeProblem[]): HostProblem[] {
 
 /**
  * Create a host from a JSON configuration:
- * `{ widgets?: WidgetDefinition[], themes?: ThemeEntry[], schemas?: StoredSchemaEntry[] }`.
+ * `{ widgets?: WidgetDefinition[], themes?: ThemeEntry[], schemas?: StoredSchemaEntry[], settings?: PrincipalSettings }`.
+ * `settings` is checked with the store's rules against the configured themes that composed;
+ * each default that passes stands in for its mode's built-in, as a principal's stored
+ * defaults do in the Node assembly.
  */
 export function createWidgenticHost(configJson: string): WidgenticHost {
   const problems: HostProblem[] = [];
@@ -185,7 +193,7 @@ export function createWidgenticHost(configJson: string): WidgenticHost {
       index: -1,
       name: "config",
       code: "INVALID_SHAPE",
-      message: "The configuration must be a JSON object with optional 'widgets', 'themes' and 'schemas' arrays."
+      message: "The configuration must be a JSON object with optional 'widgets', 'themes' and 'schemas' arrays and a 'settings' object."
     });
   }
 
@@ -202,6 +210,19 @@ export function createWidgenticHost(configJson: string): WidgenticHost {
 
   const catalog = composed.catalog;
   const registry = themes.registry;
+  // An absent or null record is no settings; anything else is checked.
+  if (config.settings !== undefined && config.settings !== null) {
+    // Defaults may name only configured themes that composed, never a built-in.
+    const served = new Set(registry.names().filter((name) => !BUILT_IN_THEMES.has(name)));
+    const checked = checkSettings(config.settings, served);
+    for (const { name, code, message } of checked.problems) {
+      problems.push({ section: "settings", index: -1, name, code, message });
+    }
+    for (const mode of THEME_MODES) {
+      const name = checked.settings.defaultThemes?.[mode];
+      if (name !== undefined) registry.setDefault(mode, name);
+    }
+  }
   const handlers = new Map<string, (args: unknown, slim: boolean) => McpToolResult>([
     [LIST_WIDGETS_TOOL.name, () => handleListWidgets(catalog)],
     [LIST_THEME_TOKENS_TOOL.name, () => handleListThemeTokens()],

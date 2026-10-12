@@ -53,6 +53,7 @@ internal sealed class WidgenticEngine : IDisposable
             ["themes"] = Section(options.Themes),
             ["schemas"] = Section(options.Schemas),
         };
+        if (options.SettingsEntry is { } settings) config["settings"] = settings.Value?.DeepClone();
         var pool = new V8HostPool(bundle.Text, config.ToJsonString(), options.EnginePoolSize, options.CallTimeout);
         try
         {
@@ -105,7 +106,8 @@ internal sealed class WidgenticEngine : IDisposable
                 "schemas" => options.Schemas,
                 _ => null,
             };
-            var source = entries is not null && index >= 0 && index < entries.Count ? entries[index].Source : section;
+            var source = section == "settings" ? options.SettingsEntry?.Source ?? section
+                : entries is not null && index >= 0 && index < entries.Count ? entries[index].Source : section;
             problems.Add(new WidgenticConfigurationProblem(
                 section,
                 source,

@@ -50,7 +50,6 @@ appears. Size: **S** one small change, **M** one change with spec deltas,
 | NET-1 | Actions and image inlining for the .NET host | P2 | L | `dotnet-host` design |
 | NET-2 | .NET patches against an older pin | P3 | M | `mcp-sdk-v2` release review |
 | RND-5 | More image sources per render | P3 | M | Owner finding, v82 |
-| THM-1 | Default themes in the .NET host | P3 | S | `theme-styles-and-defaults` design |
 | THM-2 | A dark mode for page and app documents | P3 | S | `theme-styles-and-defaults` design |
 | THM-3 | Keep style rules inside the widget: sibling combinators | P3 | S | PR #29 review |
 | AGT-5 | Load-time warnings agents can act on: dropped link schemes, unreachable action hosts | P3 | S | Browser agent, staging 2026-10-12 |
@@ -291,20 +290,6 @@ are reachable by direct URL.
   nothing, which is fixed separately.
 
 ### Theming
-
-#### THM-1 · Default themes in the .NET host — P3, S
-
-- **Problem.** The host bundle composes a registry from the configured themes, but
-  `WidgenticOptions` has no way to choose default themes. So a .NET host always
-  falls back to the built-in light and dark looks when a render names no theme,
-  while the Node server honours a principal's settings.
-- **Direction.** Optional `DefaultLightTheme` / `DefaultDarkTheme` options (or a
-  `settings` section in the designer-JSON configuration) that set the registry's
-  defaults at startup, refused at the door when they name no configured theme.
-  Ships with the next NuGet minor that follows `@widgentic/mcp`.
-- **Touches.** `dotnet-host` (configuration), the host bundle's config parsing, the
-  conformance corpus.
-- **Origin.** 2026-10-11, `theme-styles-and-defaults` design (non-goal).
 
 #### THM-2 · A dark mode for page and app documents — P3, S
 

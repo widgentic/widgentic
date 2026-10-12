@@ -1,12 +1,12 @@
-// A .NET MCP server with widgentic: the docker example's demo seed (widgets, themes and shared
-// schemas under seed/), the render-side widgentic tools, and one tool of the server's own that
+// A .NET MCP server with widgentic: the docker example's demo seed (widgets, themes, shared
+// schemas and the settings choosing default themes, under seed/), the render-side widgentic tools, and one tool of the server's own that
 // renders its result as a widget. Two transports, one server:
 //   (default)  stdio, for hosts that launch the process (Claude Code, VS Code, Inspector)
 //   --http     Streamable HTTP at http://localhost:3002/mcp (or --urls ...), for hosts that
 //              connect to a URL, such as Claude's custom connectors (through a tunnel) and VS Code
 // Over HTTP each caller may also get its own catalog: a demo key (the x-api-key header, or ?key=
 // for hosts that only take a URL) names the merge-demo or replace-demo principal, whose entries
-// under principals/ compose with the seed for that caller's calls. Keys come from configuration,
+// under principals/ (settings included) compose with the seed for that caller's calls. Keys come from configuration,
 // Widgentic:Sample:Keys:<principal>; without a known key the seed serves.
 using System.ComponentModel;
 using System.Security.Claims;
@@ -59,7 +59,8 @@ internal static class SampleServer
         mcp.WithWidgentic(options => options
                 .AddSchemasFromDirectory(Path.Combine(Seed, "schemas"))
                 .AddThemesFromDirectory(Path.Combine(Seed, "themes"))
-                .AddWidgetsFromDirectory(Path.Combine(Seed, "widgets")))
+                .AddWidgetsFromDirectory(Path.Combine(Seed, "widgets"))
+                .UseSettingsFromFile(Path.Combine(Seed, "settings.json")))
             .WithTools<TeamTools>();
 }
 
@@ -116,6 +117,7 @@ internal sealed class SampleCatalogs : IWidgenticCatalogSource
         if (Directory.Exists(Path.Combine(root, "schemas"))) catalog.AddSchemasFromDirectory(Path.Combine(root, "schemas"));
         if (Directory.Exists(Path.Combine(root, "themes"))) catalog.AddThemesFromDirectory(Path.Combine(root, "themes"));
         if (Directory.Exists(Path.Combine(root, "widgets"))) catalog.AddWidgetsFromDirectory(Path.Combine(root, "widgets"));
+        if (File.Exists(Path.Combine(root, "settings.json"))) catalog.UseSettings(File.ReadAllText(Path.Combine(root, "settings.json")));
         return ValueTask.FromResult<WidgenticCatalog?>(catalog);
     }
 }

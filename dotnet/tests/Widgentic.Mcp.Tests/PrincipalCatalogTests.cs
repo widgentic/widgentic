@@ -229,6 +229,118 @@ public sealed class PrincipalCatalogTests
             JsonSerializer.Serialize(viaTool, ModelContextProtocol.McpJsonUtilities.DefaultOptions));
     }
 
+    // Default themes from settings, at startup and per principal.
+
+    [Fact]
+    public async Task StartupDefaultsDressRendersThatNameNoTheme()
+    {
+        using var rig = Rig.Start(source: null, settingsFile: SeedSettings);
+        var css = Css(await rig.CallAsync("render_widget", Alpha, Card));
+        var lightToken = SeedTheme("google-light")["tokens"]!["bg"]!.GetValue<string>();
+        var darkToken = SeedTheme("google-dark")["tokens"]!["bg"]!.GetValue<string>();
+        Assert.Contains($":root:not([data-theme=\"dark\"]) {{\n  --wg-bg: {lightToken};", css, StringComparison.Ordinal);
+        Assert.Contains($":root[data-theme=\"dark\"] {{\n  --wg-bg: {darkToken};", css, StringComparison.Ordinal);
+        Assert.Equal(("google-light", "google-dark"), Defaults(await rig.CallAsync("list_themes", Alpha)));
+    }
+
+    [Fact]
+    public void AStartupDefaultNamingNoConfiguredThemeStopsStartup()
+    {
+        var unknown = new WidgenticOptions { EnginePoolSize = 1 }.AddSampleSeed().UseSettings("""{"defaultThemes":{"dark":"ghost"}}""");
+        var problem = Assert.Single(Assert.Throws<WidgenticConfigurationException>(() => WidgenticEngine.Create(unknown)).Problems);
+        Assert.Equal(("settings", "settings JSON", "UNKNOWN_THEME"), (problem.Section, problem.Source, problem.Code));
+
+        var file = Path.Combine(Directory.CreateTempSubdirectory("widgentic-settings-").FullName, "settings.json");
+        File.WriteAllText(file, "{ not json");
+        var unreadable = new WidgenticOptions { EnginePoolSize = 1 }.UseSettingsFromFile(file);
+        problem = Assert.Single(Assert.Throws<WidgenticConfigurationException>(() => WidgenticEngine.Create(unreadable)).Problems);
+        Assert.Equal(("settings", file, "INVALID_JSON"), (problem.Section, problem.Source, problem.Code));
+    }
+
+    [Fact]
+    public async Task InMergeAPrincipalsSettingsSectionReplacesTheStartupOne()
+    {
+        using var rig = Rig.Start(new FakeSource(user => Name(user) == "alpha"
+            ? new WidgenticCatalog().AddTheme(Night).UseSettings("""{"defaultThemes":{"dark":"night"}}""")
+            : new WidgenticCatalog()), settingsFile: SeedSettings);
+        Assert.Equal(("light", "night"), Defaults(await rig.CallAsync("list_themes", Alpha)));
+        // A principal without settings keeps the startup record's defaults.
+        Assert.Equal(("google-light", "google-dark"), Defaults(await rig.CallAsync("list_themes", Beta)));
+        Assert.Empty(rig.Logs.Messages);
+    }
+
+    [Fact]
+    public async Task InReplaceTheStartupSettingsNeverApply()
+    {
+        using var rig = Rig.Start(new FakeSource(_ => new WidgenticCatalog().AddTheme(Night)), WidgenticComposition.Replace, settingsFile: SeedSettings);
+        Assert.Equal(("light", "dark"), Defaults(await rig.CallAsync("list_themes", Alpha)));
+        Assert.Empty(rig.Logs.Messages);
+    }
+
+    [Fact]
+    public async Task APrincipalsRefusedSettingIsSkippedAndLogged()
+    {
+        using var rig = Rig.Start(new FakeSource(user => Name(user) == "alpha"
+            ? new WidgenticCatalog().UseSettings("""{"defaultThemes":{"light":"google-light","dark":"ghost"}}""")
+            : new WidgenticCatalog().UseSettings("{ not json")), settingsFile: SeedSettings);
+        var result = await rig.CallAsync("list_themes", Alpha);
+        Assert.False(IsError(result));
+        Assert.Equal(("google-light", "dark"), Defaults(result));
+        Assert.Contains(rig.Logs.Messages, message => message.Contains("the caller's setting 'defaultThemes.dark'", StringComparison.Ordinal) && message.Contains("UNKNOWN_THEME", StringComparison.Ordinal));
+        // An unreadable record replaces the startup record whole: the built-ins serve, and it is logged.
+        Assert.Equal(("light", "dark"), Defaults(await rig.CallAsync("list_themes", Beta)));
+        Assert.Contains(rig.Logs.Messages, message => message.Contains("the caller's setting 'settings'", StringComparison.Ordinal) && message.Contains("INVALID_JSON", StringComparison.Ordinal));
+        Assert.DoesNotContain(rig.Logs.Messages, message => message.Contains("ghost", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AStartupDefaultLeftUnresolvedByAPrincipalIsLogged()
+    {
+        var broken = SeedTheme("google-dark");
+        broken["tokens"]!["accent"] = "url(https://example.invalid/x.png)";
+        using var rig = Rig.Start(new FakeSource(_ => new WidgenticCatalog().AddTheme(broken.ToJsonString())), settingsFile: SeedSettings);
+        var result = await rig.CallAsync("list_themes", Alpha);
+        Assert.False(IsError(result));
+        Assert.Equal(("google-light", "dark"), Defaults(result));
+        Assert.Contains(rig.Logs.Messages, message => message.Contains("startup setting 'defaultThemes.dark' was skipped for this caller", StringComparison.Ordinal) && message.Contains("UNKNOWN_THEME", StringComparison.Ordinal));
+        Assert.Contains(rig.Logs.Messages, message => message.Contains("the caller's themes[0] ('google-dark')", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task PreviewsAndPagesFollowTheCallersDefaults()
+    {
+        const string sun = """{"name":"sun","tokens":{"accent":"#ff5a1f"},"styles":{".wg-card-title":{"letter-spacing":"0.1em"}}}""";
+        using var rig = Rig.Start(new FakeSource(user => Name(user) == "alpha"
+            ? new WidgenticCatalog().AddTheme(sun).UseSettings("""{"defaultThemes":{"light":"sun"}}""")
+            : null), settingsFile: SeedSettings);
+        var own = await rig.Catalogs.WidgetPageAsync("card", Alpha, rig.Services, Cancel);
+        var other = await rig.Catalogs.WidgetPageAsync("card", Beta, rig.Services, Cancel);
+        Assert.Contains("--wg-accent: #ff5a1f;", own, StringComparison.Ordinal);
+        Assert.Contains("letter-spacing: 0.1em;", own, StringComparison.Ordinal);
+        Assert.DoesNotContain("#ff5a1f", other, StringComparison.Ordinal);
+        Assert.Contains("--wg-accent: #ff5a1f;", Css(await rig.CallAsync("preview_widget", Alpha, Card)), StringComparison.Ordinal);
+        Assert.DoesNotContain("#ff5a1f", Css(await rig.CallAsync("preview_widget", Beta, Card)), StringComparison.Ordinal);
+    }
+
+    private static readonly string SeedSettings = Path.Combine(Repo.SampleSeed, "settings.json");
+
+    private const string Night = """{"name":"night","tokens":{"bg":"#101010","fg":"#f0f0f0","accent":"#8ab4f8"}}""";
+
+    private const string Card = """{"widget":"card","data":{"title":"T"}}""";
+
+    private static JsonNode SeedTheme(string name) =>
+        JsonNode.Parse(File.ReadAllText(Path.Combine(Repo.SampleSeed, "themes", $"{name}.json")))!;
+
+    private static string Css(string result) =>
+        JsonDocument.Parse(result).RootElement.GetProperty("structuredContent").GetProperty("css").GetString()!;
+
+    /// <summary>The effective default theme names <c>list_themes</c> reports.</summary>
+    private static (string Light, string Dark) Defaults(string result)
+    {
+        var defaults = JsonDocument.Parse(Text(result)).RootElement.GetProperty("defaults");
+        return (defaults.GetProperty("light").GetString()!, defaults.GetProperty("dark").GetString()!);
+    }
+
     /// <summary>A host tool rendering a kind that only the caller's catalog defines.</summary>
     [McpServerToolType]
     public sealed class OwnKindTool
@@ -296,9 +408,11 @@ public sealed class PrincipalCatalogTests
 
         public ListLoggerProvider Logs { get; }
 
-        public static Rig Start(FakeSource? source, WidgenticComposition composition = WidgenticComposition.Merge, int poolSize = 1)
+        public static Rig Start(FakeSource? source, WidgenticComposition composition = WidgenticComposition.Merge, int poolSize = 1, string? settingsFile = null)
         {
-            var engine = WidgenticEngine.Create(new WidgenticOptions { EnginePoolSize = poolSize }.AddSampleSeed());
+            var options = new WidgenticOptions { EnginePoolSize = poolSize }.AddSampleSeed();
+            if (settingsFile is not null) options.UseSettingsFromFile(settingsFile);
+            var engine = WidgenticEngine.Create(options);
             var logs = new ListLoggerProvider();
             var services = new ServiceCollection().AddLogging(logging => logging.AddProvider(logs));
             if (source is not null) services.AddSingleton<IWidgenticCatalogSource>(source);

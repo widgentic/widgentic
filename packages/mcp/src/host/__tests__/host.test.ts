@@ -16,7 +16,8 @@ import {
   WIDGET_PAGE_RESOURCE
 } from "../../server/definitions.js";
 import { handleListWidgets, handleListThemes, handlePreviewWidget, handleRenderWidget } from "../../server/handlers.js";
-import { composeCatalogEntries, composeThemeEntries } from "../../store/compose.js";
+import { composeCatalogEntries, composeThemeEntries, composeThemes } from "../../store/compose.js";
+import { createMemoryStore } from "../../store/memory.js";
 
 interface ToolResult {
   isError?: boolean;
@@ -188,5 +189,83 @@ describe("createWidgenticHost", () => {
 
   it("reports its version as 'source' when run unbundled", () => {
     expect(createWidgenticHost("{}").version()).toBe("source");
+  });
+});
+
+describe("createWidgenticHost settings", () => {
+  const styled = { name: "brand", tokens: { accent: "#ff5a1f" }, styles: { ".wg-btn": { "font-weight": "600" } } };
+  const night = { name: "night", tokens: { bg: "#101010", fg: "#f0f0f0", accent: "#8ab4f8" } };
+  const themed = { widgets: [invoiceWidget], themes: [styled, night] };
+
+  /** The Node path for a principal whose stored settings are `settings`. */
+  async function nodeRegistry(settings: Record<string, unknown>) {
+    const store = createMemoryStore([
+      { principal: { id: "p", scopes: ["read"] }, themes: themed.themes, settings }
+    ]);
+    return (await composeThemes(store, "p")).value;
+  }
+
+  it("chooses the default themes as a principal's stored settings do", async () => {
+    for (const defaultThemes of [{ light: "brand" }, { dark: "night" }, { light: "brand", dark: "night" }, { light: "brand", dark: "brand" }]) {
+      const host = createWidgenticHost(JSON.stringify({ ...themed, settings: { defaultThemes } }));
+      expect(host.problems()).toBe("[]");
+      const registry = await nodeRegistry({ defaultThemes });
+      const { catalog } = composeCatalogEntries({ widgets: themed.widgets }, { httpDisabled: "unresolved" });
+      for (const args of [
+        { widget: "invoice", data: invoiceWidget.descriptor.dataExample },
+        { widget: "invoice", data: invoiceWidget.descriptor.dataExample, format: "page" }
+      ]) {
+        expect(host.call("render_widget", JSON.stringify(args), true)).toBe(
+          JSON.stringify(handleRenderWidget(catalog, args, { slim: true, themes: registry }))
+        );
+      }
+      const preview = { widget: "invoice", data: { customer: "Ada" } };
+      expect(host.call("preview_widget", JSON.stringify(preview), false)).toBe(
+        JSON.stringify(handlePreviewWidget(catalog, preview, { themes: registry }))
+      );
+      expect(host.call("list_themes", "{}", false)).toBe(JSON.stringify(handleListThemes(registry)));
+    }
+    const lightOnly = createWidgenticHost(JSON.stringify({ ...themed, settings: { defaultThemes: { light: "brand" } } }));
+    const listing = JSON.parse(call(lightOnly, "list_themes", {}).content[0]?.text ?? "{}") as { defaults: unknown };
+    expect(listing.defaults).toEqual({ light: "brand", dark: "dark" });
+    // Pages take the light default: its shared classes reach the preview page.
+    expect(lightOnly.widgetPage("invoice")).toContain(".wg-btn");
+    expect(createWidgenticHost(JSON.stringify(themed)).widgetPage("invoice")).not.toContain(".wg-btn");
+  });
+
+  it("reports a default naming no served theme and keeps that mode's built-in", () => {
+    const configured = { ...themed, themes: [...themed.themes, { name: "dark", tokens: { accent: "#000000" } }] };
+    for (const name of ["ghost", "light", "dark"]) {
+      const host = createWidgenticHost(JSON.stringify({ ...configured, settings: { defaultThemes: { light: "brand", dark: name } } }));
+      const problems = JSON.parse(host.problems()) as { section: string; index: number; name: string; code: string }[];
+      expect(problems.filter((problem) => problem.section === "settings")).toEqual([
+        expect.objectContaining({ section: "settings", index: -1, name: "defaultThemes.dark", code: "UNKNOWN_THEME" })
+      ]);
+      const listing = JSON.parse(call(host, "list_themes", {}).content[0]?.text ?? "{}") as { defaults: unknown };
+      expect(listing.defaults).toEqual({ light: "brand", dark: "dark" });
+    }
+  });
+
+  it("reports malformed settings instead of throwing, keeping the built-in defaults", () => {
+    for (const settings of ["brand", [], { fonts: {} }, { defaultThemes: "brand" }, { defaultThemes: { dusk: "brand" } }, { defaultThemes: { light: 1 } }]) {
+      const host = createWidgenticHost(JSON.stringify({ ...themed, settings }));
+      const problems = JSON.parse(host.problems()) as { section: string; code: string }[];
+      expect(problems).toEqual([expect.objectContaining({ section: "settings", code: "INVALID_SHAPE" })]);
+      const listing = JSON.parse(call(host, "list_themes", {}).content[0]?.text ?? "{}") as { defaults: unknown };
+      expect(listing.defaults).toEqual({ light: "light", dark: "dark" });
+    }
+  });
+
+  it("leaves every output unchanged without settings, or with null settings", () => {
+    const without = createWidgenticHost(JSON.stringify(themed));
+    const withNull = createWidgenticHost(JSON.stringify({ ...themed, settings: null }));
+    const withEmpty = createWidgenticHost(JSON.stringify({ ...themed, settings: {} }));
+    const args = JSON.stringify({ widget: "invoice", data: invoiceWidget.descriptor.dataExample });
+    for (const host of [withNull, withEmpty]) {
+      expect(host.problems()).toBe("[]");
+      expect(host.call("render_widget", args, false)).toBe(without.call("render_widget", args, false));
+      expect(host.call("list_themes", "{}", false)).toBe(without.call("list_themes", "{}", false));
+      expect(host.widgetPage("invoice")).toBe(without.widgetPage("invoice"));
+    }
   });
 });

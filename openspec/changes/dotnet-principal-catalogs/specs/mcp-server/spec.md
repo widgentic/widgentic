@@ -5,7 +5,7 @@ The package SHALL export from a `./host` entry `createWidgenticHost(config: stri
 
 `config` is a JSON string carrying optional `widgets` (designer-exported widget definitions `{ kind, template, descriptor, load? }`), `themes` (theme entries `{ name, label?, description?, tokens, styles? }`) and `schemas` (shared schema entries `{ name, label?, description?, schema }`). Every entry SHALL be validated with the same checks and structured codes the store applies on write, and built-in kinds and the `light`/`dark` theme names stay reserved. An invalid entry SHALL be skipped and reported, never served and never thrown.
 
-`config` MAY also carry `settings`, a principal settings record in the store's shape (`{ defaultThemes?: { light?, dark? } }`), so a host can choose its default themes. It SHALL be checked with the store's write rules for settings:
+`config` MAY also carry `settings`, a principal settings record in the store's shape (`{ defaultThemes?: { light?, dark? } }`), so a host can choose its default themes. An absent or `null` record means no settings. Any other value SHALL be checked with the store's write rules for settings:
 - An unknown section, an unknown mode, or a name that is not a string SHALL be reported as `INVALID_SHAPE`.
 - A default naming a theme the host does not serve SHALL be reported as `UNKNOWN_THEME`. That covers a built-in name, a theme the config does not carry, and a configured theme that was refused.
 

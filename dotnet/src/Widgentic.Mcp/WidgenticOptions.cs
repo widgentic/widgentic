@@ -9,6 +9,9 @@ public sealed class WidgenticOptions
     internal List<ConfigEntry> Widgets { get; } = [];
     internal List<ConfigEntry> Themes { get; } = [];
     internal List<ConfigEntry> Schemas { get; } = [];
+
+    /// <summary>The settings record and where it came from, or null for none.</summary>
+    internal ConfigEntry? SettingsEntry { get; private set; }
     internal List<WidgenticConfigurationProblem> ParseProblems { get; } = [];
 
     /// <summary>The widgentic tools to expose. Default: <see cref="WidgenticTools.Default"/>.</summary>
@@ -75,6 +78,33 @@ public sealed class WidgenticOptions
     /// <summary>Add every <c>*.json</c> file in <paramref name="path"/> (ordinal file-name order) as shared schema entries.</summary>
     /// <param name="path">A directory of shared schemas, one entry or an array per file.</param>
     public WidgenticOptions AddSchemasFromDirectory(string path) => AddFromDirectory(path, AddSchema);
+
+    /// <summary>
+    /// Set the settings record, in the store's shape (<c>{ "defaultThemes": { "light"?, "dark"? } }</c>):
+    /// its default themes stand in for the built-ins when a render names no theme. The bundle
+    /// checks it at startup against the configured themes, and a refused setting stops startup
+    /// like a refused entry. A later call replaces the record.
+    /// </summary>
+    /// <param name="json">The settings record JSON.</param>
+    /// <param name="source">Where it came from, named in configuration errors.</param>
+    public WidgenticOptions UseSettings(string json, string? source = null)
+    {
+        ArgumentNullException.ThrowIfNull(json);
+        source ??= "settings JSON";
+        try
+        {
+            SettingsEntry = new ConfigEntry(JsonNode.Parse(json), source);
+        }
+        catch (JsonException error)
+        {
+            ParseProblems.Add(new WidgenticConfigurationProblem("settings", source, "INVALID_JSON", error.Message));
+        }
+        return this;
+    }
+
+    /// <summary>Set the settings record from a file, named in configuration errors.</summary>
+    /// <param name="path">A JSON file holding the settings record.</param>
+    public WidgenticOptions UseSettingsFromFile(string path) => UseSettings(File.ReadAllText(path), path);
 
     /// <summary>Each file's text, with its path as the source named in configuration errors.</summary>
     private WidgenticOptions AddFromDirectory(string path, Func<string, string?, WidgenticOptions> add)

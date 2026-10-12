@@ -45,8 +45,8 @@ public enum WidgenticComposition
 }
 
 /// <summary>
-/// One caller's widgets, themes and shared schemas, in the designer's export shapes: the same
-/// JSON the startup options take. Every entry is validated by the embedded bundle when a call
+/// One caller's widgets, themes and shared schemas, in the designer's export shapes, and its
+/// settings record: the same JSON the startup options take. Every entry is validated by the embedded bundle when a call
 /// composes it; a refused entry is skipped and logged, never fatal.
 /// </summary>
 public sealed class WidgenticCatalog
@@ -65,6 +65,24 @@ public sealed class WidgenticCatalog
     /// <see cref="WidgenticOptions.PrincipalComposition"/>.
     /// </summary>
     public WidgenticComposition? Composition { get; set; }
+
+    /// <summary>
+    /// The caller's settings record, in the store's shape (<c>{ "defaultThemes": { "light"?, "dark"? } }</c>),
+    /// or null for none. In <see cref="WidgenticComposition.Merge"/> each section it defines
+    /// replaces the startup record's section whole, and the sections it omits are the startup
+    /// record's; in <see cref="WidgenticComposition.Replace"/> it is the only record. Its
+    /// defaults name themes of the caller's composed catalog.
+    /// </summary>
+    public string? Settings { get; set; }
+
+    /// <summary>Set the caller's settings record (see <see cref="Settings"/>).</summary>
+    /// <param name="json">The settings record JSON.</param>
+    public WidgenticCatalog UseSettings(string json)
+    {
+        ArgumentNullException.ThrowIfNull(json);
+        Settings = json;
+        return this;
+    }
 
     /// <summary>Add widget definitions (one object or an array).</summary>
     /// <param name="json">The definition JSON.</param>

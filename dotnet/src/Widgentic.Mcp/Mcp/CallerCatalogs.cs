@@ -91,6 +91,12 @@ internal sealed class CallerCatalogs(WidgenticEngine engine, WidgenticCompositio
             {
                 LogCallerProblem(logger, problem);
             }
+            else if (problem.Section == "settings")
+            {
+                logger.LogWarning(
+                    "widgentic: startup setting '{Name}' was skipped for this caller ({Code}).",
+                    problem.Name, problem.Code);
+            }
             else
             {
                 logger.LogWarning(
@@ -100,10 +106,19 @@ internal sealed class CallerCatalogs(WidgenticEngine engine, WidgenticCompositio
         }
     }
 
-    private static void LogCallerProblem(ILogger logger, CallerProblem problem) =>
+    private static void LogCallerProblem(ILogger logger, CallerProblem problem)
+    {
+        if (problem.Section == "settings")
+        {
+            logger.LogWarning(
+                "widgentic: the caller's setting '{Name}' was refused and skipped for this call ({Code}).",
+                problem.Name, problem.Code);
+            return;
+        }
         logger.LogWarning(
             "widgentic: the caller's {Section}[{Index}] ('{Name}') was refused and skipped for this call ({Code}).",
             problem.Section, problem.Index, problem.Name, problem.Code);
+    }
 
     private static ILogger Logger(IServiceProvider? services) =>
         services?.GetService<ILoggerFactory>()?.CreateLogger(LoggerCategory) ?? NullLogger.Instance;

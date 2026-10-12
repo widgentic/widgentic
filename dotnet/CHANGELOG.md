@@ -3,10 +3,9 @@
 Versions share their major.minor with the `@widgentic/mcp` release whose host bundle they embed:
 `Widgentic.Mcp` X.Y.* runs `@widgentic/mcp` X.Y.*. The patch moves on its own for .NET-only fixes.
 
-## 0.11.0 (unreleased)
+## 0.11.0
 
-Embeds the `@widgentic/mcp` 0.11.0 host bundle once it is published; the version and the pin
-move together then.
+Embeds the `@widgentic/mcp` 0.11.0 host bundle.
 
 - **A catalog per caller.** Register an `IWidgenticCatalogSource` to serve each caller its own
   widgets, themes and schemas. It is given the caller's `ClaimsPrincipal` and the request's
@@ -19,8 +18,15 @@ move together then.
   - A caller's refused entries are skipped and logged without their contents, and a source that
     throws answers `CATALOG_UNAVAILABLE`.
   - `tools/list`, `list_theme_tokens`, `get_authoring_guide` and the app template stay global.
+- **Default themes from settings.** `UseSettings(json)` and `UseSettingsFromFile(path)` take a
+  settings record in the store's shape, `{ "defaultThemes": { "light"?, "dark"? } }`.
+  - Each default must name a configured theme, and a refused setting stops startup.
+  - A caller's catalog may carry its own record (`WidgenticCatalog.Settings`). In `Merge`, each
+    section it defines replaces the startup one. In `Replace`, it is the only record.
+  - A caller's refused setting is skipped and logged, keeping that mode's built-in.
 - **The sample** serves two demo principals over HTTP (`merge-demo`, `replace-demo`), keyed by
-  `x-api-key` or `?key=` from configuration.
+  `x-api-key` or `?key=` from configuration. It also loads the demo seed's default themes,
+  and `merge-demo` chooses a dark default of its own.
 - From the 0.11 bundle: `render_widget` and `preview_widget` called with `kind` instead of
   `widget` say so in their error.
 - The app template resource asks MCP Apps hosts for no border or background:
