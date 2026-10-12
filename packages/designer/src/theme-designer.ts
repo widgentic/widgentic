@@ -397,7 +397,11 @@ export function createThemeDesigner(
   });
   stylesPanel.setIssues(auditStyles(entry.styles));
 
-  panels.append(identity, tokenPanel, customPanel, stylesPanel.element, importPanel, exportPanel);
+  panels.append(identity, tokenPanel, customPanel, importPanel, exportPanel);
+  // Under the preview, where the widget designer keeps its Styles panel:
+  // styles are judged against what they dress.
+  stylesPanel.element.classList.add("wgd-edit-only");
+  side.append(stylesPanel.element);
 
   function loadTheme(input: unknown): ThemeLoadResult {
     const errors = checkThemeEntry(input);
@@ -417,9 +421,9 @@ export function createThemeDesigner(
   /** Same mechanism as the widget designer: inert the section bodies. */
   function setReadOnly(readOnly: boolean): void {
     root.classList.toggle("wgd-readonly", readOnly);
-    const bodies = [...panels.querySelectorAll(".wgd-section-body")].filter(
-      (body) => !body.parentElement?.classList.contains("wgd-view-only")
-    );
+    const bodies = [
+      ...root.querySelectorAll(".wgd-panels .wgd-section-body, .wgd-edit-only > .wgd-section-body")
+    ].filter((body) => !body.parentElement?.classList.contains("wgd-view-only"));
     for (const body of bodies) {
       if (readOnly) body.setAttribute("inert", "");
       else body.removeAttribute("inert");

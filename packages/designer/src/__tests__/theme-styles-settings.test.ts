@@ -52,6 +52,21 @@ describe("theme designer styles", () => {
     expect(JSON.parse(json.value)).toEqual({ ".wg-btn": { padding: "4px 8px" } });
   });
 
+  it("sits under the preview, as in the widget designer, and goes inert when read-only", () => {
+    const root = host();
+    const designer = createThemeDesigner(root);
+    const styles = sectionTitled(root, "Styles");
+    const side = root.querySelector(".wgd-side") as HTMLElement;
+    expect(styles.parentElement).toBe(side);
+    // Preview kind selector, then the preview, then Styles — nothing between.
+    expect(styles.previousElementSibling?.classList.contains("wgd-preview-pane")).toBe(true);
+    expect(root.querySelector(".wgd-panels")?.contains(styles)).toBe(false);
+    designer.setReadOnly(true);
+    expect(styles.querySelector(".wgd-section-body")?.hasAttribute("inert")).toBe(true);
+    designer.setReadOnly(false);
+    expect(styles.querySelector(".wgd-section-body")?.hasAttribute("inert")).toBe(false);
+  });
+
   it("omits styles from the export when emptied and round-trips them otherwise", () => {
     const entry: ThemeEntry = { name: "brand", tokens: { accent: "#ff5a1f" }, styles: { ".wg-btn": { padding: "4px" } } };
     const designer = createThemeDesigner(host(), { initialTheme: entry });
