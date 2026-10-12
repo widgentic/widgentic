@@ -15,7 +15,7 @@
   <ItemGroup>
     <!-- The docker example's demo seed, one file per entry, written by `npm run conformance:generate`; never hand-edited. -->
     <None Include="seed/**/*.json" CopyToOutputDirectory="PreserveNewest" />
-    <!-- The demo principals' own catalogs (served over HTTP); hand-written. -->
+    <!-- The demo principals' own catalogs and settings (served over HTTP), kept by hand; merge-demo's inbox and theme start as copies of the seed's. -->
     <None Include="principals/**/*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
