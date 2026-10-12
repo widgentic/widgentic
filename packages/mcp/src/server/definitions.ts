@@ -51,7 +51,11 @@ export const APP_TEMPLATE_RESOURCE = {
   name: "Widgentic App",
   uri: WIDGENTIC_APP_TEMPLATE_URI,
   mimeType: WIDGENTIC_APP_MIME_TYPE,
-  description: "Widgentic app template — renders render_widget results inline."
+  description: "Widgentic app template — renders render_widget results inline.",
+  // MCP Apps `_meta.ui.prefersBorder`: widgets draw their own surface, so the
+  // host adds no border or background. Set explicitly, as the specification
+  // recommends, since hosts' defaults differ.
+  prefersBorder: false
 } as const;
 
 /** The per-kind preview page resource template, likewise shared. */

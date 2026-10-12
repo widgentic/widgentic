@@ -439,6 +439,18 @@ or read seam is needed. The apps change's pre-deploy scan counts stored themes t
 one, to confirm none relies on it. Removing it in this change means the styles merge
 through `extends`, added here, never ships.
 
+### D21 — The app template asks hosts for no border
+
+Owner request, folded into this change. The MCP Apps specification (2026-01-26) lets a UI
+resource say whether the host draws a border and background around it
+(`_meta.ui.prefersBorder`). It recommends an explicit value, because hosts' defaults differ.
+
+Widgets draw their own surface, so the app template declares `false`. The value lives once,
+on the shared `APP_TEMPLATE_RESOURCE` descriptor, which the host bundle's `resources()`
+carries to `Widgentic.Mcp`. The Node assembly and the .NET host both put it in `_meta.ui`,
+on the resource declaration and on its `resources/read` content, since hosts may read either.
+The operator's `csp.resourceDomains` now rides on the read content too.
+
 ## Risks / Trade-offs
 
 - **A default theme overrides host-bridged colors** (`bg`, `fg`, …) in its mode, as an

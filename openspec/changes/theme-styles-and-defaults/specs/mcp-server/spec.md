@@ -94,7 +94,7 @@ The returned host SHALL take and return strings only, apart from the boolean `sl
 - `problems()`: a JSON array of `{ section, index, code, message }`, one per refused entry.
 - `definitions()`: the JSON of the tool definitions this host serves, taken from the same exported definitions as the Node assembly, with name, description and JSON-Schema `inputSchema`. The tools are `list_widgets`, `render_widget`, `list_theme_tokens`, `list_themes`, `list_schemas` and `get_authoring_guide`, plus the template's own `preview_widget`, which is marked `visibility: ["app"]` as the Node assembly registers it.
 - `call(name, argsJson, slim)`: the MCP tool result JSON of that tool's handler, with the slim flag passed through to `render_widget`. `preview_widget` SHALL be answered by the same handler as in the Node assembly, through the host's composed catalog and themes, with no rate gate: rate-limiting previews belongs to the embedding server's transport. An unknown tool name SHALL return an `isError` result, never throw.
-- `resources()`: the JSON of the served documents (the app template and the preview-page template) with name, URI or URI template, MIME type and description, taken from the same constants the Node assembly registers them with.
+- `resources()`: the JSON of the served documents (the app template and the preview-page template) with name, URI or URI template, MIME type and description, and the app template's `prefersBorder`, taken from the same constants the Node assembly registers them with.
 - `appTemplate()`: exactly `buildAppTemplate()`.
 - `widgetPage(kind)`: the preview page the Node assembly serves for `ui://widgentic/page/{kind}`.
 
@@ -147,6 +147,26 @@ The repository SHALL keep a generated conformance corpus: render inputs paired w
 #### Scenario: Calls carry no state
 - **WHEN** a host renders payload A and then payload B
 - **THEN** B's output SHALL be byte-identical to B rendered by a freshly created host, and SHALL contain no string that appears only in A
+
+### Requirement: Formal Apps declaration at the wiring layer
+The server assembly SHALL declare the tool↔UI linkage per the MCP Apps specification using the official `@modelcontextprotocol/ext-apps` server helpers: `render_widget` registered with `_meta.ui.resourceUri: "ui://widgentic/app.html"`, and the app template registered as a resource with mime type `"text/html;profile=mcp-app"` whose `_meta.ui` — on the resource declaration and on its `resources/read` content alike — SHALL carry `prefersBorder: false`, since widgets draw their own surface; the value is explicit because hosts' defaults differ, and it comes from the shared app-template resource descriptor. When the assembly is given `resourceDomains` (a list of hostnames the operator trusts the frame to load assets from), the app resource SHALL declare them as `_meta.ui.csp.resourceDomains` (the Apps CSP block) and the same list SHALL govern the inliner's declared-domain skip; with none given, nothing is declared and every external image faces inlining. The list is deployment configuration — stored widgets and render inputs SHALL have no way to extend it. The assembly SHALL detect the client's Apps capability (`extensions["io.modelcontextprotocol/ui"]`) after initialization and note the outcome on stderr. SDK and host-flavor specifics SHALL live only behind the `@widgentic/mcp/sdk` entry; the base `@widgentic/mcp` entry remains SDK-free (per the server-assembly requirement).
+
+#### Scenario: Tool declares its template
+- **WHEN** an SDK client lists tools
+- **THEN** `render_widget` SHALL carry `_meta.ui.resourceUri` pointing at the app template resource
+
+#### Scenario: Non-Apps hosts keep working
+- **WHEN** a client without the Apps capability connects
+- **THEN** all tools SHALL behave exactly as before (text/page/widget outputs), with the template simply unmounted
+
+#### Scenario: Declared domains reach the resource metadata
+- **WHEN** the assembly is created with `resourceDomains: ["cdn.example.com"]` and an SDK client reads the app resource
+- **THEN** the resource SHALL carry `_meta.ui.csp.resourceDomains: ["cdn.example.com"]`
+- **AND** with no domains configured the key SHALL be absent
+
+#### Scenario: The host is asked for no border
+- **WHEN** an SDK client lists resources and reads the app resource, with or without configured `resourceDomains`
+- **THEN** the declaration and the read content SHALL both carry `_meta.ui.prefersBorder: false`, with the same `_meta.ui`
 
 ## ADDED Requirements
 

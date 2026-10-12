@@ -434,6 +434,7 @@ workspace and the sample first, then point at the built DLL):
     - `previewThemes` offers saved entries after the built-ins, and leaves out an entry the registry refuses.
     - The conformance corpus is unchanged, since no case used `extends`.
   - **Reviewer 1 at `b889ac5` (2026-10-12).** `theme_load` with `extends: "dark"` returns, and `theme_get` holds, an entry without `extends`, as does a designer created with such an `initialTheme`. The changesets mark the removal as breaking.
+  - **MCP Apps border preference (2026-10-12, D21).** Over the SDK, both with and without `resourceDomains`, the app resource's declaration carries `_meta.ui.prefersBorder: false`, and its read content carries the same `_meta.ui`. The .NET protocol test (`AsksTheHostForNoBorder`) sees the same on `resources/list` and `resources/read`, with no `csp` when no domains are configured; `dotnet test` passes 124 of 124. The corpus changes only in the bundle's `resources()` descriptor.
   - **Not verified yet:** the hosts. Staging on `demo.widgentic.dev`, and widgentic.dev's Settings section, follow.
 - **Wire schemas from the exported definitions (2026-10-11, change `derived-input-schemas`, `@widgentic/mcp` minor pending release)**
   - **The wire.** `server-wiring` lists the tools of `createWidgenticServer()` and finds every `inputSchema` and description equal to the exported definition's, for all nine tools: nothing added (no `$schema`), nothing missing.

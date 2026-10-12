@@ -74,6 +74,7 @@ None.
 - `mcp-server`: theme styles in every styled output; default themes standing in for the
   built-ins; `list_themes` and the authoring guide describe both.
 - `self-host-example`: the Settings section and settings in the seed.
+- `dotnet-host`: the app template resource carries the MCP Apps border preference, taken from the bundle.
 - `widget-catalog`: the style guards both widget and theme styles share refuse comment
   markers, `image-set()`/`src()` URLs and `.wg-` classes hidden in pseudo-class arguments
   (found in review; theme styles reach every render, so the gaps mattered more).

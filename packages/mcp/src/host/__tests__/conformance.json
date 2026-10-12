@@ -610,7 +610,7 @@
     {
       "name": "resources",
       "op": "resources",
-      "output": "{\"appTemplate\":{\"name\":\"Widgentic App\",\"uri\":\"ui://widgentic/app.html\",\"mimeType\":\"text/html;profile=mcp-app\",\"description\":\"Widgentic app template — renders render_widget results inline.\"},\"widgetPage\":{\"name\":\"widget-page\",\"title\":\"Widgentic widget page\",\"uriTemplate\":\"ui://widgentic/page/{kind}\",\"mimeType\":\"text/html\",\"description\":\"Self-contained styled preview page for a widget kind, rendered from its descriptor's dataExample. Live renders arrive embedded in render_widget results with format: 'app'.\"}}"
+      "output": "{\"appTemplate\":{\"name\":\"Widgentic App\",\"uri\":\"ui://widgentic/app.html\",\"mimeType\":\"text/html;profile=mcp-app\",\"description\":\"Widgentic app template — renders render_widget results inline.\",\"prefersBorder\":false},\"widgetPage\":{\"name\":\"widget-page\",\"title\":\"Widgentic widget page\",\"uriTemplate\":\"ui://widgentic/page/{kind}\",\"mimeType\":\"text/html\",\"description\":\"Self-contained styled preview page for a widget kind, rendered from its descriptor's dataExample. Live renders arrive embedded in render_widget results with format: 'app'.\"}}"
     },
     {
       "name": "widget page card",
