@@ -31,7 +31,7 @@ A widget is one JSON object: \{ kind, template, descriptor \}.
 
 | Field | Meaning |
 | -- | -- |
-| `dataShape` | REQUIRED string — a compact sketch of the expected data, e.g. '\{ title, lines: \[\{ item, amount \}\] \}'. |
+| `dataShape` | Strongly recommended string — a compact sketch of the expected data, e.g. '\{ title, lines: \[\{ item, amount \}\] \}'. Agents listing the widget read it; without it they see a generic placeholder, and the designer warns. |
 | `dataExample` | RECOMMENDED — an example the widget renders well; shown to agents and used as the designer's preview data. |
 | `dataSchemaRef` | OPTIONAL string — the NAME of one of the user's saved shared schemas (discover with list\_schemas), used IN PLACE of an inline dataSchema: carrying both is refused. Use this when the user names a saved schema ('use my person schema') — the server resolves it at render time, so one shared schema serves every widget that references it and edits propagate. |
 | `hints` | OPTIONAL record documenting supported hint keys. |

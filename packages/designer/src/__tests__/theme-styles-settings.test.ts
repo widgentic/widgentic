@@ -82,6 +82,20 @@ describe("theme designer styles", () => {
     expect(designer.getTheme()).not.toHaveProperty("styles");
   });
 
+  it("flags a name saving would refuse as it is typed, and refuses it on import", () => {
+    const root = host();
+    const designer = createThemeDesigner(root);
+    const name = [...root.querySelectorAll(".wgd-field")].find((field) => field.textContent?.startsWith("Name (id)"))?.querySelector("input") as HTMLInputElement;
+    name.value = "dark";
+    name.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(sectionTitled(root, "Theme").textContent).toContain("RESERVED_THEME");
+    name.value = "ocean";
+    name.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(sectionTitled(root, "Theme").textContent).not.toContain("RESERVED_THEME");
+    expect(designer.loadTheme({ name: "my theme", tokens: {} }).ok).toBe(false);
+    expect(designer.getTheme().name).toBe("ocean");
+  });
+
   it("omits styles from the export when emptied and round-trips them otherwise", () => {
     const entry: ThemeEntry = { name: "brand", tokens: { accent: "#ff5a1f" }, styles: { ".wg-btn": { padding: "4px" } } };
     const designer = createThemeDesigner(host(), { initialTheme: entry });

@@ -126,6 +126,7 @@ export function mountPanels(
       })
   );
   refreshers.push((draft) => hintsEditor.setValue(draft.descriptor.hints));
+  const dataShapeDiag = diagnosticLine(undefined);
   const generalPanel = section("General", [
     bindText("Kind (id)", (d) => d.kind, (d, v) => ({ ...d, kind: v })),
     kindDiag,
@@ -139,6 +140,7 @@ export function mountPanels(
       (d) => d.descriptor.dataShape ?? "",
       (d, v) => ({ ...d, descriptor: { ...d.descriptor, dataShape: v } })
     ),
+    dataShapeDiag,
     h("div", { class: "wgd-field" }, [
       h("span", { class: "wgd-field-label" }, ["Hints"]),
       tabs([
@@ -488,6 +490,8 @@ export function mountPanels(
     sampleDiag.textContent = diagnostics.sample
       ? `sample vs dataSchema: ${diagnostics.sample.code} at ${diagnostics.sample.path} — ${diagnostics.sample.message}`
       : "";
+    dataShapeDiag.hidden = diagnostics.dataShape === undefined;
+    dataShapeDiag.textContent = diagnostics.dataShape ?? "";
     schemaRefDiag.hidden = diagnostics.schemaRef === undefined;
     schemaRefDiag.textContent = diagnostics.schemaRef ?? "";
     themePanel.setDiagnostic(

@@ -254,6 +254,24 @@ These are from the two reviews of PR #29:
 - **Settings element.** The settings designer gains `setThemes`, and its element a
   `themes` property, so a page using only the element can offer choices.
 
+### D14 — The designers check at the door what the store checks at Save
+
+An agent driving the WebMCP tools found that `draft_load`, `definition_check` and
+`theme_load` accepted a built-in kind (`table`), a built-in theme name (`light`) and
+names with spaces. All of them failed only when the person saved. These checks now run
+in the designers' import:
+- The identifier pattern moves to core as `SAFE_IDENTIFIER`, so the designer, the
+  store and the guides share one rule.
+- The reserved sets come from the catalog's kinds and the built-in registry's themes,
+  not from a list.
+
+A missing `dataShape` is different. The store accepts it, so the designers warn
+instead of refusing, and the guides now call it "strongly recommended" rather than
+"REQUIRED", which the store never enforced.
+
+The preview selector matched entries by content, so an empty token map picked "Light".
+An empty map with no styles now counts as "none".
+
 ## Risks / Trade-offs
 
 - **A default theme overrides host-bridged colors** (`bg`, `fg`, …) in its mode, as an

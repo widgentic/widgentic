@@ -101,7 +101,11 @@ export function mountThemePanel(
         JSON.stringify(entry.styles) === JSON.stringify(draft.themeStyles);
       const chosen = themes.find((entry) => entry.name === themeSelect.value);
       if (chosen === undefined || !same(chosen)) {
-        themeSelect.value = themes.find(same)?.name ?? "";
+        // An empty map with no styles is the defaults — "none" — never a
+        // guess at whichever named entry happens to be empty (the built-in
+        // light): a token map set programmatically names no entry.
+        const empty = Object.keys(draft.theme).length === 0 && draft.themeStyles === undefined;
+        themeSelect.value = empty ? "" : themes.find(same)?.name ?? "";
       }
     }
     renderTokenReference(draft.theme);

@@ -37,4 +37,4 @@ export const DEFAULT_LIMITS: StoreLimits = {
  * in document ids, where `/ \ # ?` are illegal); enforcing the rule at the
  * port means memory, file, and Cosmos accept and reject identically.
  */
-export const SAFE_IDENTIFIER = /^[a-zA-Z0-9._-]+$/;
+export { SAFE_IDENTIFIER } from "@widgentic/core";

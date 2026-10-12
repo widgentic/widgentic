@@ -11,7 +11,7 @@
  * controller, chrome, and store discipline.
  */
 import { errorMessage } from "./internal.js";
-import { createCatalog } from "@widgentic/core";
+import { createCatalog, createThemeRegistry, SAFE_IDENTIFIER } from "@widgentic/core";
 import {
   THEME_TOKENS,
   TOKEN_DEFAULTS,
@@ -81,6 +81,20 @@ function starterEntry(): ThemeEntry {
   return { name: "my-theme", label: "My theme", tokens: {} };
 }
 
+/** Theme names a stored theme may never take, read from the registry. */
+const BUILT_IN_THEMES: ReadonlySet<string> = new Set(createThemeRegistry().names());
+
+/** What saving would refuse about a name, in the store's terms. */
+function nameProblem(name: string): string | undefined {
+  if (!SAFE_IDENTIFIER.test(name)) {
+    return `INVALID_IDENTIFIER — '${name}' may use letters, digits, '.', '_' or '-' only.`;
+  }
+  if (BUILT_IN_THEMES.has(name)) {
+    return `RESERVED_THEME — '${name}' is a built-in theme; give yours its own name.`;
+  }
+  return undefined;
+}
+
 /** Validate an untrusted entry; errors instead of throwing. */
 export function checkThemeEntry(entry: unknown): string[] {
   const errors: string[] = [];
@@ -90,6 +104,9 @@ export function checkThemeEntry(entry: unknown): string[] {
   const candidate = entry as Record<string, unknown>;
   if (typeof candidate.name !== "string" || candidate.name.trim() === "") {
     errors.push("'name' must be a non-empty string.");
+  } else {
+    const problem = nameProblem(candidate.name);
+    if (problem !== undefined) errors.push(`name: ${problem}`);
   }
   const validated = validateTheme(candidate.tokens ?? {});
   if (!validated.ok) {
@@ -166,15 +183,25 @@ export function createThemeDesigner(
     return field;
   }
 
+  // A name saving would refuse is flagged as it is typed, in the store's terms.
+  const nameDiag = diagnosticLine(undefined);
+  function showNameProblem(): void {
+    const problem = entry.name.trim() === "" ? "'name' must be a non-empty string." : nameProblem(entry.name);
+    nameDiag.hidden = problem === undefined;
+    nameDiag.textContent = problem ?? "";
+  }
+  identityRefreshers.push(showNameProblem);
   const identity = section("Theme", [
     identityField(
       "Name (id)",
       () => entry.name,
       (value) => {
         entry = { ...entry, name: value };
+        showNameProblem();
         refresh();
       }
     ),
+    nameDiag,
     identityField(
       "Label",
       () => entry.label ?? "",
@@ -192,6 +219,8 @@ export function createThemeDesigner(
       }
     )
   ]);
+
+  showNameProblem();
 
   // The kind selector is a PREVIEW control, so it lives beside the
   // preview, outside the editing panels — read-only mode keeps it live.

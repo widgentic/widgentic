@@ -48,6 +48,11 @@ export interface DesignerDiagnostics {
   load?: string;
   /** Shared actions referenced by the template or `load` that are not among the supplied ones. */
   actionRefs?: string;
+  /**
+   * A warning, never blocking: without `descriptor.dataShape` agents that
+   * list the widget see a placeholder instead of the data it expects.
+   */
+  dataShape?: string;
   /** True when the draft can be registered and previewed. */
   previewable: boolean;
 }
@@ -127,6 +132,12 @@ export function deriveDiagnostics(
     diagnostics.kind = "Kind must be a non-empty id.";
   } else if (BASE_KINDS.has(draft.kind)) {
     diagnostics.kind = `'${draft.kind}' is a built-in kind — pick a distinct id.`;
+  }
+
+  const dataShape = draft.descriptor?.dataShape;
+  if (typeof dataShape !== "string" || dataShape.trim() === "") {
+    diagnostics.dataShape =
+      "Data shape is empty — agents listing this widget will see a placeholder instead of the data it expects.";
   }
 
   const template = validateTemplate(draft.template);

@@ -76,6 +76,7 @@
 - [x] 9.10 Example: preview themes compose `extends`; unread settings open read-only without Save; demo seed date patterns `HH:mm`.
 - [x] 9.11 Docs and headers: storage layouts list the settings record; "five designers"; README; the host-bundle and guard requirements in the deltas.
 - [x] 9.12 Test gaps: exact built-in dark comparison; light-scope computed check; unsafe entries across app format and defaults; registered-legacy assertion; invalid-theme default; anonymous defaults; mixed-section refusal; file store without `settings.json`; seed token values; dark choices in the app test; settings designer in the chrome factories.
+- [x] 9.13 WebMCP agent findings: `draft_load`/`definition_check` refuse invalid and built-in kinds and `theme_load` invalid and built-in names (`SAFE_IDENTIFIER` moves to core); a missing `dataShape` warns instead of passing silently, and the guides say "strongly recommended"; `widget_theme_set` with empty tokens no longer selects "Light"; the demo seed's date patterns use `HH:mm`.
 
 ## 8. widgentic.dev (apps repository, after the release)
 

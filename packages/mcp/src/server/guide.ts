@@ -99,7 +99,7 @@ export function buildAuthoringGuide(): Record<string, unknown> {
         template: "A template DSL node (see rules.template).",
         descriptor: {
           description: "REQUIRED string — what the widget shows, for agents.",
-          dataShape: "REQUIRED string — a compact sketch of the expected data, e.g. '{ title, lines: [{ item, amount }] }'.",
+          dataShape: "Strongly recommended string — a compact sketch of the expected data, e.g. '{ title, lines: [{ item, amount }] }'. Agents listing the widget read it; without it they see a generic placeholder, and the designer warns.",
           dataExample:
             "RECOMMENDED — an example the widget renders well; shown to agents and used as the designer's preview data.",
           dataSchemaRef:

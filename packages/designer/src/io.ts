@@ -10,7 +10,7 @@ import { isPlainObject } from "@widgentic/core";
 import { parsePath, validateTemplate } from "@widgentic/core";
 import { validateLoadBinding } from "@widgentic/core";
 import type { ActionBinding } from "@widgentic/core";
-import { } from "@widgentic/core";
+import { createCatalog, SAFE_IDENTIFIER } from "@widgentic/core";
 import { diagnosticLine, h, section, textArea, requireChild } from "./dom.js";
 import { attachJsonHighlight, repaintHighlight } from "./highlight.js";
 import type { DraftStore, WidgetDraft } from "./store.js";
@@ -23,11 +23,19 @@ export interface WidgetDefinition {
 }
 
 /** Validate an untrusted definition; errors instead of throws. */
+/** Built-in kinds a stored widget may never take, read from the catalog. */
+const BUILT_IN_KINDS: ReadonlySet<string> = new Set(createCatalog().kinds());
+
 export function checkDefinition(definition: unknown): string[] {
   const errors: string[] = [];
   if (!isPlainObject(definition)) return ["Definition must be an object."];
   if (typeof definition.kind !== "string" || definition.kind.trim() === "") {
     errors.push("'kind' must be a non-empty string.");
+  } else if (!SAFE_IDENTIFIER.test(definition.kind)) {
+    // What saving would refuse is refused here too, in the store's terms.
+    errors.push(`kind: INVALID_IDENTIFIER — '${definition.kind}' may use letters, digits, '.', '_' or '-' only.`);
+  } else if (BUILT_IN_KINDS.has(definition.kind)) {
+    errors.push(`kind: RESERVED_KIND — '${definition.kind}' is a built-in kind; give the widget its own kind.`);
   }
   const template = validateTemplate(definition.template);
   if (!template.ok) {

@@ -388,6 +388,12 @@ workspace and the sample first, then point at the built DLL):
     - **Designers:** `loadTheme` drops stale styles; the JSON tab refuses a malformed map and maps `{}` to none; the settings element takes `themes` before and after connecting.
     - **Example:** `previewThemes` merges `extends` in any order; unread settings open read-only without Save.
     - **Corpus:** it changes only in the styled-theme cases (`themeName`) and the guide text; `dotnet test` passes.
+  - **WebMCP agent findings (2026-10-12, an agent driving the designers' tools).**
+    - **Load tools refuse what saving would:** `draft_load` and `definition_check` refuse a built-in kind (`table`, `RESERVED_KIND`) and a kind with a space (`INVALID_IDENTIFIER`) with `REJECTED`, leaving the draft as it was; `theme_load` refuses `light` (`RESERVED_THEME`) and `my theme` (`INVALID_IDENTIFIER`). Both used to load and fail only at Save.
+    - **Data shape:** a definition without `dataShape` checks `ok` and carries a `dataShape` diagnostic, shown under the field in the widget designer. Both guides now call it strongly recommended rather than required.
+    - **Preview theme:** `widget_theme_set` with empty tokens leaves the selector on "none" (it switched to "Light", whose token map is also empty).
+    - **Theme designer:** typing `dark` into Name shows `RESERVED_THEME` inline, and typing `ocean` clears it.
+    - **Corpus:** only `get_authoring_guide` changed (the `dataShape` text).
   - **Not verified yet:** the hosts. Staging on `demo.widgentic.dev`, and widgentic.dev's Settings section, follow.
 - **Wire schemas from the exported definitions (2026-10-11, change `derived-input-schemas`, `@widgentic/mcp` minor pending release)**
   - **The wire.** `server-wiring` lists the tools of `createWidgenticServer()` and finds every `inputSchema` and description equal to the exported definition's, for all nine tools: nothing added (no `$schema`), nothing missing.

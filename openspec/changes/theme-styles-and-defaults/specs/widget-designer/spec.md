@@ -37,6 +37,10 @@ The widget designer SHALL accept `options.themes` — a list of named theme entr
 - **WHEN** `brand` is the selected preview theme and the host loads another widget definition
 - **THEN** the preview SHALL still carry `brand`'s tokens and styles
 
+#### Scenario: An empty token map is not a named theme
+- **WHEN** the designer was given the built-in `light` entry (whose token map is empty) and the host calls `loadTheme({})`
+- **THEN** the selector SHALL show "none"
+
 ### Requirement: Designer programmatic surface
 The package SHALL export from a `./designer` entry: `createDesigner(container: Element, options?)` returning a handle `{ getDraft(), loadWidget(definition), loadTheme(theme), setReadOnly(readOnly), subscribe(listener), dispose() }`, `createThemeDesigner(container: Element, options?)` returning `{ getTheme(), loadTheme(entry), setReadOnly(readOnly), subscribe(listener), dispose() }`, `createSchemaDesigner(container: Element, options?)` returning `{ getSchema(), loadSchema(entry), setReadOnly(readOnly), subscribe(listener), dispose() }`, `createActionDesigner(container: Element, options?)` returning `{ getAction(), loadAction(entry), setReadOnly(readOnly), subscribe(listener), dispose() }`, `createSettingsDesigner(container: Element, options?)` returning `{ getSettings(), loadSettings(settings), setThemes(themes), setReadOnly(readOnly), subscribe(listener), dispose() }`, and the opt-in element registrars `defineDesignerElement(tagName?)` (default `widgentic-designer`), `defineThemeDesignerElement(tagName?)` (default `widgentic-theme-designer`), `defineSchemaDesignerElement(tagName?)` (default `widgentic-schema-designer`) and `defineActionDesignerElement(tagName?)` (default `widgentic-action-designer`) and `defineSettingsDesignerElement(tagName?)` (default `widgentic-settings-designer`), each wrapping its factory and emitting `widgentic-change` CustomEvents whose `detail` carries the serialized draft, theme entry, schema entry, action entry, or settings record. All five factories SHALL accept `readOnly` in options and every handle SHALL expose `setReadOnly(readOnly)`: in read-only mode every editing surface is inert — visible but inoperable and visibly de-emphasized — while the preview stays live along with the widget designer's preview-theme selector, the theme designer's preview-kind selector, and the Export controls (export copies out what is already on screen; read-only restricts editing, not looking). `createDesigner` SHALL additionally accept `options.actions` (the shared actions offered for binding) and `options.secretNames`. Custom-element registration SHALL only happen through the explicit calls — importing the module SHALL have no registry side effects. The entry SHALL import other capabilities only through their public package entries, and SHALL perform no network I/O.
 
@@ -167,3 +171,20 @@ The settings designer SHALL edit a principal's settings record (`{ defaultThemes
 #### Scenario: The element is given themes
 - **WHEN** a `<widgentic-settings-designer>` gets `themes` before it connects, the person picks one for light hosts, and later `themes` grows by `dusk`
 - **THEN** the change event SHALL carry `{ settings: { defaultThemes: { light: <picked> } } }`, and `dusk` SHALL then be offered for both modes with the record unchanged
+
+### Requirement: Designers refuse at import what saving would refuse
+The widget designer's import (and `loadWidget`) SHALL refuse a definition whose `kind` is not a safe identifier — the same pattern the store enforces, exported by core as `SAFE_IDENTIFIER` — with an `INVALID_IDENTIFIER` error, or names a built-in kind with a `RESERVED_KIND` error. The theme designer's import (and `loadTheme`) SHALL refuse a `name` that is not a safe identifier (`INVALID_IDENTIFIER`) or names a built-in theme (`RESERVED_THEME`), and its Name field SHALL show the same message inline while the person types, so a name saving would refuse is visible before Save. The widget designer SHALL show a warning under the data-shape field while the shape is empty — agents listing the widget would see a placeholder — without affecting whether the draft previews.
+
+#### Scenario: A built-in kind is refused on import
+- **WHEN** a definition of kind `table` is imported into the widget designer
+- **THEN** the import SHALL be refused with `RESERVED_KIND` and the draft SHALL be unchanged
+
+#### Scenario: A built-in theme name is flagged while typing and refused on import
+- **WHEN** the person types `dark` into the theme designer's Name field
+- **THEN** the field SHALL show `RESERVED_THEME`, and typing `ocean` SHALL clear it
+- **AND WHEN** an entry named `my theme` is loaded
+- **THEN** the load SHALL be refused and the name SHALL stay `ocean`
+
+#### Scenario: An empty data shape warns without blocking the preview
+- **WHEN** the draft's descriptor has no `dataShape`
+- **THEN** the designer's diagnostics SHALL carry a `dataShape` warning shown under the field, and `previewable` SHALL be unaffected
