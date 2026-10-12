@@ -107,7 +107,7 @@
                       "bind": "receivedAt",
                       "format": {
                         "type": "date",
-                        "pattern": "dd-MM HH:mm"
+                        "pattern": "yyyy-MM-dd HH:mm"
                       }
                     }
                   ]

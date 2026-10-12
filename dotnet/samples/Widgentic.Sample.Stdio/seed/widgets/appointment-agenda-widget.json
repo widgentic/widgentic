@@ -33,7 +33,7 @@
                   "bind": "date",
                   "format": {
                     "type": "date",
-                    "pattern": "dd-MM-yyyy"
+                    "pattern": "yyyy-MM-dd"
                   }
                 }
               ]
@@ -56,7 +56,13 @@
         "template": {
           "tag": "article",
           "attrs": {
-            "class": "wg-item"
+            "class": {
+              "bind": "status",
+              "map": {
+                "cancelled": "wg-item wg-item-cancelled"
+              },
+              "default": "wg-item"
+            }
           },
           "children": [
             {
@@ -66,7 +72,15 @@
               },
               "children": [
                 {
-                  "bind": "title"
+                  "tag": "span",
+                  "attrs": {
+                    "class": "wg-subtitle-text"
+                  },
+                  "children": [
+                    {
+                      "bind": "title"
+                    }
+                  ]
                 },
                 {
                   "tag": "span",
@@ -158,7 +172,8 @@
                           "bind": "response",
                           "map": {
                             "accepted": "wg-chip wg-chip-yes",
-                            "tentative": "wg-chip wg-chip-maybe"
+                            "tentative": "wg-chip wg-chip-maybe",
+                            "declined": "wg-chip wg-chip-no"
                           },
                           "default": "wg-chip"
                         }
@@ -241,14 +256,6 @@
       ],
       "date": "2026-09-03",
       "timezone": "America/Bogota"
-    },
-    "styles": {
-      ".wg-agenda .wg-title": {
-        "letter-spacing": "-0.01em"
-      },
-      ".wg-title": {
-        "color": "var(--wg-accent)"
-      }
     }
   }
 }

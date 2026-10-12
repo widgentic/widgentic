@@ -102,7 +102,8 @@
     },
     ".wg-unread": {
       "box-shadow": "inset 3px 0 0 var(--wg-accent)",
-      "padding-left": "var(--wg-spacing)"
+      "padding-left": "var(--wg-spacing)",
+      "margin-left": "calc(-1 * var(--wg-spacing))"
     },
     ".wg-unread .wg-subtitle": {
       "color": "var(--wg-accent)"
@@ -140,24 +141,30 @@
       "letter-spacing": "-0.01em"
     },
     ".wg-card-field": {
+      "align-items": "baseline",
       "border-bottom": "var(--wg-border-width) dashed var(--wg-border)"
     },
     ".wg-card-field:last-child": {
       "border-bottom": "0"
     },
     ".wg-card-field-key": {
-      "min-width": "6em",
-      "text-transform": "uppercase",
+      "flex": "0 0 8.5em",
       "font-size": "var(--wg-font-size-sm)",
-      "letter-spacing": "0.06em"
+      "letter-spacing": "0.02em",
+      "overflow-wrap": "anywhere"
     },
     ".wg-card-field-value": {
+      "min-width": "0",
+      "overflow-wrap": "anywhere",
       "font-weight": "var(--wg-font-weight-bold)",
       "font-variant-numeric": "tabular-nums"
     },
     ".wg-table": {
       "width": "100%",
-      "box-shadow": "var(--wg-shadow)"
+      "box-shadow": "var(--wg-shadow)",
+      "border-collapse": "separate",
+      "border-spacing": "0",
+      "overflow": "hidden"
     },
     ".wg-table-title": {
       "color": "var(--wg-fg)"
@@ -172,6 +179,38 @@
     },
     ".wg-table-row:hover .wg-table-cell": {
       "background": "var(--wg-x-hover, var(--wg-bg))"
+    },
+    ".wg-chip-no": {
+      "border-color": "var(--wg-danger)",
+      "color": "var(--wg-muted)",
+      "text-decoration": "line-through"
+    },
+    ".wg-item-cancelled .wg-subtitle": {
+      "color": "var(--wg-muted)"
+    },
+    ".wg-item-cancelled .wg-subtitle-text": {
+      "text-decoration": "line-through"
+    },
+    ".wg-item-cancelled .wg-date, .wg-item-cancelled .wg-muted": {
+      "opacity": "0.7"
+    },
+    ".wg-card-field-value .wg-link": {
+      "font-weight": "inherit"
+    },
+    ".wg-table-cell .wg-link[href^=\"tel:\"], .wg-table-cell .wg-link[href^=\"mailto:\"]": {
+      "white-space": "nowrap"
+    },
+    ".wg-table-row:last-child .wg-table-cell": {
+      "border-bottom": "0"
+    },
+    ".wg-chip-no .wg-link": {
+      "color": "var(--wg-muted)"
+    },
+    ".wg-table-cell": {
+      "vertical-align": "top"
+    },
+    ".wg-table-cell:first-child": {
+      "min-width": "8em"
     }
   }
 }
