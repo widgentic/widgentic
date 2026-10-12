@@ -47,14 +47,15 @@ export function checkDefinition(definition: unknown, currentKind?: string): stri
   } else if (typeof definition.descriptor.description !== "string") {
     errors.push("'descriptor.description' must be a string.");
   } else {
-    // Refused at the door, in the store's terms: Save would refuse these.
+    // Refused at the door in the store's terms where Save refuses them; a
+    // non-object `dataSchema` is refused because the designer cannot open it.
     const { dataSchema, dataSchemaRef } = definition.descriptor;
     if (dataSchema !== undefined && dataSchemaRef !== undefined) {
       errors.push("descriptor: INVALID_SHAPE — carries 'dataSchema' and 'dataSchemaRef'; keep one.");
     } else if (dataSchema !== undefined && !isPlainObject(dataSchema)) {
       errors.push("descriptor: INVALID_SHAPE — 'dataSchema' must be a schema object.");
     } else if (dataSchemaRef !== undefined && (typeof dataSchemaRef !== "string" || !SAFE_IDENTIFIER.test(dataSchemaRef))) {
-      errors.push("descriptor: INVALID_IDENTIFIER — 'dataSchemaRef' must name a schema: letters, digits, '.', '_' or '-'.");
+      errors.push("descriptor: INVALID_SHAPE — 'dataSchemaRef' must be a valid schema name: letters, digits, '.', '_' or '-'.");
     }
   }
   if (definition.load !== undefined) {

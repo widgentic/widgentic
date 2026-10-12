@@ -31,7 +31,7 @@ When `WIDGENTIC_SEED_FILE` names a readable JSON document, the authoring service
 ## ADDED Requirements
 
 ### Requirement: The app has a Settings section
-The example SHALL offer a Settings section beside its Widgets, Themes, Data schemas, Actions and Keys sections, mounting the published settings designer with the principal's stored themes as its choices and the stored settings as its record, and saving it through the authoring surface's settings route; a refusal SHALL be shown to the person with its code and message. The Themes section's list SHALL show which themes are a default, and a theme deletion refused with `THEME_IN_USE` SHALL be shown with the refusal's message, leaving the theme listed. The widget designer SHALL open with the light default theme preselected as its preview theme; returning to the Widgets section SHALL keep the person's preview pick across the remount, and showing the section already shown — what an agent's tool call does — SHALL NOT remount it. When the settings cannot be read, the Settings section SHALL open read-only with no Save, and once a later read succeeds it SHALL open the stored record rather than the read-only placeholder, so an empty record is never saved over the stored one.
+The example SHALL offer a Settings section beside its Widgets, Themes, Data schemas, Actions and Keys sections, mounting the published settings designer with the principal's stored themes as its choices and the stored settings as its record, and saving it through the authoring surface's settings route; a refusal SHALL be shown to the person with its code and message. The Themes section's list SHALL show which themes are a default, and a theme deletion refused with `THEME_IN_USE` SHALL be shown with the refusal's message, leaving the theme listed. The widget designer SHALL open with the light default theme preselected as its preview theme; returning to the Widgets section SHALL keep the person's preview pick across the remount, and showing the section already shown — what an agent's tool call does — SHALL NOT remount it. The WebMCP definition check SHALL read the widget designer only while the Widgets section is shown, so a schema saved in another section is never reported as unknown. When the settings cannot be read, the Settings section SHALL open read-only with no Save, and once a later read succeeds it SHALL open the stored record rather than the read-only placeholder, so an empty record is never saved over the stored one.
 
 #### Scenario: Picking a default and saving it
 - **WHEN** `google-light` is the light default and the person picks `ocean` for light hosts in Settings and saves
@@ -54,6 +54,10 @@ The example SHALL offer a Settings section beside its Widgets, Themes, Data sche
 - **THEN** the designer SHALL NOT be remounted and the pick SHALL stay `ocean`
 - **AND WHEN** the person visits Themes and returns
 - **THEN** the remounted designer SHALL still preview under `ocean`
+
+#### Scenario: A schema saved meanwhile is never called unknown
+- **WHEN** the person saves a schema `orders` in Data schemas and, still there, an agent checks a definition referencing `orders`
+- **THEN** the check SHALL NOT report `orders` as unknown (the hidden widget designer is not consulted, and the reference is left unverified)
 
 #### Scenario: Unread settings are never saved over
 - **WHEN** reading the settings fails and the person opens Settings

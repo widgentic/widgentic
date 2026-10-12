@@ -167,10 +167,11 @@ function mountWidgetDesigner(): void {
     });
   } catch {
     // A saved draft the designer cannot open must not break the page (and
-    // with it the agent tools) on every reload: drop it and start fresh.
+    // with it the agent tools) on every reload: start fresh, and drop the
+    // draft only once a fresh mount proves the draft was the problem.
+    widgetDesigner = mountWidget(widgetHost, undefined, options);
     localStorage.removeItem(DRAFT_KEY);
     restored = undefined;
-    widgetDesigner = mountWidget(widgetHost, undefined, options);
   }
   widgetDesigner.subscribe((draft, diagnostics) => {
     widgetDiagnostics = diagnostics;
@@ -345,6 +346,7 @@ show("widget"); // show() mounts the entered tab; the others mount on first entr
 void exposeDesigners(
   designerSources({
     show,
+    isShown: (kind) => activeTab === kind,
     current: {
       widget: () => widgetDesigner,
       theme: () => themeDesigner,

@@ -410,9 +410,16 @@ Reviewer 1's re-review of `8841d0a` found one regression and four smaller gaps.
   read from its message, was copied into every operation's slot, so a 404 for a missing
   container read as "theme already gone". A thrown request now reports no operation's
   outcome; its message classifies a 403 and is logged.
-- **Malformed schema fields at the door.** A non-string or malformed `dataSchemaRef`, and
-  a `dataSchema` that is not an object, are refused at load as Save refuses them. A
-  `null` schema used to break every widget tool after loading.
+- **Malformed schema fields at the door.** A non-string or malformed `dataSchemaRef` is
+  refused at load with `INVALID_SHAPE`, the store's code. A `dataSchema` that is not an
+  object is refused because the designer cannot open it (a `null` schema used to break
+  every widget tool after loading). The store accepts such a `dataSchema`, so one written
+  through the authoring API would still fail to open in a designer; that needs an API
+  write and is accepted.
+- **Follow-up at `b0f0e74`: a hidden designer's shared entries go stale.** It keeps the
+  schemas and actions it was mounted with, so a schema saved in another section read as
+  unknown in the check. The examples' `widgetIfMounted` answers only while the Widgets
+  section is shown; otherwise the check leaves references unverified.
 
 ## Risks / Trade-offs
 

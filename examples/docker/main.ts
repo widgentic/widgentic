@@ -576,8 +576,9 @@ function showTab(name: (typeof SECTIONS)[number]): void {
   // the in-progress draft, which must survive a trip to the Schemas tab
   // (the store itself forces that trip for a dangling schema ref).
   if (entering && name === "widgets" && widgetMode === "new") openWidgetDesigner(widgetDesigner?.getDraft());
-  // Themes saved meanwhile become choices; an unread record is read again.
-  if (entering && name === "settings") {
+  // Themes saved meanwhile become choices; an unread record is read again on
+  // any click, the section shown or not.
+  if (name === "settings" && (entering || mySettings === undefined)) {
     if (mySettings === undefined) void refreshSettings().then(openSettingsDesigner);
     else openSettingsDesigner();
   }
@@ -661,6 +662,7 @@ async function boot(): Promise<void> {
   const agentTools = await exposeDesigners(
     designerSources({
       show: (kind) => showTab(`${kind}s`),
+      isShown: (kind) => activeSection === `${kind}s`,
       current: {
         widget: () => widgetDesigner,
         theme: () => themeDesigner,

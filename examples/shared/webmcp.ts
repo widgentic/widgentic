@@ -19,6 +19,8 @@ export type DesignerKind = "widget" | "theme" | "schema" | "action";
 export interface DesignerSourceHost {
   /** Bring the designer's section on screen; may (re)mount it. */
   show(kind: DesignerKind): void;
+  /** Whether the designer's section is on screen now (nothing is shown or mounted). */
+  isShown(kind: DesignerKind): boolean;
   /** The current handles — read AFTER `show`, since showing may remount. */
   current: {
     widget?: () => DesignerHandle | undefined;
@@ -31,7 +33,15 @@ export interface DesignerSourceHost {
 export function designerSources(host: DesignerSourceHost): DesignerSources {
   const { widget, theme, schema, action } = host.current;
   return {
-    ...(widget === undefined ? {} : { widget: () => { host.show("widget"); return widget(); }, widgetIfMounted: widget }),
+    ...(widget === undefined
+      ? {}
+      : {
+          widget: () => { host.show("widget"); return widget(); },
+          // Only while shown: a hidden designer holds the schemas and actions
+          // it was mounted with, and one saved since would read as unknown.
+          // Hidden, the check falls back to unverified references.
+          widgetIfMounted: () => (host.isShown("widget") ? widget() : undefined)
+        }),
     ...(theme === undefined ? {} : { theme: () => { host.show("theme"); return theme(); } }),
     ...(schema === undefined ? {} : { schema: () => { host.show("schema"); return schema(); } }),
     ...(action === undefined ? {} : { action: () => { host.show("action"); return action(); } })
