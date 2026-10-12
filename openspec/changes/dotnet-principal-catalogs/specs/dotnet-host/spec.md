@@ -73,7 +73,7 @@ Each call SHALL be bounded by `CallTimeout` (default 2 seconds) and by a per-run
 - **THEN** B's result SHALL equal B rendered on a fresh runtime, and SHALL contain no string that appears only in A
 
 ### Requirement: Protocol round trip and a runnable sample
-`dotnet/samples` SHALL contain a runnable MCP server. It serves over stdio by default, and over Streamable HTTP at `http://localhost:3002/mcp` (or `--urls`) with `--http`. Over HTTP it is stateless for MCP 2026-07-28 clients and keeps a session for clients that initialize, so both kinds reveal their capabilities. Both transports serve the same server. It configures `WithWidgentic` with the docker example's demo seed (its widgets, themes and shared schemas). The seed is written one file per entry from `examples/docker/seed/demo.json`, never hand-copied, and loaded with the three directory helpers. The sample also registers one host tool rendering through `IWidgenticRenderer`. Over HTTP the sample also demonstrates per-principal catalogs. An API-key authentication handler maps two demo keys, read from configuration and never printed, to two principals: one composed in Merge mode and one in Replace mode. Without a key, the startup catalog serves. The test suite SHALL launch the sample in both modes and drive it with a C# SDK client, and it SHALL connect a C# SDK client to the package's server over an in-process transport and verify `list_widgets`, `render_widget` (success and the `isError` path for an unknown kind), the host tool, and `resources/read` of the app template through the real protocol.
+`dotnet/samples` SHALL contain a runnable MCP server. It serves over stdio by default, and over Streamable HTTP at `http://localhost:3002/mcp` (or `--urls`) with `--http`. Over HTTP it is stateless for MCP 2026-07-28 clients and keeps a session for clients that initialize, so both kinds reveal their capabilities. Both transports serve the same server. It configures `WithWidgentic` with the docker example's demo seed (its widgets, themes and shared schemas). The seed is written one file per entry from `examples/docker/seed/demo.json`, never hand-copied, and loaded with the three directory helpers. The sample also registers one host tool rendering through `IWidgenticRenderer`. The seed's settings record (its default themes) is generated the same way and loaded at startup. Over HTTP the sample also demonstrates per-principal catalogs. An API-key authentication handler maps two demo keys, read from configuration and never printed, to two principals: one composed in Merge mode, with settings of its own, and one in Replace mode. Without a key, the startup catalog serves. The test suite SHALL launch the sample in both modes and drive it with a C# SDK client, and it SHALL connect a C# SDK client to the package's server over an in-process transport and verify `list_widgets`, `render_widget` (success and the `isError` path for an unknown kind), the host tool, and `resources/read` of the app template through the real protocol.
 
 #### Scenario: Protocol round trip
 - **WHEN** an in-process C# SDK client calls `render_widget` with `{ widget: "card", data: { title: "T" } }`
@@ -85,7 +85,7 @@ Each call SHALL be bounded by `CallTimeout` (default 2 seconds) and by a per-run
 
 #### Scenario: The sample serves the docker demo seed
 - **WHEN** the sample's seed files are compared with `examples/docker/seed/demo.json`
-- **THEN** they SHALL be equal, entry for entry, and the running sample's `list_widgets` SHALL include `appointment-agenda-widget` and `email-inbox-widget`, `list_themes` SHALL include `google-dark`, and `list_schemas` SHALL include `email-inbox`
+- **THEN** they SHALL be equal, entry for entry, settings included, and the running sample's `list_widgets` SHALL include `appointment-agenda-widget` and `email-inbox-widget`, `list_themes` SHALL include `google-dark` and report the seed's defaults, and `list_schemas` SHALL include `email-inbox`
 
 #### Scenario: Two principals over HTTP
 - **WHEN** the sample runs with `--http` and three clients connect, one with each demo key and one with none
@@ -99,10 +99,10 @@ Each call SHALL be bounded by `CallTimeout` (default 2 seconds) and by a per-run
 ## ADDED Requirements
 
 ### Requirement: Hosts resolve a catalog per principal
-The package SHALL let a host serve each caller (principal) its own catalog through an `IWidgenticCatalogSource` it registers. Given the caller's `ClaimsPrincipal` and the request's services, the source SHALL return either `null` or a catalog of widget, theme and schema entries, as JSON in the designer's export shapes. `null` means the startup catalog serves the caller. How the host stores or fetches catalogs SHALL be up to the implementer.
+The package SHALL let a host serve each caller (principal) its own catalog through an `IWidgenticCatalogSource` it registers. Given the caller's `ClaimsPrincipal` and the request's services, the source SHALL return either `null` or a catalog of widget, theme and schema entries, as JSON in the designer's export shapes, and optionally the principal's settings record (see "Default themes come from settings, at startup and per principal"). `null` means the startup catalog serves the caller. How the host stores or fetches catalogs SHALL be up to the implementer.
 
 A catalog SHALL combine with the startup entries according to its composition mode. `WidgenticOptions.PrincipalComposition` sets the default mode, and a returned catalog MAY override it for its principal.
-- `Merge` SHALL compose the startup entries together with the principal's. A principal entry SHALL replace the startup entry with the same identifier (a widget's `kind`, a theme's or schema's `name`), so no identifier is ever served twice. The remaining startup entries compose before the principal's, so a principal theme MAY extend a startup theme and a principal widget MAY reference a startup schema.
+- `Merge` SHALL compose the startup entries together with the principal's. A principal entry SHALL replace the startup entry with the same identifier (a widget's `kind`, a theme's or schema's `name`), so no identifier is ever served twice. The remaining startup entries compose before the principal's, so a principal widget MAY reference a startup schema.
 - `Replace` SHALL compose the built-ins and the principal's entries only.
 
 Built-in kinds and the `light`/`dark` themes SHALL stay reserved in both modes. A catalog that repeats an identifier within itself SHALL serve the first occurrence, and each later one SHALL be refused and logged.
@@ -124,9 +124,9 @@ If the source throws, the call SHALL return an `isError` result with code `CATAL
 - **THEN** each SHALL list and render its own widget, and neither SHALL list or render the other's
 
 #### Scenario: In Merge the principal's entry wins
-- **WHEN** the startup entries define widget `email-inbox-widget` and theme `google-dark`, and a principal in Merge mode defines its own `email-inbox-widget` and a theme that extends `google-dark`
+- **WHEN** the startup entries define widget `email-inbox-widget` and schema `email-inbox`, and a principal in Merge mode defines its own `email-inbox-widget` and a widget of another kind whose `dataSchemaRef` is `email-inbox`
 - **THEN** that principal's `list_widgets` SHALL list `email-inbox-widget` exactly once, with the principal's descriptor, and SHALL list the other startup widgets
-- **AND** the principal's theme SHALL be listed with `google-dark`'s tokens beneath its own
+- **AND** the principal's other widget SHALL be listed with the startup schema resolved into its `dataSchema`, and nothing SHALL be refused
 
 #### Scenario: In Replace only the principal's entries join the built-ins
 - **WHEN** a principal in Replace mode defines one widget
@@ -156,3 +156,46 @@ If the source throws, the call SHALL return an `isError` result with code `CATAL
 #### Scenario: Preview pages follow the caller
 - **WHEN** a principal reads `ui://widgentic/page/{kind}` for a kind only its catalog defines
 - **THEN** the page SHALL render that kind's example, and another principal reading the same URI SHALL get the page for an unknown kind
+
+### Requirement: Default themes come from settings, at startup and per principal
+`WidgenticOptions` SHALL accept a settings record in the store's shape (`{ "defaultThemes": { "light"?, "dark"? } }`) as a JSON string or from a file. The record SHALL be passed to the bundle with the startup entries and validated there. A reported setting SHALL stop startup with a `WidgenticConfigurationException` naming the section `settings`, the source and the code, like a refused entry.
+
+A catalog a source resolves MAY carry the principal's settings record, in the same shape. It SHALL combine with the startup record according to the catalog's composition mode:
+- `Merge` SHALL combine the two records section by section. A section the principal's record defines replaces the startup record's section whole, so `{ "defaultThemes": { "dark": "night" } }` leaves the light mode on the built-in even when the startup record sets one. A section the principal's record omits is the startup record's. A principal record that is not a JSON object SHALL replace the startup record whole and be reported.
+- `Replace` SHALL use the principal's record only.
+
+Defaults SHALL resolve against the caller's composed themes. In `Merge`, a principal theme that replaces a startup theme of the same name is therefore the one a startup default names. A setting the caller's composition refuses SHALL be skipped and logged with its section, name and code, and its mode SHALL keep the built-in. A refused setting SHALL never fail the call. A startup default that names a theme the principal's catalog shadowed with a refused entry SHALL be logged as a startup setting skipped for that caller.
+
+The defaults SHALL reach every per-caller surface: `render_widget` and `preview_widget` with no `theme`, `list_themes`' `defaults`, page and app documents, the `ui://widgentic/page/{kind}` pages, and `IWidgenticRenderer`'s `RequestContext` overload.
+
+#### Scenario: Startup defaults dress renders that name no theme
+- **WHEN** the startup record makes `google-light` the light default and `google-dark` the dark default, and a client calls `render_widget` with no `theme`
+- **THEN** `structuredContent.css` SHALL carry `google-light`'s tokens under `:root:not([data-theme="dark"])` and `google-dark`'s under `:root[data-theme="dark"]`, and `list_themes` SHALL report both defaults
+
+#### Scenario: A startup default naming no configured theme stops startup
+- **WHEN** the startup record names `ghost` as the dark default and no configured theme is named `ghost`
+- **THEN** startup SHALL fail with a `WidgenticConfigurationException` listing section `settings` and code `UNKNOWN_THEME`
+
+#### Scenario: In Merge a principal's settings section replaces the startup one
+- **WHEN** the startup record sets both defaults, and a principal in Merge mode whose catalog holds a theme `night` returns `{ "defaultThemes": { "dark": "night" } }`
+- **THEN** that principal's `list_themes` SHALL report `defaults: { "light": "light", "dark": "night" }`, and other principals SHALL keep the startup defaults
+
+#### Scenario: A principal without settings keeps the startup defaults in Merge
+- **WHEN** a principal in Merge mode returns a catalog with no settings record
+- **THEN** its `list_themes` SHALL report the startup record's defaults
+
+#### Scenario: In Replace the startup settings never apply
+- **WHEN** the startup record sets both defaults and a principal in Replace mode returns a catalog with no settings record
+- **THEN** its `list_themes` SHALL report `defaults: { "light": "light", "dark": "dark" }`
+
+#### Scenario: A principal's refused setting is skipped and logged
+- **WHEN** a principal's record names a theme its composed catalog does not serve
+- **THEN** the call SHALL succeed with that mode on the built-in, and a log entry SHALL name the section `settings` and the code `UNKNOWN_THEME`
+
+#### Scenario: A startup default left unresolved by a principal is logged
+- **WHEN** the startup record makes `google-dark` the dark default, and a principal in Merge mode defines its own `google-dark` that validation refuses
+- **THEN** that principal's dark default SHALL be the built-in, the call SHALL succeed, and a log entry SHALL name the startup setting that was skipped for this caller
+
+#### Scenario: Previews and pages follow the caller's defaults
+- **WHEN** a principal's light default differs from the startup record's, and the principal reads `ui://widgentic/page/{kind}` and calls `preview_widget` with no `theme`
+- **THEN** both SHALL carry the principal's light default, and another principal's page SHALL carry its own

@@ -18,7 +18,11 @@ The pieces are already in place:
 - **Refused at the door, per call.** A principal's invalid entries are skipped and logged, with section, index, name and code, never contents; they are never fatal. Startup entries still stop startup.
 - **A failing source is a result, not a crash.** If the source throws, the call returns an `isError` result with code `CATALOG_UNAVAILABLE`, without the exception's text, and the exception is logged.
 - **Where it applies:** `list_widgets`, `render_widget`, `preview_widget`, `list_themes` and `list_schemas`; the `ui://widgentic/page/{kind}` pages; and `IWidgenticRenderer`'s `RequestContext` overload. `list_theme_tokens`, `get_authoring_guide`, `tools/list` and the app template stay global.
-- **The sample** gains an API-key authentication handler. Two demo keys map to two principals with different catalogs; the keys are read from configuration and never printed. Without a key, the startup catalog serves.
+- **Default themes from settings, at startup and per principal.** `theme-styles-and-defaults` (PR #29) gives each principal a settings record whose `defaultThemes` section picks the theme light and dark hosts get when a render names none. That PR deliberately leaves the host bundle without settings, so `Widgentic.Mcp` can't serve them yet. This change adds them:
+  - **The bundle.** `createWidgenticHost` accepts an optional `settings` record in the store's shape, checks it with the store's write rules, and applies its defaults as the Node assembly does. Without settings, output is byte-identical.
+  - **Startup.** `WidgenticOptions` takes a settings record (JSON or a file). A refused setting stops startup.
+  - **Per principal.** A resolved catalog may carry the principal's settings record. In Merge, the records combine section by section, and the principal's section wins. In Replace, only the principal's record applies. A refused principal setting is skipped and logged, keeping the built-in for its mode.
+- **The sample** gains an API-key authentication handler. Two demo keys map to two principals with different catalogs; the keys are read from configuration and never printed. Without a key, the startup catalog serves. The sample also loads the docker demo seed's settings (`google-light`/`google-dark`), generated like the rest of its seed, and the Merge principal chooses a default of its own.
 
 ## Capabilities
 
@@ -28,7 +32,9 @@ None.
 
 ### Modified Capabilities
 
+- `mcp-server`: **Runtime-neutral host bundle** takes an optional `settings` record, reports refused settings in `problems()`, and its corpus covers default themes. The delta builds on `theme-styles-and-defaults`' text of the same requirement, so that change archives first.
 - `dotnet-host`:
+  - A new requirement for default themes from settings, at startup and per principal.
   - A new requirement for per-principal catalogs (the source, Replace/Merge, failure handling, and what resolves per caller).
   - **The engine is isolated, bounded and stateless:** the pool composes per call when a source is configured, and still caches nothing.
   - **Widgets, themes and schemas load from designer JSON and are refused at the door:** per-principal entries are refused per call, skipped and logged.
@@ -38,8 +44,9 @@ None.
 ## Impact
 
 - **Code:** `dotnet/src/Widgentic.Mcp` (engine, pool, options, tool and resource handlers, renderer, a new interface and composition enum), `dotnet/tests`, `dotnet/samples/Widgentic.Sample.Stdio`, and the README and CHANGELOG.
-- **No npm change.** The `./host` bundle is used as it is, and `mcp-server` doesn't change.
-- **Release:** ships as `Widgentic.Mcp` 0.11.0, together with the 0.11 pin bump that `derived-input-schemas` (`@widgentic/mcp` 0.11.0) brings. If that release isn't out first, it can ship alone as 0.10.1 under the patch rule. That's a release decision recorded in the tasks.
+- **npm:** `packages/mcp/src/host` (the settings input), a Node-free home for the settings rules the bundle imports, the conformance corpus and its generator (a second configuration with settings), and the bare-realm test. A `@widgentic/mcp` changeset, released in 0.11.0 with the rest of `staging`.
+- **Release:** ships as `Widgentic.Mcp` 0.11.0 with the 0.11 pin, bumped in this branch. `staging` is promoted to `main` as a whole: the npm release ("Version Packages") goes first, then the .NET release runs by hand and waits for the owner's approval (design, Migration Plan).
+- **Depends on:** PR #29 (`theme-styles-and-defaults`) merged into `staging`. The settings tasks (section 7) start after this branch merges `staging` with it.
 - **Out of scope:**
   - storage of principal catalogs (the implementer decides);
   - actions and `execute_action` (BACKLOG NET-1);
