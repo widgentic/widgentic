@@ -126,7 +126,7 @@ sets the default, and a catalog's own `Composition` overrides it for its caller:
 - **`Merge`** (the default): the startup entries plus the caller's. A caller's entry replaces
   the startup entry with the same identifier (a widget's `kind`, a theme's or schema's `name`),
   so no identifier is served twice. The remaining startup entries compose first, so the
-  caller's themes can extend startup themes and its widgets can reference startup schemas.
+  caller's widgets can reference startup schemas.
 - **`Replace`**: the built-ins and the caller's entries only.
 
 Built-in kinds and the `light`/`dark` themes stay reserved in both modes.
@@ -208,7 +208,7 @@ dotnet run --project dotnet/samples/Widgentic.Sample.Stdio -- --http \
 ```
 
 - **`merge-demo`** gets the seed, with its own `email-inbox-widget` in place of the seed's and a
-  `merge-demo-dark` theme extending `google-dark`.
+  `merge-demo-dark` theme, a copy of `google-dark` with a green accent.
 - **`replace-demo`** gets the built-ins and its own `release-notes-widget` only.
 - **Callers without a known key** get the seed.
 

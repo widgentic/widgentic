@@ -1,7 +1,8 @@
 /**
- * Store limits and the identifier charset, in a module with no imports so
- * runtime-neutral code (the authoring guide, the validators, the host
- * bundle) can read them without loading anything Node-only.
+ * Store limits and the identifier charset, in a module that imports only
+ * the browser-safe core, so runtime-neutral code (the authoring guide, the
+ * validators, the host bundle) can read them without loading anything
+ * Node-only.
  */
 
 /**
@@ -37,4 +38,4 @@ export const DEFAULT_LIMITS: StoreLimits = {
  * in document ids, where `/ \ # ?` are illegal); enforcing the rule at the
  * port means memory, file, and Cosmos accept and reject identically.
  */
-export const SAFE_IDENTIFIER = /^[a-zA-Z0-9._-]+$/;
+export { SAFE_IDENTIFIER } from "@widgentic/core";

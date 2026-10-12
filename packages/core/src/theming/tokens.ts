@@ -4,6 +4,9 @@
  * plain maps of bare token names to values. The defaults table is the
  * single source of truth for the light look.
  */
+import { UNSAFE_FUNCTIONS } from "../catalog/styles.js";
+import { isBalanced } from "../shared/css-scan.js";
+
 /**
  * The token table: every token's default, its VALUE TYPE, and what it is
  * for. Type metadata is not decoration — tooling reads it (the theme
@@ -139,15 +142,37 @@ export interface ThemeError {
 }
 
 /**
+ * Characters a token value may not hold: declaration and HTML escapes, and
+ * the backslash, whose escapes can spell any banned call (`u\72 l(` is
+ * `url(`). Exported so the guides derive the rule.
+ */
+export const TOKEN_VALUE_UNSAFE = /[;{}<>\\]/;
+
+/**
  * Value guard shared by validation (strict) and application (lenient
  * defense in depth). Rejects exfiltration and execution vectors — not
- * invalid CSS: declaration/HTML escapes, `url()` (resource fetching), and
- * `expression()` (legacy script execution in old embedded webviews).
+ * invalid CSS: declaration/HTML escapes, backslash escapes, comment markers
+ * and unclosed brackets or strings (each swallows the rest of the sheet),
+ * `url()`, `image-set()` and `src()`
+ * (resource fetching), and `expression()` (legacy script execution in old
+ * embedded webviews).
  */
 export function isSafeTokenValue(value: string): boolean {
   return (
-    !/[;{}<>]/.test(value) &&
-    !/url\s*\(/i.test(value) &&
-    !/expression\s*\(/i.test(value)
+    !TOKEN_VALUE_UNSAFE.test(value) &&
+    // An unclosed bracket or string runs on through the rest of the sheet.
+    isBalanced(value) &&
+    // A comment opener swallows every declaration after it in the sheet.
+    !/\/\*|\*\//.test(value) &&
+    // The style guard's calls: url(), expression(), and the URL carriers
+    // that do not spell url(.
+    !UNSAFE_FUNCTIONS.some((call) => new RegExp(`${call.slice(0, -1)}\\s*\\(`, "i").test(value))
   );
 }
+
+/** The token-value rule as text, built from the constants that enforce it. */
+export const TOKEN_VALUE_RULE =
+  `Token values are plain CSS values. Rejected: anything matching ${TOKEN_VALUE_UNSAFE.source}, ` +
+  "a comment marker (/* or */), an unclosed bracket or string, and calls to " +
+  `${UNSAFE_FUNCTIONS.join(", ")} (case-insensitive, whitespace-tolerant). ` +
+  "Keep values to colors, lengths, and font stacks.";

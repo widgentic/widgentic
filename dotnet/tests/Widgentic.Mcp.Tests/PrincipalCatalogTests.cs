@@ -66,9 +66,12 @@ public sealed class PrincipalCatalogTests
     {
         var inbox = SeedWidget("email-inbox-widget");
         inbox["descriptor"]!["description"] = "Alpha's own inbox.";
+        // A widget of the principal's own that references the startup schema by name.
+        var mail = SeedWidget("email-inbox-widget");
+        mail["kind"] = "alpha-mail";
         using var rig = Rig.Start(new FakeSource(_ => new WidgenticCatalog()
             .AddWidget(inbox.ToJsonString())
-            .AddTheme("""{"name":"alpha-dark","extends":"google-dark","tokens":{"accent":"#123456"}}""")));
+            .AddWidget(mail.ToJsonString())));
 
         var listing = Descriptors(await rig.CallAsync("list_widgets", Alpha));
         var inboxes = listing.Where(d => d.GetProperty("kind").GetString() == "email-inbox-widget").ToArray();
@@ -76,11 +79,11 @@ public sealed class PrincipalCatalogTests
         Assert.Equal("Alpha's own inbox.", inboxes[0].GetProperty("description").GetString());
         Assert.Contains(listing, d => d.GetProperty("kind").GetString() == "appointment-agenda-widget");
 
-        var themes = JsonDocument.Parse(Text(await rig.CallAsync("list_themes", Alpha))).RootElement.GetProperty("themes");
-        var alphaDark = themes.EnumerateArray().Single(t => t.GetProperty("name").GetString() == "alpha-dark").GetProperty("tokens");
-        var googleDark = themes.EnumerateArray().Single(t => t.GetProperty("name").GetString() == "google-dark").GetProperty("tokens");
-        Assert.Equal("#123456", alphaDark.GetProperty("accent").GetString());
-        Assert.Equal(googleDark.GetProperty("bg").GetString(), alphaDark.GetProperty("bg").GetString());
+        // The listing resolves the reference: the startup schema, as the seed defines it.
+        var own = listing.Single(d => d.GetProperty("kind").GetString() == "alpha-mail");
+        var startupSchema = JsonNode.Parse(File.ReadAllText(Path.Combine(Repo.SampleSeed, "schemas", "email-inbox.json")))!["schema"];
+        Assert.True(JsonNode.DeepEquals(startupSchema, JsonNode.Parse(own.GetProperty("dataSchema").GetRawText())));
+        Assert.Empty(rig.Logs.Messages);
     }
 
     [Fact]

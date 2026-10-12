@@ -10,7 +10,8 @@
  *   entries(principal_id, kind, name, json)        — PK(principal_id, kind, name),
  *     kind ∈ widget | theme | schema | action | secret; `json` holds the
  *     validated entry exactly as the port defines it (secrets: ciphertext
- *     records only)
+ *     records only); kind `settings`, name `principal` holds the settings
+ *     record, which entry listings and limits never count
  *   keys(digest PK, principal_id, key_id, name, scopes, created_at, revoked_at)
  *
  * Composition reads one principal's entries as a single indexed range scan —
@@ -65,13 +66,19 @@ import {
   checkStoredAction,
   checkStoredSchema,
   checkStoredTheme,
+  normalizeStoredTheme,
+  themeName,
   checkStoredWidget
 } from "./validate.js";
+import { applySettingsUpdate, readSettings, refuseThemeInUse } from "./settings.js";
 
 /** Bumped only with a persisted-shape change, which ships with its seam. */
 const SCHEMA_VERSION = 1;
 
-type EntryKind = "widget" | "theme" | "schema" | "action" | "secret";
+type EntryKind = "widget" | "theme" | "schema" | "action" | "secret" | "settings";
+
+/** The settings record's row: one per principal, beside its entries. */
+const SETTINGS_ROW = "principal";
 
 export interface SqliteStoreOptions {
   limits?: StoreLimits;
@@ -384,10 +391,11 @@ export function createSqliteStore(
 
     async themes(principalId) {
       const out: ThemeEntry[] = [];
-      for (const entry of rawEntries(principalId, "theme")) {
+      for (const raw of rawEntries(principalId, "theme")) {
+        const entry = normalizeStoredTheme(raw, (line) => report(`${line} (principal '${principalId}')`));
         const problem = checkStoredTheme(entry, limits);
         if (problem) {
-          report(`skipped a theme for '${principalId}': ${problem.code} — ${problem.message}`);
+          report(`skipped theme '${themeName(entry)}' for '${principalId}': ${problem.code} — ${problem.message}`);
           continue;
         }
         out.push(entry as ThemeEntry);
@@ -564,7 +572,31 @@ export function createSqliteStore(
 
     async removeTheme(principalId, name) {
       tx(() => {
+        // Same transaction as the delete: a default set concurrently cannot
+        // slip past the check.
+        refuseThemeInUse(rawEntry(principalId, "settings", SETTINGS_ROW), name);
         db.prepare("DELETE FROM entries WHERE principal_id = ? AND kind = 'theme' AND name = ?").run(principalId, name);
+      });
+    },
+
+    async settings(principalId) {
+      return readSettings(rawEntry(principalId, "settings", SETTINGS_ROW), (message) => report(`${message} ('${principalId}')`));
+    },
+
+    async putSettings(principalId, update) {
+      tx(() => {
+        requirePrincipal(principalId);
+        const themeNames = new Set(
+          (db
+            .prepare("SELECT name FROM entries WHERE principal_id = ? AND kind = 'theme'")
+            .all(principalId) as Array<{ name: string }>).map((row) => row.name)
+        );
+        const next = applySettingsUpdate(rawEntry(principalId, "settings", SETTINGS_ROW), update, themeNames);
+        if (next === undefined) {
+          db.prepare("DELETE FROM entries WHERE principal_id = ? AND kind = 'settings' AND name = ?").run(principalId, SETTINGS_ROW);
+        } else {
+          upsertEntry(principalId, "settings", SETTINGS_ROW, next);
+        }
       });
     },
 

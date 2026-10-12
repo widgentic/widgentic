@@ -277,21 +277,22 @@ export function createWidgenticServer(
   // The declared app template: Apps hosts fetch this once and mount it in a
   // sandboxed iframe; every render_widget result then streams into it via
   // ui/notifications/tool-result (structuredContent: { html, css, payload }).
+  // Its `_meta.ui` rides on the declaration and on the read content alike:
+  // the border preference, and the operator-declared CSP domains — hosts the
+  // frame may load assets from directly (images on them skip inlining),
+  // absent when none are configured.
+  const appUi = {
+    prefersBorder: APP_TEMPLATE_RESOURCE.prefersBorder,
+    ...(resourceDomains.length > 0 ? { csp: { resourceDomains } } : {})
+  };
   registerAppResource(
     server,
     APP_TEMPLATE_RESOURCE.name,
     APP_TEMPLATE_RESOURCE.uri,
-    {
-      description: APP_TEMPLATE_RESOURCE.description,
-      // Operator-declared CSP domains: hosts the frame may load assets
-      // from directly (images on them skip inlining). Absent when empty.
-      ...(resourceDomains.length > 0
-        ? { _meta: { ui: { csp: { resourceDomains } } } }
-        : {})
-    },
+    { description: APP_TEMPLATE_RESOURCE.description, _meta: { ui: appUi } },
     async (uri) => ({
       contents: [
-        { uri: uri.href, mimeType: RESOURCE_MIME_TYPE, text: buildAppTemplate() }
+        { uri: uri.href, mimeType: RESOURCE_MIME_TYPE, text: buildAppTemplate(), _meta: { ui: appUi } }
       ]
     })
   );
@@ -309,7 +310,7 @@ export function createWidgenticServer(
     async (uri, variables) => {
       const kind = String(variables.kind ?? "");
       return {
-        contents: [{ uri: uri.href, mimeType: WIDGET_PAGE_RESOURCE.mimeType, text: renderWidgetPage(catalog, kind) }]
+        contents: [{ uri: uri.href, mimeType: WIDGET_PAGE_RESOURCE.mimeType, text: renderWidgetPage(catalog, kind, themes) }]
       };
     }
   );

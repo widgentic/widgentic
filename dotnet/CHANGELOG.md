@@ -23,6 +23,11 @@ move together then.
   `x-api-key` or `?key=` from configuration.
 - From the 0.11 bundle: `render_widget` and `preview_widget` called with `kind` instead of
   `widget` say so in their error.
+- The app template resource asks MCP Apps hosts for no border or background:
+  `_meta.ui.prefersBorder: false`, on the resource declaration and on its read content, taken
+  from the bundle.
+- **Breaking:** theme entries lose `extends`. An entry is registered as given, so merge a base
+  theme's tokens and styles into it before passing it to `AddTheme` (startup or a caller's catalog).
 
 ## 0.10.0
 

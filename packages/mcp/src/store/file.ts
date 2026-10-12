@@ -9,6 +9,7 @@
  *   <dir>/<principalId>/schemas/<name>.json
  *   <dir>/<principalId>/actions/<name>.json
  *   <dir>/<principalId>/secrets/<name>.json   (envelope records — ciphertext only)
+ *   <dir>/<principalId>/settings.json         (the settings record)
  *
  * NOT transactional and not concurrency-safe: two writers can interleave.
  * That is acceptable for a reference implementation; the app's adapter
@@ -38,9 +39,12 @@ import {
   checkStoredAction,
   checkStoredSchema,
   checkStoredTheme,
+  normalizeStoredTheme,
+  themeName,
   checkStoredWidget,
   SAFE_IDENTIFIER
 } from "./validate.js";
+import { readSettings } from "./settings.js";
 
 interface PrincipalRow extends Principal {
   keyDigest: string;
@@ -140,15 +144,22 @@ export function createFileStore(
       if (id === undefined) return [];
       const entries = await readDirJson(join(dir, id, "themes"));
       const out: ThemeEntry[] = [];
-      for (const entry of entries) {
+      for (const raw of entries) {
+        const entry = normalizeStoredTheme(raw, (line) => report(`${line} (principal '${id}')`));
         const problem = checkStoredTheme(entry, limits);
         if (problem) {
-          report(`skipped a theme for '${id}': ${problem.code} — ${problem.message}`);
+          report(`skipped theme '${themeName(entry)}' for '${id}': ${problem.code} — ${problem.message}`);
           continue;
         }
         out.push(entry as ThemeEntry);
       }
       return out.slice(0, limits.maxThemes);
+    },
+
+    async settings(principalId) {
+      const id = safeId(principalId);
+      if (id === undefined) return {};
+      return readSettings(await readJson(join(dir, id, "settings.json")), (message) => report(`${message} ('${id}')`));
     },
 
     async schemas(principalId) {

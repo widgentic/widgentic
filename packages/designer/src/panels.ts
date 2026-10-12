@@ -9,14 +9,14 @@ import { errorMessage } from "./internal.js";
 import { isPlainObject } from "@widgentic/core";
 import type { DataSchema } from "@widgentic/core";
 import type { ThemeEntry } from "@widgentic/core";
-import { diagnosticLine, h, section, textArea, textField, requireChild } from "./dom.js";
+import { diagnosticLine, h, section, tabs, textArea, textField, requireChild } from "./dom.js";
 import { attachJsonHighlight, repaintHighlight } from "./highlight.js";
 import { mountIoPanel } from "./io.js";
 import { createJsonTreeEditor } from "./json-tree-editor.js";
 import { createSchemaBuilder } from "./schema-builder.js";
 import { createRecordEditor } from "./record-editor.js";
 import { createSchemaForm } from "./schema-form.js";
-import { createStylesEditor } from "./styles-editor.js";
+import { createStylesPanel } from "./styles-panel.js";
 import type { DraftStore, WidgetDraft } from "./store.js";
 import type { SchemaEntry } from "./schema-designer.js";
 import { mountTemplatePanel } from "./template-panel.js";
@@ -25,29 +25,6 @@ import { createBindingEditor } from "./action-editor.js";
 import type { ActionBinding } from "@widgentic/core";
 import { mountThemePanel } from "./theme-panel.js";
 import { deriveDiagnostics, effectiveDataSchema } from "./validate.js";
-
-/** Tabbed container: first tab visible, buttons switch panes. */
-function tabs(entries: { label: string; element: HTMLElement }[]): HTMLElement {
-  const buttons = entries.map((entry, index) => {
-    const button = h(
-      "button",
-      { class: `wgd-button wgd-tab${index === 0 ? " wgd-tab-active" : ""}`, type: "button" },
-      [entry.label]
-    );
-    button.addEventListener("click", () => {
-      entries.forEach((other, i) => {
-        other.element.hidden = i !== index;
-        buttons[i]?.classList.toggle("wgd-tab-active", i === index);
-      });
-    });
-    entry.element.hidden = index !== 0;
-    return button;
-  });
-  return h("div", { class: "wgd-tabs" }, [
-    h("div", { class: "wgd-row" }, buttons),
-    ...entries.map((entry) => entry.element)
-  ]);
-}
 
 /** Column layout: definition (exported) on the left, presentation on the right. */
 export interface PanelColumns {
@@ -148,6 +125,7 @@ export function mountPanels(
       })
   );
   refreshers.push((draft) => hintsEditor.setValue(draft.descriptor.hints));
+  const dataShapeDiag = diagnosticLine(undefined);
   const generalPanel = section("General", [
     bindText("Kind (id)", (d) => d.kind, (d, v) => ({ ...d, kind: v })),
     kindDiag,
@@ -161,6 +139,7 @@ export function mountPanels(
       (d) => d.descriptor.dataShape ?? "",
       (d, v) => ({ ...d, descriptor: { ...d.descriptor, dataShape: v } })
     ),
+    dataShapeDiag,
     h("div", { class: "wgd-field" }, [
       h("span", { class: "wgd-field-label" }, ["Hints"]),
       tabs([
@@ -250,6 +229,7 @@ export function mountPanels(
     spellcheck: "false"
   });
   const schemaRefDiag = diagnosticLine(undefined);
+  const schemaAuditDiag = diagnosticLine(undefined);
   const sharedWrap = h("div", undefined, [
     h("div", { class: "wgd-row" }, [
       h("span", { class: "wgd-field-label" }, ["Shared schema"]),
@@ -312,6 +292,7 @@ export function mountPanels(
       ]),
       schemaRefDiag,
       inlineEditors,
+      schemaAuditDiag,
       sharedWrap
     ],
     false
@@ -430,12 +411,9 @@ export function mountPanels(
     false
   );
 
-  // --- Styles panel (right, presentation): Tree + JSON tabs --------------
-  // Two projections of the one draft value, exactly like the template's
-  // tree/JSON pair: the tree enforces the string-only two-level shape,
-  // the JSON pane stays parse-gated.
-  const stylesDiag = h("div");
-  const stylesEditor = createStylesEditor(store.get().descriptor.styles, (styles) =>
+  // --- Styles panel (right, presentation): the panel the theme designer
+  // shares — Tree and JSON over the one draft value, plus the audit.
+  const stylesPanel = createStylesPanel(store.get().descriptor.styles, (styles) =>
     store.update((d) => {
       if (styles === undefined) {
         const { styles: _s, ...rest } = d.descriptor;
@@ -444,37 +422,7 @@ export function mountPanels(
       return { ...d, descriptor: { ...d.descriptor, styles } };
     })
   );
-  refreshers.push((draft) => stylesEditor.setValue(draft.descriptor.styles));
-  const stylesPanel = section("Styles (.wg- selectors only)", [
-    tabs([
-      { label: "Tree", element: stylesEditor.element },
-      {
-        label: "JSON",
-        // No legend — the section title already names the shape.
-        element: jsonField(
-          "",
-          (d) => d.descriptor.styles,
-          (d, v) => {
-            if (!isPlainObject(v)) return d;
-            return {
-              ...d,
-              descriptor: {
-                ...d.descriptor,
-                styles: v as Record<string, Record<string, string>>
-              }
-            };
-          },
-          (d) => {
-            const { styles: _s, ...rest } = d.descriptor;
-            return { ...d, descriptor: rest };
-          },
-          store,
-          refreshers
-        )
-      }
-    ]),
-    stylesDiag
-  ]);
+  refreshers.push((draft) => stylesPanel.setValue(draft.descriptor.styles));
 
   const templatePanel = mountTemplatePanel(store, refreshers, { actionContext });
   const themePanel = mountThemePanel(store, refreshers, themes);
@@ -511,7 +459,7 @@ export function mountPanels(
   // Read-only marks the right column's EDITING sections; the theme panel
   // (preview selector + token reference) stays live in that mode.
   previewDataPanel.classList.add("wgd-edit-only");
-  stylesPanel.classList.add("wgd-edit-only");
+  stylesPanel.element.classList.add("wgd-edit-only");
 
   // Left: the widget definition (what export produces). Right: presentation.
   columns.left.append(
@@ -522,7 +470,7 @@ export function mountPanels(
     loadPanel,
     ioPanel.element
   );
-  columns.right.append(previewDataPanel, stylesPanel, themePanel.element);
+  columns.right.append(previewDataPanel, stylesPanel.element, themePanel.element);
   disposers.push(templatePanel.dispose, themePanel.dispose, ioPanel.dispose);
 
   // Diagnostics refresh: derive once per change here (cheap, pure) — and
@@ -543,20 +491,18 @@ export function mountPanels(
     sampleDiag.textContent = diagnostics.sample
       ? `sample vs dataSchema: ${diagnostics.sample.code} at ${diagnostics.sample.path} — ${diagnostics.sample.message}`
       : "";
+    dataShapeDiag.hidden = diagnostics.dataShape === undefined;
+    dataShapeDiag.textContent = diagnostics.dataShape ?? "";
     schemaRefDiag.hidden = diagnostics.schemaRef === undefined;
     schemaRefDiag.textContent = diagnostics.schemaRef ?? "";
+    schemaAuditDiag.hidden = diagnostics.dataSchema === undefined;
+    schemaAuditDiag.textContent = diagnostics.dataSchema?.join("\n") ?? "";
     themePanel.setDiagnostic(
       diagnostics.theme
         ? `${diagnostics.theme.code}: ${diagnostics.theme.message}`
         : undefined
     );
-    stylesDiag.replaceChildren(
-      ...diagnostics.styles.map((issue) =>
-        diagnosticLine(
-          `${issue.selector}${issue.property ? ` → ${issue.property}` : ""}: ${issue.message}`
-        )
-      )
-    );
+    stylesPanel.setIssues(diagnostics.styles);
     for (const refresh of refreshers) refresh(draft);
     templatePanel.refresh(draft, diagnostics);
   }

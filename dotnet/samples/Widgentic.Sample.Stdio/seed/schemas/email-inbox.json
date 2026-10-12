@@ -1,7 +1,7 @@
 {
-  "description": "A mailbox with account context and an ordered collection of email messages.",
-  "label": "Email inbox",
   "name": "email-inbox",
+  "label": "Email inbox",
+  "description": "A mailbox with account context and an ordered collection of email messages.",
   "schema": {
     "properties": {
       "account": {

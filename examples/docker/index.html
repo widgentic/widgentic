@@ -16,15 +16,17 @@
     background: var(--host-bg);
     color: var(--host-text);
   }
-  header { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--host-line); }
-  header h1 { font-size: 16px; margin: 0 8px 0 0; }
-  nav { display: flex; gap: 4px; flex-wrap: wrap; }
-  button { font: inherit; padding: 4px 10px; border: 1px solid var(--host-border); border-radius: var(--host-radius); background: var(--host-panel); color: var(--host-text); cursor: pointer; }
-  button:hover { background: var(--host-hover); }
-  button.active { background: var(--host-accent-bg); border-color: var(--host-accent); }
-  button.primary { background: var(--host-accent); border-color: var(--host-accent); color: var(--host-panel); }
-  button.danger { color: var(--host-danger); border-color: var(--host-danger-line); }
-  input { font: inherit; padding: 4px 6px; border: 1px solid var(--host-border); border-radius: var(--host-radius-sm); background: var(--host-panel); color: var(--host-text); }
+  /* The designers preview widgets in this page's DOM: every element rule is
+     fenced out of .wgd-preview, so the preview shows what an MCP Apps host shows. */
+  header:where(:not(.wgd-preview *)) { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--host-line); }
+  header:where(:not(.wgd-preview *)) h1 { font-size: 16px; margin: 0 8px 0 0; }
+  nav:where(:not(.wgd-preview *)) { display: flex; gap: 4px; flex-wrap: wrap; }
+  button:where(:not(.wgd-preview *)) { font: inherit; padding: 4px 10px; border: 1px solid var(--host-border); border-radius: var(--host-radius); background: var(--host-panel); color: var(--host-text); cursor: pointer; }
+  button:where(:not(.wgd-preview *)):hover { background: var(--host-hover); }
+  button:where(:not(.wgd-preview *)).active { background: var(--host-accent-bg); border-color: var(--host-accent); }
+  button:where(:not(.wgd-preview *)).primary { background: var(--host-accent); border-color: var(--host-accent); color: var(--host-panel); }
+  button:where(:not(.wgd-preview *)).danger { color: var(--host-danger); border-color: var(--host-danger-line); }
+  input:where(:not(.wgd-preview *)) { font: inherit; padding: 4px 6px; border: 1px solid var(--host-border); border-radius: var(--host-radius-sm); background: var(--host-panel); color: var(--host-text); }
   #status { color: var(--host-muted); font-size: 12.5px; margin-left: auto; }
   #status.error { color: var(--host-danger); }
   section[hidden] { display: none; }
@@ -32,13 +34,14 @@
   .list { display: flex; flex-direction: column; gap: 4px; }
   .row { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid var(--host-border); border-radius: var(--host-radius); background: var(--host-panel); }
   .row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+  .row .badge { font-size: 11.5px; color: var(--host-muted); white-space: nowrap; }
   .row.selected { border-color: var(--host-accent); }
   .row button { padding: 1px 7px; font-size: 12px; }
   .muted { color: var(--host-muted); }
   .controls { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
   form.line { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
   form.line label { display: inline-flex; align-items: center; gap: 6px; }
-  input[type="checkbox"] { width: 15px; height: 15px; padding: 0; margin: 0; accent-color: var(--host-accent); }
+  input:where(:not(.wgd-preview *))[type="checkbox"] { width: 15px; height: 15px; padding: 0; margin: 0; accent-color: var(--host-accent); }
   .connect { font-size: 12.5px; color: var(--host-muted); margin: 0 0 10px; }
   .connect code { color: var(--host-text); word-break: break-all; }
   .reveal { border: 1px solid var(--host-accent-line); background: var(--host-accent-bg); border-radius: var(--host-radius-lg); padding: 8px 10px; margin: 8px 0; font-family: var(--host-font-mono); word-break: break-all; }
@@ -54,6 +57,7 @@
       <button id="tab-actions" type="button">Actions</button>
       <button id="tab-secrets" type="button">Secrets</button>
       <button id="tab-keys" type="button">Keys</button>
+      <button id="tab-settings" type="button">Settings</button>
     </nav>
     <span id="status"></span>
     <span id="agent-status" class="muted" title="WebMCP: the designers on this page are tools your browser's agent can use; you save."></span>
@@ -124,6 +128,13 @@
     </form>
     <div id="key-reveal" class="reveal" hidden></div>
     <div id="key-list" class="list"></div>
+  </section>
+
+  <section id="pane-settings" hidden>
+    <div class="controls">
+      <button id="settings-save" type="button" class="primary">Save settings</button>
+    </div>
+    <div id="settings-designer"></div>
   </section>
 
   <script type="module" src="/app.bundle.js"></script>

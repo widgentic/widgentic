@@ -14,7 +14,7 @@ import {
   verifyKey,
   StoreRejectionError
 } from "../index.js";
-import type { MemorySeedPrincipal, StoredAction, StoredWidget } from "../index.js";
+import type { MemorySeedPrincipal, StoredAction, StoredWidget, WidgetStore } from "../index.js";
 import type { ThemeEntry } from "@widgentic/core";
 
 const reportWidget: StoredWidget = {
@@ -29,7 +29,7 @@ const ticketWidget: StoredWidget = {
 };
 const brandTheme: ThemeEntry = { name: "brand", tokens: { accent: "#ff5a1f" } };
 
-/** The actions/secrets half of the read port, for fakes that only test widgets and themes. */
+/** The actions/secrets/settings half of the read port, for fakes that only test widgets and themes. */
 const inertExtras = {
   async actions() {
     return [];
@@ -39,6 +39,9 @@ const inertExtras = {
   },
   async secretValue() {
     return undefined;
+  },
+  async settings() {
+    return {};
   }
 };
 
@@ -199,6 +202,39 @@ describe("file store", () => {
     expect((await store.resolvePrincipal(KEY_A))?.id).toBe("alice");
     expect((await store.widgets("alice")).map((w) => w.kind)).toEqual(["report"]);
     expect((await store.themes("alice")).map((t) => t.name)).toEqual(["brand"]);
+  });
+
+  it("reads settings beside the entries, ignoring a later version's section", async () => {
+    const dir = await seeded();
+    await writeFile(
+      join(dir, "alice", "settings.json"),
+      JSON.stringify({ defaultThemes: { light: "brand", dark: "ghost" }, fonts: { body: "Inter" } })
+    );
+    const store = createFileStore(dir);
+    expect(await store.settings("alice")).toEqual({ defaultThemes: { light: "brand", dark: "ghost" } });
+    const composed = await composeThemes(store, "alice");
+    expect(composed.value.defaults()).toEqual({ light: "brand", dark: "dark" });
+    expect(composed.diagnostics.join("\n")).toContain("'ghost'");
+    expect(await store.settings("nobody")).toEqual({});
+    expect(await store.settings("..")).toEqual({});
+  });
+
+  it("reads a theme stored under looser token rules without the refused token", async () => {
+    const dir = await seeded();
+    await writeFile(join(dir, "alice", "themes", "legacy.json"), JSON.stringify({ name: "legacy", tokens: { accent: "#0b5fff /* brand */", bg: "#fafafa" } }));
+    const lines: string[] = [];
+    const store = createFileStore(dir, { onDiagnostic: (line) => lines.push(line) });
+    expect((await store.themes("alice")).find((theme) => theme.name === "legacy")).toEqual({ name: "legacy", tokens: { bg: "#fafafa" } });
+    expect(lines.join("\n")).toContain("theme 'legacy': token 'accent' dropped on read");
+    await writeFile(join(dir, "alice", "settings.json"), JSON.stringify({ defaultThemes: { light: "legacy" } }));
+    expect((await composeThemes(store, "alice")).value.defaults().light).toBe("legacy");
+  });
+
+  it("reads no settings for a principal with entries but no settings.json", async () => {
+    const dir = await seeded();
+    const store = createFileStore(dir);
+    expect(await store.settings("alice")).toEqual({});
+    expect((await composeThemes(store, "alice")).value.defaults()).toEqual({ light: "light", dark: "dark" });
   });
 
   it("treats missing paths as empty, not as errors", async () => {
@@ -763,5 +799,64 @@ describe("hardening: store", () => {
     expect(reads).toEqual(["actions"]);
     expect(second.diagnostics.some((d) => d.startsWith("skipped action 'bad'"))).toBe(true);
     expect(second.actions.resolve("fetch")?.kind).toBe("http");
+  });
+});
+
+describe("composition without readable settings", () => {
+  const brand: ThemeEntry = { name: "brand", tokens: { accent: "#ff5a1f" } };
+  const themesOnly = (settings?: () => Promise<unknown>) =>
+    ({
+      ...inertExtras,
+      async resolvePrincipal() {
+        return undefined;
+      },
+      async widgets() {
+        return [];
+      },
+      async themes() {
+        return [brand];
+      },
+      async schemas() {
+        return [];
+      },
+      ...(settings === undefined ? { settings: undefined } : { settings })
+    }) as unknown as WidgetStore;
+
+  it("an adapter without a settings method keeps the built-in defaults", async () => {
+    const composed = await composeThemes(themesOnly(), "p");
+    expect(composed.value.defaults()).toEqual({ light: "light", dark: "dark" });
+    expect(composed.value.get("brand")).toBeDefined();
+    // Such an adapter simply has no settings: nothing to report on every render.
+    expect(composed.diagnostics).toEqual([]);
+  });
+
+  it("a failing settings read degrades to the built-ins with a diagnostic", async () => {
+    const composed = await composeThemes(themesOnly(async () => { throw new Error("unreachable"); }), "p");
+    expect(composed.value.defaults()).toEqual({ light: "light", dark: "dark" });
+    expect(composed.diagnostics.join("\n")).toContain("default themes not read");
+  });
+
+  it("a default naming a stored theme that fails validation is dropped with a diagnostic", async () => {
+    const store = {
+      ...inertExtras,
+      async resolvePrincipal() {
+        return undefined;
+      },
+      async widgets() {
+        return [];
+      },
+      async themes() {
+        return [{ name: "broken", tokens: { sneaky: "red" } } as unknown as ThemeEntry];
+      },
+      async schemas() {
+        return [];
+      },
+      async settings() {
+        return { defaultThemes: { light: "broken" } };
+      }
+    } as WidgetStore;
+    const composed = await composeThemes(store, "p");
+    expect(composed.value.defaults().light).toBe("light");
+    expect(composed.diagnostics.join("\n")).toContain("default light theme 'broken' is not available");
   });
 });

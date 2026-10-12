@@ -1,11 +1,13 @@
 import { describe, it, expectTypeOf } from "vitest";
-import { validateTheme, applyTheme, themeToCss } from "../index.js";
+import { validateTheme, applyTheme, themeToCss, themeStylesToCss } from "../index.js";
 import type {
   WidgetTheme,
   WidgetThemeInput,
   ThemeError,
   ThemeErrorCode,
-  ValidateThemeResult
+  ValidateThemeResult,
+  ThemeEntry,
+  ThemeMode
 } from "../index.js";
 
 describe("theming types", () => {
@@ -35,5 +37,11 @@ describe("theming types", () => {
     expectTypeOf(applyTheme).parameter(0).toEqualTypeOf<Element>();
     expectTypeOf(applyTheme).parameter(1).toEqualTypeOf<WidgetThemeInput>();
     expectTypeOf(themeToCss).returns.toEqualTypeOf<string>();
+  });
+  it("theme entries carry styles and modes are a closed pair", () => {
+    expectTypeOf<{ name: "b"; tokens: {}; styles: { ".wg-btn": { padding: string } } }>().toMatchTypeOf<ThemeEntry>();
+    expectTypeOf<ThemeMode>().toEqualTypeOf<"light" | "dark">();
+    expectTypeOf(themeStylesToCss).parameters.toEqualTypeOf<[Record<string, Record<string, string>>, (string | undefined)?]>();
+    expectTypeOf(themeStylesToCss).returns.toEqualTypeOf<string>();
   });
 });

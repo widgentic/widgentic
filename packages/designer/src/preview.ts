@@ -9,13 +9,13 @@
  * never a blank pane (the app-template error-state lesson).
  */
 import { isPlainObject } from "@widgentic/core";
-import { createCatalog, widgetStylesToCss } from "@widgentic/core";
+import { createCatalog } from "@widgentic/core";
 import type { WidgetRenderer } from "@widgentic/core";
 import type { WidgetPayload } from "@widgentic/core";
 import { mountWidget } from "@widgentic/core";
 import type { WidgetMount } from "@widgentic/core";
 import { compileTemplate, validateTemplate } from "@widgentic/core";
-import { applyTheme, injectBaseStyles } from "@widgentic/core";
+import { applyTheme, injectBaseStyles, themeStylesToCss } from "@widgentic/core";
 import { h } from "./dom.js";
 import type { WidgetDraft } from "./store.js";
 import type { DesignerDiagnostics } from "./validate.js";
@@ -64,14 +64,31 @@ export interface PreviewController {
   dispose(): void;
 }
 
+/**
+ * Distinguishes previews on one page, so a theme's styles stay in theirs.
+ * The random part keeps two copies of this module (two bundles on one page)
+ * from handing out the same id.
+ */
+let previewCount = 0;
+const previewSalt = Math.random().toString(36).slice(2, 8);
+
 export function createPreview(options: PreviewOptions = {}): PreviewController {
   injectBaseStyles(document);
 
   const banner = h("div", { class: "wgd-banner" });
   banner.hidden = true;
+  // Theme styles first: the previewed kind's own rule wins a tie, as it
+  // does in a render.
+  const themeStyles = h("style");
   const kindStyles = h("style");
-  const mountRoot = h("div", { class: "wgd-preview" });
-  const pane = h("div", { class: "wgd-preview-pane" }, [banner, kindStyles, mountRoot]);
+  const scope = `wgd-preview-${previewSalt}-${++previewCount}`;
+  const mountRoot = h("div", { class: "wgd-preview", "data-wgd-scope": scope });
+  // Every style the preview emits — the widget's and the theme's — is
+  // scoped to this preview at no added weight: the preview shares the host
+  // page's DOM, and a widget's `.wg-title` must not restyle the page.
+  const scoped = (styles: Record<string, Record<string, string>>) =>
+    themeStylesToCss(styles, `[data-wgd-scope="${scope}"]`);
+  const pane = h("div", { class: "wgd-preview-pane" }, [banner, themeStyles, kindStyles, mountRoot]);
 
   const catalog = createCatalog();
   let renderer: WidgetRenderer = () => ({ tag: "div", children: ["…"] });
@@ -107,7 +124,7 @@ export function createPreview(options: PreviewOptions = {}): PreviewController {
     if (isPlainObject(descriptor.styles)) {
       customStyles.set(
         widget.kind,
-        widgetStylesToCss(descriptor.styles as Record<string, Record<string, string>>)
+        scoped(descriptor.styles as Record<string, Record<string, string>>)
       );
     }
   }
@@ -162,11 +179,13 @@ export function createPreview(options: PreviewOptions = {}): PreviewController {
     // selected custom kind's (a built-in needs none).
     kindStyles.textContent = renderingDraft
       ? draft.descriptor.styles
-        ? widgetStylesToCss(draft.descriptor.styles)
+        ? scoped(draft.descriptor.styles)
         : ""
       : customStyles.get(previewKind as string) ?? "";
     // Unsafe values are also skipped inside applyTheme (lenient layer).
     applyTheme(mountRoot, draft.theme ?? {});
+    // The guards drop unsafe entries.
+    themeStyles.textContent = draft.themeStyles ? scoped(draft.themeStyles) : "";
 
     const payload = {
       kind: renderingDraft ? PREVIEW_KIND : (previewKind as string),

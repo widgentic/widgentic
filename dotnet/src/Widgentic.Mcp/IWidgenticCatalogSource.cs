@@ -36,7 +36,7 @@ public enum WidgenticComposition
     /// The startup entries and the caller's. A caller entry replaces the startup entry with the
     /// same identifier (a widget's <c>kind</c>, a theme's or schema's <c>name</c>), so no
     /// identifier is served twice; the remaining startup entries compose first, so the caller's
-    /// themes may extend startup themes and its widgets may reference startup schemas.
+    /// widgets may reference startup schemas.
     /// </summary>
     Merge,
 

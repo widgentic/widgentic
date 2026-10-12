@@ -11,6 +11,9 @@ import { createThemeDesigner } from "./theme-designer.js";
 import type { ThemeDesignerHandle } from "./theme-designer.js";
 import { createActionDesigner } from "./action-designer.js";
 import type { ActionDesignerHandle } from "./action-designer.js";
+import { createSettingsDesigner } from "./settings-designer.js";
+import type { SettingsDesignerHandle } from "./settings-designer.js";
+import type { ThemeEntry } from "@widgentic/core";
 import { parseChromeAttribute } from "./dom.js";
 import type { ChromeOptions } from "./dom.js";
 
@@ -34,6 +37,7 @@ export const DEFAULT_TAG = "widgentic-designer";
 export const DEFAULT_THEME_TAG = "widgentic-theme-designer";
 export const DEFAULT_SCHEMA_TAG = "widgentic-schema-designer";
 export const DEFAULT_ACTION_TAG = "widgentic-action-designer";
+export const DEFAULT_SETTINGS_TAG = "widgentic-settings-designer";
 
 export function defineDesignerElement(tagName: string = DEFAULT_TAG): void {
   if (customElements.get(tagName) !== undefined) return;
@@ -168,4 +172,66 @@ export function defineActionDesignerElement(tagName: string = DEFAULT_ACTION_TAG
   }
 
   customElements.define(tagName, WidgenticActionDesignerElement);
+}
+
+/**
+ * A property set on an element before its class was defined is an own
+ * property shadowing the class accessor; at upgrade, move it onto the
+ * accessor so the value is not lost.
+ */
+export function upgradeProperty(element: HTMLElement, name: string): void {
+  if (!Object.prototype.hasOwnProperty.call(element, name)) return;
+  const own = element as unknown as Record<string, unknown>;
+  const value = own[name];
+  delete own[name];
+  own[name] = value;
+}
+
+/** Sibling registrar for the settings designer. */
+export function defineSettingsDesignerElement(tagName: string = DEFAULT_SETTINGS_TAG): void {
+  if (customElements.get(tagName) !== undefined) return;
+
+  class WidgenticSettingsDesignerElement extends HTMLElement {
+    #handle: SettingsDesignerHandle | undefined;
+    #unsubscribe: (() => void) | undefined;
+    #themes: Pick<ThemeEntry, "name" | "label">[] = [];
+
+    constructor() {
+      super();
+      upgradeProperty(this, "themes");
+    }
+
+    /** The themes offered as choices; settable before or after connecting, or before the element is defined. */
+    get themes(): Pick<ThemeEntry, "name" | "label">[] {
+      return [...this.#themes];
+    }
+
+    set themes(themes: Pick<ThemeEntry, "name" | "label">[]) {
+      this.#themes = Array.isArray(themes) ? [...themes] : [];
+      this.#handle?.setThemes(this.#themes);
+    }
+
+    connectedCallback(): void {
+      if (this.#handle !== undefined) return;
+      this.#handle = createSettingsDesigner(this, { ...elementOptions(this), themes: this.#themes });
+      this.#unsubscribe = this.#handle.subscribe((settings) => {
+        this.dispatchEvent(
+          new CustomEvent("widgentic-change", { detail: { settings }, bubbles: true })
+        );
+      });
+    }
+
+    disconnectedCallback(): void {
+      this.#unsubscribe?.();
+      this.#handle?.dispose();
+      this.#handle = undefined;
+      this.#unsubscribe = undefined;
+    }
+
+    get designer(): SettingsDesignerHandle | undefined {
+      return this.#handle;
+    }
+  }
+
+  customElements.define(tagName, WidgenticSettingsDesignerElement);
 }

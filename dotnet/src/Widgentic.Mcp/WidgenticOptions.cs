@@ -56,7 +56,7 @@ public sealed class WidgenticOptions
     /// <param name="path">A directory of designer exports, one definition or an array per file.</param>
     public WidgenticOptions AddWidgetsFromDirectory(string path) => AddFromDirectory(path, AddWidget);
 
-    /// <summary>Add theme entries (<c>{ name, label?, description?, extends?, tokens }</c>): one object or an array.</summary>
+    /// <summary>Add theme entries (<c>{ name, label?, description?, tokens, styles? }</c>): one object or an array.</summary>
     /// <param name="json">The theme JSON.</param>
     /// <param name="source">Where it came from, named in configuration errors.</param>
     public WidgenticOptions AddTheme(string json, string? source = null) =>

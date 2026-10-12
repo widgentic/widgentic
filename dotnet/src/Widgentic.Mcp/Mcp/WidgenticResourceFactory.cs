@@ -22,6 +22,7 @@ internal static class WidgenticResourceFactory
                 Uri = resources.AppTemplateUri,
                 MimeType = resources.AppTemplateMimeType,
                 Text = await engine.Pool.InvokeAsync("appTemplate", cancellationToken).ConfigureAwait(false),
+                Meta = UiMeta(resources.AppTemplatePrefersBorder, resourceDomains),
             },
             new McpServerResourceCreateOptions
             {
@@ -29,19 +30,25 @@ internal static class WidgenticResourceFactory
                 Name = resources.AppTemplateName,
                 Description = resources.AppTemplateDescription,
                 MimeType = resources.AppTemplateMimeType,
-                Meta = resourceDomains.Count == 0 ? null : CspMeta(resourceDomains),
+                Meta = UiMeta(resources.AppTemplatePrefersBorder, resourceDomains),
             });
     }
 
     /// <summary>
-    /// <c>{ "ui": { "csp": { "resourceDomains": [...] } } }</c>, shaped by the SDK's own type. Passed
+    /// <c>{ "ui": { "prefersBorder": …, "csp": { "resourceDomains": [...] } } }</c>, shaped by the
+    /// SDK's own type: the bundle's border preference, and the CSP block only when domains are
+    /// configured. Built fresh per use, for the declaration and for the read content alike. Passed
     /// through the create options because <c>McpApps.SetResourceUi</c> (SDK 2.2.0) writes only the
     /// resource-template view, which <c>resources/list</c> never shows for a fixed URI.
     /// </summary>
-    private static JsonObject CspMeta(IReadOnlyList<string> resourceDomains)
+    private static JsonObject UiMeta(bool prefersBorder, IReadOnlyList<string> resourceDomains)
     {
         var ui = JsonSerializer.SerializeToNode(
-            new McpUiResourceMeta { Csp = new McpUiResourceCsp { ResourceDomains = [.. resourceDomains] } },
+            new McpUiResourceMeta
+            {
+                PrefersBorder = prefersBorder,
+                Csp = resourceDomains.Count == 0 ? null : new McpUiResourceCsp { ResourceDomains = [.. resourceDomains] },
+            },
             McpApps.SerializerOptions);
         return new JsonObject { ["ui"] = ui };
     }

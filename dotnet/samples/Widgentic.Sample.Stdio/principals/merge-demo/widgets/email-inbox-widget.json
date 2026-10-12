@@ -1,76 +1,146 @@
 {
   "kind": "email-inbox-widget",
   "template": {
+    "tag": "section",
     "attrs": {
-      "class": "wg-inbox"
+      "class": "wg-panel wg-inbox"
     },
     "children": [
       {
+        "tag": "header",
+        "attrs": {
+          "class": "wg-panel-head"
+        },
         "children": [
           {
+            "tag": "h2",
+            "attrs": {
+              "class": "wg-title"
+            },
             "children": [
               "Merge demo inbox"
-            ],
-            "tag": "h2"
+            ]
           },
           {
+            "when": "unreadCount",
             "template": {
+              "tag": "span",
               "attrs": {
-                "class": "wg-muted"
+                "class": "wg-status wg-status-accent"
+              },
+              "children": [
+                {
+                  "bind": "unreadCount"
+                },
+                " unread"
+              ]
+            }
+          },
+          {
+            "when": "account",
+            "template": {
+              "tag": "p",
+              "attrs": {
+                "class": "wg-muted wg-inbox-account"
               },
               "children": [
                 {
                   "bind": "account"
                 }
-              ],
-              "tag": "p"
-            },
-            "when": "account"
+              ]
+            }
           }
-        ],
-        "tag": "header"
+        ]
       },
       {
         "each": "messages",
+        "key": "id",
         "empty": {
+          "tag": "p",
           "attrs": {
             "class": "wg-muted"
           },
           "children": [
             "No messages."
-          ],
-          "tag": "p"
+          ]
         },
         "template": {
+          "tag": "article",
           "attrs": {
-            "class": "wg-inbox-email"
+            "class": {
+              "bind": "isRead",
+              "map": {
+                "false": "wg-item wg-unread"
+              },
+              "default": "wg-item"
+            }
           },
           "children": [
             {
+              "tag": "div",
               "attrs": {
-                "class": "wg-inbox-sender",
-                "href": {
-                  "bind": "from",
-                  "prefix": "mailto:"
-                }
+                "class": "wg-inbox-meta"
               },
               "children": [
                 {
-                  "bind": "from"
+                  "tag": "a",
+                  "attrs": {
+                    "class": "wg-link",
+                    "href": {
+                      "bind": "from",
+                      "prefix": "mailto:"
+                    }
+                  },
+                  "children": [
+                    {
+                      "bind": "from"
+                    }
+                  ]
+                },
+                {
+                  "tag": "small",
+                  "attrs": {
+                    "class": "wg-date"
+                  },
+                  "children": [
+                    {
+                      "bind": "receivedAt",
+                      "format": {
+                        "type": "date",
+                        "pattern": "yyyy-MM-dd HH:mm"
+                      }
+                    }
+                  ]
                 }
-              ],
-              "tag": "a"
+              ]
             },
             {
+              "tag": "h3",
+              "attrs": {
+                "class": "wg-subtitle"
+              },
               "children": [
+                {
+                  "when": "isStarred",
+                  "template": {
+                    "tag": "span",
+                    "attrs": {
+                      "class": "wg-inbox-star"
+                    },
+                    "children": [
+                      "★"
+                    ]
+                  }
+                },
                 {
                   "bind": "subject"
                 }
-              ],
-              "tag": "h3"
+              ]
             },
             {
+              "when": "preview",
               "template": {
+                "tag": "p",
                 "attrs": {
                   "class": "wg-muted"
                 },
@@ -78,34 +148,43 @@
                   {
                     "bind": "preview"
                   }
-                ],
-                "tag": "p"
-              },
-              "when": "preview"
+                ]
+              }
             },
             {
-              "attrs": {
-                "class": "wg-muted"
-              },
-              "children": [
-                {
-                  "bind": "receivedAt",
-                  "format": {
-                    "pattern": "yyyy-MM-dd HH:ss",
-                    "type": "date"
+              "when": "labels",
+              "template": {
+                "tag": "ul",
+                "attrs": {
+                  "class": "wg-list"
+                },
+                "children": [
+                  {
+                    "each": "labels",
+                    "template": {
+                      "tag": "li",
+                      "attrs": {
+                        "class": "wg-chip"
+                      },
+                      "children": [
+                        {
+                          "bind": "."
+                        }
+                      ]
+                    }
                   }
-                }
-              ],
-              "tag": "small"
+                ]
+              }
             }
-          ],
-          "tag": "article"
+          ]
         }
       }
-    ],
-    "tag": "section"
+    ]
   },
   "descriptor": {
+    "description": "Displays the merge-demo principal's inbox as a readable list, with each sender address as an email link. It replaces the seed's email-inbox-widget for this principal only.",
+    "dataShape": "{ account?, unreadCount?, messages: [{ id, from, subject, preview?, receivedAt, isRead, isStarred?, labels? }] }",
+    "dataSchemaRef": "email-inbox",
     "dataExample": {
       "account": "alex@example.com",
       "messages": [
@@ -136,22 +215,18 @@
       ],
       "unreadCount": 2
     },
-    "dataSchemaRef": "email-inbox",
-    "dataShape": "{ account?, unreadCount?, messages: [{ id, from, subject, preview?, receivedAt, isRead, isStarred?, labels? }] }",
-    "description": "Displays the merge-demo principal's inbox as a readable list, with each sender address as an email link. It replaces the seed's email-inbox-widget for this principal only.",
     "styles": {
-      ".wg-inbox": {
-        "background": "var(--wg-surface)",
-        "border": "var(--wg-border-width) solid var(--wg-border)",
-        "border-radius": "var(--wg-radius-lg)",
-        "padding": "var(--wg-spacing-lg)"
+      ".wg-inbox-meta": {
+        "display": "flex",
+        "justify-content": "space-between",
+        "align-items": "baseline",
+        "gap": "var(--wg-spacing)"
       },
-      ".wg-inbox-email": {
-        "border-top": "var(--wg-border-width) solid var(--wg-border)",
-        "padding": "var(--wg-spacing)"
+      ".wg-inbox-account": {
+        "flex-basis": "100%"
       },
-      ".wg-inbox-sender": {
-        "color": "var(--wg-accent)"
+      ".wg-inbox-star": {
+        "color": "var(--wg-warning)"
       }
     }
   }

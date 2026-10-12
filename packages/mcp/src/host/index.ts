@@ -228,6 +228,6 @@ export function createWidgenticHost(configJson: string): WidgenticHost {
       return JSON.stringify(handler(args.ok ? args.value : argsJson, slim === true));
     },
     appTemplate: () => buildAppTemplate(),
-    widgetPage: (kind) => renderWidgetPage(catalog, kind)
+    widgetPage: (kind) => renderWidgetPage(catalog, kind, registry)
   };
 }

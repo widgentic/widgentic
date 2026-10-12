@@ -25,6 +25,8 @@ export const KEY_SCOPES: readonly Scope[] = ["read", "execute"];
 export type { StoredAction } from "@widgentic/core";
 import type { SecretErrorCode } from "../secrets/index.js";
 import type { EntryProblem } from "./validate.js";
+import type { PrincipalSettings, PrincipalSettingsUpdate } from "./settings.js";
+export type { PrincipalSettings, PrincipalSettingsUpdate } from "./settings.js";
 
 /** A secret as listings show it: never a value, preview or length. */
 export interface SecretEntry {
@@ -115,6 +117,11 @@ export interface WidgetStore {
    * `NO_CIPHER` when the store was built without a cipher.
    */
   secretValue(principalId: string, name: string): Promise<string | undefined>;
+  /**
+   * The principal's settings — the sections this version knows; `{}` when
+   * nothing is set or the principal is unknown. Never throws for either.
+   */
+  settings(principalId: string): Promise<PrincipalSettings>;
 }
 
 /**
@@ -153,7 +160,19 @@ export interface WritableWidgetStore extends WidgetStore {
   putTheme(principalId: string, theme: ThemeEntry): Promise<void>;
   putSchema(principalId: string, schema: StoredSchema): Promise<void>;
   removeWidget(principalId: string, kind: string): Promise<void>;
+  /**
+   * Remove a theme. Refused with `THEME_IN_USE` while the principal's
+   * settings name it as a default.
+   */
   removeTheme(principalId: string, name: string): Promise<void>;
+  /**
+   * Update the principal's settings: each section `update` names replaces
+   * that section (`null` removes it), and every other section is kept.
+   * Refused with `INVALID_SHAPE` (unknown section, mode or value) or
+   * `UNKNOWN_THEME` (a default naming no stored theme); a refusal changes
+   * nothing.
+   */
+  putSettings(principalId: string, update: PrincipalSettingsUpdate): Promise<void>;
   /**
    * Remove a schema. Refused with `SCHEMA_IN_USE` while stored widgets
    * still reference it — the write-side guard that keeps dangling refs
@@ -235,6 +254,8 @@ export type StoreRejectionCode =
   | "UNKNOWN_KEY"
   | "UNKNOWN_SCHEMA"
   | "SCHEMA_IN_USE"
+  | "UNKNOWN_THEME"
+  | "THEME_IN_USE"
   | "ACTION_IN_USE"
   | "SECRET_IN_USE"
   | "TOO_MANY_WIDGETS"

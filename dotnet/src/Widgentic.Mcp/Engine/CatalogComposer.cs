@@ -41,7 +41,7 @@ internal sealed class CatalogComposer
             if (mode == WidgenticComposition.Merge)
             {
                 // The startup entries the caller does not redefine compose first, so the caller's
-                // themes can extend them and its widgets can reference their schemas.
+                // widgets can reference their schemas.
                 foreach (var entry in section.Startup.Where(entry => entry.Id is null || !claimed.Contains(entry.Id)))
                 {
                     array.Add(entry.Value?.DeepClone());

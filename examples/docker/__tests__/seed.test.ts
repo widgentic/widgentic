@@ -10,7 +10,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { handleRenderWidget } from "@widgentic/mcp";
-import { composeCatalog } from "@widgentic/mcp/store";
+import { composeCatalog, composeThemes } from "@widgentic/mcp/store";
 import { createSqliteStore } from "@widgentic/mcp/store/sqlite";
 import { seedOnStartup, seedPrincipal } from "../seed.js";
 
@@ -50,7 +50,7 @@ const widget = (kind: string, ref: string) => ({
 describe("startup seed", () => {
   it("populates an empty store with the sample content, and its widgets render", async () => {
     const summary = await seedPrincipal(store, principalId, SAMPLE, log);
-    expect(summary).toEqual({ written: 6, skipped: 0, refused: 0 });
+    expect(summary).toEqual({ written: 7, skipped: 0, refused: 0 });
     expect((await store.schemas(principalId)).map((s) => s.name).sort()).toEqual(["appointment-agenda", "email-inbox"]);
     expect((await store.themes(principalId)).map((t) => t.name).sort()).toEqual(["google-dark", "google-light"]);
     const widgets = await store.widgets(principalId);
@@ -60,13 +60,13 @@ describe("startup seed", () => {
       const result = handleRenderWidget(catalog, { widget: stored.kind, data: stored.descriptor.dataExample });
       expect(result.isError, stored.kind).toBeUndefined();
     }
-    expect(lines.at(-1)).toContain("6 written, 0 already present, 0 refused");
+    expect(lines.at(-1)).toContain("7 written, 0 already present, 0 refused");
   });
 
   it("never overwrites an entry the principal already holds", async () => {
     await store.putTheme(principalId, { name: "google-dark", tokens: { accent: "#ff0000" } });
     const summary = await seedPrincipal(store, principalId, SAMPLE, log);
-    expect(summary).toEqual({ written: 5, skipped: 1, refused: 0 });
+    expect(summary).toEqual({ written: 6, skipped: 1, refused: 0 });
     const kept = (await store.themes(principalId)).find((t) => t.name === "google-dark");
     expect(kept?.tokens).toEqual({ accent: "#ff0000" });
   });
@@ -113,6 +113,46 @@ describe("startup seed", () => {
 
   it("seeds through the single principal at startup", async () => {
     const summary = await seedOnStartup(store, { principalId }, SAMPLE, log);
-    expect(summary?.written).toBe(6);
+    expect(summary?.written).toBe(7);
+  });
+});
+
+describe("startup seed settings", () => {
+  it("sets the demo's default themes, and a render naming no theme uses them", async () => {
+    await seedPrincipal(store, principalId, SAMPLE, log);
+    expect(await store.settings(principalId)).toEqual({ defaultThemes: { light: "google-light", dark: "google-dark" } });
+    const themes = (await composeThemes(store, principalId)).value;
+    expect(themes.defaults()).toEqual({ light: "google-light", dark: "google-dark" });
+    const catalog = (await composeCatalog(store, principalId)).value;
+    const css = String((handleRenderWidget(catalog, { widget: "card", data: { title: "t" } }, { themes }).structuredContent as { css: string }).css);
+    // Each mode's block carries that theme's accent from the seed.
+    const block = (selector: string) => css.slice(css.indexOf(`${selector} {`)).split("}")[0] ?? "";
+    expect(block(':root:not([data-theme="dark"])')).toContain(`--wg-accent: ${themes.get("google-light")?.tokens.accent};`);
+    expect(block(':root[data-theme="dark"]')).toContain(`--wg-accent: ${themes.get("google-dark")?.tokens.accent};`);
+    expect(themes.get("google-light")?.tokens.accent).toBe("#1a73e8");
+  });
+
+  it("never overwrites a section the person already holds", async () => {
+    await seedPrincipal(store, principalId, SAMPLE, log);
+    // The person sets dark hosts back to the built-in, then the service restarts.
+    await store.putSettings(principalId, { defaultThemes: { light: "google-light" } });
+    const summary = await seedPrincipal(store, principalId, SAMPLE, log);
+    expect(summary).toEqual({ written: 0, skipped: 7, refused: 0 });
+    expect(await store.settings(principalId)).toEqual({ defaultThemes: { light: "google-light" } });
+  });
+
+  it("logs a refused section with its code and keeps the entries", async () => {
+    const path = seedFile({ themes: [theme], settings: { defaultThemes: { dark: "missing" }, fonts: {} } });
+    const summary = await seedPrincipal(store, principalId, path, log);
+    expect(summary).toEqual({ written: 1, skipped: 0, refused: 2 });
+    expect(lines).toContain("widgentic web: seed setting 'defaultThemes' refused: UNKNOWN_THEME");
+    expect(lines).toContain("widgentic web: seed setting 'fonts' refused: INVALID_SHAPE");
+    expect(await store.settings(principalId)).toEqual({});
+  });
+
+  it("ignores settings that are not an object", async () => {
+    const summary = await seedPrincipal(store, principalId, seedFile({ themes: [theme], settings: ["x"] }), log);
+    expect(summary).toEqual({ written: 1, skipped: 0, refused: 0 });
+    expect(lines).toContain("widgentic web: seed 'settings' ignored: expected an object of sections");
   });
 });

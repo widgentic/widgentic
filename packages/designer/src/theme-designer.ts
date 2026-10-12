@@ -1,8 +1,9 @@
 /**
  * Standalone theme designer: edits a NAMED theme entry
- * (`{ name, label?, description?, tokens }` — the theme registry's shape,
- * which is also what a host persists) with live preview against any
- * catalog kind.
+ * (`{ name, label?, description?, tokens, styles? }` — the theme
+ * registry's shape, which is also what a host persists) with live preview
+ * against any catalog kind. Its styles are edited with the widget
+ * designer's own styles panel: one shape, one rule set, one editor.
  *
  * Split from the widget designer on purpose: an app routes to "design a
  * theme" and "design a widget" as separate destinations, and a host
@@ -10,21 +11,25 @@
  * controller, chrome, and store discipline.
  */
 import { errorMessage } from "./internal.js";
-import { createCatalog } from "@widgentic/core";
+import { createCatalog, createThemeRegistry, SAFE_IDENTIFIER } from "@widgentic/core";
 import {
   THEME_TOKENS,
   TOKEN_DEFAULTS,
   TOKEN_SPECS,
   isSafeTokenValue,
+  TOKEN_VALUE_RULE,
+  isStyleMap,
   validateTheme
 } from "@widgentic/core";
-import type { ThemeEntry, WidgetThemeInput } from "@widgentic/core";
+import type { ThemeEntry, WidgetStyles, WidgetThemeInput } from "@widgentic/core";
 import { applyChrome, diagnosticLine, h, injectDesignerStyles, section, textField, requireChild } from "./dom.js";
 import type { ChromeOptions } from "./dom.js";
 import { createPreview } from "./preview.js";
 import type { PreviewWidget } from "./preview.js";
 import { starterDraft } from "./store.js";
 import type { WidgetDraft } from "./store.js";
+import { createStylesPanel } from "./styles-panel.js";
+import { auditStyles } from "./validate.js";
 
 const BASE_KINDS = createCatalog().kinds();
 
@@ -77,8 +82,37 @@ function starterEntry(): ThemeEntry {
   return { name: "my-theme", label: "My theme", tokens: {} };
 }
 
-/** Validate an untrusted entry; errors instead of throwing. */
-export function checkThemeEntry(entry: unknown): string[] {
+/** Theme names a stored theme may never take, read from the registry. */
+const BUILT_IN_THEMES: ReadonlySet<string> = new Set(createThemeRegistry().names());
+
+/** What saving would refuse about a name, in the store's terms. */
+function nameProblem(name: string): string | undefined {
+  if (!SAFE_IDENTIFIER.test(name)) {
+    return `INVALID_IDENTIFIER — '${name}' may use letters, digits, '.', '_' or '-' only.`;
+  }
+  if (BUILT_IN_THEMES.has(name)) {
+    return `RESERVED_THEME — '${name}' is a built-in theme; give yours its own name.`;
+  }
+  return undefined;
+}
+
+/**
+ * A copy of an entry for the designer to hold. A retired `extends` is left
+ * behind: the registry ignores it, and a field the designer handed back
+ * (to `getTheme`, Export, Save or an agent) would look meaningful.
+ */
+function takeEntry(input: unknown): ThemeEntry {
+  const { extends: _retired, ...entry } = JSON.parse(JSON.stringify(input)) as ThemeEntry & { extends?: unknown };
+  return entry;
+}
+
+/**
+ * Validate an untrusted entry; errors instead of throwing. The name is held
+ * to what saving accepts only when it differs from `currentName`: a name the
+ * entry already has is the person's to fix (the Name field flags it), and
+ * reloading the same entry with new tokens must not fail on it.
+ */
+export function checkThemeEntry(entry: unknown, currentName?: string): string[] {
   const errors: string[] = [];
   if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
     return ["Theme entry must be an object."];
@@ -86,10 +120,16 @@ export function checkThemeEntry(entry: unknown): string[] {
   const candidate = entry as Record<string, unknown>;
   if (typeof candidate.name !== "string" || candidate.name.trim() === "") {
     errors.push("'name' must be a non-empty string.");
+  } else if (candidate.name !== currentName) {
+    const problem = nameProblem(candidate.name);
+    if (problem !== undefined) errors.push(`name: ${problem}`);
   }
   const validated = validateTheme(candidate.tokens ?? {});
   if (!validated.ok) {
     errors.push(`tokens: ${validated.error.code} — ${validated.error.message}`);
+  }
+  if (candidate.styles !== undefined && !isStyleMap(candidate.styles)) {
+    errors.push("styles: must map selectors to objects of property/value strings.");
   }
   return errors;
 }
@@ -100,9 +140,7 @@ export function createThemeDesigner(
 ): ThemeDesignerHandle {
   injectDesignerStyles(document);
 
-  let entry: ThemeEntry = options.initialTheme
-    ? (JSON.parse(JSON.stringify(options.initialTheme)) as ThemeEntry)
-    : starterEntry();
+  let entry: ThemeEntry = options.initialTheme ? takeEntry(options.initialTheme) : starterEntry();
   const listeners = new Set<(entry: ThemeEntry) => void>();
 
   const preview = createPreview(
@@ -122,7 +160,8 @@ export function createThemeDesigner(
 
   /** A draft carrying only what the preview needs: kind + this theme. */
   function previewDraft(): WidgetDraft {
-    return { ...starterDraft(), theme: entry.tokens };
+    const draft: WidgetDraft = { ...starterDraft(), theme: entry.tokens };
+    return entry.styles === undefined ? draft : { ...draft, themeStyles: entry.styles };
   }
 
   function refresh(): void {
@@ -158,15 +197,25 @@ export function createThemeDesigner(
     return field;
   }
 
+  // A name saving would refuse is flagged as it is typed, in the store's terms.
+  const nameDiag = diagnosticLine(undefined);
+  function showNameProblem(): void {
+    const problem = entry.name.trim() === "" ? "'name' must be a non-empty string." : nameProblem(entry.name);
+    nameDiag.hidden = problem === undefined;
+    nameDiag.textContent = problem ?? "";
+  }
+  identityRefreshers.push(showNameProblem);
   const identity = section("Theme", [
     identityField(
       "Name (id)",
       () => entry.name,
       (value) => {
         entry = { ...entry, name: value };
+        showNameProblem();
         refresh();
       }
     ),
+    nameDiag,
     identityField(
       "Label",
       () => entry.label ?? "",
@@ -184,6 +233,8 @@ export function createThemeDesigner(
       }
     )
   ]);
+
+  showNameProblem();
 
   // The kind selector is a PREVIEW control, so it lives beside the
   // preview, outside the editing panels — read-only mode keeps it live.
@@ -242,7 +293,7 @@ export function createThemeDesigner(
       const unsafe = input.value !== "" && !isSafeTokenValue(input.value);
       issue.hidden = !unsafe;
       issue.textContent = unsafe
-        ? "INVALID_TOKEN_VALUE: unsafe value withheld from the preview (no ;{}<> url() expression())."
+        ? `INVALID_TOKEN_VALUE: unsafe value withheld from the preview. ${TOKEN_VALUE_RULE}`
         : "";
       paint(input.value);
       setToken(token, input.value);
@@ -379,15 +430,31 @@ export function createThemeDesigner(
   ]);
   exportPanel.classList.add("wgd-view-only");
 
+  // Shared classes for every widget the theme dresses — the widget
+  // designer's own panel, so the shape, guards and audit are identical.
+  const stylesPanel = createStylesPanel(entry.styles, (styles: WidgetStyles | undefined) => {
+    const { styles: _previous, ...rest } = entry;
+    entry = styles === undefined ? rest : { ...rest, styles };
+    stylesPanel.setIssues(auditStyles(entry.styles));
+    refresh();
+  });
+  stylesPanel.setIssues(auditStyles(entry.styles));
+
   panels.append(identity, tokenPanel, customPanel, importPanel, exportPanel);
+  // Under the preview, where the widget designer keeps its Styles panel:
+  // styles are judged against what they dress.
+  stylesPanel.element.classList.add("wgd-edit-only");
+  side.append(stylesPanel.element);
 
   function loadTheme(input: unknown): ThemeLoadResult {
-    const errors = checkThemeEntry(input);
+    const errors = checkThemeEntry(input, entry.name);
     if (errors.length > 0) return { ok: false, errors };
-    entry = JSON.parse(JSON.stringify(input)) as ThemeEntry;
+    entry = takeEntry(input);
     for (const refreshIdentity of identityRefreshers) refreshIdentity();
     for (const refreshToken of tokenRefreshers) refreshToken();
     renderCustom();
+    stylesPanel.setValue(entry.styles);
+    stylesPanel.setIssues(auditStyles(entry.styles));
     refresh();
     return { ok: true };
   }
@@ -397,9 +464,9 @@ export function createThemeDesigner(
   /** Same mechanism as the widget designer: inert the section bodies. */
   function setReadOnly(readOnly: boolean): void {
     root.classList.toggle("wgd-readonly", readOnly);
-    const bodies = [...panels.querySelectorAll(".wgd-section-body")].filter(
-      (body) => !body.parentElement?.classList.contains("wgd-view-only")
-    );
+    const bodies = [
+      ...root.querySelectorAll(".wgd-panels .wgd-section-body, .wgd-edit-only > .wgd-section-body")
+    ].filter((body) => !body.parentElement?.classList.contains("wgd-view-only"));
     for (const body of bodies) {
       if (readOnly) body.setAttribute("inert", "");
       else body.removeAttribute("inert");

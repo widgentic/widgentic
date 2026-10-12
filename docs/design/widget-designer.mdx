@@ -11,7 +11,7 @@ A widget is one JSON object, `{ kind, template, descriptor }`:
 
 - `kind` — the identifier agents render by. It must match `^[a-zA-Z0-9._-]+$` and may not collide with a built-in kind (`card`, `table`, `tree`, `group`).
 - `template` — one node in the [template DSL](/design/template-dsl).
-- `descriptor` — what agents read before they call: a required `description` and `dataShape`, a recommended `dataExample`, optional `hints` and `styles`, and either an inline `dataSchema` or a `dataSchemaRef` naming a [shared schema](/design/data-schemas).
+- `descriptor` — what agents read before they call: a required `description`, a strongly recommended `dataShape` (without it, agents listing the widget see a placeholder, and the designer warns), a recommended `dataExample`, optional `hints` and `styles`, and either an inline `dataSchema` or a `dataSchemaRef` naming a [shared schema](/design/data-schemas).
 
 ```json
 {

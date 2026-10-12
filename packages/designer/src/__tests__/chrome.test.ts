@@ -15,6 +15,7 @@ import {
   chromeCss,
   chromeReferences,
   createActionDesigner,
+  createSettingsDesigner,
   createDesigner,
   createSchemaDesigner,
   createThemeDesigner,
@@ -65,7 +66,8 @@ const FACTORIES = [
   ["createDesigner", createDesigner],
   ["createThemeDesigner", createThemeDesigner],
   ["createSchemaDesigner", createSchemaDesigner],
-  ["createActionDesigner", createActionDesigner]
+  ["createActionDesigner", createActionDesigner],
+  ["createSettingsDesigner", createSettingsDesigner]
 ] as const;
 
 beforeEach(() => {

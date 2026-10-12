@@ -24,6 +24,6 @@ export function designerTools(sources: DesignerSources, options: ToolsOptions = 
   if (sources.theme !== undefined) tools.push(...themeTools(sources.theme, name));
   if (sources.schema !== undefined) tools.push(...schemaTools(sources.schema, name));
   if (sources.action !== undefined) tools.push(...actionTools(sources.action, name));
-  tools.push(authoringGuideTool(name, prefix), widgetDefinitionCheckTool(name, prefix), themeTokenSpecsTool(name));
+  tools.push(authoringGuideTool(name, prefix), widgetDefinitionCheckTool(name, prefix, sources.widgetIfMounted), themeTokenSpecsTool(name));
   return tools;
 }

@@ -1,7 +1,7 @@
 {
-  "description": "A dated agenda containing scheduled appointments, participants, locations, and attendance state.",
-  "label": "Appointment agenda",
   "name": "appointment-agenda",
+  "label": "Appointment agenda",
+  "description": "A dated agenda containing scheduled appointments, participants, locations, and attendance state.",
   "schema": {
     "properties": {
       "appointments": {
