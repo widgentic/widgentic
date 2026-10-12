@@ -394,6 +394,9 @@ workspace and the sample first, then point at the built DLL):
     - **Preview theme:** `widget_theme_set` with empty tokens leaves the selector on "none" (it switched to "Light", whose token map is also empty).
     - **Theme designer:** typing `dark` into Name shows `RESERVED_THEME` inline, and typing `ocean` clears it.
     - **Corpus:** only `get_authoring_guide` changed (the `dataShape` text).
+  - **WebMCP agent retest on staging `6c7eace` (2026-10-12).** Four findings fixed. Two remained:
+    - **`widget_theme_set` dropped the person's theme:** it now layers over the chosen preview theme. A test chooses `google-light`, sets `accent`, and checks the selector and `previewTheme` still name it with the other tokens kept; `{}` returns its tokens exactly. In the designer the same holds for a theme with styles; with nothing chosen, a map is the whole theme.
+    - **`schema_load` accepted `type: "banana"`:** it still loads (the store accepts it on purpose) but returns `warnings` naming `schema.properties.kind.type`, the schema designer shows the warning until the type is fixed, and an inline `dataSchema` warns in the widget designer and in `definition_check`. Core tests cover unknown names (and that validation still lets anything through), unrunnable patterns, misshapen keywords through `items`, and silence on every supported type and on unknown keywords.
   - **Not verified yet:** the hosts. Staging on `demo.widgentic.dev`, and widgentic.dev's Settings section, follow.
 - **Wire schemas from the exported definitions (2026-10-11, change `derived-input-schemas`, `@widgentic/mcp` minor pending release)**
   - **The wire.** `server-wiring` lists the tools of `createWidgenticServer()` and finds every `inputSchema` and description equal to the exported definition's, for all nine tools: nothing added (no `$schema`), nothing missing.

@@ -27,6 +27,12 @@ export interface WidgetDraft {
   theme?: WidgetTheme;
   /** The preview theme's shared styles; preview-only, never exported. */
   themeStyles?: WidgetStyles;
+  /**
+   * The supplied theme the person chose for the preview, by name; `theme`
+   * is its tokens with any programmatic tokens layered over them.
+   * Preview-only, never exported.
+   */
+  previewTheme?: string;
 }
 
 export type DraftListener = (draft: WidgetDraft) => void;

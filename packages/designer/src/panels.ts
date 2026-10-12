@@ -88,8 +88,7 @@ export function mountPanels(
   columns: PanelColumns,
   themes: ThemeEntry[] = [],
   schemas: SchemaEntry[] = [],
-  actionContext: TemplateActionContext = { actions: [], secretNames: [], schemas: [] },
-  previewTheme?: string
+  actionContext: TemplateActionContext = { actions: [], secretNames: [], schemas: [] }
 ): { dispose(): void } {
   const refreshers: Refresher[] = [];
   const disposers: (() => void)[] = [];
@@ -230,6 +229,7 @@ export function mountPanels(
     spellcheck: "false"
   });
   const schemaRefDiag = diagnosticLine(undefined);
+  const schemaAuditDiag = diagnosticLine(undefined);
   const sharedWrap = h("div", undefined, [
     h("div", { class: "wgd-row" }, [
       h("span", { class: "wgd-field-label" }, ["Shared schema"]),
@@ -292,6 +292,7 @@ export function mountPanels(
       ]),
       schemaRefDiag,
       inlineEditors,
+      schemaAuditDiag,
       sharedWrap
     ],
     false
@@ -424,7 +425,7 @@ export function mountPanels(
   refreshers.push((draft) => stylesPanel.setValue(draft.descriptor.styles));
 
   const templatePanel = mountTemplatePanel(store, refreshers, { actionContext });
-  const themePanel = mountThemePanel(store, refreshers, themes, previewTheme);
+  const themePanel = mountThemePanel(store, refreshers, themes);
 
   // --- Load: the widget-level http GET action run once per instance -------
   const loadDiag = diagnosticLine(undefined);
@@ -494,6 +495,8 @@ export function mountPanels(
     dataShapeDiag.textContent = diagnostics.dataShape ?? "";
     schemaRefDiag.hidden = diagnostics.schemaRef === undefined;
     schemaRefDiag.textContent = diagnostics.schemaRef ?? "";
+    schemaAuditDiag.hidden = diagnostics.dataSchema === undefined;
+    schemaAuditDiag.textContent = diagnostics.dataSchema?.join("\n") ?? "";
     themePanel.setDiagnostic(
       diagnostics.theme
         ? `${diagnostics.theme.code}: ${diagnostics.theme.message}`

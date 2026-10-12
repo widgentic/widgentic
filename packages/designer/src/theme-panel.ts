@@ -17,9 +17,7 @@ import type { DraftStore, WidgetDraft } from "./store.js";
 export function mountThemePanel(
   store: DraftStore,
   refreshers: ((draft: WidgetDraft) => void)[],
-  themes: ThemeEntry[] = [],
-  /** The entry the designer opened with, so equal-content entries stay told apart. */
-  initialName?: string
+  themes: ThemeEntry[] = []
 ): {
   element: HTMLElement;
   /** Show the theme validator's error — this panel owns the value. */
@@ -39,19 +37,27 @@ export function mountThemePanel(
       h("option", { value: entry.name }, [entry.label ?? entry.name])
     );
   }
-  if (initialName !== undefined && themes.some((entry) => entry.name === initialName)) {
-    themeSelect.value = initialName;
-  }
+  // The selection is the person's: it names the draft's `previewTheme`
+  // and only a pick here changes it — tokens a host or agent layers on
+  // top never re-select by content.
+  const showChoice = (draft: WidgetDraft) => {
+    themeSelect.value = themes.some((entry) => entry.name === draft.previewTheme) ? draft.previewTheme ?? "" : "";
+  };
+  showChoice(store.get());
   themeSelect.addEventListener("change", () => {
     const entry = themes.find((candidate) => candidate.name === themeSelect.value);
     store.update((draft) => {
-      const { theme: _theme, themeStyles: _styles, ...rest } = draft;
+      const { theme: _theme, themeStyles: _styles, previewTheme: _name, ...rest } = draft;
       if (entry === undefined) return rest;
-      // The entry's shared styles dress the preview too, so its classes
-      // look in the draft as they will under this theme.
-      return entry.styles === undefined
-        ? { ...rest, theme: entry.tokens }
-        : { ...rest, theme: entry.tokens, themeStyles: entry.styles };
+      // A pick replaces any layered tokens. The entry's shared styles dress
+      // the preview too, so its classes look in the draft as they will
+      // under this theme.
+      return {
+        ...rest,
+        theme: entry.tokens,
+        previewTheme: entry.name,
+        ...(entry.styles === undefined ? {} : { themeStyles: entry.styles })
+      };
     });
   });
 
@@ -89,25 +95,7 @@ export function mountThemePanel(
   renderTokenReference(store.get().theme);
 
   refreshers.push((draft) => {
-    // Reflect programmatic theme loads; an unrecognized map shows as none.
-    if (draft.theme === undefined) {
-      themeSelect.value = "";
-    } else {
-      // The chosen name stands while the draft still carries that entry;
-      // otherwise the first entry with the same tokens AND styles (a
-      // styles-only theme has the built-in light's tokens).
-      const same = (entry: ThemeEntry) =>
-        JSON.stringify(entry.tokens) === JSON.stringify(draft.theme) &&
-        JSON.stringify(entry.styles) === JSON.stringify(draft.themeStyles);
-      const chosen = themes.find((entry) => entry.name === themeSelect.value);
-      if (chosen === undefined || !same(chosen)) {
-        // An empty map with no styles is the defaults — "none" — never a
-        // guess at whichever named entry happens to be empty (the built-in
-        // light): a token map set programmatically names no entry.
-        const empty = Object.keys(draft.theme).length === 0 && draft.themeStyles === undefined;
-        themeSelect.value = empty ? "" : themes.find(same)?.name ?? "";
-      }
-    }
+    showChoice(draft);
     renderTokenReference(draft.theme);
   });
 

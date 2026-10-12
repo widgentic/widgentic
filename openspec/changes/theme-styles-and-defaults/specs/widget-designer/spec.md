@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Preview theme selection in the widget designer
-The widget designer SHALL accept `options.themes` — a list of named theme entries — and offer them as the preview theme through a selector (including a "none" choice for the built-in defaults), applying the chosen entry's tokens to the live preview. A host SHALL be able to name one of those entries as `options.previewTheme`: the designer SHALL open with it selected and applied — its tokens and its styles — and a name matching no supplied entry SHALL be ignored, leaving "none". Loading a widget definition SHALL keep the selected preview theme, tokens and styles alike, and loading a bare token map through `loadTheme` SHALL replace the preview theme whole, dropping the previous entry's styles. The preview SHALL render the draft widget only — there is no kind selector; previewing arbitrary catalog kinds under a theme belongs to the standalone theme designer. Beside the theme selection, the designer SHALL show a compact read-only listing of the effective preview tokens — the selected entry merged over the defaults — with each token's name, its effective value, and a color swatch for `color`-typed tokens (type read from the registry's metadata, never inferred), so style authoring can reference `var(--wg-…)` by sight. The widget designer SHALL NOT edit theme tokens; theme authoring belongs to the standalone theme designer. The draft's theme selection SHALL NOT affect the exported widget definition, which stays `{ kind, template, descriptor }`.
+The widget designer SHALL accept `options.themes` — a list of named theme entries — and offer them as the preview theme through a selector (including a "none" choice for the built-in defaults), applying the chosen entry's tokens to the live preview. A host SHALL be able to name one of those entries as `options.previewTheme`: the designer SHALL open with it selected and applied — its tokens and its styles — and a name matching no supplied entry SHALL be ignored, leaving "none". Loading a widget definition SHALL keep the selected preview theme, tokens and styles alike, and loading a bare token map through `loadTheme` SHALL layer it over the selected entry: the selection and the entry's styles stay, the map's tokens win over the entry's, and each load replaces the previous layer, so `{}` returns to the entry exactly; with no entry selected the map is the whole preview theme. Only the person's choice in the selector changes the selection — a token map never selects an entry by its content — and choosing an entry, or none, replaces any layered tokens. The preview SHALL render the draft widget only — there is no kind selector; previewing arbitrary catalog kinds under a theme belongs to the standalone theme designer. Beside the theme selection, the designer SHALL show a compact read-only listing of the effective preview tokens — the selected entry merged over the defaults — with each token's name, its effective value, and a color swatch for `color`-typed tokens (type read from the registry's metadata, never inferred), so style authoring can reference `var(--wg-…)` by sight. The widget designer SHALL NOT edit theme tokens; theme authoring belongs to the standalone theme designer. The draft's theme selection SHALL NOT affect the exported widget definition, which stays `{ kind, template, descriptor }`.
 
 #### Scenario: Supplied themes are selectable and applied
 - **WHEN** a designer is created with `options.themes` containing a `dark` entry and that entry is selected
@@ -29,17 +29,21 @@ The widget designer SHALL accept `options.themes` — a list of named theme entr
 - **THEN** the selector SHALL show `brand` and the preview SHALL carry its tokens and its styles from the first render
 - **AND** choosing "none" SHALL still remove both, and `options.previewTheme: "missing"` SHALL open with "none"
 
-#### Scenario: A token map replaces the preview theme whole
-- **WHEN** `brand` (with styles) is the selected preview theme and the host calls `loadTheme({ accent: "#123456" })`
-- **THEN** the preview SHALL carry the new tokens and none of `brand`'s styles, and the selector SHALL show "none"
+#### Scenario: A token map layers over the chosen theme
+- **WHEN** `tide` (tokens and styles) is the selected preview theme and the host calls `loadTheme({ accent: "#123456" })`
+- **THEN** the selector SHALL still show `tide`, and the preview SHALL carry `accent: #123456`, `tide`'s other tokens and `tide`'s styles
+- **AND WHEN** the host then calls `loadTheme({})`
+- **THEN** the preview tokens SHALL equal `tide`'s exactly
 
 #### Scenario: Loading a widget keeps the preview theme
 - **WHEN** `brand` is the selected preview theme and the host loads another widget definition
 - **THEN** the preview SHALL still carry `brand`'s tokens and styles
 
 #### Scenario: An empty token map is not a named theme
-- **WHEN** the designer was given the built-in `light` entry (whose token map is empty) and the host calls `loadTheme({})`
+- **WHEN** the designer was given the built-in `light` entry (whose token map is empty), no entry is selected, and the host calls `loadTheme({})`
 - **THEN** the selector SHALL show "none"
+- **AND WHEN** the host calls `loadTheme({ accent: "#123456" })`
+- **THEN** the selector SHALL still show "none" and the preview SHALL carry exactly those tokens and no shared styles
 
 ### Requirement: Designer programmatic surface
 The package SHALL export from a `./designer` entry: `createDesigner(container: Element, options?)` returning a handle `{ getDraft(), loadWidget(definition), loadTheme(theme), setReadOnly(readOnly), subscribe(listener), dispose() }`, `createThemeDesigner(container: Element, options?)` returning `{ getTheme(), loadTheme(entry), setReadOnly(readOnly), subscribe(listener), dispose() }`, `createSchemaDesigner(container: Element, options?)` returning `{ getSchema(), loadSchema(entry), setReadOnly(readOnly), subscribe(listener), dispose() }`, `createActionDesigner(container: Element, options?)` returning `{ getAction(), loadAction(entry), setReadOnly(readOnly), subscribe(listener), dispose() }`, `createSettingsDesigner(container: Element, options?)` returning `{ getSettings(), loadSettings(settings), setThemes(themes), setReadOnly(readOnly), subscribe(listener), dispose() }`, and the opt-in element registrars `defineDesignerElement(tagName?)` (default `widgentic-designer`), `defineThemeDesignerElement(tagName?)` (default `widgentic-theme-designer`), `defineSchemaDesignerElement(tagName?)` (default `widgentic-schema-designer`) and `defineActionDesignerElement(tagName?)` (default `widgentic-action-designer`) and `defineSettingsDesignerElement(tagName?)` (default `widgentic-settings-designer`), each wrapping its factory and emitting `widgentic-change` CustomEvents whose `detail` carries the serialized draft, theme entry, schema entry, action entry, or settings record. All five factories SHALL accept `readOnly` in options and every handle SHALL expose `setReadOnly(readOnly)`: in read-only mode every editing surface is inert — visible but inoperable and visibly de-emphasized — while the preview stays live along with the widget designer's preview-theme selector, the theme designer's preview-kind selector, and the Export controls (export copies out what is already on screen; read-only restricts editing, not looking). `createDesigner` SHALL additionally accept `options.actions` (the shared actions offered for binding) and `options.secretNames`. Custom-element registration SHALL only happen through the explicit calls — importing the module SHALL have no registry side effects. The entry SHALL import other capabilities only through their public package entries, and SHALL perform no network I/O.
@@ -188,3 +192,16 @@ The widget designer's import (and `loadWidget`) SHALL refuse a definition whose 
 #### Scenario: An empty data shape warns without blocking the preview
 - **WHEN** the draft's descriptor has no `dataShape`
 - **THEN** the designer's diagnostics SHALL carry a `dataShape` warning shown under the field, and `previewable` SHALL be unaffected
+
+### Requirement: Designers warn about schema keywords the validator ignores
+The schema designer SHALL show, under its definition, every warning `auditDataSchema` reports for the entry's schema — a `type` name outside the supported set, a `pattern` the validator will not run, a subset keyword of the wrong shape — updated on every edit and load. The widget designer SHALL report the same for an inline `descriptor.dataSchema` as `diagnostics.dataSchema` and show it in its Data schema section. These SHALL be warnings only: the store accepts such schemas and the validator ignores what it cannot use, so loading, previewing and saving are unaffected.
+
+#### Scenario: An unknown type is shown, not refused
+- **WHEN** the schema designer loads `{ name: "fruit", schema: { type: "banana" } }`
+- **THEN** the load SHALL succeed and a warning naming `schema.type` and `'banana'` SHALL be visible
+- **AND WHEN** it loads a schema of type `string`
+- **THEN** the warning SHALL be gone
+
+#### Scenario: An inline schema warns in the widget designer
+- **WHEN** a widget whose `descriptor.dataSchema` is `{ type: "banana" }` is loaded
+- **THEN** the Data schema section SHALL show a warning naming `dataSchema.type`

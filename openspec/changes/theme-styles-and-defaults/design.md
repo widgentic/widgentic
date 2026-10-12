@@ -270,7 +270,29 @@ instead of refusing, and the guides now call it "strongly recommended" rather th
 "REQUIRED", which the store never enforced.
 
 The preview selector matched entries by content, so an empty token map picked "Light".
-An empty map with no styles now counts as "none".
+The agent's retest showed the deeper problem: `widget_theme_set` replaced the theme the
+person had chosen. The choice is now the draft's `previewTheme` (preview-only, like
+`themeStyles`). Only the person's pick in the selector changes it, and `loadTheme`
+layers tokens over the chosen entry: its styles stay, and `{}` returns to it exactly.
+This also settles the review finding about stale styles beside "none" (D13): the
+selector now always names the entry whose styles the preview carries.
+
+### D15 — Schema keywords the validator ignores are warnings, not refusals
+
+The same agent loaded a schema with `type: "banana"`. The store accepts it on purpose:
+`checkStoredSchema` is shallow, and the validator ignores what it cannot use, so a
+stricter store would refuse what the renderer tolerates and could hide stored entries
+on read. So core gains `auditDataSchema`, which names what the validator would ignore:
+- an unknown `type` name;
+- a `pattern` it will not run;
+- an `enum`, `required`, `properties` or `items` of the wrong shape.
+
+The schema designer and the widget designer show these as warnings, `schema_load`
+returns them, and `definition_check` reports them for an inline schema. Unknown
+keywords stay silent, because they are forward compatible. The guides now derive the
+supported type list from `DATA_SCHEMA_TYPES`. Refusing such schemas at write would be a
+store change of its own, with read-side leniency for documents already stored, so it
+is not part of this change.
 
 ## Risks / Trade-offs
 

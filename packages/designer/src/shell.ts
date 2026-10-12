@@ -99,6 +99,7 @@ export function createDesigner(
       ? {
           ...base,
           theme: preselected.tokens,
+          previewTheme: preselected.name,
           ...(preselected.styles === undefined ? {} : { themeStyles: preselected.styles })
         }
       : options.initialTheme !== undefined
@@ -131,8 +132,7 @@ export function createDesigner(
     { left: leftColumn, right: rightSections },
     options.themes ?? [],
     options.schemas ?? [],
-    actionContext,
-    preselected?.name
+    actionContext
   );
 
   function refresh(draft: WidgetDraft): void {
@@ -184,11 +184,17 @@ export function createDesigner(
       if (!validated.ok) {
         return { ok: false, errors: [validated.error.message] };
       }
-      // A token map replaces the preview theme whole: the previous entry's
-      // shared styles must not linger beside new tokens.
+      // Tokens layer over the person's chosen preview theme, which stays
+      // chosen with its shared styles, so `{}` returns to it exactly. With
+      // nothing chosen they are the whole preview theme.
       store.update((draft) => {
         const { themeStyles: _previous, ...rest } = draft;
-        return { ...rest, theme: validated.theme };
+        const chosen = options.themes?.find((entry) => entry.name === draft.previewTheme);
+        return {
+          ...rest,
+          theme: { ...(chosen?.tokens ?? {}), ...validated.theme },
+          ...(chosen?.styles === undefined ? {} : { themeStyles: chosen.styles })
+        };
       });
       return { ok: true };
     },

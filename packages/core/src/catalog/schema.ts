@@ -36,6 +36,17 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** The `type` names the validator checks; any other name constrains nothing. */
+export const DATA_SCHEMA_TYPES: readonly string[] = [
+  "object",
+  "array",
+  "string",
+  "number",
+  "integer",
+  "boolean",
+  "null"
+];
+
 function matchesSingleType(type: string, data: unknown): boolean {
   switch (type) {
     case "object":
@@ -161,4 +172,59 @@ export function validateDataAgainstSchema(
   }
 
   return undefined;
+}
+
+/**
+ * What the validator would silently ignore in a schema: an unknown `type`
+ * name, a `pattern` it refuses to run, or a subset keyword of the wrong
+ * shape. Warnings, never refusals — stores accept these (unknown input is
+ * ignored, not misread), but an author meant something by them. Paths are
+ * dotted from `path`. Never throws.
+ */
+export function auditDataSchema(schema: DataSchema, path = "schema"): string[] {
+  const warnings: string[] = [];
+  const type = schema.type;
+  if (type !== undefined) {
+    const names = typeof type === "string" ? [type] : Array.isArray(type) ? type : undefined;
+    if (names === undefined) {
+      warnings.push(`${path}.type: must be a type name or a list of them; it is ignored.`);
+    } else {
+      for (const name of names) {
+        if (typeof name !== "string" || !DATA_SCHEMA_TYPES.includes(name)) {
+          warnings.push(
+            `${path}.type: '${String(name)}' is not one of ${DATA_SCHEMA_TYPES.join(", ")}; it constrains nothing.`
+          );
+        }
+      }
+    }
+  }
+  if (schema.pattern !== undefined && compileSafePattern(schema.pattern) === undefined) {
+    warnings.push(
+      `${path}.pattern: not run — it must be a valid regular expression of at most ${PATTERN_MAX_LENGTH} characters without nested quantifiers.`
+    );
+  }
+  if (schema.enum !== undefined && !Array.isArray(schema.enum)) {
+    warnings.push(`${path}.enum: must be a list of values; it is ignored.`);
+  }
+  if (
+    schema.required !== undefined &&
+    !(Array.isArray(schema.required) && schema.required.every((key) => typeof key === "string"))
+  ) {
+    warnings.push(`${path}.required: must be a list of property names; it is ignored.`);
+  }
+  if (schema.properties !== undefined) {
+    if (!isPlainObject(schema.properties)) {
+      warnings.push(`${path}.properties: must be an object of schemas; it is ignored.`);
+    } else {
+      for (const [key, subschema] of Object.entries(schema.properties)) {
+        if (isPlainObject(subschema)) warnings.push(...auditDataSchema(subschema, `${path}.properties.${key}`));
+        else warnings.push(`${path}.properties.${key}: must be a schema object; it is ignored.`);
+      }
+    }
+  }
+  if (schema.items !== undefined) {
+    if (isPlainObject(schema.items)) warnings.push(...auditDataSchema(schema.items, `${path}.items`));
+    else warnings.push(`${path}.items: must be a schema object; it is ignored.`);
+  }
+  return warnings;
 }

@@ -22,6 +22,7 @@ import {
   FORMAT_DECIMALS_MIN,
   FORMAT_TYPES,
   MAX_TEMPLATE_DEPTH,
+  DATA_SCHEMA_TYPES,
   PATTERN_MAX_LENGTH,
   PROPERTY_NAME,
   TOKEN_SPECS,
@@ -226,7 +227,7 @@ export function buildDesignerGuide(prefix: string): Record<string, unknown> {
           "Every registry token is always DEFINED at render time, so bare var(--wg-<token>) is safe. Custom x-* variables are defined only by themes that set them, so give those a fallback: var(--wg-x-foo, <value>)."
       },
       dataSchema: {
-        keywords: "Supported subset: type (object/array/string/number/integer/boolean/null, or an array of those), properties, required, items, enum, pattern. Unknown keywords are ignored.",
+        keywords: `Supported subset: type (${DATA_SCHEMA_TYPES.join("/")}, or an array of those), properties, required, items, enum, pattern. Unknown keywords are ignored.`,
         pattern: `pattern is a bounded regex: max ${PATTERN_MAX_LENGTH} chars, no nested quantifiers, applied only to strings and capped input length; unsafe or invalid patterns are ignored rather than enforced.`,
         effect: "Kinds with a dataSchema fail fast with dotted paths (e.g. data.lines.0.amount); schema-less kinds render leniently."
       }

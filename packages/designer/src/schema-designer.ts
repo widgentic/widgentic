@@ -8,15 +8,12 @@
  * JSON discipline.
  */
 import { errorMessage } from "./internal.js";
-import { isPlainObject, SAFE_IDENTIFIER } from "@widgentic/core";
+import { auditDataSchema, isPlainObject, SAFE_IDENTIFIER } from "@widgentic/core";
 import type { DataSchema } from "@widgentic/core";
 import { applyChrome, diagnosticLine, h, injectDesignerStyles, section, textField, requireChild } from "./dom.js";
 import type { ChromeOptions } from "./dom.js";
 import { attachJsonHighlight, repaintHighlight } from "./highlight.js";
 import { createSchemaBuilder } from "./schema-builder.js";
-
-/** The store's identifier charset — kept local: `@widgentic/mcp/store` is a
- * Node-only entry and the designer runs in browsers. */
 
 export interface SchemaEntry {
   name: string;
@@ -101,7 +98,17 @@ export function createSchemaDesigner(
     return JSON.parse(JSON.stringify(entry)) as SchemaEntry;
   }
 
+  // What the validator would ignore in the schema: a warning the person
+  // sees while editing, never a refusal (the store accepts it).
+  const schemaDiag = diagnosticLine(undefined);
+  function showSchemaWarnings(): void {
+    const warnings = isPlainObject(entry.schema) ? auditDataSchema(entry.schema) : [];
+    schemaDiag.hidden = warnings.length === 0;
+    schemaDiag.textContent = warnings.join("\n");
+  }
+
   function notify(): void {
+    showSchemaWarnings();
     for (const listener of [...listeners]) listener(getEntry());
   }
 
@@ -219,7 +226,8 @@ export function createSchemaDesigner(
   const definition = section("Definition", [
     h("div", { class: "wgd-row" }, [builderTab, jsonTab]),
     builder.element,
-    jsonWrap
+    jsonWrap,
+    schemaDiag
   ]);
 
   // --- Import / Export: the agent hand-off -------------------------------
@@ -278,6 +286,7 @@ export function createSchemaDesigner(
   exportSection.classList.add("wgd-view-only");
 
   panels.append(identity, definition, importSection, exportSection);
+  showSchemaWarnings();
   // The JSON layer wraps the textareas in place, so attach after assembly.
   attachJsonHighlight(jsonArea);
   attachJsonHighlight(importArea);

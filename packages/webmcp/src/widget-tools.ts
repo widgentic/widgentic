@@ -135,6 +135,8 @@ export function widgetTools(source: () => DesignerHandle | undefined, name: Name
       description:
         "Set the theme tokens the widget preview is rendered with: { tokens: { <token>: <css value> } } over the --wg-* tokens " +
         "(list them with the theme_token_specs tool; author variables are x-<name>). Validated by the theming rules; refused → { ok: false, code: 'REJECTED', errors }. " +
+        "The tokens layer over the preview theme the person chose in the designer, which stays selected with its shared styles; each call replaces the previous layer, so { tokens: {} } returns to the chosen theme exactly. " +
+        "The result carries the effective tokens and previewTheme, the chosen theme's name (absent when none is chosen). " +
         "This is the preview theme of the draft, not a saved theme entry.",
       inputSchema: objectSchema(
         { tokens: { type: "object", description: "Token name → CSS value.", additionalProperties: { type: "string" } } },
@@ -147,7 +149,8 @@ export function widgetTools(source: () => DesignerHandle | undefined, name: Name
         if (!isPlainObject(tokens)) return invalidArgument("tokens", "object of token → value");
         const result = handle.loadTheme(tokens);
         if (!result.ok) return rejected(result.errors);
-        return okResult({ theme: handle.getDraft().theme ?? {} });
+        const { theme, previewTheme } = handle.getDraft();
+        return okResult({ theme: theme ?? {}, ...(previewTheme === undefined ? {} : { previewTheme }) });
       }
     })
   ];

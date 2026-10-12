@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Load and check tools refuse what saving would refuse
-`<prefix>_widget_draft_load` and `<prefix>_widget_definition_check` SHALL refuse a definition whose `kind` is not a safe identifier (letters, digits, `.`, `_`, `-`) or names a built-in kind, and `<prefix>_theme_load` SHALL refuse an entry whose `name` is not a safe identifier or names a built-in theme (`light`, `dark`), each with `ok: false`, `code: "REJECTED"` and an error naming the rule, and the designer's draft or entry SHALL be unchanged — an agent learns at the draft what the store would otherwise answer only when the person saves. A definition without a `dataShape` SHALL NOT be refused: the result SHALL carry a `dataShape` diagnostic saying agents will see a placeholder. `<prefix>_widget_theme_set` SHALL apply its tokens as an unnamed preview theme: the preview-theme selector SHALL NOT switch to a named theme whose tokens happen to match, so an empty token map leaves it on "none".
+`<prefix>_widget_draft_load` and `<prefix>_widget_definition_check` SHALL refuse a definition whose `kind` is not a safe identifier (letters, digits, `.`, `_`, `-`) or names a built-in kind, and `<prefix>_theme_load` SHALL refuse an entry whose `name` is not a safe identifier or names a built-in theme (`light`, `dark`), each with `ok: false`, `code: "REJECTED"` and an error naming the rule, and the designer's draft or entry SHALL be unchanged — an agent learns at the draft what the store would otherwise answer only when the person saves. What the store accepts but an author likely did not mean SHALL load with a warning, not a refusal: a definition without a `dataShape` SHALL carry a `dataShape` diagnostic saying agents will see a placeholder, an inline `dataSchema` with keywords the validator would ignore SHALL carry a `dataSchema` diagnostic listing them, and `<prefix>_schema_load` SHALL return `warnings` naming the same problems in the loaded schema (omitted when there are none). `<prefix>_widget_theme_set` SHALL layer its tokens over the preview theme the person chose: the selection and its styles stay, each call replaces the previous layer so `{ tokens: {} }` returns to the chosen theme exactly, and the result SHALL carry the effective tokens and `previewTheme`, the chosen theme's name.
 
 #### Scenario: A built-in kind is refused at the draft
 - **WHEN** `<prefix>_widget_draft_load` or `<prefix>_widget_definition_check` executes with a definition of kind `table`
@@ -20,5 +20,17 @@
 - **THEN** the result SHALL report `ok: true` and `diagnostics.dataShape` SHALL say the shape is empty
 
 #### Scenario: Preview tokens never claim a named theme
-- **WHEN** the widget designer was given the built-in themes and `<prefix>_widget_theme_set` executes with `{ tokens: {} }`
+- **WHEN** the widget designer was given the built-in themes, none is chosen, and `<prefix>_widget_theme_set` executes with `{ tokens: {} }`
 - **THEN** the preview-theme selector SHALL show "none", not "Light"
+
+#### Scenario: Preview tokens keep the person's chosen theme
+- **WHEN** the person chose `google-light` as the preview theme and `<prefix>_widget_theme_set` executes with `{ tokens: { accent: "#d93025" } }`
+- **THEN** the selector SHALL still show `google-light`, and the result SHALL carry `previewTheme: "google-light"` and `google-light`'s tokens with `accent` replaced
+- **AND WHEN** it executes with `{ tokens: {} }`
+- **THEN** the result's tokens SHALL equal `google-light`'s exactly
+
+#### Scenario: A schema the validator would partly ignore loads with warnings
+- **WHEN** `<prefix>_schema_load` executes with a schema whose property `kind` has `type: "banana"`
+- **THEN** the result SHALL report `ok: true` and `warnings` naming `schema.properties.kind.type`
+- **AND WHEN** `<prefix>_widget_definition_check` executes with an inline `dataSchema` of `{ type: "banana" }`
+- **THEN** the result SHALL report `ok: true` and `diagnostics.dataSchema` naming it

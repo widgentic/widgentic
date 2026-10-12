@@ -9,7 +9,7 @@ import type {
   ThemeDesignerHandle
 } from "@widgentic/designer";
 import type { ThemeEntry } from "@widgentic/core";
-import { isPlainObject } from "@widgentic/core";
+import { auditDataSchema, DATA_SCHEMA_TYPES, isPlainObject } from "@widgentic/core";
 import { argumentsOf, invalidArgument, notMounted, okResult, rejected } from "./result.js";
 import { defineTool, objectSchema, PERSON_SAVES } from "./tool.js";
 import type { NameOf } from "./tool.js";
@@ -105,7 +105,8 @@ export function schemaTools(source: () => SchemaDesignerHandle | undefined, name
       name: name("schema_load"),
       title: "Load a schema entry",
       description:
-        "Replace the entry in the schema designer: { entry: { name, label?, description?, schema } }. name: letters, digits, '.', '_' or '-'; schema: a JSON Schema object in the supported subset — type (object/array/string/number/integer/boolean/null or an array of those), properties, required, items, enum, pattern (bounded); unknown keywords are ignored. " +
+        "Replace the entry in the schema designer: { entry: { name, label?, description?, schema } }. name: letters, digits, '.', '_' or '-'; schema: a JSON Schema object in the supported subset — type (" + DATA_SCHEMA_TYPES.join("/") + " or an array of those), properties, required, items, enum, pattern (bounded); unknown keywords are ignored. " +
+        "What the validator would ignore (another type name, a pattern it will not run, a keyword of the wrong shape) still loads, with { warnings } naming each — fix them, or the schema checks less than you meant. " +
         "Widgets reference it as descriptor.dataSchemaRef: \"<name>\" instead of an inline dataSchema. " +
         "Refused → { ok: false, code: 'REJECTED', errors }. " +
         PERSON_SAVES,
@@ -117,7 +118,9 @@ export function schemaTools(source: () => SchemaDesignerHandle | undefined, name
         if (!isPlainObject(entry)) return invalidArgument("entry", "object");
         const result = handle.loadSchema(entry);
         if (!result.ok) return rejected(result.errors);
-        return okResult({ entry: handle.getSchema() });
+        const loaded = handle.getSchema();
+        const warnings = auditDataSchema(loaded.schema);
+        return okResult(warnings.length === 0 ? { entry: loaded } : { entry: loaded, warnings });
       }
     })
   ];

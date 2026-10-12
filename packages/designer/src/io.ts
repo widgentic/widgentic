@@ -89,14 +89,15 @@ export function importWidgetJson(text: string): ImportResult {
 export function applyDefinition(store: DraftStore, definition: WidgetDefinition): void {
   // The preview theme is the designer's state, not the definition's: a load
   // keeps it whole, tokens and shared styles alike.
-  const { theme, themeStyles } = store.get();
+  const { theme, themeStyles, previewTheme } = store.get();
   store.replace({
     kind: definition.kind,
     template: definition.template,
     descriptor: definition.descriptor,
     ...(definition.load !== undefined ? { load: definition.load } : {}),
     ...(theme !== undefined ? { theme } : {}),
-    ...(themeStyles !== undefined ? { themeStyles } : {})
+    ...(themeStyles !== undefined ? { themeStyles } : {}),
+    ...(previewTheme !== undefined ? { previewTheme } : {})
   });
 }
 

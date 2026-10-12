@@ -16,3 +16,20 @@
 #### Scenario: Structural tricks and URL carriers are dropped
 - **WHEN** styles hold `html /* .wg-x */`, `body:not(.wg-x)`, `:is(.wg-a, body)`, `body[data-a=".wg-"]`, `.wg-a, ~ .wg-b`, a value `red /*`, and values calling `image-set(` or `src(`, beside a safe `.wg-row:has(.wg-ok, .wg-warn)` rule
 - **THEN** the generated CSS SHALL contain only the safe rule
+
+## ADDED Requirements
+
+### Requirement: Data schemas can be audited for what validation ignores
+The catalog SHALL export `DATA_SCHEMA_TYPES` — the `type` names the data validator checks — and `auditDataSchema(schema, path?)`, which returns, without throwing, a warning per thing the validator would silently ignore: a `type` name outside `DATA_SCHEMA_TYPES` (or a `type` that is neither a name nor a list of names), a `pattern` it refuses to run, and an `enum`, `required`, `properties` or `items` of the wrong shape, recursing into `properties` and `items` with dotted paths from `path` (default `schema`). Unknown keywords SHALL produce no warning (they are forward compatible), and validation itself SHALL stay unchanged.
+
+#### Scenario: An unknown type is named, and validation still ignores it
+- **WHEN** a schema's property `kind` has `type: "banana"`
+- **THEN** `auditDataSchema` SHALL return a warning naming `schema.properties.kind.type` and `'banana'`, and `validateDataAgainstSchema` SHALL accept any value there
+
+#### Scenario: Unrunnable patterns and misshapen keywords are named through items
+- **WHEN** an array schema's `items` has a string `required`, a string `enum`, a nested-quantifier `pattern` on a property, and a property whose schema is a string
+- **THEN** `auditDataSchema(schema, "dataSchema")` SHALL return one warning for each, with paths under `dataSchema.items`
+
+#### Scenario: Supported schemas are silent
+- **WHEN** a schema uses only `DATA_SCHEMA_TYPES`, a runnable `pattern`, well-shaped keywords and an unknown `x-note` keyword
+- **THEN** `auditDataSchema` SHALL return no warnings

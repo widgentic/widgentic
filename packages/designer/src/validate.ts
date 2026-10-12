@@ -4,7 +4,7 @@
  * Everything here goes through public package entries — the designer owns
  * no validation logic of its own.
  */
-import { isPlainObject } from "@widgentic/core";
+import { auditDataSchema, isPlainObject } from "@widgentic/core";
 import {
   createCatalog,
   validateDataAgainstSchema,
@@ -53,6 +53,8 @@ export interface DesignerDiagnostics {
    * list the widget see a placeholder instead of the data it expects.
    */
   dataShape?: string;
+  /** Warnings, never blocking: what the validator would ignore in the inline `dataSchema`. */
+  dataSchema?: string[];
   /** True when the draft can be registered and previewed. */
   previewable: boolean;
 }
@@ -138,6 +140,12 @@ export function deriveDiagnostics(
   if (typeof dataShape !== "string" || dataShape.trim() === "") {
     diagnostics.dataShape =
       "Data shape is empty — agents listing this widget will see a placeholder instead of the data it expects.";
+  }
+
+  const inlineSchema = draft.descriptor?.dataSchema;
+  if (isPlainObject(inlineSchema)) {
+    const warnings = auditDataSchema(inlineSchema, "dataSchema");
+    if (warnings.length > 0) diagnostics.dataSchema = warnings;
   }
 
   const template = validateTemplate(draft.template);

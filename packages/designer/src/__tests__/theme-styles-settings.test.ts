@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { ThemeEntry } from "@widgentic/core";
 import {
   createDesigner,
+  createSchemaDesigner,
   createSettingsDesigner,
   createThemeDesigner,
   defineSettingsDesignerElement
@@ -80,6 +81,23 @@ describe("theme designer styles", () => {
     json.value = "{}";
     json.dispatchEvent(new Event("input", { bubbles: true }));
     expect(designer.getTheme()).not.toHaveProperty("styles");
+  });
+
+  it("shows what the validator would ignore in a schema, in both designers", () => {
+    const schemaRoot = host();
+    const schemaDesigner = createSchemaDesigner(schemaRoot);
+    const warning = () => [...schemaRoot.querySelectorAll<HTMLElement>(".wgd-diagnostic")].map((el) => (el.hidden ? "" : el.textContent ?? "")).join("\n");
+    expect(warning()).not.toContain("banana");
+    expect(schemaDesigner.loadSchema({ name: "fruit", schema: { type: "banana" } })).toEqual({ ok: true });
+    expect(warning()).toContain("schema.type: 'banana'");
+    schemaDesigner.loadSchema({ name: "fruit", schema: { type: "string" } });
+    expect(warning()).not.toContain("banana");
+
+    const widgetRoot = host();
+    const designer = createDesigner(widgetRoot);
+    const draft = designer.getDraft();
+    expect(designer.loadWidget({ kind: "fruit-card", template: draft.template, descriptor: { ...draft.descriptor, dataSchema: { type: "banana" } } }).ok).toBe(true);
+    expect(sectionTitled(widgetRoot, "Data schema").textContent).toContain("dataSchema.type: 'banana'");
   });
 
   it("flags a name saving would refuse as it is typed, and refuses it on import", () => {
@@ -207,15 +225,31 @@ describe("a host-chosen preview theme", () => {
     expect(missing.getDraft()).not.toHaveProperty("theme");
   });
 
-  it("loadTheme replaces the preview theme whole, leaving no previous styles", () => {
+  it("loadTheme layers tokens over the chosen theme, which stays chosen; {} returns to it", () => {
     const root = host();
-    const designer = createDesigner(root, { initialWidget: widget, themes, previewTheme: "brand" });
+    const tide: ThemeEntry = {
+      name: "tide",
+      tokens: { accent: "#0a84ff", bg: "#001b2e" },
+      styles: { ".wg-btn": { color: "rgb(1, 2, 3)" } }
+    };
+    const designer = createDesigner(root, { initialWidget: widget, themes: [...themes, tide], previewTheme: "tide" });
+    const select = root.querySelector(".wgd-theme-select") as HTMLSelectElement;
     expect(designer.loadTheme({ accent: "#123456" })).toEqual({ ok: true });
+    expect(select.value).toBe("tide");
+    expect(designer.getDraft().theme).toEqual({ accent: "#123456", bg: "#001b2e" });
+    expect(designer.getDraft().themeStyles).toEqual(tide.styles);
+    expect(css(root)).toContain(".wg-btn");
+    expect(designer.loadTheme({})).toEqual({ ok: true });
+    expect(designer.getDraft().theme).toEqual(tide.tokens);
+    expect(select.value).toBe("tide");
+    // With nothing chosen the tokens are the whole preview theme.
+    change(select, "");
+    expect(designer.loadTheme({ accent: "#123456" })).toEqual({ ok: true });
+    expect(select.value).toBe("");
+    expect(designer.getDraft().theme).toEqual({ accent: "#123456" });
     expect(designer.getDraft()).not.toHaveProperty("themeStyles");
     expect(css(root)).not.toContain(".wg-btn");
-    expect((root.querySelector(".wgd-theme-select") as HTMLSelectElement).value).toBe("");
   });
-
   it("keeps the preview theme, styles included, when a widget is loaded", () => {
     const root = host();
     const designer = createDesigner(root, { themes, previewTheme: "brand" });

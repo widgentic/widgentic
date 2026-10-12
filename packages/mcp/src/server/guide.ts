@@ -12,6 +12,7 @@
  *     tool, deliberately. Saving is the user's authenticated act.
  */
 import {
+  DATA_SCHEMA_TYPES,
   PATTERN_MAX_LENGTH,
   PROPERTY_NAME,
   UNSAFE,
@@ -290,8 +291,7 @@ export function buildAuthoringGuide(): Record<string, unknown> {
       },
       dataSchema: {
         keywords:
-          "Supported subset: type (object/array/string/number/integer/" +
-          "boolean/null, or an array of those), properties, required, " +
+          `Supported subset: type (${DATA_SCHEMA_TYPES.join("/")}, or an array of those), properties, required, ` +
           "items, enum, pattern. Unknown keywords are ignored.",
         pattern:
           `pattern is a bounded regex: max ${PATTERN_MAX_LENGTH} chars, no nested ` +

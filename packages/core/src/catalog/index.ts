@@ -8,7 +8,7 @@ export { el } from "./node.js";
 export { createCatalog, DuplicateKindError } from "./registry.js";
 export type { WidgetCatalog, RenderOptions, RenderResult } from "./registry.js";
 export type { WidgetDescriptor, WidgetDescriptorInput } from "./descriptors.js";
-export { validateDataAgainstSchema, PATTERN_MAX_LENGTH } from "./schema.js";
+export { validateDataAgainstSchema, auditDataSchema, DATA_SCHEMA_TYPES, PATTERN_MAX_LENGTH } from "./schema.js";
 export type { DataSchema } from "./schema.js";
 export { widgetStylesToCss, isStyleMap, UNSAFE, UNSAFE_FUNCTIONS, PROPERTY_NAME } from "./styles.js";
 export { SAFE_IDENTIFIER } from "./identifiers.js";
