@@ -9,6 +9,7 @@
  *   <dir>/<principalId>/schemas/<name>.json
  *   <dir>/<principalId>/actions/<name>.json
  *   <dir>/<principalId>/secrets/<name>.json   (envelope records — ciphertext only)
+ *   <dir>/<principalId>/settings.json         (the settings record)
  *
  * NOT transactional and not concurrency-safe: two writers can interleave.
  * That is acceptable for a reference implementation; the app's adapter
@@ -38,6 +39,7 @@ import {
   checkStoredAction,
   checkStoredSchema,
   checkStoredTheme,
+  themeName,
   checkStoredWidget,
   SAFE_IDENTIFIER
 } from "./validate.js";
@@ -144,7 +146,7 @@ export function createFileStore(
       for (const entry of entries) {
         const problem = checkStoredTheme(entry, limits);
         if (problem) {
-          report(`skipped a theme for '${id}': ${problem.code} — ${problem.message}`);
+          report(`skipped theme '${themeName(entry)}' for '${id}': ${problem.code} — ${problem.message}`);
           continue;
         }
         out.push(entry as ThemeEntry);
@@ -155,7 +157,7 @@ export function createFileStore(
     async settings(principalId) {
       const id = safeId(principalId);
       if (id === undefined) return {};
-      return readSettings(await readJson(join(dir, id, "settings.json")));
+      return readSettings(await readJson(join(dir, id, "settings.json")), (message) => report(`${message} ('${id}')`));
     },
 
     async schemas(principalId) {

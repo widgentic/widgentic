@@ -514,11 +514,15 @@ function templateCss(styleCss: string, themes: RenderThemes): string {
       themeToCss(explicit.tokens, `:root, ${DARK_SCOPE}`)
     ].filter((part) => part.length > 0).join("\n");
   }
-  // :not() keeps the light default out of dark mode wherever the dark side
-  // sets nothing; both selectors outweigh the template's :root bridge.
+  // Tokens are mode-scoped: :not() keeps the light default out of dark
+  // mode wherever the dark side sets nothing, and both selectors outweigh
+  // the template's :root bridge. Styles are mode-scoped only when each mode
+  // has its own default: a lone default's classes are layout a widget relies
+  // on, and they read the active mode's tokens anyway.
+  const scopeStyles = light !== undefined && dark !== undefined;
   return [
-    light?.styles ? themeStylesToCss(light.styles, LIGHT_SCOPE) : "",
-    dark?.styles ? themeStylesToCss(dark.styles, DARK_SCOPE) : "",
+    light?.styles ? themeStylesToCss(light.styles, scopeStyles ? LIGHT_SCOPE : undefined) : "",
+    dark?.styles ? themeStylesToCss(dark.styles, scopeStyles ? DARK_SCOPE : undefined) : "",
     styleCss,
     light ? themeToCss(light.tokens, LIGHT_SCOPE) : "",
     dark ? themeToCss(dark.tokens, DARK_SCOPE) : ""
@@ -571,7 +575,14 @@ export function handlePreviewWidget(
   }
   // A half-streamed inline token map is normal here: the result decides.
   const resolvedTheme = resolveThemeInput(input.theme, options.themes);
-  const themes = renderThemes(resolvedTheme.ok ? resolvedTheme.theme : undefined, options.themes);
+  // A theme still streaming ("bra" of "brand") previews with NO theme, not
+  // the defaults: switching from the default to the named theme mid-stream
+  // would flash a look the result never has.
+  const themes = input.theme === undefined
+    ? renderThemes(undefined, options.themes)
+    : resolvedTheme.ok
+      ? renderThemes(resolvedTheme.theme, options.themes)
+      : {};
   return {
     content: [{ type: "text", text: `Preview of '${widget}'.` }],
     structuredContent: {
@@ -639,6 +650,13 @@ export function handleRenderWidget(
   // The theme rides the payload as an unknown-field passthrough, so hosts
   // that mount the widget natively can honor it (advisory, any format).
   if (resolvedTheme.theme !== undefined) payload.theme = resolvedTheme.theme.tokens;
+  // A named theme with shared styles also rides by NAME, so an action's
+  // re-render resolves the same entry — styles included — from the caller's
+  // registry instead of a bare token map. Styleless themes keep the payload
+  // exactly as before.
+  if (typeof input.theme === "string" && resolvedTheme.theme?.styles !== undefined) {
+    payload.themeName = input.theme;
+  }
 
   // Contract validation (kind membership, hints/meta shape) + rendering.
   const rendered = catalog.render(payload);
@@ -834,9 +852,15 @@ export function handleRenderWidget(
  * `dataExample` rendered as a self-contained light page, or a one-line
  * document naming the unknown kind.
  */
-export function renderWidgetPage(catalog: WidgetCatalog, kind: string): string {
+export function renderWidgetPage(
+  catalog: WidgetCatalog,
+  kind: string,
+  themes?: ThemeRegistry | undefined
+): string {
   const example = catalog.describe(kind)?.dataExample;
-  const result = handleRenderWidget(catalog, { widget: kind, data: example ?? null, format: "page" });
+  // With the caller's registry the page takes the light default, as every
+  // document does; without one (or with built-in defaults) it is unchanged.
+  const result = handleRenderWidget(catalog, { widget: kind, data: example ?? null, format: "page" }, { themes });
   const page = result.content.find((block) => block.type === "text");
   return !result.isError && typeof page?.text === "string"
     ? page.text

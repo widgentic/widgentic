@@ -184,7 +184,12 @@ export function createDesigner(
       if (!validated.ok) {
         return { ok: false, errors: [validated.error.message] };
       }
-      store.update((draft) => ({ ...draft, theme: validated.theme }));
+      // A token map replaces the preview theme whole: the previous entry's
+      // shared styles must not linger beside new tokens.
+      store.update((draft) => {
+        const { themeStyles: _previous, ...rest } = draft;
+        return { ...rest, theme: validated.theme };
+      });
       return { ok: true };
     },
     subscribe(listener) {

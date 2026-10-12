@@ -93,9 +93,9 @@ The full token table is on [Theme tokens](/reference/theme-tokens).
 
 descriptor.styles is \{ "\<selector\>": \{ "\<cssProperty\>": "\<value\>" \} \} — each declaration is a separate key/value pair, e.g. \{ ".wg-roster-row": \{ "display": "flex", "gap": "var(--wg-spacing)" \} \}.
 
-Every selector (and every comma-separated part) must target a .wg- class, e.g. '.wg-card .wg-xcard-head'. The base stylesheet also ships a wg-code monospace block utility (font-mono, surface, border) any template element can opt into via class.
+Every selector part (split on top-level commas) must name a .wg- class in its own structure — a .wg- class only inside :not(), :is() or an attribute test does not count — and no part may open with a combinator, e.g. '.wg-card .wg-xcard-head' or '.wg-row:has(.wg-ok, .wg-warn)'.
 
-Selectors, properties, or values matching \[;\{\}\<\>@\\\\\] — or containing 'url(' or 'expression(' — are dropped.
+Selectors, properties, or values matching \[;\{\}\<\>@\\\\\], holding a comment marker (/\* or \*/), or calling url(, expression(, image-set(, src( are dropped.
 
 Property names must match ^-?\[a-zA-Z\]\[a-zA-Z-\]\*\$ (letters and hyphens, optionally leading '-'); anything else is dropped.
 

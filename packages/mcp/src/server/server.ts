@@ -309,7 +309,7 @@ export function createWidgenticServer(
     async (uri, variables) => {
       const kind = String(variables.kind ?? "");
       return {
-        contents: [{ uri: uri.href, mimeType: WIDGET_PAGE_RESOURCE.mimeType, text: renderWidgetPage(catalog, kind) }]
+        contents: [{ uri: uri.href, mimeType: WIDGET_PAGE_RESOURCE.mimeType, text: renderWidgetPage(catalog, kind, themes) }]
       };
     }
   );

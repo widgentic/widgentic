@@ -4,7 +4,7 @@
  * editor: the structured Tree and a parse-gated JSON view over the same
  * value, plus the audit's list of entries the renderer would drop.
  */
-import { isPlainObject } from "@widgentic/core";
+import { isStyleMap } from "@widgentic/core";
 import type { WidgetStyles } from "@widgentic/core";
 import { diagnosticLine, h, requireChild, section, tabs, textArea } from "./dom.js";
 import { attachJsonHighlight, repaintHighlight } from "./highlight.js";
@@ -42,11 +42,17 @@ export function createStylesPanel(
       const value: unknown = JSON.parse(text);
       parseError.hidden = true;
       parseError.textContent = "";
-      // Last valid wins: only an object reaches the value.
-      if (isPlainObject(value)) {
-        tree.setValue(value as WidgetStyles);
-        onChange(value as WidgetStyles);
+      // Last valid wins: only the styles shape reaches the value, and an
+      // empty map is no styles, as the Tree view has it.
+      if (!isStyleMap(value)) {
+        parseError.hidden = false;
+        parseError.textContent =
+          "Styles must map selectors to objects of property/value strings (the last valid value is kept).";
+        return;
       }
+      const next = Object.keys(value).length > 0 ? value : undefined;
+      tree.setValue(next);
+      onChange(next);
     } catch (error) {
       parseError.hidden = false;
       parseError.textContent = `Invalid JSON (the last valid value is kept): ${errorMessage(error)}`;

@@ -141,13 +141,20 @@ export interface ThemeError {
 /**
  * Value guard shared by validation (strict) and application (lenient
  * defense in depth). Rejects exfiltration and execution vectors — not
- * invalid CSS: declaration/HTML escapes, `url()` (resource fetching), and
- * `expression()` (legacy script execution in old embedded webviews).
+ * invalid CSS: declaration/HTML escapes, comment markers (an opener
+ * swallows the rest of the sheet), `url()`, `image-set()` and `src()`
+ * (resource fetching), and `expression()` (legacy script execution in old
+ * embedded webviews).
  */
 export function isSafeTokenValue(value: string): boolean {
   return (
     !/[;{}<>]/.test(value) &&
+    // A comment opener swallows every declaration after it in the sheet.
+    !/\/\*|\*\//.test(value) &&
     !/url\s*\(/i.test(value) &&
-    !/expression\s*\(/i.test(value)
+    !/expression\s*\(/i.test(value) &&
+    // URL carriers that do not spell url(.
+    !/image-set\s*\(/i.test(value) &&
+    !/src\s*\(/i.test(value)
   );
 }

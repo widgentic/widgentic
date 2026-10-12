@@ -331,7 +331,27 @@ describe("sqlite themes with malformed styles written out of band", () => {
     const composed = await composeThemes(reopened, p.id);
     expect(composed.value.get("broken")).toBeUndefined();
     expect(composed.value.get("good")?.styles).toEqual({ ".wg-btn": { padding: "4px" } });
-    expect(diagnostics.join("\n")).toMatch(/broken|INVALID_THEME/);
+    expect(diagnostics.join("\n")).toContain("skipped theme 'broken'");
+    expect(diagnostics.join("\n")).toContain("INVALID_THEME");
+    reopened.close();
+  });
+});
+
+describe("sqlite settings values that are not names", () => {
+  it("are dropped with a diagnostic", async () => {
+    const path = freshPath();
+    const store = open(path);
+    const p = await store.ensurePrincipal("sqlite:settings-malformed");
+    store.close();
+    const raw = new DatabaseSync(path);
+    raw
+      .prepare("INSERT INTO entries (principal_id, kind, name, json) VALUES (?, 'settings', 'principal', ?)")
+      .run(p.id, JSON.stringify({ defaultThemes: { light: 7 } }));
+    raw.close();
+    const diagnostics: string[] = [];
+    const reopened = createSqliteStore(path, { limits: LIMITS, cipher: createLocalCipher(KEK), onDiagnostic: (m) => diagnostics.push(m) });
+    expect(await reopened.settings(p.id)).toEqual({});
+    expect(diagnostics.join("\n")).toContain("light default theme that is not a name");
     reopened.close();
   });
 });

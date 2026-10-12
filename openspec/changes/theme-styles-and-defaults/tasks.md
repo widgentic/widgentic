@@ -62,6 +62,21 @@
   - the light/dark defaults following the host's theme;
   - Settings saving and the Themes list updating.
 
+## 9. Review findings (PR #29, two reviews, deduplicated)
+
+- [x] 9.1 Theme styles survive `execute_action` re-renders: `themeName` on the payload for named themes with styles; resolve it again, falling back to the held tokens (both reviews).
+- [x] 9.2 Style guards: ban comment markers and `image-set(`/`src(` (styles and token values); require a `.wg-` class outside pseudo-class arguments and attribute tests; refuse combinator-led parts; the guides derive the rules from one object built from the constants (review 2).
+- [x] 9.3 Scoping: split on top-level commas; scope root-anchored parts on their root compound (both reviews).
+- [x] 9.4 Scope styles by mode only when both modes have their own default (review 1).
+- [x] 9.5 Cosmos `putSettings` / `removeTheme` as transactional batches with `ifMatch` and retries; the fake gains batch and etags; race tests (both reviews).
+- [x] 9.6 `composeThemes` keeps the built-ins with a diagnostic when settings are missing or unreadable (review 2).
+- [x] 9.7 Designer: `loadTheme` drops the previous preview styles; the JSON tab admits only the styles shape and maps `{}` to none; `setThemes` and the element's `themes` property; preview scope ids salted per bundle; shared `clone` (both reviews).
+- [x] 9.8 Steering: `list_themes` and `render_widget.theme` descriptions name the defaults; WebMCP `theme_get`/`theme_load` describe `styles` (both reviews).
+- [x] 9.9 Widget pages take the light default; a still-streaming theme previews with none; `undefined` sections count as absent in every adapter; settings reads report dropped values; diagnostics name the skipped theme (both reviews).
+- [x] 9.10 Example: preview themes compose `extends`; unread settings open read-only without Save; demo seed date patterns `HH:mm`.
+- [x] 9.11 Docs and headers: storage layouts list the settings record; "five designers"; README; the host-bundle and guard requirements in the deltas.
+- [x] 9.12 Test gaps: exact built-in dark comparison; light-scope computed check; unsafe entries across app format and defaults; registered-legacy assertion; invalid-theme default; anonymous defaults; mixed-section refusal; file store without `settings.json`; seed token values; dark choices in the app test; settings designer in the chrome factories.
+
 ## 8. widgentic.dev (apps repository, after the release)
 
 - [ ] 8.1 Companion change in `widgentic/apps` (its `widgentic-app` spec): a Settings section in `apps/web` mounting the settings designer against `/api/settings`; the widget designer opened with `previewTheme` set to the light default; the Themes list showing defaults; `THEME_IN_USE` through the feedback banner (design D11).

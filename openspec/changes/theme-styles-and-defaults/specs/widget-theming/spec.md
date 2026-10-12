@@ -64,10 +64,43 @@ The package SHALL export `createThemeRegistry()` returning a registry of named t
 - **THEN** `get("child").styles` SHALL be `{ ".wg-btn": { padding: "4px", color: "blue" }, ".wg-badge": { "font-weight": "700" } }`
 - **AND** registering an entry whose `styles` is an array, or maps a selector to a string, SHALL throw carrying `INVALID_THEME`
 
+### Requirement: Theme validation
+`validateTheme(input)` SHALL return `{ ok: true, theme } | { ok: false, error: ThemeError }` where `ThemeError` has `code` (`"INVALID_THEME" | "UNKNOWN_TOKEN" | "INVALID_TOKEN_VALUE"`), `message`, and the offending `token` name when applicable. Non-object input SHALL fail with `INVALID_THEME`; keys outside `THEME_TOKENS` SHALL fail with `UNKNOWN_TOKEN` **unless** they match the custom-variable pattern `^x-[a-z0-9][a-z0-9-]*$`, which SHALL be accepted; values that are not strings or that contain `;`, `{`, `}`, `<`, `>`, a comment marker (`/*` or `*/`), `url(`, `expression(`, `image-set(` or `src(` (case-insensitive, whitespace-tolerant before the parenthesis) SHALL fail with `INVALID_TOKEN_VALUE` — custom variables included. The guard rejects exfiltration and execution vectors, not invalid CSS — inert nonsense values pass.
+
+#### Scenario: Valid theme passes
+- **WHEN** `validateTheme({ bg: "#0b0e14", "font-family": "Inter, sans-serif" })` is called
+- **THEN** the result SHALL be ok
+
+#### Scenario: Unknown token is rejected
+- **WHEN** `validateTheme({ sneaky: "red" })` is called
+- **THEN** the result SHALL have `error.code: "UNKNOWN_TOKEN"` and `error.token: "sneaky"`
+
+#### Scenario: Injection-shaped values are rejected
+- **WHEN** a value contains `"red; } body { display:none"` or `"url(https://evil.example/x)"`
+- **THEN** the result SHALL have `error.code: "INVALID_TOKEN_VALUE"`
+
+#### Scenario: Legacy script vectors are rejected
+- **WHEN** a value contains `"expression(alert(1))"` or `"EXPRESSION (alert(1))"`
+- **THEN** the result SHALL have `error.code: "INVALID_TOKEN_VALUE"`
+
+#### Scenario: Custom variables are accepted
+- **WHEN** `validateTheme({ "x-card-media-radius": "12px" })` is called
+- **THEN** the result SHALL be ok
+
+#### Scenario: Malformed custom names and unsafe custom values are rejected
+- **WHEN** the key is `"x-"`, `"x-Bad_Name"`, or `"xcustom"`
+- **THEN** the result SHALL have `error.code: "UNKNOWN_TOKEN"`
+- **AND WHEN** `{ "x-ok": "url(https://evil.example/x)" }` is validated
+- **THEN** the result SHALL have `error.code: "INVALID_TOKEN_VALUE"`
+
+#### Scenario: Comment markers and URL carriers are rejected
+- **WHEN** a value is `"red /*"`, `"image-set(\"https://evil.example/x\" 1x)"` or `"src(\"https://evil.example/x\")"`
+- **THEN** the result SHALL have `error.code: "INVALID_TOKEN_VALUE"`
+
 ## ADDED Requirements
 
 ### Requirement: Theme styles generate scoped CSS
-`themeStylesToCss(styles, scope?)` SHALL generate CSS from a theme's style map under exactly the guards and output format of the registered-widget-styles generator — every selector part targeting a `.wg-` class, the same banned constructs and property-name rule, unsafe entries dropped and safe siblings kept, never throwing. Without `scope` its output SHALL equal that generator's for the same map. With `scope` (a selector supplied by the caller, never by theme data), every comma-separated part of every emitted selector SHALL be prefixed by `:where(<scope>) `, so a scoped rule applies only inside the scope and gains no specificity from it.
+`themeStylesToCss(styles, scope?)` SHALL generate CSS from a theme's style map under exactly the guards and output format of the registered-widget-styles generator — every selector part targeting a `.wg-` class, the same banned constructs and property-name rule, unsafe entries dropped and safe siblings kept, never throwing. Without `scope` its output SHALL equal that generator's for the same map. With `scope` (a selector supplied by the caller, never by theme data, and always targeting the root element), every top-level part of every emitted selector SHALL be scoped so the rule applies only inside the scope and gains no specificity from it: a part is prefixed by `:where(<scope>) `, except a part anchored at the root (`:root…` or `html…`), which takes `:where(<scope>)` as an extra condition on its root compound.
 
 #### Scenario: Unscoped theme styles match widget styles
 - **WHEN** `themeStylesToCss({ ".wg-btn": { padding: "4px 8px" } })` is called
@@ -81,6 +114,10 @@ The package SHALL export `createThemeRegistry()` returning a registry of named t
 - **WHEN** a document whose root carries `data-theme="dark"` holds the CSS of `themeStylesToCss({ ".wg-btn": { color: "rgb(1, 2, 3)" } }, ':root[data-theme="dark"]')` followed by a widget rule `.wg-btn { color: rgb(4, 5, 6) }`
 - **THEN** a `.wg-btn` element's computed color SHALL be `rgb(4, 5, 6)`, since the two selectors weigh the same and the widget rule comes later
 - **AND** with the root's `data-theme` removed and the widget rule absent, the element SHALL NOT take `rgb(1, 2, 3)`
+
+#### Scenario: Pseudo-class arguments and root anchors survive scoping
+- **WHEN** `themeStylesToCss({ ".wg-row:has(.wg-ok, .wg-warn), html .wg-x": { color: "red" } }, ':root[data-theme="dark"]')` is called
+- **THEN** the selector SHALL be `:where(:root[data-theme="dark"]) .wg-row:has(.wg-ok, .wg-warn), html:where(:root[data-theme="dark"]) .wg-x`
 
 #### Scenario: Unsafe theme style entries never reach the output
 - **WHEN** the map holds a `body` selector, a value with `url(`, and a safe `.wg-btn` rule

@@ -277,7 +277,13 @@ export async function handleExecuteAction(
   const renderInput: Record<string, unknown> = { widget, data: rootData };
   if (payload.hints !== undefined) renderInput.hints = payload.hints;
   if (payload.meta !== undefined) renderInput.meta = payload.meta;
-  if (payload.theme !== undefined) renderInput.theme = payload.theme;
+  // A named theme resolves again from the caller's registry (tokens AND
+  // styles); one that no longer exists falls back to the held token map.
+  const themeName = typeof payload.themeName === "string" && options.themes?.get(payload.themeName) !== undefined
+    ? payload.themeName
+    : undefined;
+  if (themeName !== undefined) renderInput.theme = themeName;
+  else if (payload.theme !== undefined) renderInput.theme = payload.theme;
   const rendered = handleRenderWidget(catalog, renderInput, {
     slim: true,
     themes: options.themes,

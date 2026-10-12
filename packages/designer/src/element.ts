@@ -13,6 +13,7 @@ import { createActionDesigner } from "./action-designer.js";
 import type { ActionDesignerHandle } from "./action-designer.js";
 import { createSettingsDesigner } from "./settings-designer.js";
 import type { SettingsDesignerHandle } from "./settings-designer.js";
+import type { ThemeEntry } from "@widgentic/core";
 import { parseChromeAttribute } from "./dom.js";
 import type { ChromeOptions } from "./dom.js";
 
@@ -180,10 +181,21 @@ export function defineSettingsDesignerElement(tagName: string = DEFAULT_SETTINGS
   class WidgenticSettingsDesignerElement extends HTMLElement {
     #handle: SettingsDesignerHandle | undefined;
     #unsubscribe: (() => void) | undefined;
+    #themes: Pick<ThemeEntry, "name" | "label">[] = [];
+
+    /** The themes offered as choices; settable before or after connecting. */
+    get themes(): Pick<ThemeEntry, "name" | "label">[] {
+      return [...this.#themes];
+    }
+
+    set themes(themes: Pick<ThemeEntry, "name" | "label">[]) {
+      this.#themes = Array.isArray(themes) ? [...themes] : [];
+      this.#handle?.setThemes(this.#themes);
+    }
 
     connectedCallback(): void {
       if (this.#handle !== undefined) return;
-      this.#handle = createSettingsDesigner(this, elementOptions(this));
+      this.#handle = createSettingsDesigner(this, { ...elementOptions(this), themes: this.#themes });
       this.#unsubscribe = this.#handle.subscribe((settings) => {
         this.dispatchEvent(
           new CustomEvent("widgentic-change", { detail: { settings }, bubbles: true })

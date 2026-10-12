@@ -53,7 +53,7 @@ A theme can also define **styles**: rules for `.wg-` classes that any widget ren
 }
 ```
 
-A widget's template then uses the class (`{ "tag": "button", "attrs": { "class": "wg-btn" } }`) and gets the theme's look wherever the theme applies. The rules are the widget rules: every selector part targets a `.wg-` class, and selectors, properties or values containing `;`, braces, `<`, `>`, `@`, a backslash, `url(` or `expression(` are dropped, as is a property name outside letters and hyphens. A theme's styles are emitted before the rendered widget's own styles, so a widget can always override a shared rule.
+A widget's template then uses the class (`{ "tag": "button", "attrs": { "class": "wg-btn" } }`) and gets the theme's look wherever the theme applies. The rules are the widget rules. Each selector part (split on top-level commas) must name a `.wg-` class in its own structure: one only inside `:not()`, `:is()` or an attribute test does not count. A part may not open with a combinator. Selectors, properties or values containing `;`, braces, `<`, `>`, `@`, a backslash or a comment marker are dropped, as are values calling `url(`, `expression(`, `image-set(` or `src(`, and property names outside letters and hyphens. A theme's styles are emitted before the rendered widget's own styles, so a widget can always override a shared rule.
 
 The theme designer edits styles with the widget designer's own Styles panel, with the same Tree and JSON tabs and the same warnings for entries that would be dropped. The preview shows them on every kind you select. In the widget designer, choosing a preview theme applies its styles too, so a shared class looks in your draft as it will in a render. Agents see a theme's styles in `list_themes`.
 
@@ -71,7 +71,7 @@ Two entries exist in every catalog. `light` is the empty token map, which means 
 
 When a render names no theme, hosts fall back to the built-in look: the light defaults on light hosts and the dark preset on dark ones. In **Settings → Default themes** you can choose your own theme for each: one for light hosts, one for dark hosts, or the same theme for both. Each mode holds one choice, so picking a theme replaces the previous default for that mode. Choosing the built-in again clears it.
 
-Your choice applies to every render that names no theme, for all your keys. On a host in dark mode the dark default applies; elsewhere the light default does. Documents with no host colour scheme (`format: "page"` and `"app"`) use the light default. A render that names a theme still uses that theme. A default theme overrides the host's own colours in its mode, as a named theme does.
+Your choice applies to every render that names no theme, for all your keys. On a host in dark mode the dark default's tokens apply; elsewhere the light default's do. A default's shared styles follow the same split when you chose a theme for each mode; when only one mode has a default, its styles apply in both, since widgets rely on those classes for layout. Documents with no host colour scheme (`format: "page"` and `"app"`) use the light default. A render that names a theme still uses that theme. A default theme overrides the host's own colours in its mode, as a named theme does.
 
 A theme that is a default cannot be deleted; the app answers `THEME_IN_USE` until you choose another default. `list_themes` reports the current defaults to agents. Settings are not part of the theme entry, so exporting or importing a theme never changes your defaults.
 

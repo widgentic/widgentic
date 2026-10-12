@@ -6,7 +6,8 @@
  * Adapters store the RAW record and call these rules on both sides: writes
  * replace the sections an update names (a `null` removes one) and keep the
  * rest, including sections a later version wrote; reads keep only the
- * sections this version knows. Node-free: the host bundle loads this module.
+ * sections this version knows. Not loaded by the host bundle: its refusals
+ * come from `./types.js`, which imports `node:crypto`.
  */
 import { isPlainObject } from "@widgentic/core";
 import type { ThemeMode } from "@widgentic/core";
@@ -27,14 +28,27 @@ export type PrincipalSettingsUpdate = {
 const SECTIONS: readonly (keyof PrincipalSettings)[] = ["defaultThemes"];
 const MODES: readonly ThemeMode[] = ["light", "dark"];
 
-/** The sections this version knows, malformed values dropped. Never throws. */
-export function readSettings(raw: unknown): PrincipalSettings {
-  if (!isPlainObject(raw) || !isPlainObject(raw.defaultThemes)) return {};
+/**
+ * The sections this version knows, malformed values dropped — each drop
+ * reported through `report` when one is given. Never throws.
+ */
+export function readSettings(raw: unknown, report?: (message: string) => void): PrincipalSettings {
+  if (raw === undefined || raw === null) return {};
+  if (!isPlainObject(raw)) {
+    report?.("ignored a settings record that is not an object.");
+    return {};
+  }
   const themes = raw.defaultThemes;
+  if (themes === undefined) return {};
+  if (!isPlainObject(themes)) {
+    report?.("ignored a 'defaultThemes' setting that is not an object.");
+    return {};
+  }
   const picked: Partial<Record<ThemeMode, string>> = {};
   for (const mode of MODES) {
     const name = themes[mode];
     if (typeof name === "string") picked[mode] = name;
+    else if (name !== undefined) report?.(`ignored a ${mode} default theme that is not a name.`);
   }
   return Object.keys(picked).length > 0 ? { defaultThemes: picked } : {};
 }
@@ -79,6 +93,8 @@ export function applySettingsUpdate(
   }
   const next: Record<string, unknown> = isPlainObject(raw) ? { ...raw } : {};
   for (const [section, value] of Object.entries(update)) {
+    // An undefined section is an absent one, in every adapter alike.
+    if (value === undefined) continue;
     if (!SECTIONS.some((known) => known === section)) {
       throw new StoreRejectionError("INVALID_SHAPE", `'${section}' is not a settings section.`);
     }

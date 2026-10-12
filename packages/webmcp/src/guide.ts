@@ -26,6 +26,7 @@ import {
   PROPERTY_NAME,
   TOKEN_SPECS,
   UNSAFE,
+  UNSAFE_FUNCTIONS,
   URL_ATTRS,
   createCatalog,
   formatBoundValue
@@ -45,6 +46,26 @@ export const STORE_LIMITS = {
 const FORMAT_EXAMPLES = {
   currency: formatBoundValue("3206.9905920000", { type: "currency", currency: "COP", decimals: 0 }),
   date: formatBoundValue("2026-09-01T02:04:47", { type: "date", pattern: "dd-MM-yyyy HH:mm" })
+};
+
+/**
+ * The style rules both guides teach — widget styles and theme styles share
+ * one guard — built from the constants that enforce them.
+ */
+const STYLE_RULES = {
+  selectors:
+    "Every selector part (split on top-level commas) must name a .wg- class " +
+    "in its own structure — a .wg- class only inside :not(), :is() or an " +
+    "attribute test does not count — and no part may open with a combinator, " +
+    "e.g. '.wg-card .wg-xcard-head' or '.wg-row:has(.wg-ok, .wg-warn)'.",
+  banned:
+    `Selectors, properties, or values matching ${UNSAFE.source}, holding a ` +
+    `comment marker (/* or */), or calling ${UNSAFE_FUNCTIONS.join(", ")} are dropped.`,
+  // An ALLOWLIST, not merely "no banned characters": a property with a
+  // digit or underscore is dropped even though it contains nothing banned.
+  propertyNames:
+    `Property names must match ${PROPERTY_NAME.source} (letters and ` +
+    "hyphens, optionally leading '-'); anything else is dropped."
 };
 
 /**
@@ -137,9 +158,8 @@ export function buildDesignerGuide(prefix: string): Record<string, unknown> {
       styles: {
         purpose:
           "A theme's styles define classes every widget rendered under the theme can use (e.g. .wg-btn for buttons), so a look is written once instead of copied into each widget. They are emitted before the widget's own styles, so a widget's rule wins a tie.",
-        selectors: "Every selector (and every comma-separated part) must target a .wg- class.",
-        banned: `Selectors, properties, or values matching ${UNSAFE.source} — or containing 'url(' or 'expression(' — are dropped.`,
-        propertyNames: `Property names must match ${PROPERTY_NAME.source} (letters and hyphens, optionally leading '-'); anything else is dropped.`
+        // The same guard as widget styles: one rule object for both.
+        ...STYLE_RULES
       },
       defaults:
         "Which theme dresses renders that name no theme — one for light hosts, one for dark — is a setting the person chooses in Settings, not part of the theme entry.",
@@ -198,10 +218,8 @@ export function buildDesignerGuide(prefix: string): Record<string, unknown> {
       styles: {
         shape:
           "descriptor.styles is { \"<selector>\": { \"<cssProperty>\": \"<value>\" } } — each declaration is a separate key/value pair, e.g. { \".wg-roster-row\": { \"display\": \"flex\", \"gap\": \"var(--wg-spacing)\" } }.",
-        selectors:
-          "Every selector (and every comma-separated part) must target a .wg- class, e.g. '.wg-card .wg-xcard-head'. The base stylesheet also ships a wg-code monospace block utility any template element can opt into via class.",
-        banned: `Selectors, properties, or values matching ${UNSAFE.source} — or containing 'url(' or 'expression(' — are dropped.`,
-        propertyNames: `Property names must match ${PROPERTY_NAME.source} (letters and hyphens, optionally leading '-'); anything else is dropped.`,
+        ...STYLE_RULES,
+        utilities: "The base stylesheet also ships a wg-code monospace block utility any template element can opt into via class.",
         tokens:
           "Reference theme tokens with var(--wg-<token>) and custom variables with var(--wg-x-<name>); prefer tokens over literals so themes restyle the widget. " +
           "Every registry token is always DEFINED at render time, so bare var(--wg-<token>) is safe. Custom x-* variables are defined only by themes that set them, so give those a fallback: var(--wg-x-foo, <value>)."

@@ -13,7 +13,11 @@
  *       id "schema:<name>"  → { principalId, schema: StoredSchema }
  *       id "action:<name>"  → { principalId, action: StoredAction }
  *       id "secret:<name>"  → { principalId, name, createdAt, updatedAt, record }  (ciphertext)
- *     Every read is a point read or a single-partition query.
+ *       id "settings"       → { principalId, settings }  (the settings record; outside
+ *                             every entry prefix, so no listing or count meets it)
+ *     Every read is a point read or a single-partition query. Settings
+ *     writes and theme removal run as transactional batches in the
+ *     partition, so "a default names a stored theme" holds under races.
  *   - `keys` container, partition key `/digest`, id = digest:
  *       { digest, principalId, keyId, name, scopes, createdAt, revokedAt? }
  *     `resolvePrincipal` is a 1-RU point read: the presented key is hashed
@@ -95,6 +99,17 @@ export interface CosmosItemLike {
   delete(): Promise<unknown>;
 }
 
+/**
+ * One operation of a transactional batch, in the SDK's own shape. All of a
+ * principal's documents share its partition, so one batch can check a
+ * theme and write the settings atomically.
+ */
+export type CosmosBatchOperation =
+  | { operationType: "Create"; resourceBody: Record<string, unknown> }
+  | { operationType: "Replace"; id: string; resourceBody: Record<string, unknown>; ifMatch?: string }
+  | { operationType: "Read"; id: string }
+  | { operationType: "Delete"; id: string };
+
 export interface CosmosContainerLike {
   item(id: string, partitionKey: string): CosmosItemLike;
   items: {
@@ -104,6 +119,14 @@ export interface CosmosContainerLike {
     ): { fetchAll(): Promise<{ resources: unknown[] }> };
     create(doc: unknown): Promise<unknown>;
     upsert(doc: unknown): Promise<unknown>;
+    /**
+     * Transactional batch (all or nothing, one partition). Optional: a
+     * client without it keeps the read-then-write path for settings.
+     */
+    batch?(
+      operations: CosmosBatchOperation[],
+      partitionKey: string
+    ): Promise<{ result?: { statusCode: number }[] }>;
   };
 }
 
@@ -309,9 +332,57 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
   }
 
   async function rawSettings(principalId: string): Promise<unknown> {
-    const { resource } = await data.item("settings", principalId).read();
-    return (resource as Partial<SettingsDoc> | undefined)?.settings;
+    return (await settingsDoc(principalId)).settings;
   }
+
+  /** The settings document's record and etag; both absent when there is none. */
+  async function settingsDoc(principalId: string): Promise<{ settings?: Record<string, unknown>; etag?: string }> {
+    const { resource } = await data.item("settings", principalId).read();
+    const doc = resource as (Partial<SettingsDoc> & { _etag?: string }) | undefined;
+    if (doc === undefined) return {};
+    return {
+      ...(doc.settings === undefined ? {} : { settings: doc.settings }),
+      ...(doc._etag === undefined ? {} : { etag: doc._etag })
+    };
+  }
+
+  async function rawThemeNames(principalId: string): Promise<Set<string>> {
+    // Raw: a theme the validator rejects today is still theirs.
+    const names = new Set<string>();
+    for (const raw of await listByPrefix(principalId, "theme:")) {
+      const name = (raw as Partial<ThemeDoc>).theme?.name;
+      if (typeof name === "string") names.add(name);
+    }
+    return names;
+  }
+
+  /**
+   * Run a transactional batch: every operation's status, `ok` only when all
+   * succeeded. A refused operation fails the whole batch (the others report
+   * 424); a thrown service error reports its own code in every slot.
+   */
+  async function runBatch(
+    operation: string,
+    principalId: string,
+    operations: CosmosBatchOperation[]
+  ): Promise<{ ok: boolean; statuses: number[] }> {
+    const batch = data.items.batch;
+    if (batch === undefined) throw new StoreRejectionError("STORE_ERROR", `${operation}: no transactional batch.`);
+    try {
+      const response = await batch.call(data.items, operations, principalId);
+      const statuses = (response.result ?? []).map((entry) => entry.statusCode);
+      const ok = statuses.length === operations.length && statuses.every((code) => code >= 200 && code < 300);
+      return { ok, statuses };
+    } catch (error) {
+      const code = isServiceError(error) ? Number(error.code) : Number.NaN;
+      if (code === 403) throw operationError(operation, error);
+      return { ok: false, statuses: operations.map(() => code) };
+    }
+  }
+
+  /** A settings write lost a race: another write changed or created it first. */
+  const lostRace = (code: number | undefined) => code === 412 || code === 409;
+  const BATCH_ATTEMPTS = 3;
 
   // Integrity scans read RAW docs: a widget the validator rejects today
   // still holds its references, and a delete must not slip past it.
@@ -682,6 +753,24 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
     },
 
     async removeTheme(principalId, name) {
+      if (data.items.batch !== undefined) {
+        // Atomic with the in-use check: the delete commits only if the
+        // settings document is still the one checked. Without one, the
+        // guard creates an empty record — it reads as no settings.
+        for (let attempt = 0; attempt < BATCH_ATTEMPTS; attempt++) {
+          const current = await settingsDoc(principalId);
+          refuseThemeInUse(current.settings, name);
+          const body = { id: "settings", principalId, settings: current.settings ?? {} };
+          const guard: CosmosBatchOperation = current.etag === undefined
+            ? { operationType: "Create", resourceBody: body }
+            : { operationType: "Replace", id: "settings", resourceBody: body, ifMatch: current.etag };
+          const outcome = await runBatch("removeTheme", principalId, [{ operationType: "Delete", id: `theme:${name}` }, guard]);
+          if (outcome.ok || outcome.statuses[0] === 404) return; // gone already: as before
+          if (lostRace(outcome.statuses[1])) continue;
+          throw new StoreRejectionError("STORE_ERROR", `removeTheme failed (service codes ${outcome.statuses.join(", ")}).`);
+        }
+        throw new StoreRejectionError("STORE_ERROR", "removeTheme: the settings kept changing; try again.");
+      }
       refuseThemeInUse(await rawSettings(principalId), name);
       try {
         await data.item(`theme:${name}`, principalId).delete();
@@ -692,18 +781,41 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
     },
 
     async settings(principalId) {
-      return readSettings(await rawSettings(principalId));
+      return readSettings(await rawSettings(principalId), (message) => log(`widgentic store: ${message} (${principalId})`));
     },
 
     async putSettings(principalId, update) {
       await requirePrincipal(principalId);
-      // Raw theme names: a theme the validator rejects today is still theirs.
-      const themeNames = new Set<string>();
-      for (const raw of await listByPrefix(principalId, "theme:")) {
-        const name = (raw as Partial<ThemeDoc>).theme?.name;
-        if (typeof name === "string") themeNames.add(name);
+      if (data.items.batch !== undefined) {
+        // Atomic with the existence check: the write commits only if the
+        // settings document is unchanged since it was read AND every theme
+        // it names still exists (a Read of a missing theme fails the batch).
+        for (let attempt = 0; attempt < BATCH_ATTEMPTS; attempt++) {
+          const current = await settingsDoc(principalId);
+          const next = applySettingsUpdate(current.settings, update, await rawThemeNames(principalId));
+          if (next === undefined && current.etag === undefined) return; // nothing to keep, nothing stored
+          // An emptied record is kept as an empty document: a Delete cannot
+          // be made conditional on the etag.
+          const body = { id: "settings", principalId, settings: next ?? {} };
+          const named = [...new Set(Object.values(readSettings(next).defaultThemes ?? {}))];
+          const write: CosmosBatchOperation = current.etag === undefined
+            ? { operationType: "Create", resourceBody: body }
+            : { operationType: "Replace", id: "settings", resourceBody: body, ifMatch: current.etag };
+          const outcome = await runBatch("putSettings", principalId, [
+            write,
+            ...named.map((name): CosmosBatchOperation => ({ operationType: "Read", id: `theme:${name}` }))
+          ]);
+          if (outcome.ok) return;
+          const removed = named.find((_name, index) => outcome.statuses[index + 1] === 404);
+          if (removed !== undefined) {
+            throw new StoreRejectionError("UNKNOWN_THEME", `'${removed}' was removed while the settings were saved.`);
+          }
+          if (lostRace(outcome.statuses[0])) continue;
+          throw new StoreRejectionError("STORE_ERROR", `putSettings failed (service codes ${outcome.statuses.join(", ")}).`);
+        }
+        throw new StoreRejectionError("STORE_ERROR", "putSettings: the settings kept changing; try again.");
       }
-      const next = applySettingsUpdate(await rawSettings(principalId), update, themeNames);
+      const next = applySettingsUpdate(await rawSettings(principalId), update, await rawThemeNames(principalId));
       try {
         if (next === undefined) {
           await data.item("settings", principalId).delete();

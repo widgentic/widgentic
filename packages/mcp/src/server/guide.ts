@@ -15,6 +15,7 @@ import {
   PATTERN_MAX_LENGTH,
   PROPERTY_NAME,
   UNSAFE,
+  UNSAFE_FUNCTIONS,
   createCatalog,
   formatBoundValue
 } from "@widgentic/core";
@@ -38,6 +39,26 @@ import {
 } from "@widgentic/core";
 import { DEFAULT_LIMITS, SAFE_IDENTIFIER } from "../store/limits.js";
 import type { McpToolResult } from "../output/index.js";
+
+/**
+ * The style rules both guides teach — widget styles and theme styles share
+ * one guard — built from the constants that enforce them.
+ */
+const STYLE_RULES = {
+  selectors:
+    "Every selector part (split on top-level commas) must name a .wg- class " +
+    "in its own structure — a .wg- class only inside :not(), :is() or an " +
+    "attribute test does not count — and no part may open with a combinator, " +
+    "e.g. '.wg-card .wg-xcard-head' or '.wg-row:has(.wg-ok, .wg-warn)'.",
+  banned:
+    `Selectors, properties, or values matching ${UNSAFE.source}, holding a ` +
+    `comment marker (/* or */), or calling ${UNSAFE_FUNCTIONS.join(", ")} are dropped.`,
+  // An ALLOWLIST, not merely "no banned characters": a property with a
+  // digit or underscore is dropped even though it contains nothing banned.
+  propertyNames:
+    `Property names must match ${PROPERTY_NAME.source} (letters and ` +
+    "hyphens, optionally leading '-'); anything else is dropped."
+};
 
 /**
  * The recipe's outputs are RENDERED by the engine, not typed: the guide can
@@ -162,15 +183,8 @@ export function buildAuthoringGuide(): Record<string, unknown> {
           "theme can use (e.g. .wg-btn for buttons), so a look is written " +
           "once instead of copied into each widget. They are emitted before " +
           "the widget's own styles, so a widget's rule wins a tie.",
-        // Derived from the same guards as widget styles: one rule for both.
-        selectors:
-          "Every selector (and every comma-separated part) must target a .wg- class.",
-        banned:
-          `Selectors, properties, or values matching ${UNSAFE.source} — or ` +
-          "containing 'url(' or 'expression(' — are dropped.",
-        propertyNames:
-          `Property names must match ${PROPERTY_NAME.source} (letters and ` +
-          "hyphens, optionally leading '-'); anything else is dropped."
+        // The same guard as widget styles: one rule object for both.
+        ...STYLE_RULES
       },
       defaults:
         "Which theme dresses renders that name no theme — one for light " +
@@ -261,22 +275,10 @@ export function buildAuthoringGuide(): Record<string, unknown> {
           "\"<value>\" } } — each declaration is a separate key/value " +
           "pair, e.g. { \".wg-roster-row\": { \"display\": \"flex\", " +
           "\"gap\": \"var(--wg-spacing)\" } }.",
-        selectors:
-          "Every selector (and every comma-separated part) must target a " +
-          ".wg- class, e.g. '.wg-card .wg-xcard-head'. The base stylesheet " +
-          "also ships a wg-code monospace block utility (font-mono, " +
-          "surface, border) any template element can opt into via class.",
-        // Derived: the guard's own character class, plus the two
-        // function forms the value check rejects on top of it.
-        banned:
-          `Selectors, properties, or values matching ${UNSAFE.source} — or ` +
-          "containing 'url(' or 'expression(' — are dropped.",
-        // The property rule is an ALLOWLIST, not merely "no banned
-        // characters": a property with a digit or underscore is dropped
-        // even though it contains nothing banned.
-        propertyNames:
-          `Property names must match ${PROPERTY_NAME.source} (letters and ` +
-          "hyphens, optionally leading '-'); anything else is dropped.",
+        ...STYLE_RULES,
+        utilities:
+          "The base stylesheet also ships a wg-code monospace block utility " +
+          "(font-mono, surface, border) any template element can opt into via class.",
         tokens:
           "Reference theme tokens with var(--wg-<token>) and custom " +
           "variables with var(--wg-x-<name>); prefer tokens over literals " +

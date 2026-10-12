@@ -84,6 +84,19 @@ Storage per adapter:
   schema migration. Entry listings and limits filter by their own kinds.
 - **Cosmos:** a document `settings` in the principal's partition. Its id lies outside
   every `<kind>:` prefix the entry queries match.
+- **Review: Cosmos must not rely on read-then-write.** Both reviews found that Cosmos
+  checked and wrote in separate steps, so a race could leave a default naming a deleted
+  theme. All of a principal's documents share its partition, so:
+  - **`putSettings`** commits in one transactional batch. It replaces the settings
+    document with `ifMatch` on the etag it read (or creates it) and reads every named
+    theme; a missing theme fails the batch.
+  - **`removeTheme`** deletes the theme in a batch that replaces the settings document
+    unchanged, with `ifMatch`. When none exists it creates an empty one, which reads as
+    no settings.
+  - **On conflict**, both retry up to three times.
+  - **An emptied record** is kept as an empty document, because a batch Delete cannot be
+    made conditional.
+  - **Fallback:** a client without `batch` keeps the earlier path.
 
 ### D2 — The registry carries the defaults
 
@@ -106,10 +119,18 @@ under `:root[data-theme="dark"]`:
   static `:root` bridge. The dark selector ties with the static dark block, and the later
   style element wins.
 
-Theme styles are scoped as `:where(<mode selector>) <part>` on every comma-separated
-part, inside `themeStylesToCss` (core) with the widget generator's guards. A scoped rule
-weighs exactly what its author wrote. A theme that is the default for both modes is
-emitted unscoped, exactly as an explicit theme is.
+Theme styles are scoped as `:where(<mode selector>) <part>` on every top-level part,
+inside `themeStylesToCss` (core) with the widget generator's guards. A scoped rule weighs
+exactly what its author wrote. A theme that is the default for both modes is emitted
+unscoped, exactly as an explicit theme is.
+- **Review: styles are scoped only when both modes have their own default.** A lone
+  default's classes are layout a widget relies on: scoped to the light mode, they would
+  vanish on a dark host whose default is the built-in. Unscoped, they read the active
+  mode's tokens. Tokens stay mode-scoped always.
+- **Review: top-level parts, root-anchored parts.** Splitting on every comma broke
+  `.wg-row:has(.wg-ok, .wg-warn)`. A part anchored at the root (`:root[…] .wg-x`,
+  `html .wg-x`) takes `:where(<scope>)` on its root compound, because prefixing would
+  demand a root inside the root and never match.
 
 *Alternative rejected:* `@media (prefers-color-scheme: dark)`. It follows the OS, not the
 host; the template already mirrors the host in `data-theme`.
@@ -129,6 +150,18 @@ doesn't matter; they stay last, where explicit themes already put them.
   emission; the designer's audit flags them.
 - **Alternative rejected:** refusing unsafe entries on write, which would make theme
   styles stricter than widget styles for no gain.
+- **Review: the shared guards had gaps.** Theme styles reach every render under a
+  default, so the gaps widget styles already had now mattered more:
+  - **A comment** in a selector or value could rewrite the selector or swallow the rest
+    of the sheet.
+  - **`image-set()` and `src()`** carry URLs without spelling `url(`.
+  - **The `.wg-` test** only checked that a part contained `.wg-`, so `body:not(.wg-x)`
+    passed.
+
+  The guard now bans comment markers and those functions, in style values and token
+  values alike. A selector part must name a `.wg-` class outside every pseudo-class
+  argument and attribute test, and must not open with a combinator. Both guides teach
+  this from one rules object built from the exported constants.
 - **Apply note: one shape predicate.** The registry, the store's write check and the
   theme designer's import all need the same "map of maps of strings" test. Rather than
   three copies, `@widgentic/core` exports `isStyleMap` from `./catalog`, beside
@@ -205,6 +238,22 @@ The designer stays unaware of settings; the host decides which name to pass.
   picked by hand is not part of the draft the example carries over, so it resets (to
   "none" before this change). Accepted.
 
+### D13 — Review fixes that keep every surface on the same theme
+
+These are from the two reviews of PR #29:
+- **Named themes in action re-renders.** A named theme that carries styles rides the
+  payload by name (`themeName`), so an `execute_action` re-render resolves the same
+  entry, styles included, instead of a bare token map. Themes without styles leave the
+  payload exactly as before.
+- **Widget pages.** The `ui://widgentic/page/{kind}` page takes the light default, as
+  documents do.
+- **Streaming previews.** A theme name still streaming previews with no theme, not the
+  defaults, so the look never flips mid-stream.
+- **Example app, unread settings.** When the settings cannot be read, Settings opens
+  read-only with no Save, so an empty record never replaces the stored one.
+- **Settings element.** The settings designer gains `setThemes`, and its element a
+  `themes` property, so a page using only the element can offer choices.
+
 ## Risks / Trade-offs
 
 - **A default theme overrides host-bridged colors** (`bg`, `fg`, …) in its mode, as an
@@ -219,6 +268,10 @@ The designer stays unaware of settings; the host decides which name to pass.
 - **A future partition-wide Cosmos scan would meet the `settings` document.**
   → The contract tests list every kind after settings are written, so a stray read fails
   a test.
+- **Custom adapters written against the earlier port have no `settings`.**
+  → `composeThemes` keeps the built-in defaults with a diagnostic when the method is
+  missing or its read fails, because defaults are cosmetic. The changeset says adapters
+  now implement `settings` and `putSettings`.
 - **The settings designer offers only the themes the host passes.** → Hosts pass the
   stored list; an absent name shows as "unavailable".
 - **Apply note: a seeded section comes back once it is fully cleared.** The seed writes a

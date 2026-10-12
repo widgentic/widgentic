@@ -242,14 +242,15 @@ Claude Code degrades gracefully to text. Host registration snippets live in
   tokens, styles? }`): every registry token with color swatches, plus
   author-defined `x-*` custom variables and shared styles (the widget
   designer's Styles panel), previewed against any catalog kind.
-- **Settings designer** — the principal's settings record; its Default themes
-  subsection picks the theme light and dark hosts get when a render names
-  none.
-
 The two cooperate without either owning the other: themes flow into the
 widget designer via `{ themes }`, and widgets flow into the theme designer
 via `{ widgets }`, so a theme is judged against the widgets it will
 actually dress (invalid definitions are skipped, never fatal).
+
+The package also ships the schema, action and settings designers (the
+settings designer's Default themes subsection picks the theme light and dark
+hosts get when a render names none); the self-hosted example
+([examples/docker/](examples/docker/)) mounts all five.
 
 ```ts
 import { createDesigner, createSchemaDesigner, createThemeDesigner } from "@widgentic/designer";

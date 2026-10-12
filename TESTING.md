@@ -379,6 +379,15 @@ workspace and the sample first, then point at the built DLL):
     - **Settings designer.** Mounts alone; registers its element only on the explicit call; edits and notifies; lets one theme serve both modes; shows a missing theme as unavailable; passes unknown sections through; refuses a malformed record; is inert when read-only.
     - **WebMCP.** `theme_load`/`theme_get` round-trip `styles`, and a token merge keeps them.
   - **Self-host example.** The seed writes `settings` after the themes, never over a held section; refusals are logged per section, and the demo seed sets `google-light`/`google-dark` (7 written). An in-browser app test boots `main.ts` in happy-dom against the real authoring handler and checks: the widget designer opens on the light default; the Themes list marks the default; picking a default in Settings and saving moves the mark; deleting the default shows `THEME_IN_USE`; a newly saved theme becomes a choice.
+  - **Review fixes (two reviews of PR #29, deduplicated).**
+    - **Action re-renders:** a named theme with styles survives an `execute_action` re-render (same `css`), a styleless theme adds no `themeName`, and a vanished name falls back to the held tokens.
+    - **Guards:** they drop comment tricks, `:not(.wg-x)`, `:is(.wg-a, body)`, attribute-hidden `.wg-`, combinator-led parts, and `image-set(`/`src(`, in styles and token values. They keep `:has(…, …)`, `:not(:last-child)` and root-anchored rules; a root-anchored rule scopes on its root compound and computes only in its scope.
+    - **Two defaults:** each theme's padding applies on hosts of its mode, in the template (computed). The dark-host value equals a no-defaults render's.
+    - **Cosmos races:** a theme removed mid-`putSettings` gives `UNKNOWN_THEME`, a default set mid-`removeTheme` gives `THEME_IN_USE`, and a section added meanwhile survives. These are checked through the fake's transactional batch with etags.
+    - **Composition:** it survives a missing or throwing `settings` and an invalid-but-stored default, with diagnostics.
+    - **Designers:** `loadTheme` drops stale styles; the JSON tab refuses a malformed map and maps `{}` to none; the settings element takes `themes` before and after connecting.
+    - **Example:** `previewThemes` merges `extends` in any order; unread settings open read-only without Save.
+    - **Corpus:** it changes only in the styled-theme cases (`themeName`) and the guide text; `dotnet test` passes.
   - **Not verified yet:** the hosts. Staging on `demo.widgentic.dev`, and widgentic.dev's Settings section, follow.
 - **Wire schemas from the exported definitions (2026-10-11, change `derived-input-schemas`, `@widgentic/mcp` minor pending release)**
   - **The wire.** `server-wiring` lists the tools of `createWidgenticServer()` and finds every `inputSchema` and description equal to the exported definition's, for all nine tools: nothing added (no `$schema`), nothing missing.

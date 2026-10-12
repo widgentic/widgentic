@@ -25,7 +25,7 @@ export function themeTools(source: () => ThemeDesignerHandle | undefined, name: 
       title: "Read the theme entry",
       readOnly: true,
       description:
-        "Read the theme entry open in the theme designer: { entry: { name, label?, description?, extends?, tokens } } — tokens is a map of --wg-* token names (and x-<name> author variables) to CSS values.",
+        "Read the theme entry open in the theme designer: { entry: { name, label?, description?, extends?, tokens, styles? } } — tokens is a map of --wg-* token names (and x-<name> author variables) to CSS values; styles maps .wg- selectors to { property: value } (shared classes every widget under the theme can use).",
       inputSchema: objectSchema({}),
       execute() {
         const handle = source();
@@ -37,8 +37,9 @@ export function themeTools(source: () => ThemeDesignerHandle | undefined, name: 
       name: name("theme_load"),
       title: "Load a theme entry",
       description:
-        "Replace the entry in the theme designer: { entry: { name, label?, description?, tokens } }. name: letters, digits, '.', '_' or '-'; light and dark are reserved. " +
+        "Replace the WHOLE entry in the theme designer: { entry: { name, label?, description?, tokens, styles? } } — read it with theme_get first and keep its styles, or they are dropped. name: letters, digits, '.', '_' or '-'; light and dark are reserved. " +
         "tokens: bare --wg-* token names (colours: bg, surface, fg, muted, accent, accent-fg, border; shape: radius, radius-sm, radius-lg, spacing, border-width; type and status tokens — list them all with theme_token_specs) and author variables x-<name>, to plain CSS values (no ';', '{', '}', 'url(' or 'expression('). " +
+        "styles: shared .wg- classes, { \".wg-btn\": { \"padding\": \"4px 8px\" } }, under the widget style rules. " +
         "A dark theme sets bg/surface/fg/muted/border together so contrast holds. Refused → { ok: false, code: 'REJECTED', errors }. " +
         PERSON_SAVES,
       inputSchema: ENTRY_SCHEMA("theme"),

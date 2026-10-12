@@ -74,6 +74,9 @@ None.
 - `mcp-server`: theme styles in every styled output; default themes standing in for the
   built-ins; `list_themes` and the authoring guide describe both.
 - `self-host-example`: the Settings section and settings in the seed.
+- `widget-catalog`: the style guards both widget and theme styles share refuse comment
+  markers, `image-set()`/`src()` URLs and `.wg-` classes hidden in pseudo-class arguments
+  (found in review; theme styles reach every render, so the gaps mattered more).
 
 The `widgentic-app` capability (Settings section on widgentic.dev) changes in the apps
 repository's companion change.

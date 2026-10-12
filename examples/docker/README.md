@@ -35,7 +35,7 @@ is opt-in per key and is what lets your http actions run.
 
 ## Co-author with a browser agent (WebMCP)
 
-The authoring page registers its four designers as [WebMCP](https://github.com/webmachinelearning/webmcp)
+The authoring page registers its widget, theme, schema and action designers as [WebMCP](https://github.com/webmachinelearning/webmcp)
 tools through `@widgentic/webmcp` (beta). Open it in **ChatGPT Desktop's
 browser**, or in Chrome 149+ / Edge 150 with `chrome://flags/#enable-webmcp-testing`
 (or with an origin-trial token for your origin — see below), and the header

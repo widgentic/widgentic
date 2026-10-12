@@ -10,6 +10,7 @@ import { isPlainObject } from "@widgentic/core";
 import type { ThemeEntry, ThemeMode } from "@widgentic/core";
 import { applyChrome, h, injectDesignerStyles, section } from "./dom.js";
 import type { ChromeOptions } from "./dom.js";
+import { clone } from "./internal.js";
 
 /** The settings record as the designer sees it: known sections plus any it passes through. */
 export interface SettingsRecord {
@@ -34,6 +35,8 @@ export interface SettingsDesignerHandle {
   /** The record, built-in choices omitted; unedited sections as supplied. */
   getSettings(): SettingsRecord;
   loadSettings(settings: unknown): SettingsLoadResult;
+  /** Replace the themes offered as choices; the record is kept as it is. */
+  setThemes(themes: Pick<ThemeEntry, "name" | "label">[]): void;
   setReadOnly(readOnly: boolean): void;
   subscribe(listener: (settings: SettingsRecord) => void): () => void;
   dispose(): void;
@@ -43,10 +46,6 @@ const MODES: readonly { mode: ThemeMode; label: string; builtIn: string }[] = [
   { mode: "light", label: "Light hosts", builtIn: "Built-in light" },
   { mode: "dark", label: "Dark hosts", builtIn: "Built-in dark" }
 ];
-
-function clone<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T;
-}
 
 /** Shape check for an untrusted record; errors instead of throwing. */
 function checkSettings(settings: unknown): string[] {
@@ -68,7 +67,7 @@ export function createSettingsDesigner(
 ): SettingsDesignerHandle {
   injectDesignerStyles(document);
 
-  const themes = options.themes ?? [];
+  let themes = options.themes ?? [];
   let record: SettingsRecord = options.initialSettings ? clone(options.initialSettings) : {};
   const listeners = new Set<(settings: SettingsRecord) => void>();
 
@@ -151,9 +150,18 @@ export function createSettingsDesigner(
   }
   if (options.readOnly === true) setReadOnly(true);
 
+  function setThemes(next: Pick<ThemeEntry, "name" | "label">[]): void {
+    themes = [...next];
+    for (const { mode, builtIn } of MODES) {
+      const select = selects.get(mode);
+      if (select !== undefined) fillSelect(select, mode, builtIn);
+    }
+  }
+
   return {
     getSettings,
     loadSettings,
+    setThemes,
     setReadOnly,
     subscribe(listener) {
       listeners.add(listener);

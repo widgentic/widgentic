@@ -5,7 +5,8 @@ import type { ThemeRegistry, WidgetCatalog } from "@widgentic/core";
 import { checkThemeEntry } from "@widgentic/designer";
 import { checkStoredTheme } from "../../store/validate.js";
 import { buildAppTemplate } from "../index.js";
-import { handleListThemes, handlePreviewWidget, handleRenderWidget } from "../handlers.js";
+import { handleListThemes, handlePreviewWidget, handleRenderWidget, renderWidgetPage } from "../handlers.js";
+import { LIST_THEMES_TOOL, RENDER_WIDGET_TOOL } from "../definitions.js";
 import { handleGetAuthoringGuide } from "../guide.js";
 import type { McpToolResult } from "../../output/index.js";
 import { bootTemplate, toolResult } from "./template-harness.js";
@@ -81,10 +82,14 @@ describe("theme styles reach every styled output", () => {
   });
 
   it("unsafe theme style entries never reach any output", () => {
+    const withDefault = registry((r) => r.setDefault("light", "brand"));
     const outputs = [
       cssOf(render(registry(), { theme: "brand" })),
       textOf(render(registry(), { theme: "brand", format: "page" })),
-      cssOf(handlePreviewWidget(invoiceCatalog(), { widget: "invoice", data: 1, theme: "brand" }, { themes: registry() }))
+      blockTexts(render(registry(), { theme: "brand", format: "app" })).join("\n"),
+      cssOf(handlePreviewWidget(invoiceCatalog(), { widget: "invoice", data: 1, theme: "brand" }, { themes: registry() })),
+      cssOf(render(withDefault)),
+      blockTexts(render(withDefault, { format: "app" })).join("\n")
     ];
     for (const output of outputs) {
       expect(output).not.toMatch(/(^|\n)body \{\n  color: red;/);
@@ -102,19 +107,27 @@ describe("theme styles reach every styled output", () => {
 });
 
 describe("default themes from settings stand in for the built-ins", () => {
-  it("the light default dresses light hosts only", () => {
+  it("the light default's tokens dress light hosts only; a lone default's styles serve both modes", () => {
     const css = cssOf(render(registry((r) => r.setDefault("light", "brand"))));
     expect(css).toContain(`${LIGHT} {\n  --wg-accent: #ff5a1f;\n}`);
-    expect(css).toContain(`:where(${LIGHT}) .wg-btn {`);
     expect(css).not.toContain(`${DARK} {`);
+    // Layout a widget relies on must not vanish on a dark host with no dark default.
+    expect(css).toContain(".wg-btn {\n  padding: 4px 8px;\n}");
+    expect(css).not.toContain(":where(");
   });
 
-  it("the dark default dresses dark hosts only, styles scoped", () => {
+  it("the dark default's tokens dress dark hosts only", () => {
     const css = cssOf(render(registry((r) => r.setDefault("dark", "brand-dark"))));
     expect(css).toContain(`${DARK} {`);
     expect(css).toContain("--wg-accent: #ff8a5c;");
-    expect(css).toContain(`:where(${DARK}) .wg-btn {\n  padding: 6px 10px;\n}`);
+    expect(css).toContain(".wg-btn {\n  padding: 6px 10px;\n}");
     expect(css).not.toContain(`${LIGHT} {`);
+  });
+
+  it("two different defaults each scope their styles to their own mode", () => {
+    const css = cssOf(render(registry((r) => { r.setDefault("light", "brand"); r.setDefault("dark", "brand-dark"); })));
+    expect(css).toContain(`:where(${LIGHT}) .wg-btn {\n  padding: 4px 8px;\n}`);
+    expect(css).toContain(`:where(${DARK}) .wg-btn {\n  padding: 6px 10px;\n}`);
   });
 
   it("one theme serving both modes is emitted as an explicit theme is", () => {
@@ -152,15 +165,32 @@ describe("default themes from settings stand in for the built-ins", () => {
   });
 });
 
+describe("documents and previews", () => {
+  it("the widget page resource takes the light default, unchanged without one", () => {
+    const catalog = invoiceCatalog();
+    const withDefault = renderWidgetPage(catalog, "invoice", registry((r) => r.setDefault("light", "brand")));
+    expect(withDefault).toContain(":root {\n  --wg-accent: #ff5a1f;\n}");
+    expect(withDefault).toContain(".wg-btn {\n  padding: 4px 8px;\n}");
+    expect(renderWidgetPage(catalog, "invoice", createThemeRegistry())).toBe(renderWidgetPage(catalog, "invoice"));
+  });
+
+  it("a theme still streaming previews with no theme, not the defaults", () => {
+    const withDefault = registry((r) => r.setDefault("light", "brand"));
+    const half = handlePreviewWidget(invoiceCatalog(), { widget: "invoice", data: 1, theme: "bra" }, { themes: withDefault });
+    expect(cssOf(half)).not.toContain("#ff5a1f");
+    expect(cssOf(half)).toBe(cssOf(handlePreviewWidget(invoiceCatalog(), { widget: "invoice", data: 1 }, { themes: createThemeRegistry() })));
+  });
+});
+
 describe("the light default in the app template", () => {
   // The template's static style (base stylesheet, host bridge, dark block)
   // plus the result's css, measured once per fresh document.
-  function accentOn(hostTheme: "light" | "dark"): string {
+  function accentOn(hostTheme: "light" | "dark", themes: ThemeRegistry = registry((r) => r.setDefault("light", "brand"))): string {
     const t = bootTemplate();
     const staticCss = buildAppTemplate().split("<style>")[1]?.split("</style>")[0] ?? "";
     document.head.insertAdjacentHTML("afterbegin", `<style>${staticCss}</style>`);
     t.dispatch({ jsonrpc: "2.0", method: "ui/notifications/host-context-changed", params: { theme: hostTheme } });
-    const result = render(registry((r) => r.setDefault("light", "brand")));
+    const result = render(themes);
     t.dispatch(toolResult(result.structuredContent as Record<string, unknown>));
     if (t.root().querySelector(".wg-btn") === null) throw new Error("the widget did not mount");
     // Tokens are declared on the root and inherited; read them where declared.
@@ -175,8 +205,28 @@ describe("the light default in the app template", () => {
     expect(accentOn("light")).toBe("#ff5a1f");
   });
 
-  it("leaves a dark host to the built-in behavior", () => {
-    expect(accentOn("dark")).not.toBe("#ff5a1f");
+  it("leaves a dark host to exactly the built-in behavior", () => {
+    const withDefault = accentOn("dark");
+    expect(withDefault).not.toBe("#ff5a1f");
+    expect(withDefault).toBe(accentOn("dark", createThemeRegistry()));
+  });
+
+  // Two different defaults: each mode gets its own theme's classes.
+  function paddingOn(hostTheme: "light" | "dark"): string {
+    const t = bootTemplate();
+    const staticCss = buildAppTemplate().split("<style>")[1]?.split("</style>")[0] ?? "";
+    document.head.insertAdjacentHTML("afterbegin", `<style>${staticCss}</style>`);
+    t.dispatch({ jsonrpc: "2.0", method: "ui/notifications/host-context-changed", params: { theme: hostTheme } });
+    const result = render(registry((r) => { r.setDefault("light", "brand"); r.setDefault("dark", "brand-dark"); }));
+    t.dispatch(toolResult(result.structuredContent as Record<string, unknown>));
+    const button = t.root().querySelector(".wg-btn");
+    if (button === null) throw new Error("the widget did not mount");
+    return getComputedStyle(button).padding;
+  }
+
+  it("applies each mode's own theme styles", () => {
+    expect(paddingOn("light")).toBe("4px 8px");
+    expect(paddingOn("dark")).toBe("6px 10px");
   });
 });
 
@@ -192,6 +242,13 @@ describe("agents see theme styles and defaults", () => {
     expect(listing.themes.find((t) => t.name === "brand")?.styles).toEqual({ ...BTN, body: { color: "red" } });
     expect(listing.defaults).toEqual({ light: "brand", dark: "dark" });
     expect(listing.rules).toContain("{ name, label?, description?, tokens, styles? }");
+  });
+
+  it("list_themes and render_widget steer agents to the user's defaults", () => {
+    expect(LIST_THEMES_TOOL.description).toContain("defaults");
+    expect(LIST_THEMES_TOOL.description).toContain("styles");
+    const themeParam = (RENDER_WIDGET_TOOL.inputSchema.properties as Record<string, { description?: string }>).theme;
+    expect(themeParam?.description).toContain("Leave this out to use the user's default themes");
   });
 
   it("the guide teaches theme styles from the shared constants, and its drafts import cleanly", () => {

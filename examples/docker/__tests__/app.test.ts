@@ -104,5 +104,7 @@ describe("the example app's Settings section", () => {
     await until(() => status() === "saved theme my-theme", "the theme save");
     click("tab-settings");
     expect([...lightSelect().options].map((option) => option.value)).toContain("my-theme");
+    const dark = document.querySelector('#settings-designer select[data-mode="dark"]') as HTMLSelectElement;
+    expect([...dark.options].map((option) => option.value)).toContain("my-theme");
   });
 });

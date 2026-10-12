@@ -67,6 +67,21 @@ describe("theme designer styles", () => {
     expect(styles.querySelector(".wgd-section-body")?.hasAttribute("inert")).toBe(false);
   });
 
+  it("refuses a malformed map in the JSON tab and treats an empty one as no styles", () => {
+    const root = host();
+    const designer = createThemeDesigner(root, {
+      initialTheme: { name: "brand", tokens: {}, styles: { ".wg-btn": { padding: "4px" } } }
+    });
+    const json = sectionTitled(root, "Styles").querySelector("textarea") as HTMLTextAreaElement;
+    json.value = '{".wg-btn": "padding: 4px"}';
+    json.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(designer.getTheme().styles).toEqual({ ".wg-btn": { padding: "4px" } });
+    expect(sectionTitled(root, "Styles").textContent).toContain("Styles must map selectors to objects");
+    json.value = "{}";
+    json.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(designer.getTheme()).not.toHaveProperty("styles");
+  });
+
   it("omits styles from the export when emptied and round-trips them otherwise", () => {
     const entry: ThemeEntry = { name: "brand", tokens: { accent: "#ff5a1f" }, styles: { ".wg-btn": { padding: "4px" } } };
     const designer = createThemeDesigner(host(), { initialTheme: entry });
@@ -178,6 +193,15 @@ describe("a host-chosen preview theme", () => {
     expect(missing.getDraft()).not.toHaveProperty("theme");
   });
 
+  it("loadTheme replaces the preview theme whole, leaving no previous styles", () => {
+    const root = host();
+    const designer = createDesigner(root, { initialWidget: widget, themes, previewTheme: "brand" });
+    expect(designer.loadTheme({ accent: "#123456" })).toEqual({ ok: true });
+    expect(designer.getDraft()).not.toHaveProperty("themeStyles");
+    expect(css(root)).not.toContain(".wg-btn");
+    expect((root.querySelector(".wgd-theme-select") as HTMLSelectElement).value).toBe("");
+  });
+
   it("keeps the preview theme, styles included, when a widget is loaded", () => {
     const root = host();
     const designer = createDesigner(root, { themes, previewTheme: "brand" });
@@ -204,13 +228,21 @@ describe("settings designer", () => {
     expect(root.querySelector(".wgd-styles")).toBeNull();
     expect(customElements.get("widgentic-settings-designer")).toBeUndefined();
     defineSettingsDesignerElement();
-    const element = document.createElement("widgentic-settings-designer");
+    const element = document.createElement("widgentic-settings-designer") as HTMLElement & {
+      themes: { name: string; label?: string }[];
+    };
+    element.themes = themes; // before connecting
     const seen: unknown[] = [];
     element.addEventListener("widgentic-change", (event) => seen.push((event as CustomEvent).detail));
     document.body.appendChild(element);
-    change(select(element, "light"), "light");
-    expect(seen.length).toBeGreaterThan(0);
-    expect((seen.at(-1) as { settings: SettingsRecord }).settings).toHaveProperty("defaultThemes");
+    expect([...select(element, "light").options].map((option) => option.value)).toEqual(["", "ocean", "night"]);
+    change(select(element, "light"), "ocean");
+    expect(seen.at(-1)).toEqual({ settings: { defaultThemes: { light: "ocean" } } });
+    // ...and after: a theme saved meanwhile becomes a choice, the record stays.
+    element.themes = [...themes, { name: "dusk" }];
+    expect([...select(element, "dark").options].map((option) => option.value)).toEqual(["", "ocean", "night", "dusk"]);
+    change(select(element, "dark"), "dusk");
+    expect(seen.at(-1)).toEqual({ settings: { defaultThemes: { light: "ocean", dark: "dusk" } } });
   });
 
   it("choosing defaults edits the record and notifies", () => {

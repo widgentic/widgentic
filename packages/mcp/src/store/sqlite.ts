@@ -10,7 +10,8 @@
  *   entries(principal_id, kind, name, json)        — PK(principal_id, kind, name),
  *     kind ∈ widget | theme | schema | action | secret; `json` holds the
  *     validated entry exactly as the port defines it (secrets: ciphertext
- *     records only)
+ *     records only); kind `settings`, name `principal` holds the settings
+ *     record, which entry listings and limits never count
  *   keys(digest PK, principal_id, key_id, name, scopes, created_at, revoked_at)
  *
  * Composition reads one principal's entries as a single indexed range scan —
@@ -65,6 +66,7 @@ import {
   checkStoredAction,
   checkStoredSchema,
   checkStoredTheme,
+  themeName,
   checkStoredWidget
 } from "./validate.js";
 import { applySettingsUpdate, readSettings, refuseThemeInUse } from "./settings.js";
@@ -391,7 +393,7 @@ export function createSqliteStore(
       for (const entry of rawEntries(principalId, "theme")) {
         const problem = checkStoredTheme(entry, limits);
         if (problem) {
-          report(`skipped a theme for '${principalId}': ${problem.code} — ${problem.message}`);
+          report(`skipped theme '${themeName(entry)}' for '${principalId}': ${problem.code} — ${problem.message}`);
           continue;
         }
         out.push(entry as ThemeEntry);
@@ -576,7 +578,7 @@ export function createSqliteStore(
     },
 
     async settings(principalId) {
-      return readSettings(rawEntry(principalId, "settings", SETTINGS_ROW));
+      return readSettings(rawEntry(principalId, "settings", SETTINGS_ROW), (message) => report(`${message} ('${principalId}')`));
     },
 
     async putSettings(principalId, update) {

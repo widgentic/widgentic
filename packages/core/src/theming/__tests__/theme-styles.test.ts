@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from "vitest";
 import { widgetStylesToCss } from "../../catalog/index.js";
-import { createThemeRegistry, InvalidThemeEntryError, themeStylesToCss } from "../index.js";
+import { createThemeRegistry, InvalidThemeEntryError, themeStylesToCss, validateTheme } from "../index.js";
 import type { ThemeEntry } from "../index.js";
 
 const DARK = ':root[data-theme="dark"]';
@@ -95,12 +95,74 @@ describe("themeStylesToCss", () => {
     );
   });
 
+  it("splits only on top-level commas, keeping pseudo-class arguments whole", () => {
+    const css = themeStylesToCss({ ".wg-row:has(.wg-ok, .wg-warn), .wg-x :is(.wg-a, .wg-b)": { color: "red" } }, DARK);
+    expect(css.split(" {")[0]).toBe(
+      `:where(${DARK}) .wg-row:has(.wg-ok, .wg-warn), :where(${DARK}) .wg-x :is(.wg-a, .wg-b)`
+    );
+  });
+
   it("drops unsafe entries and keeps safe siblings", () => {
     const css = themeStylesToCss(
       { body: { color: "red" }, ".wg-x": { background: "url(https://evil.example/x)" }, ".wg-btn": { padding: "4px" } },
       DARK
     );
     expect(css).toBe(`:where(${DARK}) .wg-btn {\n  padding: 4px;\n}`);
+  });
+});
+
+describe("the shared style guards", () => {
+  const css = (styles: Record<string, Record<string, string>>) => themeStylesToCss(styles);
+
+  it.each([
+    ["a comment in a selector", { "html /* .wg-x */": { color: "red" } }],
+    ["a .wg- class only inside :not()", { "body:not(.wg-x)": { color: "red" } }],
+    ["a .wg- class only inside :is()", { ":is(.wg-a, body)": { color: "red" } }],
+    ["a .wg- class only inside an attribute test", { 'body[data-a=".wg-"]': { color: "red" } }],
+    ["a part opening with a combinator", { ".wg-a, ~ .wg-b": { color: "red" } }],
+    ["a comment opener in a value", { ".wg-a": { color: "red /*" } }],
+    ["image-set() in a value", { ".wg-a": { background: 'image-set("https://evil.example/x.png" 1x)' } }],
+    ["-webkit-image-set() in a value", { ".wg-a": { background: '-webkit-image-set("https://evil.example/x.png" 1x)' } }],
+    ["src() in a value", { ".wg-a": { background: 'src("https://evil.example/x.png")' } }]
+  ])("drops %s", (_label, styles) => {
+    expect(css(styles)).toBe("");
+    expect(widgetStylesToCss(styles)).toBe("");
+  });
+
+  it("keeps .wg- selectors with pseudo-class arguments and root anchors", () => {
+    expect(css({ ".wg-row:has(.wg-ok, .wg-warn)": { color: "red" } })).toContain(".wg-row:has(.wg-ok, .wg-warn) {");
+    expect(css({ ".wg-item:not(:last-child)": { color: "red" } })).toContain(".wg-item:not(:last-child) {");
+    expect(css({ ':root[data-theme="dark"] .wg-btn': { color: "red" } })).toContain(':root[data-theme="dark"] .wg-btn {');
+  });
+
+  it("refuses the same vectors in theme token values", () => {
+    for (const value of ["red /*", "image-set(\"https://e.example/x\" 1x)", "src(\"https://e.example/x\")"]) {
+      const result = validateTheme({ accent: value });
+      expect(result.ok, value).toBe(false);
+    }
+  });
+});
+
+describe("scoping a root-anchored part", () => {
+  it("adds the scope to the root compound instead of prefixing it", () => {
+    expect(themeStylesToCss({ ':root[data-theme="dark"] .wg-btn': { color: "red" } }, DARK).split(" {")[0]).toBe(
+      `:root[data-theme="dark"]:where(${DARK}) .wg-btn`
+    );
+    expect(themeStylesToCss({ "html .wg-x, .wg-y": { color: "red" } }, DARK).split(" {")[0]).toBe(
+      `html:where(${DARK}) .wg-x, :where(${DARK}) .wg-y`
+    );
+  });
+
+  it("matches a root-anchored rule only in its own scope", () => {
+    function colorFor(darkRoot: boolean): string {
+      document.documentElement.removeAttribute("data-theme");
+      if (darkRoot) document.documentElement.setAttribute("data-theme", "dark");
+      document.head.innerHTML = `<style>${themeStylesToCss({ "html .wg-btn": { color: "rgb(7, 7, 7)" } }, DARK)}</style>`;
+      document.body.innerHTML = '<button class="wg-btn">ok</button>';
+      return getComputedStyle(document.querySelector(".wg-btn") as Element).color;
+    }
+    expect(colorFor(true)).toBe("rgb(7, 7, 7)");
+    expect(colorFor(false)).not.toBe("rgb(7, 7, 7)");
   });
 });
 

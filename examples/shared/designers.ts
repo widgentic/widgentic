@@ -90,7 +90,23 @@ export function mountAction(
  * cannot drift on it.
  */
 export function previewThemes(saved: readonly ThemeEntry[]): ThemeEntry[] {
-  const builtIns = createThemeRegistry().list();
-  const names = new Set(builtIns.map((entry) => entry.name));
-  return [...builtIns, ...saved.filter((entry) => !names.has(entry.name))];
+  // Registered, not passed raw: an entry that `extends` another previews
+  // with its base merged in (tokens and styles), as render_widget renders
+  // it. Bases may come later in the list, so passes repeat while they make
+  // progress; an entry that never registers is left out.
+  const registry = createThemeRegistry();
+  let pending = saved.filter((entry) => registry.get(entry.name) === undefined);
+  for (let progress = true; progress && pending.length > 0; ) {
+    const before = pending.length;
+    pending = pending.filter((entry) => {
+      try {
+        registry.register(entry);
+        return false;
+      } catch {
+        return true;
+      }
+    });
+    progress = pending.length < before;
+  }
+  return registry.list();
 }

@@ -64,8 +64,13 @@ export interface PreviewController {
   dispose(): void;
 }
 
-/** Distinguishes previews on one page, so a theme's styles stay in theirs. */
+/**
+ * Distinguishes previews on one page, so a theme's styles stay in theirs.
+ * The random part keeps two copies of this module (two bundles on one page)
+ * from handing out the same id.
+ */
 let previewCount = 0;
+const previewSalt = Math.random().toString(36).slice(2, 8);
 
 export function createPreview(options: PreviewOptions = {}): PreviewController {
   injectBaseStyles(document);
@@ -76,7 +81,7 @@ export function createPreview(options: PreviewOptions = {}): PreviewController {
   // does in a render.
   const themeStyles = h("style");
   const kindStyles = h("style");
-  const scope = `wgd-preview-${++previewCount}`;
+  const scope = `wgd-preview-${previewSalt}-${++previewCount}`;
   const mountRoot = h("div", { class: "wgd-preview", "data-wgd-scope": scope });
   const pane = h("div", { class: "wgd-preview-pane" }, [banner, themeStyles, kindStyles, mountRoot]);
 

@@ -125,8 +125,11 @@ describe("startup seed settings", () => {
     expect(themes.defaults()).toEqual({ light: "google-light", dark: "google-dark" });
     const catalog = (await composeCatalog(store, principalId)).value;
     const css = String((handleRenderWidget(catalog, { widget: "card", data: { title: "t" } }, { themes }).structuredContent as { css: string }).css);
-    expect(css).toContain(':root:not([data-theme="dark"]) {');
-    expect(css).toContain(':root[data-theme="dark"] {');
+    // Each mode's block carries that theme's accent from the seed.
+    const block = (selector: string) => css.slice(css.indexOf(`${selector} {`)).split("}")[0] ?? "";
+    expect(block(':root:not([data-theme="dark"])')).toContain(`--wg-accent: ${themes.get("google-light")?.tokens.accent};`);
+    expect(block(':root[data-theme="dark"]')).toContain(`--wg-accent: ${themes.get("google-dark")?.tokens.accent};`);
+    expect(themes.get("google-light")?.tokens.accent).toBe("#1a73e8");
   });
 
   it("never overwrites a section the person already holds", async () => {

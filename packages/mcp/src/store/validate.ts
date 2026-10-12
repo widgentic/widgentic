@@ -155,6 +155,11 @@ export function checkStoredWidget(
   return undefined;
 }
 
+/** A raw theme entry's name for a diagnostic, whatever shape it arrived in. */
+export function themeName(entry: unknown): string {
+  return isPlainObject(entry) && typeof entry.name === "string" ? entry.name : "(unnamed)";
+}
+
 /** Check a theme entry. `undefined` means acceptable. */
 export function checkStoredTheme(
   entry: unknown,

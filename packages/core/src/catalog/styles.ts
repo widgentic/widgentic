@@ -1,8 +1,9 @@
 /**
  * Registered widget styles: custom kinds ship their look as data alongside
- * their template/renderer. Same trust model as themes — designer-authored,
- * so selectors, properties, and values are all guarded, and unsafe entries
- * are skipped rather than emitted.
+ * their template/renderer, and themes ship shared classes the same way.
+ * Same trust model as theme tokens — designer-authored — so selectors,
+ * properties, and values are all guarded, and unsafe entries are skipped
+ * rather than emitted.
  */
 import { isPlainObject } from "../shared/plain-object.js";
 
@@ -28,19 +29,98 @@ export function isStyleMap(value: unknown): value is WidgetStyles {
   );
 }
 
-/** Every comma-separated selector part must target a .wg- class. */
+/**
+ * CSS functions that fetch or execute, refused in values wherever they
+ * appear — `image-set()` and `src()` carry URLs without spelling `url(`.
+ * Exported so the guides derive the rule instead of restating it.
+ */
+export const UNSAFE_FUNCTIONS: readonly string[] = ["url(", "expression(", "image-set(", "src("];
+
+/** A comment opener or closer: one can swallow every rule after it. */
+const COMMENT = /\/\*|\*\//;
+
+function callsUnsafeFunction(text: string): boolean {
+  return UNSAFE_FUNCTIONS.some((call) => new RegExp(`${call.slice(0, -1)}\\s*\\(`, "i").test(text));
+}
+
+/**
+ * A selector's top-level structure: the text outside every (…) argument and
+ * […] attribute test, scanned with depth so nesting is respected. A `.wg-`
+ * class only counts when it is part of the selector itself, not hidden in
+ * `:not(.wg-x)` or `[data-a=".wg-"]`.
+ */
+function outsideArguments(part: string): string {
+  let depth = 0;
+  let out = "";
+  for (const char of part) {
+    if (char === "(" || char === "[") depth++;
+    else if (char === ")" || char === "]") depth = Math.max(0, depth - 1);
+    else if (depth === 0) out += char;
+  }
+  return out;
+}
+
+/**
+ * Every top-level selector part must name a .wg- class in its own
+ * structure, and no part may open with a combinator (`~ .wg-b` is invalid
+ * alone and would only become valid once scoped). No comments.
+ */
 function isSafeSelector(selector: string): boolean {
-  if (UNSAFE.test(selector)) return false;
-  const parts = selector.split(",").map((part) => part.trim());
-  return parts.length > 0 && parts.every((part) => part.includes(".wg-"));
+  if (UNSAFE.test(selector) || COMMENT.test(selector)) return false;
+  const parts = topLevelParts(selector);
+  return (
+    parts.length > 0 &&
+    parts.every((part) => !/^[>+~]/.test(part) && outsideArguments(part).includes(".wg-"))
+  );
 }
 
 function isSafeValue(value: string): boolean {
-  return (
-    !UNSAFE.test(value) &&
-    !/url\s*\(/i.test(value) &&
-    !/expression\s*\(/i.test(value)
-  );
+  return !UNSAFE.test(value) && !COMMENT.test(value) && !callsUnsafeFunction(value);
+}
+
+/**
+ * A selector list's parts, split on TOP-LEVEL commas only: the commas
+ * inside :is(), :not(), :has() or :where() belong to their argument, so
+ * `.wg-row:has(.wg-ok, .wg-warn)` stays one part.
+ */
+function topLevelParts(selector: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < selector.length; i++) {
+    const char = selector[i];
+    if (char === "(" || char === "[") depth++;
+    else if (char === ")" || char === "]") depth = Math.max(0, depth - 1);
+    else if (char === "," && depth === 0) {
+      parts.push(selector.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+  parts.push(selector.slice(start).trim());
+  return parts.filter((part) => part.length > 0);
+}
+
+/**
+ * One part under a scope that targets the root element. A part already
+ * anchored at the root (`:root[data-theme="dark"] .wg-x`, `html .wg-x`)
+ * takes the scope as an extra condition on that root compound — prefixing
+ * would demand a root inside the root and never match; any other part is
+ * prefixed with `:where(<scope>) `.
+ */
+function scopePart(part: string, scope: string): string {
+  if (!/^(:root|html)(?![\w-])/i.test(part)) return `:where(${scope}) ${part}`;
+  let depth = 0;
+  let end = part.length;
+  for (let i = 0; i < part.length; i++) {
+    const char = part[i] ?? "";
+    if (char === "(" || char === "[") depth++;
+    else if (char === ")" || char === "]") depth = Math.max(0, depth - 1);
+    else if (depth === 0 && /[\s>+~]/.test(char)) {
+      end = i;
+      break;
+    }
+  }
+  return `${part.slice(0, end)}:where(${scope})${part.slice(end)}`;
 }
 
 /**
@@ -71,7 +151,7 @@ export function guardedStylesToCss(styles: WidgetStyles, scope: string | undefin
     if (lines.length > 0) {
       const scoped = scope === undefined
         ? selector
-        : selector.split(",").map((part) => `:where(${scope}) ${part.trim()}`).join(", ");
+        : topLevelParts(selector).map((part) => scopePart(part, scope)).join(", ");
       rules.push(`${scoped} {\n${lines.join("\n")}\n}`);
     }
   }

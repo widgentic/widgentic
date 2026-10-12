@@ -42,6 +42,13 @@ describe("theme designer tools", () => {
     expect(theme.getTheme().name).toBe("ocean");
   });
 
+  it("describes the entry with its styles, and that a load replaces it whole", () => {
+    const describe = (name: string) => tools.find((tool) => tool.name === name)?.description ?? "";
+    expect(describe("widgentic_theme_get")).toContain("styles?");
+    expect(describe("widgentic_theme_load")).toContain("styles?");
+    expect(describe("widgentic_theme_load")).toContain("keep its styles");
+  });
+
   it("merges tokens into the current entry, exactly", async () => {
     theme.loadTheme({ name: "t", tokens: { bg: "#fff", fg: "#000" } });
     const result = await run(tools, "widgentic_theme_tokens_set", { tokens: { accent: "#0a84ff" }, remove: ["fg"] });

@@ -12,6 +12,7 @@
 import { describe, expect, it } from "vitest";
 import { createCosmosStore } from "../cosmos.js";
 import type {
+  CosmosBatchOperation,
   CosmosClientLike,
   CosmosContainerLike,
   CosmosQueryOptions,
@@ -49,6 +50,14 @@ function param(spec: CosmosQuerySpec, name: string): string | undefined {
 
 class FakeContainer implements CosmosContainerLike {
   private partitions = new Map<string, Map<string, Doc>>();
+  private etags = 0;
+  /** Runs just before a batch commits: the seam for "a concurrent write". */
+  public beforeBatch: (() => void) | undefined = undefined;
+
+  /** Every stored document carries an _etag that changes on each write. */
+  private stamp(doc: Doc): Doc {
+    return { ...doc, _etag: `"e${++this.etags}"` };
+  }
 
   constructor(
     private readonly name: string,
@@ -78,7 +87,7 @@ class FakeContainer implements CosmosContainerLike {
   }
 
   seed(doc: Doc): void {
-    this.partition(String(doc[this.pkField])).set(doc.id, { ...doc });
+    this.partition(String(doc[this.pkField])).set(doc.id, this.stamp(doc));
   }
 
   item(id: string, partitionKey: string) {
@@ -96,7 +105,7 @@ class FakeContainer implements CosmosContainerLike {
       replace: async (doc: unknown) => {
         record("replace");
         this.maybeFail("replace");
-        this.partition(partitionKey).set(id, { ...(doc as Doc) });
+        this.partition(partitionKey).set(id, this.stamp(doc as Doc));
         return {};
       },
       delete: async () => {
@@ -152,14 +161,38 @@ class FakeContainer implements CosmosContainerLike {
       const typed = doc as Doc;
       const pk = String(typed[this.pkField]);
       if (this.partition(pk).has(typed.id)) throw { code: 409 };
-      this.partition(pk).set(typed.id, { ...typed });
+      this.partition(pk).set(typed.id, this.stamp(typed));
       return {};
     },
     upsert: async (doc: unknown) => {
       this.maybeFail("upsert");
       const typed = doc as Doc;
-      this.partition(String(typed[this.pkField])).set(typed.id, { ...typed });
+      this.partition(String(typed[this.pkField])).set(typed.id, this.stamp(typed));
       return {};
+    },
+    // All or nothing within one partition, as the service runs it: the
+    // first refused operation fails the batch and the rest report 424.
+    batch: async (operations: CosmosBatchOperation[], partitionKey: string) => {
+      this.maybeFail("batch");
+      this.beforeBatch?.();
+      this.beforeBatch = undefined;
+      const part = this.partition(partitionKey);
+      const statuses = operations.map((op) => {
+        if (op.operationType === "Read") return part.has(op.id) ? 200 : 404;
+        if (op.operationType === "Delete") return part.has(op.id) ? 204 : 404;
+        if (op.operationType === "Create") return part.has(String(op.resourceBody.id)) ? 409 : 201;
+        const existing = part.get(op.id);
+        if (existing === undefined) return 404;
+        return op.ifMatch !== undefined && existing._etag !== op.ifMatch ? 412 : 200;
+      });
+      const failed = statuses.findIndex((code) => code >= 300);
+      if (failed !== -1) return { result: statuses.map((code, i) => ({ statusCode: i === failed ? code : 424 })) };
+      for (const op of operations) {
+        if (op.operationType === "Delete") part.delete(op.id);
+        else if (op.operationType === "Create") part.set(String(op.resourceBody.id), this.stamp(op.resourceBody as Doc));
+        else if (op.operationType === "Replace") part.set(op.id, this.stamp(op.resourceBody as Doc));
+      }
+      return { result: statuses.map((code) => ({ statusCode: code })) };
     }
   };
 }
@@ -362,7 +395,7 @@ describe("cosmos settings written out of band", () => {
     const composed = await composeThemes(store, p.id);
     expect(composed.value.defaults()).toEqual({ light: "a", dark: "dark" });
     expect(composed.diagnostics.join("\n")).toContain("'ghost'");
-    expect(composed.value.get("legacy")?.styles).toBeUndefined();
+    expect(composed.value.get("legacy")).toEqual({ name: "legacy", tokens: { accent: "#123456" } });
     await store.putSettings(p.id, { defaultThemes: { light: "legacy" } });
     const stored = (await data.item("settings", p.id).read()).resource;
     expect(stored?.settings).toEqual({ defaultThemes: { light: "legacy" }, fonts: { body: "Inter" } });
@@ -376,5 +409,46 @@ describe("cosmos settings written out of band", () => {
     const p = await store.ensurePrincipal("cosmos:settings-none");
     expect(await store.settings(p.id)).toEqual({});
     expect(await store.settings("usr_unknown")).toEqual({});
+  });
+});
+
+describe("cosmos settings writes are atomic with the theme checks", () => {
+  async function rig() {
+    const { client, data } = fakeCosmos();
+    const store = createCosmosStore({ client, log: () => {} });
+    const p = await store.ensurePrincipal("cosmos:settings-race");
+    await store.putTheme(p.id, { name: "a", tokens: {} });
+    return { store, data, p };
+  }
+
+  it("refuses a default whose theme is removed between the check and the write", async () => {
+    const { store, data, p } = await rig();
+    data.beforeBatch = () => {
+      // A concurrent removeTheme lands after putSettings read the themes.
+      void data.item("theme:a", p.id).delete();
+    };
+    await expect(store.putSettings(p.id, { defaultThemes: { light: "a" } })).rejects.toMatchObject({ code: "UNKNOWN_THEME" });
+    expect(await store.settings(p.id)).toEqual({});
+  });
+
+  it("refuses removing a theme that became a default between the check and the delete", async () => {
+    const { store, data, p } = await rig();
+    data.beforeBatch = () => {
+      // A concurrent putSettings names the theme after removeTheme checked.
+      data.seed({ id: "settings", principalId: p.id, settings: { defaultThemes: { dark: "a" } } });
+    };
+    await expect(store.removeTheme(p.id, "a")).rejects.toMatchObject({ code: "THEME_IN_USE" });
+    expect((await store.themes(p.id)).map((t) => t.name)).toEqual(["a"]);
+  });
+
+  it("keeps a section another writer added meanwhile", async () => {
+    const { store, data, p } = await rig();
+    await store.putSettings(p.id, { defaultThemes: { light: "a" } });
+    data.beforeBatch = () => {
+      data.seed({ id: "settings", principalId: p.id, settings: { defaultThemes: { light: "a" }, fonts: { body: "Inter" } } });
+    };
+    await store.putSettings(p.id, { defaultThemes: { dark: "a" } });
+    const stored = (await data.item("settings", p.id).read()).resource;
+    expect(stored?.settings).toEqual({ defaultThemes: { dark: "a" }, fonts: { body: "Inter" } });
   });
 });

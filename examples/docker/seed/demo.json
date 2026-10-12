@@ -290,7 +290,7 @@
                     {
                       "bind": "startsAt",
                       "format": {
-                        "pattern": "yyyy-MM-dd HH:ss",
+                        "pattern": "yyyy-MM-dd HH:mm",
                         "type": "date"
                       }
                     },
@@ -298,7 +298,7 @@
                     {
                       "bind": "endsAt",
                       "format": {
-                        "pattern": "yyyy-MM-dd HH:ss",
+                        "pattern": "yyyy-MM-dd HH:mm",
                         "type": "date"
                       }
                     }
@@ -536,7 +536,7 @@
                     {
                       "bind": "receivedAt",
                       "format": {
-                        "pattern": "yyyy-MM-dd HH:ss",
+                        "pattern": "yyyy-MM-dd HH:mm",
                         "type": "date"
                       }
                     }

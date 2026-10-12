@@ -12,7 +12,7 @@
  */
 import { describe, expect, it } from "vitest";
 import type { WritableWidgetStore } from "../types.js";
-import { StoreRejectionError } from "../types.js";
+import { ANONYMOUS_PRINCIPAL, StoreRejectionError } from "../types.js";
 import type { PrincipalSettingsUpdate, StoredAction, StoredWidget } from "../types.js";
 import type { ThemeEntry } from "@widgentic/core";
 import { composeThemes } from "../compose.js";
@@ -380,6 +380,9 @@ export function describeStoreContract(
       await store.putSettings(p.id, { defaultThemes: { light: "a" } });
       await store.putSettings(p.id, {});
       expect(await store.settings(p.id)).toEqual({ defaultThemes: { light: "a" } });
+      // An undefined section is an absent one, in every adapter alike.
+      await store.putSettings(p.id, { defaultThemes: undefined } as unknown as PrincipalSettingsUpdate);
+      expect(await store.settings(p.id)).toEqual({ defaultThemes: { light: "a" } });
       await store.putSettings(p.id, { defaultThemes: null });
       expect(await store.settings(p.id)).toEqual({});
       await store.putSettings(p.id, { defaultThemes: { light: "a" } });
@@ -397,6 +400,8 @@ export function describeStoreContract(
       await expect(store.putSettings(p.id, sepia)).rejects.toMatchObject({ code: "INVALID_SHAPE" });
       const fonts = { fonts: {} } as unknown as PrincipalSettingsUpdate;
       await expect(store.putSettings(p.id, fonts)).rejects.toMatchObject({ code: "INVALID_SHAPE" });
+      const mixed = { defaultThemes: { dark: "a" }, fonts: {} } as unknown as PrincipalSettingsUpdate;
+      await expect(store.putSettings(p.id, mixed)).rejects.toMatchObject({ code: "INVALID_SHAPE" });
       const numeric = { defaultThemes: { light: 7 } } as unknown as PrincipalSettingsUpdate;
       await expect(store.putSettings(p.id, numeric)).rejects.toMatchObject({ code: "INVALID_SHAPE" });
       expect(await store.settings(p.id)).toEqual({ defaultThemes: { light: "a" } });
@@ -426,6 +431,7 @@ export function describeStoreContract(
       await store.putSettings(a.id, { defaultThemes: { light: "brand" } });
       expect(await store.settings(b.id)).toEqual({});
       expect((await composeThemes(store, b.id)).value.defaults()).toEqual({ light: "light", dark: "dark" });
+      expect((await composeThemes(store, ANONYMOUS_PRINCIPAL.id)).value.defaults()).toEqual({ light: "light", dark: "dark" });
       // The settings record is not an entry of any kind.
       expect((await store.themes(a.id)).map((t) => t.name)).toEqual(["brand"]);
       expect(await store.widgets(a.id)).toEqual([]);

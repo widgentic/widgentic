@@ -10,7 +10,7 @@ export type { WidgetCatalog, RenderOptions, RenderResult } from "./registry.js";
 export type { WidgetDescriptor, WidgetDescriptorInput } from "./descriptors.js";
 export { validateDataAgainstSchema, PATTERN_MAX_LENGTH } from "./schema.js";
 export type { DataSchema } from "./schema.js";
-export { widgetStylesToCss, isStyleMap, UNSAFE, PROPERTY_NAME } from "./styles.js";
+export { widgetStylesToCss, isStyleMap, UNSAFE, UNSAFE_FUNCTIONS, PROPERTY_NAME } from "./styles.js";
 export type { WidgetStyles } from "./styles.js";
 export { renderToHtml } from "./html.js";
 export { mountNode } from "./dom.js";

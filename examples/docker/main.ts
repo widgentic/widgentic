@@ -1,6 +1,7 @@
 /**
- * The self-hosted authoring client: the four designers over the authoring
- * surface, plus write-only secrets and API keys. Deliberately plainer than
+ * The self-hosted authoring client: the widget, theme, schema, action and
+ * settings designers over the authoring surface, plus write-only secrets
+ * and API keys. Deliberately plainer than
  * widgentic.dev's app — one list and one designer per tab — while covering
  * the same authoring capability: list, create, open read-only, edit, save,
  * delete, test an action, write a secret, mint and revoke a key.
@@ -56,7 +57,9 @@ let myThemes: ThemeEntry[] = [];
 let mySchemas: SchemaEntry[] = [];
 let myActions: StoredAction[] = [];
 let mySecrets: SecretEntry[] = [];
-let mySettings: Settings = {};
+// Unknown until read: Settings never saves over a record it could not read
+// (a save sends the whole defaultThemes section).
+let mySettings: Settings | undefined;
 let secretsEnabled = false;
 
 
@@ -120,7 +123,7 @@ function openWidgetDesigner(load?: unknown, readOnly = false): void {
   widgetDesigner = mountWidget($("widget-designer"), widgetDesigner, {
     themes: previewThemes(myThemes),
     // The preview opens on the person's light default (built-in when unset).
-    ...(mySettings.defaultThemes?.light === undefined ? {} : { previewTheme: mySettings.defaultThemes.light }),
+    ...(mySettings?.defaultThemes?.light === undefined ? {} : { previewTheme: mySettings.defaultThemes.light }),
     schemas: mySchemas,
     actions: myActions,
     secretNames: mySecrets.map((s) => s.name),
@@ -234,7 +237,7 @@ function showThemes(): void {
 
 /** "default light", "default dark" or both, for a theme the settings name. */
 function defaultBadge(name: string): string | undefined {
-  const defaults = mySettings.defaultThemes ?? {};
+  const defaults = mySettings?.defaultThemes ?? {};
   const modes = (["light", "dark"] as const).filter((mode) => defaults[mode] === name);
   return modes.length === 0 ? undefined : `default ${modes.join(" & ")}`;
 }
@@ -516,11 +519,15 @@ let settingsDesigner: SettingsDesignerHandle | undefined;
 
 function openSettingsDesigner(): void {
   // Choices are the themes saved right now; an unsaved pick survives the remount.
-  const current = settingsDesigner?.getSettings() ?? mySettings;
+  const unread = mySettings === undefined;
+  const current = unread ? {} : settingsDesigner?.getSettings() ?? mySettings ?? {};
   settingsDesigner = mountSettings($("settings-designer"), settingsDesigner, {
     themes: myThemes,
-    initialSettings: current
+    initialSettings: current,
+    readOnly: unread
   });
+  $("settings-save").hidden = unread;
+  if (unread) status("settings could not be read — reload the page before changing them", "error");
 }
 
 async function refreshSettings(): Promise<void> {
@@ -528,7 +535,7 @@ async function refreshSettings(): Promise<void> {
 }
 
 async function saveSettings(): Promise<void> {
-  if (settingsDesigner === undefined) return;
+  if (settingsDesigner === undefined || mySettings === undefined) return;
   const saved = await attempt(() => api.saveSettings(settingsDesigner?.getSettings() ?? {}));
   if (saved === undefined) return;
   mySettings = saved;
@@ -552,8 +559,11 @@ function showTab(name: (typeof SECTIONS)[number]): void {
   // the in-progress draft, which must survive a trip to the Schemas tab
   // (the store itself forces that trip for a dangling schema ref).
   if (name === "widgets" && widgetMode === "new") openWidgetDesigner(widgetDesigner?.getDraft());
-  // Themes saved meanwhile become choices.
-  if (name === "settings") openSettingsDesigner();
+  // Themes saved meanwhile become choices; an unread record is read again.
+  if (name === "settings") {
+    if (mySettings === undefined) void refreshSettings().then(openSettingsDesigner);
+    else openSettingsDesigner();
+  }
 }
 
 for (const section of SECTIONS) {
