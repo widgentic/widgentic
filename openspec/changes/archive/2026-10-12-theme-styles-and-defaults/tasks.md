@@ -57,7 +57,7 @@
 - [x] 7.2 Changesets: core, designer and mcp minor; webmcp patch.
 - [x] 7.3 Dated `TESTING.md` entry. `BACKLOG.md`: queue the .NET default-themes option and dark mode for documents.
 - [x] 7.4 Gate: typecheck, `npm test`, `npm run build`, `npm run pack:check`, `npm run conformance:generate` with no diff afterwards, `dotnet test`, `openspec validate --strict theme-styles-and-defaults`, `openspec validate --specs`, `npm run docs:check`.
-- [ ] 7.5 Stage on `demo.widgentic.dev` from this branch and check in fresh conversations in at least two hosts:
+- [x] 7.5 Stage on `demo.widgentic.dev` from this branch and check in fresh conversations in at least two hosts (2026-10-12: owner reported the testing went well, on `7373de2`):
   - a widget using a theme class;
   - the light/dark defaults following the host's theme;
   - Settings saving and the Themes list updating.
