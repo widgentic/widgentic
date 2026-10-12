@@ -54,7 +54,7 @@ appears. Size: **S** one small change, **M** one change with spec deltas,
 | THM-1 | Default themes in the .NET host | P3 | S | `theme-styles-and-defaults` design |
 | THM-2 | A dark mode for page and app documents | P3 | S | `theme-styles-and-defaults` design |
 | THM-3 | Keep style rules inside the widget: sibling combinators | P3 | S | PR #29 review |
-| THM-4 | Theme `extends` from end to end | P2 | M | Browser agent, staging 2026-10-12 |
+| THM-4 | Drop theme `extends` | P2 | S | Browser agent, staging 2026-10-12 |
 | AGT-5 | Load-time warnings agents can act on: dropped link schemes, unreachable action hosts | P3 | S | Browser agent, staging 2026-10-12 |
 
 **Part 2 · Pairing with other technologies**
@@ -357,27 +357,42 @@ are reachable by direct URL.
 - **Touches.** `widget-catalog` (the guard), `STYLE_RULES`, the guides.
 - **Origin.** 2026-10-12, PR #29 review; this behavior predates that change.
 
-#### THM-4 · Theme `extends` from end to end — P2, M
+#### THM-4 · Drop theme `extends` — P2, S
 
-- **Problem.** The registry merges a theme over its base (`extends`), and stored themes
-  may carry it, but nothing else does:
-  - The theme designer neither shows nor edits it, and its preview ignores it, so a
-    theme extending `dark` previews light.
-  - The guides and `theme_load` never mention it.
-  - Nothing checks the base at the door. A theme whose base does not exist is saved,
-    then skipped at composition (`UNKNOWN_BASE_THEME`). That breaks "never saved but
-    vanished".
-  - Deleting a base leaves the themes built on it dangling.
-- **Direction.**
-  - A base selector in the theme designer (built-ins plus the host's themes), with the
-    preview composed through a registry.
-  - Refuse an unknown base on write, as `UNKNOWN_THEME` is refused for defaults, and
-    refuse deleting a base in use, as `THEME_IN_USE` is.
-  - Describe `extends` in the guides and tool descriptions.
-- **Touches.** `widget-theming`, `widget-store`, `widget-designer`, `designer-webmcp`,
-  `authoring-api`.
+- **Decision (owner, 2026-10-12).** Remove the feature. Nothing uses it:
+  - No designer, seed, guide or tool sets it.
+  - "A theme based on another" is a one-time copy (`seedThemeEntry`: Copy, and New from
+    light/dark on widgentic.dev).
+  - The .NET host only passes theme entries through to the bundle, and is not released.
+  - A host that wants a derived theme merges the tokens and styles itself before
+    registering.
+- **Why.** As it stands, a theme with `extends` can be stored through `PUT /themes`, a
+  designer JSON import or WebMCP `theme_load`, and nothing checks it:
+  - an unknown or deleted base makes the theme vanish from lists, renders and defaults
+    (`UNKNOWN_BASE_THEME`);
+  - composition depends on the order themes are read (by name in SQLite and the file
+    store);
+  - the theme designer ignores it.
+- **To do.**
+  - Core: remove `extends` from `ThemeEntry` and the registry's merge, along with
+    `UNKNOWN_BASE_THEME`. An `extends` field on an entry is then ignored like any
+    unknown field, so a theme renders with its own tokens and styles.
+  - Specs and docs: drop `extends` from the `widget-theming` registry requirement and
+    its scenarios, including the styles merge `theme-styles-and-defaults` added. Drop
+    `extends?` from the `list_themes` and host-bundle config shapes (`mcp-server`), from
+    `mcp-tools.mdx`, from `payload-to-pixels.mdx`, and from the `WidgenticOptions` doc
+    comment in `dotnet/`.
+  - Examples: `previewThemes` passes entries as they are.
+  - Tests that exercise `extends`: core registry and theme-styles, mcp theme-styles
+    output, examples designers.
+  - Changeset: core minor, noting that code registering with `extends` must merge first.
+  - No refusal, exclusion or read seam. The apps change's pre-deploy scan counts stored
+    themes carrying `extends`, to confirm none relies on it.
+- **Timing.** `theme-styles-and-defaults` makes styles merge through `extends`. Landing
+  this before that release avoids publishing behavior that is removed in the next one.
+- **Touches.** `widget-theming`, `mcp-server`, examples, `dotnet/` docs.
 - **Origin.** 2026-10-12, the browser agent on staging (`theme_load` accepted
-  `extends: "no-such-theme"`); `extends` predates `theme-styles-and-defaults`.
+  `extends: "no-such-theme"`), traced and decided the same day.
 
 #### AGT-5 · Load-time warnings agents can act on — P3, S
 

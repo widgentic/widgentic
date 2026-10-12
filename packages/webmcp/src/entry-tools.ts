@@ -39,7 +39,7 @@ export function themeTools(source: () => ThemeDesignerHandle | undefined, name: 
       title: "Read the theme entry",
       readOnly: true,
       description:
-        "Read the theme entry open in the theme designer: { entry: { name, label?, description?, extends?, tokens, styles? } } — tokens is a map of --wg-* token names (and x-<name> author variables) to CSS values; styles maps .wg- selectors to { property: value } (shared classes every widget under the theme can use). " +
+        "Read the theme entry open in the theme designer: { entry: { name, label?, description?, tokens, styles? } } — tokens is a map of --wg-* token names (and x-<name> author variables) to CSS values; styles maps .wg- selectors to { property: value } (shared classes every widget under the theme can use). " +
         THEME_RESULT,
       inputSchema: objectSchema({}),
       execute() {
