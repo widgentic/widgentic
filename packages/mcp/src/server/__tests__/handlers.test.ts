@@ -13,7 +13,7 @@ import {
   LIST_THEME_TOKENS_TOOL
 } from "../index.js";
 import {
-  THEME_TOKENS,
+  THEME_TOKENS, TOKEN_VALUE_RULE,
   createThemeRegistry,
   darkTheme,
   validateTheme
@@ -58,6 +58,8 @@ describe("handleListThemeTokens", () => {
     for (const token of listing.tokens) {
       expect(token.default.length).toBeGreaterThan(0);
     }
+    // The value rule is core's, not restated.
+    expect(listing.rules).toContain(TOKEN_VALUE_RULE);
     expect(validateTheme(listing.presets.dark)).toMatchObject({ ok: true });
     expect(listing.rules).toContain("strings");
   });

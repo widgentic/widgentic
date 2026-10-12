@@ -25,7 +25,10 @@ const agentTools = await exposeDesigners({
   widget: () => widgetDesigner,          // a DesignerHandle, or undefined while unmounted
   theme: () => { showTab("theme"); return themeDesigner; },  // a getter may mount first
   schema: () => schemaDesigner,
-  action: () => actionDesigner
+  action: () => actionDesigner,
+  // The read-only definition check resolves the person's shared schemas and
+  // actions through this one, so it must never show or mount anything.
+  widgetIfMounted: () => widgetDesigner
 });
 
 // Tell the person only when it matters; everyone else sees the page unchanged.
@@ -73,11 +76,11 @@ nothing), `INVALID_INPUT` (with the `argument`), `REJECTED` (with the
 designer's own `errors`). Read tools carry `annotations.readOnlyHint`, so
 agents run them without a confirmation step.
 
-Diagnostics come from the designer itself: the package subscribes to each
-handle it sees and returns what the designer computed for the change a tool
-made. Before the first change there is nothing to return, so `widget_draft_get`
-derives them without the host's shared entries and says so with
-`diagnosticsDerived: true`.
+Diagnostics come from the designer itself (`getDiagnostics()`, `checkWidget()`),
+resolved against the shared schemas and actions its host supplied, so the tools
+report exactly what the person sees. `widget_definition_check` reads the designer
+through `widgetIfMounted`; without it, the check runs on the definition alone,
+leaves shared references unverified and says so with `diagnosticsDerived: true`.
 
 ## What a host agent can still do
 

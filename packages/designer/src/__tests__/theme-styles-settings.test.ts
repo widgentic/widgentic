@@ -126,6 +126,25 @@ describe("theme designer styles", () => {
     expect(designer.checkWidget({ ...referencing({}), kind: "table" }).ok).toBe(false);
   });
 
+  it("calls a reference unknown only against schemas the host supplied", () => {
+    const referencing: WidgetDefinition = {
+      kind: "inbox-card",
+      template: { tag: "div", children: ["x"] },
+      descriptor: { description: "d", dataShape: "{}", dataSchemaRef: "email-inbox" } as WidgetDefinition["descriptor"]
+    };
+    expect(createDesigner(host(), { initialWidget: referencing }).getDiagnostics().schemaRef).toBeUndefined();
+    expect(createDesigner(host(), { initialWidget: referencing, schemas: [] }).getDiagnostics().schemaRef).toContain("'email-inbox'");
+  });
+
+  it("shows the empty state, with the problem in the banner, for a malformed initial kind", () => {
+    const root = host();
+    createDesigner(root, {
+      initialWidget: { kind: "my widget", template: { tag: "div", children: ["hi"] }, descriptor: { description: "d", dataShape: "s" } }
+    });
+    expect(root.querySelector(".wgd-preview .wgd-preview-empty")).not.toBeNull();
+    expect(root.querySelector(".wgd-banner")?.textContent).toContain("INVALID_IDENTIFIER");
+  });
+
   it("shows what the validator would ignore in a schema, in both designers", () => {
     const schemaRoot = host();
     const schemaDesigner = createSchemaDesigner(schemaRoot);

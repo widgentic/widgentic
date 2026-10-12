@@ -264,7 +264,7 @@ const designer = createDesigner(el, {
   // pass your own values to override; chromeCss() paints your page to match
   initialWidget, initialTheme
 });
-// → { getDraft, loadWidget, loadTheme, setReadOnly, subscribe, dispose }
+// → { getDraft, getDiagnostics, loadWidget, checkWidget, loadTheme, setReadOnly, subscribe, dispose }
 
 const themeDesigner = createThemeDesigner(el, { widgets, readOnly });
 // → { getTheme, loadTheme, setReadOnly, subscribe, dispose }

@@ -20,7 +20,10 @@ describe("designerSources", () => {
       },
       current: { widget: () => mounted as never, theme: () => undefined }
     });
-    expect(Object.keys(sources).sort()).toEqual(["theme", "widget"]);
+    expect(Object.keys(sources).sort()).toEqual(["theme", "widget", "widgetIfMounted"]);
+    // The side-effect-free source the definition check reads shows nothing.
+    expect(sources.widgetIfMounted?.()).toBeUndefined();
+    expect(shown).toEqual([]);
     const handle = sources.widget?.();
     expect(shown).toEqual(["widget"]);
     expect(handle?.getDraft()).toEqual({ kind: "after-show" });

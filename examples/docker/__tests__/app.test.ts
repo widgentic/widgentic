@@ -93,6 +93,24 @@ describe("the example app's Settings section", () => {
     expect(status()).not.toContain("load failed");
   });
 
+  it("keeps the designer on its tab and the preview pick across a trip", () => {
+    click("tab-widgets");
+    const designerRoot = () => document.querySelector("#widget-designer .wgd-root");
+    const pick = () => document.querySelector("#widget-designer .wgd-theme-select") as HTMLSelectElement;
+    pick().value = "ocean";
+    pick().dispatchEvent(new Event("change", { bubbles: true }));
+    const before = designerRoot();
+    // What an agent's tool call does: show the section already shown.
+    click("tab-widgets");
+    expect(designerRoot()).toBe(before);
+    expect(pick().value).toBe("ocean");
+    // A trip remounts (to pick up entries saved meanwhile) and keeps the pick.
+    click("tab-themes");
+    click("tab-widgets");
+    expect(designerRoot()).not.toBe(before);
+    expect(pick().value).toBe("ocean");
+  });
+
   it("picking a default and saving it moves the mark", async () => {
     click("tab-settings");
     expect([...lightSelect().options].map((option) => option.value)).toEqual(["", "google-light", "ocean"]);

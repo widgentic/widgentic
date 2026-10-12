@@ -18,7 +18,7 @@ let widget: DesignerHandle;
 let theme: ThemeDesignerHandle;
 let schema: SchemaDesignerHandle;
 let root: HTMLElement;
-const tools = designerTools({ widget: () => widget, theme: () => theme });
+const tools = designerTools({ widget: () => widget, widgetIfMounted: () => widget, theme: () => theme });
 const schemaTools = designerTools({ schema: () => schema });
 
 const definition = (kind: string) => ({
@@ -103,6 +103,35 @@ describe("load tools refuse what saving would refuse", () => {
     // Carrying both is refused, as Save refuses it.
     const both = await run(tools, "widgentic_widget_definition_check", { definition: { ...referencing({ unreadCount: 3 }), descriptor: { ...referencing({ unreadCount: 3 }).descriptor, dataSchema: { type: "object" } } } });
     expect(both.code).toBe("REJECTED");
+  });
+
+  it("checks through the mounted designer without showing or remounting anything", async () => {
+    const inbox = { name: "email-inbox", schema: { type: "object" } };
+    root = host();
+    widget = createDesigner(root, { schemas: [inbox] });
+    let shown = 0;
+    const sourced = designerTools({ widget: () => { shown++; return widget; }, widgetIfMounted: () => widget });
+    const result = await run(sourced, "widgentic_widget_definition_check", {
+      definition: { ...definition("inbox-card"), descriptor: { ...definition("inbox-card").descriptor, dataSchemaRef: "email-inbox" } }
+    });
+    expect(result.ok).toBe(true);
+    expect((result.diagnostics as { schemaRef?: string }).schemaRef).toBeUndefined();
+    expect(result).not.toHaveProperty("diagnosticsDerived");
+    expect(shown).toBe(0);
+  });
+
+  it.each([
+    ["a numeric reference", { dataSchemaRef: 5 }],
+    ["a reference with a space", { dataSchemaRef: "a b" }],
+    ["an empty reference", { dataSchemaRef: "" }],
+    ["a null schema", { dataSchema: null }]
+  ])("refuses %s at the draft, and the tools keep working", async (_label, extra) => {
+    const bad = { ...definition("bad-card"), descriptor: { ...definition("bad-card").descriptor, ...extra } };
+    for (const tool of ["widgentic_widget_draft_load", "widgentic_widget_definition_check"]) {
+      const result = await run(tools, tool, { definition: bad });
+      expect(result.code, tool).toBe("REJECTED");
+    }
+    expect((await run(tools, "widgentic_widget_draft_get")).ok).toBe(true);
   });
 
   it("leaves references unverified, never unknown, with no designer mounted", async () => {

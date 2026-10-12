@@ -6,7 +6,7 @@
  * never touches the current draft.
  */
 import { errorMessage } from "./internal.js";
-import { isPlainObject } from "@widgentic/core";
+import { isPlainObject, SAFE_IDENTIFIER } from "@widgentic/core";
 import { parsePath, validateTemplate } from "@widgentic/core";
 import { validateLoadBinding } from "@widgentic/core";
 import type { ActionBinding } from "@widgentic/core";
@@ -46,9 +46,16 @@ export function checkDefinition(definition: unknown, currentKind?: string): stri
     errors.push("'descriptor' must be an object.");
   } else if (typeof definition.descriptor.description !== "string") {
     errors.push("'descriptor.description' must be a string.");
-  } else if (definition.descriptor.dataSchema !== undefined && definition.descriptor.dataSchemaRef !== undefined) {
-    // Refused at the door, in the store's terms: Save would refuse it.
-    errors.push("descriptor: INVALID_SHAPE — carries 'dataSchema' and 'dataSchemaRef'; keep one.");
+  } else {
+    // Refused at the door, in the store's terms: Save would refuse these.
+    const { dataSchema, dataSchemaRef } = definition.descriptor;
+    if (dataSchema !== undefined && dataSchemaRef !== undefined) {
+      errors.push("descriptor: INVALID_SHAPE — carries 'dataSchema' and 'dataSchemaRef'; keep one.");
+    } else if (dataSchema !== undefined && !isPlainObject(dataSchema)) {
+      errors.push("descriptor: INVALID_SHAPE — 'dataSchema' must be a schema object.");
+    } else if (dataSchemaRef !== undefined && (typeof dataSchemaRef !== "string" || !SAFE_IDENTIFIER.test(dataSchemaRef))) {
+      errors.push("descriptor: INVALID_IDENTIFIER — 'dataSchemaRef' must name a schema: letters, digits, '.', '_' or '-'.");
+    }
   }
   if (definition.load !== undefined) {
     const problem = validateLoadBinding(definition.load, "load", {

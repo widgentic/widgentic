@@ -28,6 +28,7 @@ import type {
   SchemaEntry,
   ThemeDesignerHandle
 } from "@widgentic/designer";
+import { isPlainObject } from "@widgentic/core";
 import type { StoredAction, ThemeEntry } from "@widgentic/core";
 import { invoiceWidget, weatherWidget, xPostWidget } from "@widgentic-examples/mcp-server/widgets";
 // The mount discipline (dispose → clear → construct, and re-mount a designer
@@ -136,18 +137,41 @@ const widgetHost = document.getElementById("widget-designer") as HTMLElement;
 let widgetDesigner: DesignerHandle | undefined;
 let widgetDiagnostics: DesignerDiagnostics | undefined;
 
+/** The preview theme the person last picked, carried across a remount. */
+function previewPick(saved: string | null): { previewTheme?: string } {
+  try {
+    const draft: unknown = saved === null ? undefined : JSON.parse(saved);
+    return isPlainObject(draft) && typeof draft.previewTheme === "string" ? { previewTheme: draft.previewTheme } : {};
+  } catch {
+    return {};
+  }
+}
+
 function mountWidgetDesigner(): void {
   // Everything saved in the other tabs is on offer here: themes for the
   // preview, schemas to reference, actions to bind, per the cooperation
   // story this demo exists to tell.
-  const restored = restoredDraft(localStorage.getItem(DRAFT_KEY));
-  widgetDesigner = mountWidget(widgetHost, widgetDesigner, {
-    ...(restored === undefined ? {} : { initialWidget: restored }),
+  const saved = localStorage.getItem(DRAFT_KEY);
+  let restored = restoredDraft(saved);
+  const options = {
     themes: previewThemes(savedThemes()),
     schemas: savedSchemas(),
     actions: savedActions(),
+    ...previewPick(saved),
     ...chromeOptions()
-  });
+  };
+  try {
+    widgetDesigner = mountWidget(widgetHost, widgetDesigner, {
+      ...(restored === undefined ? {} : { initialWidget: restored }),
+      ...options
+    });
+  } catch {
+    // A saved draft the designer cannot open must not break the page (and
+    // with it the agent tools) on every reload: drop it and start fresh.
+    localStorage.removeItem(DRAFT_KEY);
+    restored = undefined;
+    widgetDesigner = mountWidget(widgetHost, undefined, options);
+  }
   widgetDesigner.subscribe((draft, diagnostics) => {
     widgetDiagnostics = diagnostics;
     localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
@@ -217,7 +241,13 @@ const remount: Record<Tab, () => void> = {
   action: mountActionDesigner
 };
 
+let activeTab: Tab | undefined;
+
 function show(name: Tab): void {
+  // Remount only on ENTERING a tab: an agent's tool call on the tab already
+  // shown must leave its designer, preview pick and preview tokens alone.
+  const entering = name !== activeTab;
+  activeTab = name;
   for (const tab of TABS) {
     hosts[tab].hidden = tab !== name;
     document.getElementById(`tab-${tab}`)?.classList.toggle("active", tab === name);
@@ -226,7 +256,7 @@ function show(name: Tab): void {
   }
   // Re-mount the designer being entered, so entries saved in the other tabs
   // appear in its selectors (themes/schemas/actions/preview widgets).
-  remount[name]();
+  if (entering) remount[name]();
 }
 
 for (const tab of TABS) {

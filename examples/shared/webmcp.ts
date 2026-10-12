@@ -31,7 +31,7 @@ export interface DesignerSourceHost {
 export function designerSources(host: DesignerSourceHost): DesignerSources {
   const { widget, theme, schema, action } = host.current;
   return {
-    ...(widget === undefined ? {} : { widget: () => { host.show("widget"); return widget(); } }),
+    ...(widget === undefined ? {} : { widget: () => { host.show("widget"); return widget(); }, widgetIfMounted: widget }),
     ...(theme === undefined ? {} : { theme: () => { host.show("theme"); return theme(); } }),
     ...(schema === undefined ? {} : { schema: () => { host.show("schema"); return schema(); } }),
     ...(action === undefined ? {} : { action: () => { host.show("action"); return action(); } })

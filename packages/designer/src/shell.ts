@@ -147,9 +147,13 @@ export function createDesigner(
     actionContext
   );
 
-  // Every diagnostic resolves against the shared entries the host supplied.
+  // Every diagnostic resolves against the shared entries the host supplied;
+  // with no schemas supplied a reference is unverifiable, never "unknown".
   const diagnose = (draft: WidgetDraft): DesignerDiagnostics =>
-    deriveDiagnostics(draft, { schemas: options.schemas ?? [], actions: options.actions ?? [] });
+    deriveDiagnostics(draft, {
+      ...(options.schemas === undefined ? {} : { schemas: options.schemas }),
+      actions: options.actions ?? []
+    });
 
   function refresh(draft: WidgetDraft): void {
     const diagnostics = diagnose(draft);

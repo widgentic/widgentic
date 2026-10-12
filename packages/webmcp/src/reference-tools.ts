@@ -30,10 +30,11 @@ export function authoringGuideTool(name: NameOf, prefix: string): WebMcpTool {
 }
 
 /**
- * Checked by the mounted widget designer when there is one, so refusals and
- * diagnostics match a load and shared references resolve against the
- * person's saved schemas and actions. Without one, the definition is checked
- * on its own and references are left unverified (`diagnosticsDerived`).
+ * Checked by the mounted widget designer when the host exposes it without
+ * side effects (`widgetIfMounted`), so refusals and diagnostics match a load
+ * and shared references resolve against the person's saved schemas and
+ * actions — and the person's view never moves. Otherwise the definition is
+ * checked on its own and references are left unverified (`diagnosticsDerived`).
  */
 export function widgetDefinitionCheckTool(
   name: NameOf,

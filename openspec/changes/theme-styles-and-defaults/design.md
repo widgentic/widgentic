@@ -359,14 +359,13 @@ Kept as is:
 Accepted, not fixed (outside normal use):
 - **Re-saving a theme stored under the old token rules** stores it without the dropped
   token. The scan in the apps change will show whether any such theme exists.
-- **A corrupt autosave in the designer demo** (`load: null`, say) can fail its Widgets
-  tab. The designer never writes one.
+- **A corrupt autosave in the designer demo:** fixed after all (D19). The demo drops a
+  saved draft the designer cannot open and starts fresh, so the page and its agent
+  tools still load.
 - **Mode scoping counts styles that produce no CSS:** a default whose every rule the
   guard drops still scopes the other default's styles.
 - **`composeThemeEntries` does not normalize.** Config-supplied themes, as in the .NET
   host, are authored now and are refused loudly rather than trimmed.
-- **`widget_definition_check` is stricter than `draft_load`** for a draft whose own kind
-  is reserved: the check always holds the kind to what Save accepts.
 - **Sibling combinators** (`.wg-a ~ *`) predate this change; they are `BACKLOG.md` THM-3.
 
 ### D18 — Diagnostics come from the designer that holds the shared entries
@@ -389,6 +388,31 @@ cache is gone.
 The same report noted that a descriptor carrying both `dataSchema` and `dataSchemaRef`
 loaded with only a diagnostic, while the guide says it is refused and the store does
 refuse it. It is now refused at load, like the other things Save refuses (D14).
+
+### D19 — Fourth review round: tool calls never move the person's view
+
+Reviewer 1's re-review of `8841d0a` found one regression and four smaller gaps.
+- **The check moved the view (regression).** D18 made `widget_definition_check` read
+  the designer through the host's `widget` source. Hosts let that getter show the
+  section and remount the designer, so a read-only check switched tabs and reset the
+  designer. `DesignerSources` gains `widgetIfMounted`, a getter that never shows or
+  mounts anything, and the check reads only that. Without it, the check runs on the
+  definition alone.
+- **Remounts reset the preview pick.** Both examples remounted the widget designer
+  whenever its section was shown, including when an agent's tool call showed the
+  section already on screen. They now remount only when the person enters the section,
+  and the remount keeps the person's preview pick. Agent tokens layered on top survive
+  tool calls; a trip to another tab drops them, which is a person's navigation.
+- **"Unknown schema" without schemas.** The designer passed `[]` when the host gave no
+  schemas, defeating D18's guard. It now passes the host's value through, and only an
+  explicit list makes a reference unknown.
+- **A request-level Cosmos code read as an operation result.** A thrown batch's own code,
+  read from its message, was copied into every operation's slot, so a 404 for a missing
+  container read as "theme already gone". A thrown request now reports no operation's
+  outcome; its message classifies a 403 and is logged.
+- **Malformed schema fields at the door.** A non-string or malformed `dataSchemaRef`, and
+  a `dataSchema` that is not an object, are refused at load as Save refuses them. A
+  `null` schema used to break every widget tool after loading.
 
 ## Risks / Trade-offs
 

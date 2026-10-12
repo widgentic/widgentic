@@ -9,6 +9,7 @@
  * Wiring comes from the shared example module (mount discipline, typed API
  * client); everything on this page is the demo a reader copies.
  */
+import { isPlainObject } from "@widgentic/core";
 import type { StoredAction, ThemeEntry } from "@widgentic/core";
 import type {
   ActionDesignerHandle,
@@ -124,11 +125,14 @@ function openWidgetDesigner(widget?: unknown, readOnly = false): void {
   // a remount carries the in-progress draft, whose kind may be one Save
   // would refuse, and it must survive (the designer flags the kind).
   const initial = draftDefinition(widget);
+  // A remounted draft keeps the person's preview pick; anything else opens
+  // on their light default (built-in when unset).
+  const picked = isPlainObject(widget) && typeof widget.previewTheme === "string" ? widget.previewTheme : undefined;
+  const previewTheme = picked ?? mySettings?.defaultThemes?.light;
   widgetDesigner = mountWidget($("widget-designer"), widgetDesigner, {
     ...(initial === undefined ? {} : { initialWidget: initial }),
     themes: previewThemes(myThemes),
-    // The preview opens on the person's light default (built-in when unset).
-    ...(mySettings?.defaultThemes?.light === undefined ? {} : { previewTheme: mySettings.defaultThemes.light }),
+    ...(previewTheme === undefined ? {} : { previewTheme }),
     schemas: mySchemas,
     actions: myActions,
     secretNames: mySecrets.map((s) => s.name),
@@ -555,7 +559,14 @@ async function saveSettings(): Promise<void> {
 
 const SECTIONS = ["widgets", "themes", "schemas", "actions", "secrets", "keys", "settings"] as const;
 
+let activeSection: (typeof SECTIONS)[number] | undefined;
+
 function showTab(name: (typeof SECTIONS)[number]): void {
+  // Remounts happen on ENTERING a section: an agent's tool call on the
+  // section already shown must leave its designer, preview pick and preview
+  // tokens alone.
+  const entering = name !== activeSection;
+  activeSection = name;
   for (const section of SECTIONS) {
     $(`pane-${section}`).hidden = section !== name;
     $(`tab-${section}`).classList.toggle("active", section === name);
@@ -564,9 +575,9 @@ function showTab(name: (typeof SECTIONS)[number]): void {
   // actions and secrets saved meanwhile appear in its selectors — carrying
   // the in-progress draft, which must survive a trip to the Schemas tab
   // (the store itself forces that trip for a dangling schema ref).
-  if (name === "widgets" && widgetMode === "new") openWidgetDesigner(widgetDesigner?.getDraft());
+  if (entering && name === "widgets" && widgetMode === "new") openWidgetDesigner(widgetDesigner?.getDraft());
   // Themes saved meanwhile become choices; an unread record is read again.
-  if (name === "settings") {
+  if (entering && name === "settings") {
     if (mySettings === undefined) void refreshSettings().then(openSettingsDesigner);
     else openSettingsDesigner();
   }

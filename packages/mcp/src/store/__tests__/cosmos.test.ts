@@ -64,7 +64,7 @@ class FakeContainer implements CosmosContainerLike {
     private readonly pkField: string,
     private readonly queries: RecordedQuery[],
     private readonly pointOps: RecordedPointOp[],
-    public failWith: { code: number | string; ops: string[] } | undefined = undefined
+    public failWith: { code: number | string; ops: string[]; message?: string } | undefined = undefined
   ) {}
 
   private partition(pk: string): Map<string, Doc> {
@@ -179,6 +179,7 @@ class FakeContainer implements CosmosContainerLike {
         this.maybeFail("batch");
       } catch (error) {
         const code = (error as { code: number | string }).code;
+        if (this.failWith?.message !== undefined) throw new Error(`Batch request error: ${this.failWith.message}`);
         throw new Error(
           code === 403
             ? "Batch request error: Request blocked by Auth wg : Request is blocked because principal [p] does not have required RBAC permissions to perform action [Microsoft.DocumentDB/databaseAccounts/readMetadata]"
@@ -320,6 +321,30 @@ describe("cosmos adapter identity model", () => {
     await expect(run(store, p.id)).rejects.toMatchObject({ code: "STORE_ERROR" });
     expect(lines.join("\n")).toContain(`${operation} batch failed`);
     expect(lines.join("\n")).toContain("Request rate is large");
+  });
+
+  it.each([
+    ["an explicit status code", "Message: {\"Errors\":[\"denied\"]}, StatusCode: 403"],
+    ["a firewall refusal", "Request originated from IP 1.2.3.4 through public internet. This is blocked by your Cosmos DB account firewall settings."]
+  ])("a batch refused with %s surfaces FORBIDDEN", async (_label, message) => {
+    const { client, data } = fakeCosmos();
+    const store = createCosmosStore({ client, log: () => {} });
+    const p = await store.ensurePrincipal(`hygiene:forbidden-${message.length}`);
+    await store.putTheme(p.id, { name: "a", tokens: {} });
+    data.failWith = { code: 500, ops: ["batch"], message };
+    await expect(store.putSettings(p.id, { defaultThemes: { light: "a" } })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("a request-level 404 never reads as the theme being gone", async () => {
+    const { client, data } = fakeCosmos();
+    const store = createCosmosStore({ client, log: () => {} });
+    const p = await store.ensurePrincipal("hygiene:request-404");
+    await store.putTheme(p.id, { name: "a", tokens: {} });
+    data.failWith = { code: 404, ops: ["batch"], message: "Message: {\"Errors\":[\"Resource Not Found\"]}, StatusCode: 404" };
+    await expect(store.removeTheme(p.id, "a")).rejects.toMatchObject({ code: "STORE_ERROR" });
+    await expect(store.putSettings(p.id, { defaultThemes: { light: "a" } })).rejects.toMatchObject({ code: "STORE_ERROR" });
+    data.failWith = undefined;
+    expect((await store.themes(p.id)).map((theme) => theme.name)).toEqual(["a"]);
   });
 
   it("diagnostics identify entries, never keys or digests", async () => {

@@ -417,6 +417,12 @@ workspace and the sample first, then point at the built DLL):
     - Both schema forms together are `REJECTED`.
     - With no designer mounted, the reference is unverified (`diagnosticsDerived: true`) rather than unknown.
     - In the designer, `getDiagnostics()` and `checkWidget` give the same answers, without touching the draft.
+  - **Fourth review round at `8841d0a` (2026-10-12, D19).**
+    - **WebMCP:** `definition_check` with a `widget` source that counts its calls and a `widgetIfMounted` source resolves `email-inbox` and calls `widget` zero times. A numeric, spaced or empty `dataSchemaRef` and a `null` `dataSchema` are `REJECTED` by `draft_load` and `definition_check`, and `draft_get` still works afterwards.
+    - **Designer:** with no `schemas`, a reference is not unknown; with `schemas: []`, it is. A malformed initial kind shows the empty state with `INVALID_IDENTIFIER` in the banner.
+    - **Self-host app:** after picking `ocean`, showing Widgets again keeps the same designer root and the pick, and a trip to Themes and back remounts with `ocean` still picked.
+    - **Cosmos:** a batch refused with an explicit `StatusCode: 403` or a firewall message gives `FORBIDDEN`. A request-level `StatusCode: 404` gives `STORE_ERROR` for `removeTheme` and `putSettings`, and the theme is still stored.
+    - **Unit tests:** `list_theme_tokens` carries `TOKEN_VALUE_RULE`, and an adapter without `settings` composes with no diagnostics.
   - **Not verified yet:** the hosts. Staging on `demo.widgentic.dev`, and widgentic.dev's Settings section, follow.
 - **Wire schemas from the exported definitions (2026-10-11, change `derived-input-schemas`, `@widgentic/mcp` minor pending release)**
   - **The wire.** `server-wiring` lists the tools of `createWidgenticServer()` and finds every `inputSchema` and description equal to the exported definition's, for all nine tools: nothing added (no `$schema`), nothing missing.

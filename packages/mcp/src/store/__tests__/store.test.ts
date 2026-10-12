@@ -826,6 +826,8 @@ describe("composition without readable settings", () => {
     const composed = await composeThemes(themesOnly(), "p");
     expect(composed.value.defaults()).toEqual({ light: "light", dark: "dark" });
     expect(composed.value.get("brand")).toBeDefined();
+    // Such an adapter simply has no settings: nothing to report on every render.
+    expect(composed.diagnostics).toEqual([]);
   });
 
   it("a failing settings read degrades to the built-ins with a diagnostic", async () => {

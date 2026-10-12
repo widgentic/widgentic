@@ -239,18 +239,16 @@ function isServiceError(error: unknown): error is { code: number | string } {
 }
 
 /**
- * The service code of a failed batch request. `@azure/cosmos` 4.x rethrows
- * it as `new Error("Batch request error: <message>")` without its `code`,
- * so a permission refusal is recognized from the phrases its message uses
- * (a bare "403" also appears in throttling diagnostics, as an LSN or a
- * session token), and any other code only from an explicit `StatusCode:`.
+ * Whether a failed batch request was a permission refusal. `@azure/cosmos`
+ * 4.x rethrows it as `new Error("Batch request error: <message>")` without
+ * its `code`, so the refusal is recognized from the phrases its message uses
+ * or an explicit `StatusCode: 403` — a bare "403" also appears in throttling
+ * diagnostics, as an LSN or a session token.
  */
-function batchFailureCode(error: unknown): number {
-  if (isServiceError(error)) return Number(error.code);
+function isPermissionRefusal(error: unknown): boolean {
+  if (isServiceError(error)) return String(error.code) === "403";
   const message = error instanceof Error ? error.message : "";
-  if (/\bForbidden\b|RBAC permissions|blocked by Auth|firewall/i.test(message)) return 403;
-  const stated = /StatusCode:\s*(\d{3})\b/i.exec(message)?.[1];
-  return stated === undefined ? Number.NaN : Number(stated);
+  return /\bForbidden\b|RBAC permissions|blocked by Auth|firewall|StatusCode:\s*403\b/i.test(message);
 }
 
 /** The first line of a failure's message, bounded: enough to tell a 429 from a timeout. */
@@ -396,10 +394,13 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
       const ok = statuses.length === operations.length && statuses.every((code) => code >= 200 && code < 300);
       return { ok, statuses };
     } catch (error) {
-      const code = batchFailureCode(error);
-      if (code === 403) throw operationError(operation, { code });
+      if (isPermissionRefusal(error)) throw operationError(operation, { code: 403 });
       log(`widgentic store: ${operation} batch failed for ${principalId}: ${failureSummary(error)}`);
-      return { ok: false, statuses: operations.map(() => code) };
+      // A request that failed as a whole reports no operation's outcome: its
+      // own code (in a message, say a 404 for a missing container) must never
+      // read as "this theme is gone" or "the settings changed".
+      const code = isServiceError(error) ? Number(error.code) : Number.NaN;
+      return { ok: false, statuses: operations.map(() => (lostRace(code) ? code : Number.NaN)) };
     }
   }
 
