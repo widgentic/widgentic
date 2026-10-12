@@ -424,6 +424,9 @@ workspace and the sample first, then point at the built DLL):
     - **Cosmos:** a batch refused with an explicit `StatusCode: 403` or a firewall message gives `FORBIDDEN`. A request-level `StatusCode: 404` gives `STORE_ERROR` for `removeTheme` and `putSettings`, and the theme is still stored.
     - **Unit tests:** `list_theme_tokens` carries `TOKEN_VALUE_RULE`, and an adapter without `settings` composes with no diagnostics.
   - **Re-review at `b0f0e74` (2026-10-12).** The shared example sources return the widget designer from `widgetIfMounted` while its section is shown and nothing once another section is shown. Without that source, the check leaves a reference unverified rather than unknown (existing test). A malformed `dataSchemaRef` is refused with `INVALID_SHAPE`, as the store refuses it.
+  - **Reviewer 1 at `1fbce0e`: ready to merge.** Its two non-blocking notes are addressed:
+    - An app-level test (`app-webmcp.test.ts`) boots the self-host page on a stand-in model context. On Widgets, the check resolves `inbox` through the designer. On Data schemas, a schema `orders` saved meanwhile is not reported unknown (`diagnosticsDerived: true`), and the view stays on Data schemas.
+    - The spec no longer says "never" for View and Edit mode.
   - **Not verified yet:** the hosts. Staging on `demo.widgentic.dev`, and widgentic.dev's Settings section, follow.
 - **Wire schemas from the exported definitions (2026-10-11, change `derived-input-schemas`, `@widgentic/mcp` minor pending release)**
   - **The wire.** `server-wiring` lists the tools of `createWidgenticServer()` and finds every `inputSchema` and description equal to the exported definition's, for all nine tools: nothing added (no `$schema`), nothing missing.
