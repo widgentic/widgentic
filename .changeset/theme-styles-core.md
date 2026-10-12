@@ -16,4 +16,7 @@ Themes gain shared styles and a default per host mode.
   - Values and theme token values may not call `image-set(` or `src(`, which carry URLs like `url(`. Token values also refuse `\`, whose escapes can spell any refused call.
   - Scoped theme styles split on top-level commas and scope a root-anchored part (`:root[…] .wg-x`, `html .wg-x`) on its root compound.
 - **The rules as data.** `UNSAFE_FUNCTIONS` and `STYLE_RULES` (`./catalog`), and `TOKEN_VALUE_UNSAFE` and `TOKEN_VALUE_RULE` (`./theming`), let guides and tools derive the rules instead of restating them.
-- **Theme `extends` is removed.** An entry is complete as registered: a host that derives one theme from another merges the tokens and styles before registering. An `extends` field is ignored like any unknown field, and `UNKNOWN_BASE_THEME` is gone. No designer, seed, guide or tool ever set it; "a theme based on another" is a one-time copy (`seedThemeEntry`).
+- **Breaking: theme `extends` is removed.** `ThemeEntry.extends` and the `UNKNOWN_BASE_THEME` code are gone, and an entry is complete as registered. No designer, seed, guide or tool ever set it; "a theme based on another" is a one-time copy (`seedThemeEntry`).
+  - **TypeScript:** an entry literal that sets `extends` no longer compiles.
+  - **JSON:** an entry carrying `extends` is registered without its base, since the field is ignored like any unknown one.
+  - **Migration:** merge the base's tokens and styles into the entry before registering, for example `{ ...base.tokens, ...own.tokens }`.

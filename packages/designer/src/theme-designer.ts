@@ -97,6 +97,16 @@ function nameProblem(name: string): string | undefined {
 }
 
 /**
+ * A copy of an entry for the designer to hold. A retired `extends` is left
+ * behind: the registry ignores it, and a field the designer handed back
+ * (to `getTheme`, Export, Save or an agent) would look meaningful.
+ */
+function takeEntry(input: unknown): ThemeEntry {
+  const { extends: _retired, ...entry } = JSON.parse(JSON.stringify(input)) as ThemeEntry & { extends?: unknown };
+  return entry;
+}
+
+/**
  * Validate an untrusted entry; errors instead of throwing. The name is held
  * to what saving accepts only when it differs from `currentName`: a name the
  * entry already has is the person's to fix (the Name field flags it), and
@@ -130,9 +140,7 @@ export function createThemeDesigner(
 ): ThemeDesignerHandle {
   injectDesignerStyles(document);
 
-  let entry: ThemeEntry = options.initialTheme
-    ? (JSON.parse(JSON.stringify(options.initialTheme)) as ThemeEntry)
-    : starterEntry();
+  let entry: ThemeEntry = options.initialTheme ? takeEntry(options.initialTheme) : starterEntry();
   const listeners = new Set<(entry: ThemeEntry) => void>();
 
   const preview = createPreview(
@@ -441,7 +449,7 @@ export function createThemeDesigner(
   function loadTheme(input: unknown): ThemeLoadResult {
     const errors = checkThemeEntry(input, entry.name);
     if (errors.length > 0) return { ok: false, errors };
-    entry = JSON.parse(JSON.stringify(input)) as ThemeEntry;
+    entry = takeEntry(input);
     for (const refreshIdentity of identityRefreshers) refreshIdentity();
     for (const refreshToken of tokenRefreshers) refreshToken();
     renderCustom();

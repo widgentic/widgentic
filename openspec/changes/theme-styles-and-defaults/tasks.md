@@ -86,3 +86,4 @@
 - [x] 8.20 Reviewer 1 at `1fbce0e` (ready to merge), non-blocking notes: an app-level test of the check's WebMCP wiring; the self-host delta's "never" scoped to the person being in another section.
 - [x] 8.21 Browser agent on staging: theme tools return `diagnostics.styles` (the Styles panel's audit, `auditStyles` now exported); style messages name the part at fault; load-time link/host warnings queued as BACKLOG AGT-5 (`extends`: see 8.22) (both predate this change).
 - [x] 8.22 Theme `extends` removed (owner decision, D20): the registry holds entries as registered and ignores an `extends` field; specs, docs, the .NET options comment and the example preview themes follow; BACKLOG THM-4 closed by this.
+- [x] 8.23 Reviewer 1 at `b889ac5`: the theme designer drops a retired `extends` from what it opens or loads; the changesets mark the removal as breaking, with the migration step; the apps change no longer mentions merging `extends`.

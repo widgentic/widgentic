@@ -13,3 +13,4 @@ Theme styles in every styled output, and per-principal settings with default the
 - **`list_theme_tokens`** states the token-value rule from core's `TOKEN_VALUE_RULE`.
 - **Authoring surface.** It serves the record at `/settings` (`GET`, and `PUT` with section-level replace; `THEME_IN_USE` maps to 409). Theme writes carry `styles`.
 - **Agents.** `list_themes` reports each theme's `styles` and the effective `defaults`. Its description and `render_widget`'s `theme` description tell agents to leave `theme` out to use the user's defaults. The authoring guide documents theme styles from one rules object shared with widget styles.
+- **Breaking, with core's removal of theme `extends`:** a stored theme carrying `extends` is still served, but renders with its own tokens and styles only. Copy the base's tokens into it to keep its look.

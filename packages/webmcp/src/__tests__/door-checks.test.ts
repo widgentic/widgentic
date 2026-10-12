@@ -9,6 +9,7 @@
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import { createThemeRegistry } from "@widgentic/core";
+import type { ThemeEntry } from "@widgentic/core";
 import { createDesigner, createSchemaDesigner, createThemeDesigner } from "@widgentic/designer";
 import type { DesignerHandle, SchemaDesignerHandle, ThemeDesignerHandle } from "@widgentic/designer";
 import { designerTools } from "../index.js";
@@ -166,6 +167,15 @@ describe("load tools refuse what saving would refuse", () => {
     const clean = await run(tools, "widgentic_theme_load", { entry: { name: "ocean", tokens: {}, styles: { ".wg-ok": { padding: "4px" } } } });
     expect((clean.diagnostics as { styles: unknown[] }).styles).toEqual([]);
     expect((await run(tools, "widgentic_theme_get")).diagnostics).toEqual({ styles: [] });
+  });
+
+  it("never hands back a retired extends", async () => {
+    const loaded = await run(tools, "widgentic_theme_load", { entry: { name: "ocean", extends: "dark", tokens: { accent: "#0a84ff" } } });
+    expect(loaded.ok).toBe(true);
+    expect(loaded.entry).toEqual({ name: "ocean", tokens: { accent: "#0a84ff" } });
+    expect((await run(tools, "widgentic_theme_get")).entry).not.toHaveProperty("extends");
+    theme = createThemeDesigner(host(), { initialTheme: { name: "stored", extends: "dark", tokens: {} } as ThemeEntry });
+    expect(theme.getTheme()).not.toHaveProperty("extends");
   });
 
   it("schema_load and definition_check warn about what the validator would ignore", async () => {
