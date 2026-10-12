@@ -26,8 +26,6 @@ describe("widget designer tools", () => {
     expect(definition.descriptor.description).toBe(invoiceWidget.descriptor.description);
     const diagnostics = result.diagnostics as { previewable: boolean };
     expect(diagnostics.previewable).toBe(true);
-    // No change has gone through the tools yet: the diagnostics are derived and say so.
-    expect(result.diagnosticsDerived).toBe(true);
   });
 
   it("lands a drafted definition in the designer and notifies its subscribers", async () => {
@@ -35,7 +33,6 @@ describe("widget designer tools", () => {
     designer.subscribe(listener);
     const result = await run(tools, "widgentic_widget_draft_load", { definition: invoiceWidget });
     expect(result.ok).toBe(true);
-    expect(result.diagnosticsDerived).toBe(false);
     expect((result.diagnostics as { previewable: boolean }).previewable).toBe(true);
     expect(designer.getDraft().kind).toBe("invoice");
     expect(listener).toHaveBeenCalled();

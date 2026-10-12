@@ -71,10 +71,22 @@ export interface DesignerOptions {
 }
 
 export type LoadResult = { ok: true } | { ok: false; errors: string[] };
+export type WidgetCheckResult = { ok: true; diagnostics: DesignerDiagnostics } | { ok: false; errors: string[] };
 
 export interface DesignerHandle {
   getDraft(): WidgetDraft;
+  /**
+   * The current draft's diagnostics, resolved against the shared schemas and
+   * actions the host supplied — what subscribers receive on every change.
+   */
+  getDiagnostics(): DesignerDiagnostics;
   loadWidget(definition: unknown): LoadResult;
+  /**
+   * Check a definition exactly as `loadWidget` would — the same refusals —
+   * and return its diagnostics against the host's shared entries, without
+   * touching the draft.
+   */
+  checkWidget(definition: unknown): WidgetCheckResult;
   loadTheme(theme: unknown): LoadResult;
   /** Disable/enable editing; the preview and theme selector stay live. */
   setReadOnly(readOnly: boolean): void;
@@ -135,11 +147,12 @@ export function createDesigner(
     actionContext
   );
 
+  // Every diagnostic resolves against the shared entries the host supplied.
+  const diagnose = (draft: WidgetDraft): DesignerDiagnostics =>
+    deriveDiagnostics(draft, { schemas: options.schemas ?? [], actions: options.actions ?? [] });
+
   function refresh(draft: WidgetDraft): void {
-    const diagnostics = deriveDiagnostics(draft, {
-      schemas: options.schemas ?? [],
-      actions: options.actions ?? []
-    });
+    const diagnostics = diagnose(draft);
     preview.update(draft, diagnostics);
     for (const listener of [...listeners]) listener(draft, diagnostics);
   }
@@ -172,12 +185,19 @@ export function createDesigner(
 
   return {
     getDraft: () => cloneDraft(store.get()),
+    getDiagnostics: () => diagnose(store.get()),
     setReadOnly,
     loadWidget(definition) {
       const errors = checkDefinition(definition, store.get().kind);
       if (errors.length > 0) return { ok: false, errors };
       applyDefinition(store, definition as unknown as WidgetDefinition);
       return { ok: true };
+    },
+    checkWidget(definition) {
+      const errors = checkDefinition(definition, store.get().kind);
+      if (errors.length > 0) return { ok: false, errors };
+      const { kind, template, descriptor, load } = definition as unknown as WidgetDefinition;
+      return { ok: true, diagnostics: diagnose({ kind, template, descriptor, ...(load === undefined ? {} : { load }) }) };
     },
     loadTheme(theme) {
       const validated = validateTheme(theme);

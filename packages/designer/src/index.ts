@@ -21,6 +21,7 @@ export type {
   DesignerHandle,
   DesignerOptions,
   LoadResult,
+  WidgetCheckResult,
   WidgetDefinition
 } from "./shell.js";
 export {

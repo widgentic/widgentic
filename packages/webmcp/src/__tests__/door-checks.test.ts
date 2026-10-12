@@ -80,6 +80,41 @@ describe("load tools refuse what saving would refuse", () => {
     expect((await run(tools, "widgentic_theme_load", { entry: { name: "light", tokens: {} } })).code).toBe("REJECTED");
   });
 
+  it("resolves a shared schema reference against the host's saved schemas", async () => {
+    const inbox = { name: "email-inbox", schema: { type: "object", properties: { unreadCount: { type: "number" } }, required: ["unreadCount"] } };
+    const referencing = (example: unknown) => ({
+      kind: "inbox-card",
+      template: { tag: "div", children: [{ bind: "unreadCount" }] },
+      descriptor: { description: "d", dataShape: "{ unreadCount }", dataSchemaRef: "email-inbox", dataExample: example }
+    });
+    // Opened the way the apps open a stored widget: mounted with it, no tool call yet.
+    root = host();
+    widget = createDesigner(root, { schemas: [inbox], initialWidget: referencing({ unreadCount: 3 }) });
+    const got = await run(tools, "widgentic_widget_draft_get");
+    expect((got.diagnostics as { schemaRef?: string }).schemaRef).toBeUndefined();
+    const good = await run(tools, "widgentic_widget_definition_check", { definition: referencing({ unreadCount: 3 }) });
+    expect((good.diagnostics as { schemaRef?: string }).schemaRef).toBeUndefined();
+    // The example is checked against the resolved schema.
+    const bad = await run(tools, "widgentic_widget_definition_check", { definition: referencing({ unreadCount: "three" }) });
+    expect((bad.diagnostics as { example?: { code: string } }).example?.code).toBe("INVALID_TYPE");
+    // A reference that names no saved schema is still reported.
+    const typo = await run(tools, "widgentic_widget_definition_check", { definition: { ...referencing({ unreadCount: 3 }), descriptor: { ...referencing({}).descriptor, dataSchemaRef: "email-inbx" } } });
+    expect((typo.diagnostics as { schemaRef?: string }).schemaRef).toContain("'email-inbx'");
+    // Carrying both is refused, as Save refuses it.
+    const both = await run(tools, "widgentic_widget_definition_check", { definition: { ...referencing({ unreadCount: 3 }), descriptor: { ...referencing({ unreadCount: 3 }).descriptor, dataSchema: { type: "object" } } } });
+    expect(both.code).toBe("REJECTED");
+  });
+
+  it("leaves references unverified, never unknown, with no designer mounted", async () => {
+    const definitionOnly = designerTools({});
+    const result = await run(definitionOnly, "widgentic_widget_definition_check", {
+      definition: { ...definition("inbox-card"), descriptor: { ...definition("inbox-card").descriptor, dataSchemaRef: "email-inbox" } }
+    });
+    expect(result.ok).toBe(true);
+    expect(result.diagnosticsDerived).toBe(true);
+    expect((result.diagnostics as { schemaRef?: string }).schemaRef).toBeUndefined();
+  });
+
   it("schema_load and definition_check warn about what the validator would ignore", async () => {
     const loaded = await run(schemaTools, "widgentic_schema_load", {
       entry: { name: "fruit", schema: { type: "object", properties: { kind: { type: "banana" } } } }

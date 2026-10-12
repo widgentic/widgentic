@@ -177,7 +177,9 @@ export function deriveDiagnostics(
       diagnostics.schemaRef =
         "A descriptor carries 'dataSchema' OR 'dataSchemaRef', never both.";
     } else if (
-      (options.schemas ?? []).every((entry) => entry.name !== ref)
+      // Unverifiable without the host's schemas: never a false "unknown".
+      options.schemas !== undefined &&
+      options.schemas.every((entry) => entry.name !== ref)
     ) {
       diagnostics.schemaRef = `References unknown schema '${ref}' — it is not among the supplied shared schemas.`;
     }

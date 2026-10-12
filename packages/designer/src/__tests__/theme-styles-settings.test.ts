@@ -111,6 +111,21 @@ describe("theme designer styles", () => {
     expect(designer.getDraft().descriptor).not.toHaveProperty("styles");
   });
 
+  it("resolves diagnostics against the host's shared schemas, for the draft and for a check", () => {
+    const inbox = { name: "email-inbox", schema: { type: "object", properties: { unreadCount: { type: "number" } } } };
+    const referencing = (example: unknown): WidgetDefinition => ({
+      kind: "inbox-card",
+      template: { tag: "div", children: [{ bind: "unreadCount" }] },
+      descriptor: { description: "d", dataShape: "{ unreadCount }", dataSchemaRef: "email-inbox", dataExample: example } as WidgetDefinition["descriptor"]
+    });
+    const designer = createDesigner(host(), { schemas: [inbox], initialWidget: referencing({ unreadCount: 3 }) });
+    expect(designer.getDiagnostics().schemaRef).toBeUndefined();
+    const checked = designer.checkWidget(referencing({ unreadCount: "three" }));
+    expect(checked.ok && checked.diagnostics.example?.code).toBe("INVALID_TYPE");
+    expect(designer.getDraft().descriptor.dataExample).toEqual({ unreadCount: 3 });
+    expect(designer.checkWidget({ ...referencing({}), kind: "table" }).ok).toBe(false);
+  });
+
   it("shows what the validator would ignore in a schema, in both designers", () => {
     const schemaRoot = host();
     const schemaDesigner = createSchemaDesigner(schemaRoot);

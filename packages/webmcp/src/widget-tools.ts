@@ -4,7 +4,6 @@
  * edit goes through the designer's own validation and is visible immediately.
  */
 import type { DesignerDiagnostics, DesignerHandle, WidgetDefinition, WidgetDraft } from "@widgentic/designer";
-import { deriveDiagnostics } from "@widgentic/designer";
 import { isPlainObject } from "@widgentic/core";
 import { dslCheatSheet } from "./guide.js";
 import { argumentsOf, invalidArgument, notMounted, okResult, rejected } from "./result.js";
@@ -13,29 +12,11 @@ import type { NameOf } from "./tool.js";
 import type { WebMcpTool } from "./types.js";
 
 /**
- * The designer computes diagnostics on every change and hands them to
- * subscribers; there is no getter. Subscribe once per handle so the tools
- * return exactly what the designer computed for the change they made.
- * Before the first change nothing is cached — then derive without the host's
- * shared entries and say so (`diagnosticsDerived`), because unknown schema or
- * action references may be over-reported there.
+ * The designer's own diagnostics for its current draft, resolved against the
+ * shared schemas and actions its host supplied — what the person sees.
  */
-const latest = new WeakMap<DesignerHandle, DesignerDiagnostics>();
-const tracked = new WeakSet<DesignerHandle>();
-
-function track(handle: DesignerHandle): void {
-  if (tracked.has(handle)) return;
-  tracked.add(handle);
-  handle.subscribe((_draft, diagnostics) => {
-    latest.set(handle, diagnostics);
-  });
-}
-
-function diagnosticsOf(handle: DesignerHandle): { diagnostics: DesignerDiagnostics; diagnosticsDerived: boolean } {
-  track(handle);
-  const cached = latest.get(handle);
-  if (cached !== undefined) return { diagnostics: cached, diagnosticsDerived: false };
-  return { diagnostics: deriveDiagnostics(handle.getDraft()), diagnosticsDerived: true };
+function diagnosticsOf(handle: DesignerHandle): { diagnostics: DesignerDiagnostics } {
+  return { diagnostics: handle.getDiagnostics() };
 }
 
 /** The export shape: what the designer's Export panel and the server's import consume. */
@@ -55,11 +36,7 @@ const DEFINITION_SHAPE =
 
 export function widgetTools(source: () => DesignerHandle | undefined, name: NameOf, prefix: string): WebMcpTool[] {
   const rules = dslCheatSheet(prefix);
-  const resolve = (): DesignerHandle | undefined => {
-    const handle = source();
-    if (handle !== undefined) track(handle);
-    return handle;
-  };
+  const resolve = source;
 
   return [
     defineTool({

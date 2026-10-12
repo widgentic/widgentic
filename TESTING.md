@@ -410,6 +410,13 @@ workspace and the sample first, then point at the built DLL):
     - **Cosmos:** a 429 whose diagnostics carry `LSN: 403` stays `STORE_ERROR`, and the batch failure is logged with the service's first line.
     - **Self-host example:** a new draft given the kind `my widget` keeps that kind across a trip to the Themes tab, flagged `INVALID_IDENTIFIER`, with no "load failed".
     - **Old-shape tests:** the Cosmos test now also refuses the write, and the file-store test serves the trimmed theme as the light default.
+  - **Browser agent: false "unknown schema" (2026-10-12, staging `5969a8b`).** The agent found that `definition_check`, and `draft_get` on a widget opened with Edit, called the saved `email-inbox` reference unknown. Its report traced this to WebMCP deriving diagnostics without the host's schemas. Regression tests:
+    - A designer mounted with `email-inbox` and opened on a referencing widget gives no `schemaRef` from `draft_get` or `definition_check`.
+    - A bad example gets `INVALID_TYPE` against the resolved schema.
+    - The typo `email-inbx` is still reported.
+    - Both schema forms together are `REJECTED`.
+    - With no designer mounted, the reference is unverified (`diagnosticsDerived: true`) rather than unknown.
+    - In the designer, `getDiagnostics()` and `checkWidget` give the same answers, without touching the draft.
   - **Not verified yet:** the hosts. Staging on `demo.widgentic.dev`, and widgentic.dev's Settings section, follow.
 - **Wire schemas from the exported definitions (2026-10-11, change `derived-input-schemas`, `@widgentic/mcp` minor pending release)**
   - **The wire.** `server-wiring` lists the tools of `createWidgenticServer()` and finds every `inputSchema` and description equal to the exported definition's, for all nine tools: nothing added (no `$schema`), nothing missing.

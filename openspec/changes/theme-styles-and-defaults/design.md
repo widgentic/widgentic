@@ -369,6 +369,27 @@ Accepted, not fixed (outside normal use):
   is reserved: the check always holds the kind to what Save accepts.
 - **Sibling combinators** (`.wg-a ~ *`) predate this change; they are `BACKLOG.md` THM-3.
 
+### D18 — Diagnostics come from the designer that holds the shared entries
+
+The browser agent found that `widget_definition_check`, and `widget_draft_get` on a
+freshly opened widget, reported every `dataSchemaRef` as unknown, and never checked the
+example against the referenced schema. The WebMCP layer derived diagnostics itself,
+without the host's schemas: its cache of the designer's diagnostics was empty until the
+first change.
+
+The designer handle now answers both questions:
+- `getDiagnostics()` returns the current draft's diagnostics.
+- `checkWidget(definition)` returns what a load would.
+
+Both resolve against the schemas and actions the host gave the designer, so the tools
+report what the person sees. With no designer mounted, the check falls back to the
+definition alone, and a reference it cannot verify is no longer called unknown. The
+cache is gone.
+
+The same report noted that a descriptor carrying both `dataSchema` and `dataSchemaRef`
+loaded with only a diagnostic, while the guide says it is refused and the store does
+refuse it. It is now refused at load, like the other things Save refuses (D14).
+
 ## Risks / Trade-offs
 
 - **A default theme overrides host-bridged colors** (`bg`, `fg`, …) in its mode, as an

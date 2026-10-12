@@ -46,6 +46,9 @@ export function checkDefinition(definition: unknown, currentKind?: string): stri
     errors.push("'descriptor' must be an object.");
   } else if (typeof definition.descriptor.description !== "string") {
     errors.push("'descriptor.description' must be a string.");
+  } else if (definition.descriptor.dataSchema !== undefined && definition.descriptor.dataSchemaRef !== undefined) {
+    // Refused at the door, in the store's terms: Save would refuse it.
+    errors.push("descriptor: INVALID_SHAPE — carries 'dataSchema' and 'dataSchemaRef'; keep one.");
   }
   if (definition.load !== undefined) {
     const problem = validateLoadBinding(definition.load, "load", {
