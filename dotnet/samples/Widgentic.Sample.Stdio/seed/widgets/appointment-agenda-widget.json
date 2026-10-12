@@ -1,84 +1,121 @@
 {
   "kind": "appointment-agenda-widget",
   "template": {
+    "tag": "section",
     "attrs": {
-      "class": "wg-agenda"
+      "class": "wg-panel wg-agenda"
     },
     "children": [
       {
+        "tag": "header",
+        "attrs": {
+          "class": "wg-panel-head"
+        },
         "children": [
           {
+            "tag": "h2",
+            "attrs": {
+              "class": "wg-title"
+            },
             "children": [
               "Agenda"
-            ],
-            "tag": "h2"
+            ]
           },
           {
+            "when": "date",
             "template": {
+              "tag": "p",
               "attrs": {
-                "class": "wg-muted"
+                "class": "wg-date"
               },
               "children": [
                 {
-                  "bind": "date"
+                  "bind": "date",
+                  "format": {
+                    "type": "date",
+                    "pattern": "dd-MM-yyyy"
+                  }
                 }
-              ],
-              "tag": "p"
-            },
-            "when": "date"
+              ]
+            }
           }
-        ],
-        "tag": "header"
+        ]
       },
       {
         "each": "appointments",
+        "key": "id",
         "empty": {
+          "tag": "p",
           "attrs": {
             "class": "wg-muted"
           },
           "children": [
             "No appointments."
-          ],
-          "tag": "p"
+          ]
         },
         "template": {
+          "tag": "article",
           "attrs": {
-            "class": "wg-agenda-item"
+            "class": "wg-item"
           },
           "children": [
             {
+              "tag": "h3",
+              "attrs": {
+                "class": "wg-subtitle"
+              },
               "children": [
                 {
                   "bind": "title"
+                },
+                {
+                  "tag": "span",
+                  "attrs": {
+                    "class": {
+                      "bind": "status",
+                      "map": {
+                        "confirmed": "wg-status wg-status-success",
+                        "tentative": "wg-status wg-status-warning",
+                        "cancelled": "wg-status wg-status-danger"
+                      },
+                      "default": "wg-status wg-status-info"
+                    }
+                  },
+                  "children": [
+                    {
+                      "bind": "status"
+                    }
+                  ]
                 }
-              ],
-              "tag": "h3"
+              ]
             },
             {
+              "tag": "p",
               "attrs": {
-                "class": "wg-agenda-time"
+                "class": "wg-date"
               },
               "children": [
                 {
                   "bind": "startsAt",
                   "format": {
-                    "pattern": "yyyy-MM-dd HH:mm",
-                    "type": "date"
+                    "type": "date",
+                    "pattern": "yyyy-MM-dd HH:mm"
                   }
                 },
                 " — ",
                 {
                   "bind": "endsAt",
                   "format": {
-                    "pattern": "yyyy-MM-dd HH:mm",
-                    "type": "date"
+                    "type": "date",
+                    "pattern": "HH:mm"
                   }
                 }
-              ],
-              "tag": "p"
+              ]
             },
             {
+              "when": "location",
               "template": {
+                "tag": "p",
                 "attrs": {
                   "class": "wg-muted"
                 },
@@ -86,39 +123,53 @@
                   {
                     "bind": "location"
                   }
-                ],
-                "tag": "p"
-              },
-              "when": "location"
+                ]
+              }
             },
             {
+              "when": "meetingUrl",
               "template": {
+                "tag": "a",
                 "attrs": {
-                  "class": "wg-agenda-link",
+                  "class": "wg-link",
                   "href": {
                     "bind": "meetingUrl"
                   }
                 },
                 "children": [
                   "Join meeting"
-                ],
-                "tag": "a"
-              },
-              "when": "meetingUrl"
+                ]
+              }
             },
             {
+              "when": "attendees",
               "template": {
+                "tag": "ul",
+                "attrs": {
+                  "class": "wg-list"
+                },
                 "children": [
                   {
                     "each": "attendees",
                     "template": {
+                      "tag": "li",
+                      "attrs": {
+                        "class": {
+                          "bind": "response",
+                          "map": {
+                            "accepted": "wg-chip wg-chip-yes",
+                            "tentative": "wg-chip wg-chip-maybe"
+                          },
+                          "default": "wg-chip"
+                        }
+                      },
                       "children": [
                         {
-                          "else": {
-                            "bind": "name"
-                          },
+                          "when": "email",
                           "template": {
+                            "tag": "a",
                             "attrs": {
+                              "class": "wg-link",
                               "href": {
                                 "bind": "email",
                                 "prefix": "mailto:"
@@ -128,28 +179,27 @@
                               {
                                 "bind": "name"
                               }
-                            ],
-                            "tag": "a"
+                            ]
                           },
-                          "when": "email"
+                          "else": {
+                            "bind": "name"
+                          }
                         }
-                      ],
-                      "tag": "li"
+                      ]
                     }
                   }
-                ],
-                "tag": "ul"
-              },
-              "when": "attendees"
+                ]
+              }
             }
-          ],
-          "tag": "article"
+          ]
         }
       }
-    ],
-    "tag": "section"
+    ]
   },
   "descriptor": {
+    "description": "Displays a day agenda with formatted appointment times, attendance, and email links for attendees.",
+    "dataShape": "{ date?, timezone?, appointments: [{ id, title, startsAt, endsAt, location?, meetingUrl?, description?, status, attendees?: [{ name, email?, response? }] }] }",
+    "dataSchemaRef": "appointment-agenda",
     "dataExample": {
       "appointments": [
         {
@@ -192,25 +242,12 @@
       "date": "2026-09-03",
       "timezone": "America/Bogota"
     },
-    "dataSchemaRef": "appointment-agenda",
-    "dataShape": "{ date?, timezone?, appointments: [{ id, title, startsAt, endsAt, location?, meetingUrl?, description?, status, attendees?: [{ name, email?, response? }] }] }",
-    "description": "Displays a day agenda with formatted appointment times, attendance, and email links for attendees.",
     "styles": {
-      ".wg-agenda": {
-        "background": "var(--wg-surface)",
-        "border": "var(--wg-border-width) solid var(--wg-border)",
-        "border-radius": "var(--wg-radius-lg)",
-        "padding": "var(--wg-spacing-lg)"
+      ".wg-agenda .wg-title": {
+        "letter-spacing": "-0.01em"
       },
-      ".wg-agenda-item": {
-        "border-top": "var(--wg-border-width) solid var(--wg-border)",
-        "padding": "var(--wg-spacing)"
-      },
-      ".wg-agenda-link": {
+      ".wg-title": {
         "color": "var(--wg-accent)"
-      },
-      ".wg-agenda-time": {
-        "color": "var(--wg-muted)"
       }
     }
   }
