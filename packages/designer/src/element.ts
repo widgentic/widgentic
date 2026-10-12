@@ -174,6 +174,19 @@ export function defineActionDesignerElement(tagName: string = DEFAULT_ACTION_TAG
   customElements.define(tagName, WidgenticActionDesignerElement);
 }
 
+/**
+ * A property set on an element before its class was defined is an own
+ * property shadowing the class accessor; at upgrade, move it onto the
+ * accessor so the value is not lost.
+ */
+export function upgradeProperty(element: HTMLElement, name: string): void {
+  if (!Object.prototype.hasOwnProperty.call(element, name)) return;
+  const own = element as unknown as Record<string, unknown>;
+  const value = own[name];
+  delete own[name];
+  own[name] = value;
+}
+
 /** Sibling registrar for the settings designer. */
 export function defineSettingsDesignerElement(tagName: string = DEFAULT_SETTINGS_TAG): void {
   if (customElements.get(tagName) !== undefined) return;
@@ -183,7 +196,12 @@ export function defineSettingsDesignerElement(tagName: string = DEFAULT_SETTINGS
     #unsubscribe: (() => void) | undefined;
     #themes: Pick<ThemeEntry, "name" | "label">[] = [];
 
-    /** The themes offered as choices; settable before or after connecting. */
+    constructor() {
+      super();
+      upgradeProperty(this, "themes");
+    }
+
+    /** The themes offered as choices; settable before or after connecting, or before the element is defined. */
     get themes(): Pick<ThemeEntry, "name" | "label">[] {
       return [...this.#themes];
     }

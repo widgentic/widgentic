@@ -6,6 +6,7 @@
  * rather than emitted.
  */
 import { isPlainObject } from "../shared/plain-object.js";
+import { indexOfTopLevel, isBalanced, pseudoArguments, splitTopLevel, topLevelText } from "../shared/css-scan.js";
 
 export type WidgetStyles = Record<string, Record<string, string>>;
 
@@ -44,60 +45,48 @@ function callsUnsafeFunction(text: string): boolean {
 }
 
 /**
- * A selector's top-level structure: the text outside every (…) argument and
- * […] attribute test, scanned with depth so nesting is respected. A `.wg-`
- * class only counts when it is part of the selector itself, not hidden in
- * `:not(.wg-x)` or `[data-a=".wg-"]`.
+ * Pseudo-classes that pass their argument's matches through: `:is(.wg-a,
+ * .wg-b)` matches only what its arguments match. `:not()` and `:has()` do
+ * not — `body:not(.wg-x)` and `body:has(.wg-x)` match `body`.
  */
-function outsideArguments(part: string): string {
-  let depth = 0;
-  let out = "";
-  for (const char of part) {
-    if (char === "(" || char === "[") depth++;
-    else if (char === ")" || char === "]") depth = Math.max(0, depth - 1);
-    else if (depth === 0) out += char;
-  }
-  return out;
-}
+const FORWARDING_PSEUDOS = ["is", "where", "matches", "-webkit-any", "-moz-any"] as const;
+
+/** Combinators between compounds, read outside brackets and strings. */
+const COMBINATOR = (char: string) => /[\s>+~]/.test(char);
 
 /**
- * Every top-level selector part must name a .wg- class in its own
- * structure, and no part may open with a combinator (`~ .wg-b` is invalid
- * alone and would only become valid once scoped). No comments.
+ * A selector list every one of whose parts is held to `.wg-` classes: some
+ * compound of each part names a `.wg-` class at its own level, or forwards
+ * through `:is()`/`:where()` to a list that does. A `.wg-` hidden in
+ * `:not()`, `:has()`, an attribute test or a string constrains nothing.
  */
-function isSafeSelector(selector: string): boolean {
-  if (UNSAFE.test(selector) || COMMENT.test(selector)) return false;
-  const parts = topLevelParts(selector);
-  return (
-    parts.length > 0 &&
-    parts.every((part) => !/^[>+~]/.test(part) && outsideArguments(part).includes(".wg-"))
+function isConstrainedList(selector: string): boolean {
+  const parts = splitTopLevel(selector, (char) => char === ",");
+  return parts.length > 0 && parts.every(isConstrainedPart);
+}
+
+function isConstrainedPart(part: string): boolean {
+  return splitTopLevel(part, COMBINATOR).some(
+    (compound) =>
+      topLevelText(compound).includes(".wg-") ||
+      pseudoArguments(compound, FORWARDING_PSEUDOS).some(isConstrainedList)
   );
 }
 
-function isSafeValue(value: string): boolean {
-  return !UNSAFE.test(value) && !COMMENT.test(value) && !callsUnsafeFunction(value);
+/**
+ * Every top-level selector part must be held to `.wg-` classes, and no
+ * part may open with a combinator (`~ .wg-b` is invalid alone and would
+ * only become valid once scoped). Brackets and strings must close, and
+ * no comments: either would run on and swallow the rules after it.
+ */
+function isSafeSelector(selector: string): boolean {
+  if (UNSAFE.test(selector) || COMMENT.test(selector) || !isBalanced(selector)) return false;
+  const parts = splitTopLevel(selector, (char) => char === ",");
+  return parts.length > 0 && parts.every((part) => !/^[>+~]/.test(part) && isConstrainedPart(part));
 }
 
-/**
- * A selector list's parts, split on TOP-LEVEL commas only: the commas
- * inside :is(), :not(), :has() or :where() belong to their argument, so
- * `.wg-row:has(.wg-ok, .wg-warn)` stays one part.
- */
-function topLevelParts(selector: string): string[] {
-  const parts: string[] = [];
-  let depth = 0;
-  let start = 0;
-  for (let i = 0; i < selector.length; i++) {
-    const char = selector[i];
-    if (char === "(" || char === "[") depth++;
-    else if (char === ")" || char === "]") depth = Math.max(0, depth - 1);
-    else if (char === "," && depth === 0) {
-      parts.push(selector.slice(start, i).trim());
-      start = i + 1;
-    }
-  }
-  parts.push(selector.slice(start).trim());
-  return parts.filter((part) => part.length > 0);
+function isSafeValue(value: string): boolean {
+  return !UNSAFE.test(value) && !COMMENT.test(value) && isBalanced(value) && !callsUnsafeFunction(value);
 }
 
 /**
@@ -109,17 +98,8 @@ function topLevelParts(selector: string): string[] {
  */
 function scopePart(part: string, scope: string): string {
   if (!/^(:root|html)(?![\w-])/i.test(part)) return `:where(${scope}) ${part}`;
-  let depth = 0;
-  let end = part.length;
-  for (let i = 0; i < part.length; i++) {
-    const char = part[i] ?? "";
-    if (char === "(" || char === "[") depth++;
-    else if (char === ")" || char === "]") depth = Math.max(0, depth - 1);
-    else if (depth === 0 && /[\s>+~]/.test(char)) {
-      end = i;
-      break;
-    }
-  }
+  const found = indexOfTopLevel(part, COMBINATOR);
+  const end = found === -1 ? part.length : found;
   return `${part.slice(0, end)}:where(${scope})${part.slice(end)}`;
 }
 
@@ -151,7 +131,7 @@ export function guardedStylesToCss(styles: WidgetStyles, scope: string | undefin
     if (lines.length > 0) {
       const scoped = scope === undefined
         ? selector
-        : topLevelParts(selector).map((part) => scopePart(part, scope)).join(", ");
+        : splitTopLevel(selector, (char) => char === ",").map((part) => scopePart(part, scope)).join(", ");
       rules.push(`${scoped} {\n${lines.join("\n")}\n}`);
     }
   }

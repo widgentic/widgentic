@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
 import type { ThemeEntry } from "@widgentic/core";
-import { previewThemes } from "../designers.js";
+import { previewThemes, restoredDraft } from "../designers.js";
 
 describe("previewThemes", () => {
   it("merges an entry's base in, as render_widget does, whatever the order", () => {
@@ -23,5 +23,25 @@ describe("previewThemes", () => {
     ]);
     expect(entries.map((entry) => entry.name)).toEqual(["light", "dark"]);
     expect(entries.find((entry) => entry.name === "dark")?.tokens.bg).not.toBe("#ff0000");
+  });
+});
+
+describe("restoredDraft", () => {
+  const draft = {
+    kind: "my widget",
+    template: { tag: "div" },
+    descriptor: { description: "d" },
+    theme: { accent: "#123456" },
+    previewTheme: "ocean"
+  };
+
+  it("restores the definition as the person left it, a kind Save would refuse included", () => {
+    expect(restoredDraft(JSON.stringify(draft))).toEqual({ kind: "my widget", template: { tag: "div" }, descriptor: { description: "d" } });
+  });
+
+  it("starts fresh on nothing, corrupt text or a non-draft", () => {
+    expect(restoredDraft(null)).toBeUndefined();
+    expect(restoredDraft("{not json")).toBeUndefined();
+    expect(restoredDraft(JSON.stringify({ kind: "x" }))).toBeUndefined();
   });
 });

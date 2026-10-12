@@ -4,7 +4,7 @@
  * Everything here goes through public package entries — the designer owns
  * no validation logic of its own.
  */
-import { auditDataSchema, isPlainObject } from "@widgentic/core";
+import { auditDataSchema, isPlainObject, SAFE_IDENTIFIER, STYLE_RULES } from "@widgentic/core";
 import {
   createCatalog,
   validateDataAgainstSchema,
@@ -85,6 +85,17 @@ export function effectiveDataSchema(
 
 const BASE_KINDS = new Set(createCatalog().kinds());
 
+/** What saving would refuse about a kind, in the store's terms; `undefined` when acceptable. */
+export function kindProblem(kind: string): string | undefined {
+  if (!SAFE_IDENTIFIER.test(kind)) {
+    return `INVALID_IDENTIFIER — '${kind}' may use letters, digits, '.', '_' or '-' only.`;
+  }
+  if (BASE_KINDS.has(kind)) {
+    return `RESERVED_KIND — '${kind}' is a built-in kind; give the widget its own kind.`;
+  }
+  return undefined;
+}
+
 /**
  * Detect style entries the renderer would skip, using only the public
  * generator: a probe that produces no CSS was filtered by the safety
@@ -97,8 +108,7 @@ export function auditStyles(styles: WidgetStyles | undefined): StyleIssue[] {
     if (widgetStylesToCss({ [selector]: { color: "red" } }) === "") {
       issues.push({
         selector,
-        message:
-          "Selector would be skipped — every comma-separated part must target a .wg- class and avoid ;{}<>@\\."
+        message: `Selector would be skipped. ${STYLE_RULES.selectors} ${STYLE_RULES.banned}`
       });
       continue;
     }
@@ -114,8 +124,7 @@ export function auditStyles(styles: WidgetStyles | undefined): StyleIssue[] {
         issues.push({
           selector,
           property,
-          message:
-            "Declaration would be skipped — unsafe property name or value (no url(), expression(), or ;{}<>@\\)."
+          message: `Declaration would be skipped. ${STYLE_RULES.propertyNames} ${STYLE_RULES.banned}`
         });
       }
     }
@@ -132,8 +141,9 @@ export function deriveDiagnostics(
 
   if (typeof draft.kind !== "string" || draft.kind.trim().length === 0) {
     diagnostics.kind = "Kind must be a non-empty id.";
-  } else if (BASE_KINDS.has(draft.kind)) {
-    diagnostics.kind = `'${draft.kind}' is a built-in kind — pick a distinct id.`;
+  } else {
+    const problem = kindProblem(draft.kind);
+    if (problem !== undefined) diagnostics.kind = problem;
   }
 
   const dataShape = draft.descriptor?.dataShape;

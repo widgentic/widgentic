@@ -516,10 +516,11 @@ function templateCss(styleCss: string, themes: RenderThemes): string {
   }
   // Tokens are mode-scoped: :not() keeps the light default out of dark
   // mode wherever the dark side sets nothing, and both selectors outweigh
-  // the template's :root bridge. Styles are mode-scoped only when each mode
-  // has its own default: a lone default's classes are layout a widget relies
-  // on, and they read the active mode's tokens anyway.
-  const scopeStyles = light !== undefined && dark !== undefined;
+  // the template's :root bridge. Styles are mode-scoped only when both
+  // defaults carry them: a default's classes are layout a widget relies on,
+  // so with nothing to replace them in the other mode they serve both
+  // modes, reading the active mode's tokens anyway.
+  const scopeStyles = light?.styles !== undefined && dark?.styles !== undefined;
   return [
     light?.styles ? themeStylesToCss(light.styles, scopeStyles ? LIGHT_SCOPE : undefined) : "",
     dark?.styles ? themeStylesToCss(dark.styles, scopeStyles ? DARK_SCOPE : undefined) : "",

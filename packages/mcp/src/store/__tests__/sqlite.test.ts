@@ -152,6 +152,28 @@ describe("sqlite adapter", () => {
     await expect(store.putWidget(p.id, widget("after-close"))).rejects.toMatchObject({ code: "STORE_ERROR" });
   });
 
+  it("a theme stored under looser token rules keeps its other tokens and still serves as a default", async () => {
+    const path = freshPath();
+    const store = open(path);
+    const p = await store.ensurePrincipal("sqlite:legacy-theme");
+    store.close();
+    const raw = new DatabaseSync(path);
+    raw
+      .prepare("INSERT INTO entries (principal_id, kind, name, json) VALUES (?, 'theme', 'legacy', ?)")
+      .run(p.id, JSON.stringify({ name: "legacy", tokens: { accent: "#0b5fff /* brand */", bg: "#fafafa" } }));
+    raw.close();
+    const diagnostics: string[] = [];
+    const reopened = createSqliteStore(path, { limits: LIMITS, cipher: createLocalCipher(KEK), onDiagnostic: (m) => diagnostics.push(m) });
+    expect(await reopened.themes(p.id)).toEqual([{ name: "legacy", tokens: { bg: "#fafafa" } }]);
+    expect(diagnostics.join("\n")).toContain("theme 'legacy': token 'accent' dropped on read");
+    await reopened.putSettings(p.id, { defaultThemes: { light: "legacy" } });
+    const composed = await composeThemes(reopened, p.id);
+    expect(composed.value.defaults().light).toBe("legacy");
+    // Writes still refuse the value.
+    await expect(reopened.putTheme(p.id, { name: "legacy", tokens: { accent: "#0b5fff /* brand */", bg: "#fafafa" } })).rejects.toMatchObject({ code: "INVALID_THEME" });
+    reopened.close();
+  });
+
   it("a null secret record is skipped on list and reads as a miss, not a failure", async () => {
     const path = freshPath();
     const store = open(path);

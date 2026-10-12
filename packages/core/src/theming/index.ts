@@ -1,4 +1,4 @@
-export { THEME_TOKENS, TOKEN_DEFAULTS, TOKEN_SPECS, isSafeTokenValue } from "./tokens.js";
+export { THEME_TOKENS, TOKEN_DEFAULTS, TOKEN_SPECS, TOKEN_VALUE_RULE, TOKEN_VALUE_UNSAFE, isSafeTokenValue } from "./tokens.js";
 export type {
   ThemeToken,
   TokenType,

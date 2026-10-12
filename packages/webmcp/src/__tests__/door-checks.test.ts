@@ -62,6 +62,24 @@ describe("load tools refuse what saving would refuse", () => {
     expect(theme.getTheme().name).not.toBe(name);
   });
 
+  it("tools that reload the draft are not refused for a kind or name the person typed", async () => {
+    root = host();
+    widget = createDesigner(root, { initialWidget: definition("my widget") });
+    expect(widget.getDraft().kind).toBe("my widget");
+    const data = await run(tools, "widgentic_widget_example_data_set", { data: { title: "Now" } });
+    expect(data.ok).toBe(true);
+    expect((data.diagnostics as { kind?: string }).kind).toContain("INVALID_IDENTIFIER");
+    expect(widget.getDraft().descriptor.dataExample).toEqual({ title: "Now" });
+    // Changing to a kind Save would refuse is still refused.
+    expect((await run(tools, "widgentic_widget_draft_load", { definition: definition("table") })).code).toBe("REJECTED");
+
+    theme = createThemeDesigner(host(), { initialTheme: { name: "dark", tokens: {} } });
+    const tokens = await run(tools, "widgentic_theme_tokens_set", { tokens: { accent: "#0a84ff" } });
+    expect(tokens.ok).toBe(true);
+    expect(theme.getTheme()).toMatchObject({ name: "dark", tokens: { accent: "#0a84ff" } });
+    expect((await run(tools, "widgentic_theme_load", { entry: { name: "light", tokens: {} } })).code).toBe("REJECTED");
+  });
+
   it("schema_load and definition_check warn about what the validator would ignore", async () => {
     const loaded = await run(schemaTools, "widgentic_schema_load", {
       entry: { name: "fruit", schema: { type: "object", properties: { kind: { type: "banana" } } } }

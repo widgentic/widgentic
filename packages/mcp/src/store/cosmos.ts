@@ -75,6 +75,7 @@ import {
   checkStoredAction,
   checkStoredSchema,
   checkStoredTheme,
+  normalizeStoredTheme,
   checkStoredWidget
 } from "./validate.js";
 import { applySettingsUpdate, readSettings, refuseThemeInUse } from "./settings.js";
@@ -237,6 +238,17 @@ function isServiceError(error: unknown): error is { code: number | string } {
   return typeof error === "object" && error !== null && "code" in error;
 }
 
+/**
+ * The service code of a failed batch request. `@azure/cosmos` 4.x rethrows
+ * it as `new Error("Batch request error: <message>")` without its `code`,
+ * so a permission refusal is recognized from the message it wraps.
+ */
+function batchFailureCode(error: unknown): number {
+  if (isServiceError(error)) return Number(error.code);
+  const message = error instanceof Error ? error.message : "";
+  return /\b403\b|forbidden|RBAC permissions|blocked by Auth/i.test(message) ? 403 : Number.NaN;
+}
+
 /** Wrap a Cosmos failure without letting credential/key material through. */
 function operationError(operation: string, error: unknown): StoreRejectionError {
   const code = isServiceError(error) ? String(error.code) : "UNKNOWN";
@@ -374,8 +386,8 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
       const ok = statuses.length === operations.length && statuses.every((code) => code >= 200 && code < 300);
       return { ok, statuses };
     } catch (error) {
-      const code = isServiceError(error) ? Number(error.code) : Number.NaN;
-      if (code === 403) throw operationError(operation, error);
+      const code = batchFailureCode(error);
+      if (code === 403) throw operationError(operation, { code });
       return { ok: false, statuses: operations.map(() => code) };
     }
   }
@@ -453,14 +465,15 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
           log(`widgentic store: skipping malformed theme doc '${doc.id}' for ${principalId}.`);
           continue;
         }
-        const problem = checkStoredTheme(doc.theme, limits);
+        const theme = normalizeStoredTheme(doc.theme, (line) => log(`widgentic store: ${line} (principal ${principalId})`));
+        const problem = checkStoredTheme(theme, limits);
         if (problem) {
           log(
             `widgentic store: skipping theme '${doc.theme.name}' for ${principalId}: ${problem.code}.`
           );
           continue;
         }
-        out.push(doc.theme);
+        out.push(theme as ThemeEntry);
       }
       return out;
     },
@@ -797,7 +810,11 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
           // An emptied record is kept as an empty document: a Delete cannot
           // be made conditional on the etag.
           const body = { id: "settings", principalId, settings: next ?? {} };
-          const named = [...new Set(Object.values(readSettings(next).defaultThemes ?? {}))];
+          // Only the defaults this update writes must still exist; a section
+          // it leaves alone is kept as stored, as every adapter keeps it.
+          const named = update.defaultThemes === undefined || update.defaultThemes === null
+            ? []
+            : [...new Set(Object.values(readSettings(next).defaultThemes ?? {}))];
           const write: CosmosBatchOperation = current.etag === undefined
             ? { operationType: "Create", resourceBody: body }
             : { operationType: "Replace", id: "settings", resourceBody: body, ifMatch: current.etag };

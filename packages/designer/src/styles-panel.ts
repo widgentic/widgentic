@@ -65,6 +65,9 @@ export function createStylesPanel(
     if (document.activeElement === area) return;
     area.value = styles === undefined ? "" : JSON.stringify(styles, null, 2);
     repaintHighlight(area); // programmatic writes fire no input event
+    // The text now shown is valid: an earlier parse error no longer applies.
+    parseError.hidden = true;
+    parseError.textContent = "";
   }
 
   const issues = h("div");

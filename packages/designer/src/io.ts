@@ -10,7 +10,7 @@ import { isPlainObject } from "@widgentic/core";
 import { parsePath, validateTemplate } from "@widgentic/core";
 import { validateLoadBinding } from "@widgentic/core";
 import type { ActionBinding } from "@widgentic/core";
-import { createCatalog, SAFE_IDENTIFIER } from "@widgentic/core";
+import { kindProblem } from "./validate.js";
 import { diagnosticLine, h, section, textArea, requireChild } from "./dom.js";
 import { attachJsonHighlight, repaintHighlight } from "./highlight.js";
 import type { DraftStore, WidgetDraft } from "./store.js";
@@ -22,20 +22,21 @@ export interface WidgetDefinition {
   load?: ActionBinding;
 }
 
-/** Validate an untrusted definition; errors instead of throws. */
-/** Built-in kinds a stored widget may never take, read from the catalog. */
-const BUILT_IN_KINDS: ReadonlySet<string> = new Set(createCatalog().kinds());
-
-export function checkDefinition(definition: unknown): string[] {
+/**
+ * Validate an untrusted definition; errors instead of throws. The kind is
+ * held to what saving accepts only when it differs from `currentKind`: a
+ * kind the draft already has is the person's to fix (the diagnostics flag
+ * it), and reloading the same draft with new data must not fail on it.
+ */
+export function checkDefinition(definition: unknown, currentKind?: string): string[] {
   const errors: string[] = [];
   if (!isPlainObject(definition)) return ["Definition must be an object."];
   if (typeof definition.kind !== "string" || definition.kind.trim() === "") {
     errors.push("'kind' must be a non-empty string.");
-  } else if (!SAFE_IDENTIFIER.test(definition.kind)) {
+  } else if (definition.kind !== currentKind) {
     // What saving would refuse is refused here too, in the store's terms.
-    errors.push(`kind: INVALID_IDENTIFIER — '${definition.kind}' may use letters, digits, '.', '_' or '-' only.`);
-  } else if (BUILT_IN_KINDS.has(definition.kind)) {
-    errors.push(`kind: RESERVED_KIND — '${definition.kind}' is a built-in kind; give the widget its own kind.`);
+    const problem = kindProblem(definition.kind);
+    if (problem !== undefined) errors.push(`kind: ${problem}`);
   }
   const template = validateTemplate(definition.template);
   if (!template.ok) {
@@ -73,14 +74,14 @@ export type ImportResult =
   | { ok: true; definition: WidgetDefinition }
   | { ok: false; errors: string[] };
 
-export function importWidgetJson(text: string): ImportResult {
+export function importWidgetJson(text: string, currentKind?: string): ImportResult {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
   } catch (error) {
     return { ok: false, errors: [`Invalid JSON: ${errorMessage(error)}`] };
   }
-  const errors = checkDefinition(parsed);
+  const errors = checkDefinition(parsed, currentKind);
   if (errors.length > 0) return { ok: false, errors };
   return { ok: true, definition: parsed as unknown as WidgetDefinition };
 }
@@ -158,7 +159,7 @@ export function mountIoPanel(store: DraftStore): {
     "Import"
   ]);
   importButton.addEventListener("click", () => {
-    const result = importWidgetJson(importArea.value);
+    const result = importWidgetJson(importArea.value, store.get().kind);
     if (!result.ok) {
       importError.hidden = false;
       importError.textContent = result.errors.join("\n");

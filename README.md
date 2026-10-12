@@ -242,6 +242,7 @@ Claude Code degrades gracefully to text. Host registration snippets live in
   tokens, styles? }`): every registry token with color swatches, plus
   author-defined `x-*` custom variables and shared styles (the widget
   designer's Styles panel), previewed against any catalog kind.
+
 The two cooperate without either owning the other: themes flow into the
 widget designer via `{ themes }`, and widgets flow into the theme designer
 via `{ widgets }`, so a theme is judged against the widgets it will

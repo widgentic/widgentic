@@ -14,9 +14,8 @@
 import {
   DATA_SCHEMA_TYPES,
   PATTERN_MAX_LENGTH,
-  PROPERTY_NAME,
-  UNSAFE,
-  UNSAFE_FUNCTIONS,
+  STYLE_RULES,
+  TOKEN_VALUE_RULE,
   createCatalog,
   formatBoundValue
 } from "@widgentic/core";
@@ -40,26 +39,6 @@ import {
 } from "@widgentic/core";
 import { DEFAULT_LIMITS, SAFE_IDENTIFIER } from "../store/limits.js";
 import type { McpToolResult } from "../output/index.js";
-
-/**
- * The style rules both guides teach — widget styles and theme styles share
- * one guard — built from the constants that enforce them.
- */
-const STYLE_RULES = {
-  selectors:
-    "Every selector part (split on top-level commas) must name a .wg- class " +
-    "in its own structure — a .wg- class only inside :not(), :is() or an " +
-    "attribute test does not count — and no part may open with a combinator, " +
-    "e.g. '.wg-card .wg-xcard-head' or '.wg-row:has(.wg-ok, .wg-warn)'.",
-  banned:
-    `Selectors, properties, or values matching ${UNSAFE.source}, holding a ` +
-    `comment marker (/* or */), or calling ${UNSAFE_FUNCTIONS.join(", ")} are dropped.`,
-  // An ALLOWLIST, not merely "no banned characters": a property with a
-  // digit or underscore is dropped even though it contains nothing banned.
-  propertyNames:
-    `Property names must match ${PROPERTY_NAME.source} (letters and ` +
-    "hyphens, optionally leading '-'); anything else is dropped."
-};
 
 /**
  * The recipe's outputs are RENDERED by the engine, not typed: the guide can
@@ -204,11 +183,7 @@ export function buildAuthoringGuide(): Record<string, unknown> {
           "A custom variable x-foo becomes --wg-x-foo on the themed scope; " +
           "reference it from widget styles as var(--wg-x-foo)."
       },
-      valueSafety:
-        "Token values are plain CSS values. Rejected: ';', '{', '}', '<', " +
-        "'>', 'url(' and 'expression(' (case-insensitive, " +
-        "whitespace-tolerant). Keep values to colors, lengths, and font " +
-        "stacks."
+      valueSafety: TOKEN_VALUE_RULE
     },
     rules: {
       template: {

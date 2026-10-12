@@ -123,10 +123,28 @@ describe("the shared style guards", () => {
     ["a comment opener in a value", { ".wg-a": { color: "red /*" } }],
     ["image-set() in a value", { ".wg-a": { background: 'image-set("https://evil.example/x.png" 1x)' } }],
     ["-webkit-image-set() in a value", { ".wg-a": { background: '-webkit-image-set("https://evil.example/x.png" 1x)' } }],
-    ["src() in a value", { ".wg-a": { background: 'src("https://evil.example/x.png")' } }]
+    ["src() in a value", { ".wg-a": { background: 'src("https://evil.example/x.png")' } }],
+    ["a quoted parenthesis hiding a top-level comma", { '.wg-a[title="("], body': { color: "red" } }],
+    ["a quoted bracket closing :not() early", { 'body:not([title=")"] .wg-x)': { color: "red" } }],
+    ["a quoted bracket ending an attribute test early", { 'body:not([x="]].wg-"])': { color: "red" } }],
+    ["an unclosed pseudo-class", { ".wg-a:is(": { color: "red" } }],
+    ["an unclosed attribute test", { ".wg-a[title": { color: "red" } }],
+    ["an unclosed string in a selector", { '.wg-a[title="x]': { color: "red" } }],
+    ["an unclosed bracket in a value", { ".wg-a": { width: "calc(1px + (2px" } }],
+    ["an unclosed call in a value", { ".wg-a": { color: "foo(" } }],
+    ["a stray closer in a value", { ".wg-a": { width: "1px)" } }],
+    ["an unclosed string in a value", { ".wg-a": { content: '"open' } }]
   ])("drops %s", (_label, styles) => {
     expect(css(styles)).toBe("");
     expect(widgetStylesToCss(styles)).toBe("");
+  });
+
+  it("keeps selectors held to .wg- through :is() and :where(), and quoted brackets that close", () => {
+    expect(css({ ":is(.wg-btn, .wg-link):hover": { color: "red" } })).toContain(":is(.wg-btn, .wg-link):hover {");
+    expect(css({ ":where(.wg-card) h3": { color: "red" } })).toContain(":where(.wg-card) h3 {");
+    expect(css({ ":is(:where(.wg-a), .wg-b p)": { color: "red" } })).toContain(":is(:where(.wg-a), .wg-b p) {");
+    expect(css({ '.wg-a[title="("]': { content: '"("' } })).toContain('.wg-a[title="("] {\n  content: "(";');
+    expect(css({ ".wg-a": { width: "calc(1px + (2px * 3))" } })).toContain("calc(1px + (2px * 3))");
   });
 
   it("keeps .wg- selectors with pseudo-class arguments and root anchors", () => {
@@ -136,7 +154,14 @@ describe("the shared style guards", () => {
   });
 
   it("refuses the same vectors in theme token values", () => {
-    for (const value of ["red /*", "image-set(\"https://e.example/x\" 1x)", "src(\"https://e.example/x\")"]) {
+    for (const value of [
+      "red /*",
+      "image-set(\"https://e.example/x\" 1x)",
+      "src(\"https://e.example/x\")",
+      "u\\72 l(https://e.example/x)",
+      "calc(1px + (2px",
+      "\"open"
+    ]) {
       const result = validateTheme({ accent: value });
       expect(result.ok, value).toBe(false);
     }
@@ -163,6 +188,26 @@ describe("scoping a root-anchored part", () => {
     }
     expect(colorFor(true)).toBe("rgb(7, 7, 7)");
     expect(colorFor(false)).not.toBe("rgb(7, 7, 7)");
+  });
+});
+
+describe("a quoted parenthesis cannot carry a part out of its scope", () => {
+  it("scopes every part of the list", () => {
+    expect(themeStylesToCss({ '.wg-a[title="("], .wg-b': { color: "red" } }, DARK).split(" {")[0]).toBe(
+      `:where(${DARK}) .wg-a[title="("], :where(${DARK}) .wg-b`
+    );
+  });
+
+  it("leaves .wg-b unstyled on a light root", () => {
+    function colorFor(darkRoot: boolean): string {
+      document.documentElement.removeAttribute("data-theme");
+      if (darkRoot) document.documentElement.setAttribute("data-theme", "dark");
+      document.head.innerHTML = `<style>${themeStylesToCss({ '.wg-a[title="("], .wg-b': { color: "rgb(9, 8, 7)" } }, DARK)}</style>`;
+      document.body.innerHTML = '<p class="wg-b">ok</p>';
+      return getComputedStyle(document.querySelector(".wg-b") as Element).color;
+    }
+    expect(colorFor(true)).toBe("rgb(9, 8, 7)");
+    expect(colorFor(false)).not.toBe("rgb(9, 8, 7)");
   });
 });
 

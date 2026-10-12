@@ -1,8 +1,9 @@
 // @vitest-environment happy-dom
 /**
  * The example app's Settings section when the settings cannot be read: it
- * opens read-only and offers no Save, so an empty record can never be saved
- * over the stored one. The real page and bundle entry, with `/api` answered
+ * opens read-only and offers no Save, and once a later read succeeds it
+ * opens the stored record rather than the placeholder, so an empty record
+ * can never be saved over the stored one. The real page and bundle entry, with `/api` answered
  * by the published authoring surface except for the failing read.
  */
 import { readFileSync } from "node:fs";
@@ -15,6 +16,8 @@ import { createMemoryStore } from "@widgentic/mcp/store";
 const here = dirname(fileURLToPath(import.meta.url));
 const store = createMemoryStore();
 let principalId = "";
+// The settings read fails until a test lets it through.
+let settingsReadable = false;
 
 async function until(check: () => boolean, label: string): Promise<void> {
   for (let i = 0; i < 200; i++) {
@@ -40,8 +43,7 @@ beforeAll(async () => {
 
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input), "http://example.test");
-    // The settings read fails, every time.
-    if (url.pathname === "/api/settings" && (init?.method ?? "GET") === "GET") {
+    if (!settingsReadable && url.pathname === "/api/settings" && (init?.method ?? "GET") === "GET") {
       return new Response(JSON.stringify({ error: { code: "STORE_ERROR", message: "settings unavailable" } }), { status: 502 });
     }
     const answer = await handleAuthoringRequest(
@@ -70,6 +72,18 @@ describe("unread settings are never saved over", () => {
     expect((document.getElementById("settings-save") as HTMLElement).hidden).toBe(true);
     expect(lightSelect().closest("[inert]")).not.toBeNull();
     click("settings-save");
+    expect(await store.settings(principalId)).toEqual({ defaultThemes: { light: "google-light" } });
+  });
+
+  it("opens the stored record, not the read-only placeholder, once a later read succeeds", async () => {
+    settingsReadable = true;
+    click("tab-themes");
+    click("tab-settings");
+    await until(() => !(document.getElementById("settings-save") as HTMLElement).hidden, "the editable designer");
+    expect(lightSelect().value).toBe("google-light");
+    expect(lightSelect().closest("[inert]")).toBeNull();
+    click("settings-save");
+    await until(() => status() === "saved settings", "the save");
     expect(await store.settings(principalId)).toEqual({ defaultThemes: { light: "google-light" } });
   });
 });

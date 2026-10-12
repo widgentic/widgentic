@@ -172,8 +172,19 @@ class FakeContainer implements CosmosContainerLike {
     },
     // All or nothing within one partition, as the service runs it: the
     // first refused operation fails the batch and the rest report 424.
+    // A failed batch request reaches the caller as @azure/cosmos 4.x throws
+    // it: a plain Error whose message wraps the service's, with no `code`.
     batch: async (operations: CosmosBatchOperation[], partitionKey: string) => {
-      this.maybeFail("batch");
+      try {
+        this.maybeFail("batch");
+      } catch (error) {
+        const code = (error as { code: number | string }).code;
+        throw new Error(
+          code === 403
+            ? "Batch request error: Request blocked by Auth wg : Request is blocked because principal [p] does not have required RBAC permissions to perform action [Microsoft.DocumentDB/databaseAccounts/readMetadata]"
+            : `Batch request error: Message: {"Errors":["service unavailable"]} (${String(code)})`
+        );
+      }
       this.beforeBatch?.();
       this.beforeBatch = undefined;
       const part = this.partition(partitionKey);
@@ -291,6 +302,22 @@ describe("cosmos adapter identity model", () => {
     await expect(attempt).rejects.toThrow(/putWidget/);
   });
 
+  it.each([
+    ["putSettings", (store: ReturnType<typeof createCosmosStore>, id: string) => store.putSettings(id, { defaultThemes: { light: "a" } })],
+    ["removeTheme", (store: ReturnType<typeof createCosmosStore>, id: string) => store.removeTheme(id, "a")]
+  ])("a read-only identity's %s batch surfaces FORBIDDEN, not STORE_ERROR", async (operation, run) => {
+    const { client, data } = fakeCosmos();
+    const store = createCosmosStore({ client, log: () => {} });
+    const p = await store.ensurePrincipal(`hygiene:forbidden-${operation}`);
+    await store.putTheme(p.id, { name: "a", tokens: {} });
+    data.failWith = { code: 403, ops: ["batch"] };
+    const attempt = run(store, p.id);
+    await expect(attempt).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(attempt).rejects.toThrow(new RegExp(operation));
+    data.failWith = { code: 503, ops: ["batch"] };
+    await expect(run(store, p.id)).rejects.toMatchObject({ code: "STORE_ERROR" });
+  });
+
   it("diagnostics identify entries, never keys or digests", async () => {
     const lines: string[] = [];
     const { client, data, keys } = fakeCosmos();
@@ -401,6 +428,29 @@ describe("cosmos settings written out of band", () => {
     expect(stored?.settings).toEqual({ defaultThemes: { light: "legacy" }, fonts: { body: "Inter" } });
     // The settings document is no entry of any kind.
     expect((await store.themes(p.id)).map((t) => t.name).sort()).toEqual(["a", "legacy"]);
+  });
+
+  it("a theme stored under looser token rules keeps its other tokens and still serves as a default", async () => {
+    const { client, data } = fakeCosmos();
+    const lines: string[] = [];
+    const store = createCosmosStore({ client, log: (line) => lines.push(line) });
+    const p = await store.ensurePrincipal("cosmos:legacy-theme");
+    data.seed({ id: "theme:legacy", principalId: p.id, theme: { name: "legacy", tokens: { accent: "#0b5fff /* brand */", bg: "#fafafa" } } });
+    expect(await store.themes(p.id)).toEqual([{ name: "legacy", tokens: { bg: "#fafafa" } }]);
+    expect(lines.join("\n")).toContain("theme 'legacy': token 'accent' dropped on read");
+    await store.putSettings(p.id, { defaultThemes: { light: "legacy" } });
+    expect((await composeThemes(store, p.id)).value.defaults().light).toBe("legacy");
+    // The stored document is left as it is.
+    expect((await data.item("theme:legacy", p.id).read()).resource?.theme).toEqual({ name: "legacy", tokens: { accent: "#0b5fff /* brand */", bg: "#fafafa" } });
+  });
+
+  it("an update that leaves a dangling default alone is not refused for it", async () => {
+    const { client, data } = fakeCosmos();
+    const store = createCosmosStore({ client, log: () => {} });
+    const p = await store.ensurePrincipal("cosmos:dangling-untouched");
+    data.seed({ id: "settings", principalId: p.id, settings: { defaultThemes: { dark: "ghost" } } });
+    await expect(store.putSettings(p.id, {})).resolves.toBeUndefined();
+    await expect(store.putSettings(p.id, { defaultThemes: { dark: "ghost" } })).rejects.toMatchObject({ code: "UNKNOWN_THEME" });
   });
 
   it("a principal written before settings reads as empty settings", async () => {

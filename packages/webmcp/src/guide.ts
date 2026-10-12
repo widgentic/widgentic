@@ -24,10 +24,9 @@ import {
   MAX_TEMPLATE_DEPTH,
   DATA_SCHEMA_TYPES,
   PATTERN_MAX_LENGTH,
-  PROPERTY_NAME,
+  STYLE_RULES,
   TOKEN_SPECS,
-  UNSAFE,
-  UNSAFE_FUNCTIONS,
+  TOKEN_VALUE_RULE,
   URL_ATTRS,
   createCatalog,
   formatBoundValue,
@@ -48,26 +47,6 @@ export const STORE_LIMITS = {
 const FORMAT_EXAMPLES = {
   currency: formatBoundValue("3206.9905920000", { type: "currency", currency: "COP", decimals: 0 }),
   date: formatBoundValue("2026-09-01T02:04:47", { type: "date", pattern: "dd-MM-yyyy HH:mm" })
-};
-
-/**
- * The style rules both guides teach — widget styles and theme styles share
- * one guard — built from the constants that enforce them.
- */
-const STYLE_RULES = {
-  selectors:
-    "Every selector part (split on top-level commas) must name a .wg- class " +
-    "in its own structure — a .wg- class only inside :not(), :is() or an " +
-    "attribute test does not count — and no part may open with a combinator, " +
-    "e.g. '.wg-card .wg-xcard-head' or '.wg-row:has(.wg-ok, .wg-warn)'.",
-  banned:
-    `Selectors, properties, or values matching ${UNSAFE.source}, holding a ` +
-    `comment marker (/* or */), or calling ${UNSAFE_FUNCTIONS.join(", ")} are dropped.`,
-  // An ALLOWLIST, not merely "no banned characters": a property with a
-  // digit or underscore is dropped even though it contains nothing banned.
-  propertyNames:
-    `Property names must match ${PROPERTY_NAME.source} (letters and ` +
-    "hyphens, optionally leading '-'); anything else is dropped."
 };
 
 /**
@@ -170,8 +149,7 @@ export function buildDesignerGuide(prefix: string): Record<string, unknown> {
         namePattern: CUSTOM_VARIABLE.source,
         appliedAs: "A custom variable x-foo becomes --wg-x-foo on the themed scope; reference it from widget styles as var(--wg-x-foo)."
       },
-      valueSafety:
-        "Token values are plain CSS values. Rejected: ';', '{', '}', '<', '>', 'url(' and 'expression(' (case-insensitive, whitespace-tolerant). Keep values to colors, lengths, and font stacks."
+      valueSafety: TOKEN_VALUE_RULE
     },
     rules: {
       template: {

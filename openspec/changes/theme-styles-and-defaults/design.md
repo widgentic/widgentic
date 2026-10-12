@@ -123,10 +123,11 @@ Theme styles are scoped as `:where(<mode selector>) <part>` on every top-level p
 inside `themeStylesToCss` (core) with the widget generator's guards. A scoped rule weighs
 exactly what its author wrote. A theme that is the default for both modes is emitted
 unscoped, exactly as an explicit theme is.
-- **Review: styles are scoped only when both modes have their own default.** A lone
-  default's classes are layout a widget relies on: scoped to the light mode, they would
-  vanish on a dark host whose default is the built-in. Unscoped, they read the active
-  mode's tokens. Tokens stay mode-scoped always.
+- **Review: styles are scoped only when both defaults carry styles.** A default's
+  classes are layout a widget relies on: scoped to the light mode, they would vanish on
+  a dark host whose default has none to replace them, whether that default is the
+  built-in or a theme without styles. Unscoped, they read the active mode's tokens.
+  Tokens stay mode-scoped always.
 - **Review: top-level parts, root-anchored parts.** Splitting on every comma broke
   `.wg-row:has(.wg-ok, .wg-warn)`. A part anchored at the root (`:root[…] .wg-x`,
   `html .wg-x`) takes `:where(<scope>)` on its root compound, because prefixing would
@@ -294,6 +295,39 @@ supported type list from `DATA_SCHEMA_TYPES`. Refusing such schemas at write wou
 store change of its own, with read-side leniency for documents already stored, so it
 is not part of this change.
 
+### D16 — Second review round: the guards read CSS as CSS
+
+The two re-reviews of `6c7eace` found that the stricter guards had holes and side
+effects:
+- **One scanner.** Depth counting ignored quoted strings, so `.wg-a[title="("], body`
+  hid a comma and `body:not([title=")"] .wg-x)` closed `:not(` early. One quote-aware
+  scanner in core (`shared/css-scan.ts`) now serves the comma split, the top-level text
+  and the root-compound scoping.
+- **Balance.** An unclosed bracket or string in a selector, a style value or a token
+  value runs on through the rest of the stylesheet, so all three must balance. Token
+  values also refuse `\`, whose escapes spell any banned call.
+- **Selectors held through `:is()`/`:where()`.** The previous round's "`.wg-` outside
+  every argument" rule dropped legitimate rules such as `:is(.wg-btn, .wg-link):hover`
+  and `:where(.wg-card) h3`. A compound now counts when it names a `.wg-` class itself
+  or through `:is()`/`:where()` whose every argument does. `:not()`, `:has()`,
+  attribute tests and strings still never count.
+- **Rules as text.** `STYLE_RULES` and `TOKEN_VALUE_RULE` move to core, built from the
+  constants, so both guides, the WebMCP descriptions and the designers' messages read
+  one copy.
+- **Stored data.** Stricter token rules would have made a theme stored under 0.10
+  vanish entirely. `normalizeStoredTheme` now drops only the refused token on read,
+  with a diagnostic (Migration Plan).
+- **Cosmos.** `@azure/cosmos` rethrows batch failures without a status code, so a
+  permission refusal is recognized from the wrapped message. `putSettings` checks only
+  the defaults its update writes, as the other adapters do.
+- **Identity checks.** They apply only when a load changes the kind or name, so
+  `widget_example_data_set` and `theme_tokens_set` are not refused for an identity the
+  person typed. The widget designer flags a malformed kind as it is typed, and the
+  designer demo restores an autosaved draft as the person left it.
+- **Example app.** A Settings visit after a failed read opens the stored record, not the
+  read-only placeholder.
+- **Settings element.** It adopts a `themes` property set before the element was defined.
+
 ## Risks / Trade-offs
 
 - **A default theme overrides host-bridged colors** (`bg`, `fg`, …) in its mode, as an
@@ -328,6 +362,12 @@ No data migration:
 - **Theme entries:** gain an optional key.
 - **Settings record:** absent reads as `{}`.
 - **Old-shape tests:** each adapter loads pre-change themes and reports empty settings.
+- **Stricter guards (D16):** a stored token value the new token rules refuse is dropped
+  on read with a diagnostic; the theme itself is served (old-shape tests in SQLite,
+  Cosmos and the file store). Style entries the new selector and value rules refuse are
+  dropped when CSS is generated, as unsafe entries always were. Before the apps deploy
+  (task 8.3), a read-only scan of the stored themes and widget styles under the new
+  guards records how many entries are affected, and the result is noted here.
 
 Rollback by redeploying the previous version:
 - **Old code ignores `styles`:** themes validate on tokens only.

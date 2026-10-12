@@ -11,7 +11,7 @@
  * palette, and a page that wants to match it derives its own properties from
  * `chromeCss(CHROME_DEFAULTS)`.
  */
-import { createThemeRegistry } from "@widgentic/core";
+import { createThemeRegistry, isPlainObject } from "@widgentic/core";
 import type { ThemeEntry } from "@widgentic/core";
 import {
   createActionDesigner,
@@ -30,7 +30,8 @@ import type {
   SettingsDesignerHandle,
   SettingsDesignerOptions,
   ThemeDesignerHandle,
-  ThemeDesignerOptions
+  ThemeDesignerOptions,
+  WidgetDefinition
 } from "@widgentic/designer";
 
 function clear(host: HTMLElement, previous: { dispose(): void } | undefined): void {
@@ -109,4 +110,26 @@ export function previewThemes(saved: readonly ThemeEntry[]): ThemeEntry[] {
     progress = pending.length < before;
   }
   return registry.list();
+}
+
+/**
+ * An autosaved draft, ready to mount as `initialWidget`: the definition
+ * fields only (the preview theme belongs to the session, not the draft),
+ * or `undefined` when the text is not a draft. It is the person's own
+ * work, so it is not held to what Save accepts — a kind Save would refuse
+ * is restored and flagged by the designer, never silently dropped.
+ */
+export function restoredDraft(text: string | null): WidgetDefinition | undefined {
+  if (text === null) return undefined;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+  if (!isPlainObject(parsed) || typeof parsed.kind !== "string" || !isPlainObject(parsed.descriptor) || parsed.template === undefined) {
+    return undefined;
+  }
+  const { kind, template, descriptor, load } = parsed;
+  return { kind, template, descriptor, ...(load === undefined ? {} : { load }) } as unknown as WidgetDefinition;
 }

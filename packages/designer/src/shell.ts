@@ -174,7 +174,7 @@ export function createDesigner(
     getDraft: () => cloneDraft(store.get()),
     setReadOnly,
     loadWidget(definition) {
-      const errors = checkDefinition(definition);
+      const errors = checkDefinition(definition, store.get().kind);
       if (errors.length > 0) return { ok: false, errors };
       applyDefinition(store, definition as unknown as WidgetDefinition);
       return { ok: true };

@@ -1,7 +1,8 @@
 /**
- * Store limits and the identifier charset, in a module with no imports so
- * runtime-neutral code (the authoring guide, the validators, the host
- * bundle) can read them without loading anything Node-only.
+ * Store limits and the identifier charset, in a module that imports only
+ * the browser-safe core, so runtime-neutral code (the authoring guide, the
+ * validators, the host bundle) can read them without loading anything
+ * Node-only.
  */
 
 /**

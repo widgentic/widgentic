@@ -7,7 +7,7 @@
 import { createCatalog } from "@widgentic/core";
 import { countTemplateNodes, validateTemplate, parsePath } from "@widgentic/core";
 import { ACTION_NAME, validateActionDefinition, validateLoadBinding } from "@widgentic/core";
-import { createThemeRegistry, isStyleMap, validateTheme } from "@widgentic/core";
+import { createThemeRegistry, isSafeTokenValue, isStyleMap, validateTheme } from "@widgentic/core";
 import type { ThemeEntry } from "@widgentic/core";
 import type { StoredSchema, StoredWidget } from "./types.js";
 import type { StoreLimits } from "./limits.js";
@@ -158,6 +158,26 @@ export function checkStoredWidget(
 /** A raw theme entry's name for a diagnostic, whatever shape it arrived in. */
 export function themeName(entry: unknown): string {
   return isPlainObject(entry) && typeof entry.name === "string" ? entry.name : "(unnamed)";
+}
+
+/**
+ * Read-side seam for themes stored under looser token rules: a token value
+ * today's guard refuses (a comment, a backslash, an unclosed bracket, a
+ * URL-carrying call) is dropped from the entry with a report naming it,
+ * instead of the whole theme vanishing from lists, renders and defaults.
+ * Writes still refuse such values; the stored document is left as it is.
+ */
+export function normalizeStoredTheme(entry: unknown, report: (line: string) => void): unknown {
+  if (!isPlainObject(entry) || !isPlainObject(entry.tokens)) return entry;
+  let tokens: Record<string, unknown> | undefined;
+  for (const [token, value] of Object.entries(entry.tokens)) {
+    if (typeof value === "string" && !isSafeTokenValue(value)) {
+      tokens ??= { ...entry.tokens };
+      delete tokens[token];
+      report(`theme '${themeName(entry)}': token '${token}' dropped on read; its stored value breaks the token rules.`);
+    }
+  }
+  return tokens === undefined ? entry : { ...entry, tokens };
 }
 
 /** Check a theme entry. `undefined` means acceptable. */

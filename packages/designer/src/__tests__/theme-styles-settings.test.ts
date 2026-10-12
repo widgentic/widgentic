@@ -9,6 +9,7 @@ import {
   defineSettingsDesignerElement
 } from "../index.js";
 import type { SettingsRecord, WidgetDefinition } from "../index.js";
+import { upgradeProperty } from "../element.js";
 
 beforeEach(() => {
   document.body.innerHTML = "";
@@ -81,6 +82,33 @@ describe("theme designer styles", () => {
     json.value = "{}";
     json.dispatchEvent(new Event("input", { bubbles: true }));
     expect(designer.getTheme()).not.toHaveProperty("styles");
+  });
+
+  it("clears the JSON tab's parse error once a valid value arrives another way", () => {
+    const root = host();
+    const designer = createThemeDesigner(root, { initialTheme: { name: "brand", tokens: {} } });
+    const styles = () => sectionTitled(root, "Styles");
+    const json = styles().querySelector("textarea") as HTMLTextAreaElement;
+    json.value = '{".wg-btn": "padding: 4px"}';
+    json.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(styles().textContent).toContain("Styles must map selectors to objects");
+    expect(designer.loadTheme({ name: "brand", tokens: {}, styles: { ".wg-a": { color: "red" } } }).ok).toBe(true);
+    expect(styles().textContent).not.toContain("Styles must map selectors to objects");
+    expect(json.value).toContain(".wg-a");
+  });
+
+  it("gates the widget designer's JSON tab on the styles shape too", () => {
+    const root = host();
+    const designer = createDesigner(root);
+    const before = designer.getDraft().descriptor.styles;
+    const json = sectionTitled(root, "Styles").querySelector("textarea") as HTMLTextAreaElement;
+    json.value = '{".wg-btn": "padding: 4px"}';
+    json.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(designer.getDraft().descriptor.styles).toEqual(before);
+    expect(sectionTitled(root, "Styles").textContent).toContain("Styles must map selectors to objects");
+    json.value = "{}";
+    json.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(designer.getDraft().descriptor).not.toHaveProperty("styles");
   });
 
   it("shows what the validator would ignore in a schema, in both designers", () => {
@@ -293,6 +321,18 @@ describe("settings designer", () => {
     expect(seen.at(-1)).toEqual({ settings: { defaultThemes: { light: "ocean", dark: "dusk" } } });
   });
 
+  it("keeps themes set on the element before it was defined", () => {
+    defineSettingsDesignerElement("wg-settings-early");
+    const early = document.createElement("wg-settings-early") as HTMLElement & { themes: { name: string }[] };
+    // What an element set up before its definition loaded carries at upgrade:
+    // an own data property shadowing the accessor (happy-dom does not
+    // upgrade, so the shadowing is made by hand; Chrome is probed in TESTING.md).
+    Object.defineProperty(early, "themes", { value: themes, writable: true, configurable: true, enumerable: true });
+    upgradeProperty(early, "themes");
+    expect(Object.prototype.hasOwnProperty.call(early, "themes")).toBe(false);
+    document.body.appendChild(early);
+    expect([...select(early, "light").options].map((option) => option.value)).toEqual(["", "ocean", "night"]);
+  });
   it("choosing defaults edits the record and notifies", () => {
     const root = host();
     const designer = createSettingsDesigner(root, { themes });

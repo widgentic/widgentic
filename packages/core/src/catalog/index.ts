@@ -12,6 +12,7 @@ export { validateDataAgainstSchema, auditDataSchema, DATA_SCHEMA_TYPES, PATTERN_
 export type { DataSchema } from "./schema.js";
 export { widgetStylesToCss, isStyleMap, UNSAFE, UNSAFE_FUNCTIONS, PROPERTY_NAME } from "./styles.js";
 export { SAFE_IDENTIFIER } from "./identifiers.js";
+export { STYLE_RULES } from "./style-rules.js";
 export type { WidgetStyles } from "./styles.js";
 export { renderToHtml } from "./html.js";
 export { mountNode } from "./dom.js";

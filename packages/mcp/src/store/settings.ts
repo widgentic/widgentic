@@ -44,6 +44,8 @@ export function readSettings(raw: unknown, report?: (message: string) => void): 
     report?.("ignored a 'defaultThemes' setting that is not an object.");
     return {};
   }
+  // Malformed values of known modes are reported; a mode this version does
+  // not know is a later version's, ignored silently like an unknown section.
   const picked: Partial<Record<ThemeMode, string>> = {};
   for (const mode of MODES) {
     const name = themes[mode];

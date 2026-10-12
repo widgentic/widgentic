@@ -31,7 +31,7 @@ When `WIDGENTIC_SEED_FILE` names a readable JSON document, the authoring service
 ## ADDED Requirements
 
 ### Requirement: The app has a Settings section
-The example SHALL offer a Settings section beside its Widgets, Themes, Data schemas, Actions and Keys sections, mounting the published settings designer with the principal's stored themes as its choices and the stored settings as its record, and saving it through the authoring surface's settings route; a refusal SHALL be shown to the person with its code and message. The Themes section's list SHALL show which themes are a default, and a theme deletion refused with `THEME_IN_USE` SHALL be shown with the refusal's message, leaving the theme listed. The widget designer SHALL open with the light default theme preselected as its preview theme. When the settings cannot be read, the Settings section SHALL open read-only with no Save, so an empty record is never saved over the stored one.
+The example SHALL offer a Settings section beside its Widgets, Themes, Data schemas, Actions and Keys sections, mounting the published settings designer with the principal's stored themes as its choices and the stored settings as its record, and saving it through the authoring surface's settings route; a refusal SHALL be shown to the person with its code and message. The Themes section's list SHALL show which themes are a default, and a theme deletion refused with `THEME_IN_USE` SHALL be shown with the refusal's message, leaving the theme listed. The widget designer SHALL open with the light default theme preselected as its preview theme. When the settings cannot be read, the Settings section SHALL open read-only with no Save, and once a later read succeeds it SHALL open the stored record rather than the read-only placeholder, so an empty record is never saved over the stored one.
 
 #### Scenario: Picking a default and saving it
 - **WHEN** `google-light` is the light default and the person picks `ocean` for light hosts in Settings and saves
@@ -52,3 +52,5 @@ The example SHALL offer a Settings section beside its Widgets, Themes, Data sche
 #### Scenario: Unread settings are never saved over
 - **WHEN** reading the settings fails and the person opens Settings
 - **THEN** the settings designer SHALL be read-only, Save SHALL be hidden, and the stored record SHALL be unchanged
+- **AND WHEN** a later visit reads them and the person saves
+- **THEN** the designer SHALL show the stored light default and the stored record SHALL be unchanged

@@ -66,6 +66,7 @@ import {
   checkStoredAction,
   checkStoredSchema,
   checkStoredTheme,
+  normalizeStoredTheme,
   themeName,
   checkStoredWidget
 } from "./validate.js";
@@ -390,7 +391,8 @@ export function createSqliteStore(
 
     async themes(principalId) {
       const out: ThemeEntry[] = [];
-      for (const entry of rawEntries(principalId, "theme")) {
+      for (const raw of rawEntries(principalId, "theme")) {
+        const entry = normalizeStoredTheme(raw, (line) => report(`${line} (principal '${principalId}')`));
         const problem = checkStoredTheme(entry, limits);
         if (problem) {
           report(`skipped theme '${themeName(entry)}' for '${principalId}': ${problem.code} — ${problem.message}`);

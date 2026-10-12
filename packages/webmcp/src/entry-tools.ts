@@ -9,7 +9,7 @@ import type {
   ThemeDesignerHandle
 } from "@widgentic/designer";
 import type { ThemeEntry } from "@widgentic/core";
-import { auditDataSchema, DATA_SCHEMA_TYPES, isPlainObject } from "@widgentic/core";
+import { auditDataSchema, DATA_SCHEMA_TYPES, isPlainObject, TOKEN_VALUE_RULE } from "@widgentic/core";
 import { argumentsOf, invalidArgument, notMounted, okResult, rejected } from "./result.js";
 import { defineTool, objectSchema, PERSON_SAVES } from "./tool.js";
 import type { NameOf } from "./tool.js";
@@ -38,7 +38,7 @@ export function themeTools(source: () => ThemeDesignerHandle | undefined, name: 
       title: "Load a theme entry",
       description:
         "Replace the WHOLE entry in the theme designer: { entry: { name, label?, description?, tokens, styles? } } — read it with theme_get first and keep its styles, or they are dropped. name: letters, digits, '.', '_' or '-'; light and dark are reserved. " +
-        "tokens: bare --wg-* token names (colours: bg, surface, fg, muted, accent, accent-fg, border; shape: radius, radius-sm, radius-lg, spacing, border-width; type and status tokens — list them all with theme_token_specs) and author variables x-<name>, to plain CSS values (no ';', '{', '}', 'url(' or 'expression('). " +
+        "tokens: bare --wg-* token names (colours: bg, surface, fg, muted, accent, accent-fg, border; shape: radius, radius-sm, radius-lg, spacing, border-width; type and status tokens — list them all with theme_token_specs) and author variables x-<name>, to plain CSS values. " + TOKEN_VALUE_RULE + " " +
         "styles: shared .wg- classes, { \".wg-btn\": { \"padding\": \"4px 8px\" } }, under the widget style rules. " +
         "A dark theme sets bg/surface/fg/muted/border together so contrast holds. Refused → { ok: false, code: 'REJECTED', errors }. " +
         PERSON_SAVES,

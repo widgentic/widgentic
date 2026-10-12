@@ -17,6 +17,7 @@ import {
   TOKEN_DEFAULTS,
   TOKEN_SPECS,
   isSafeTokenValue,
+  TOKEN_VALUE_RULE,
   isStyleMap,
   validateTheme
 } from "@widgentic/core";
@@ -95,8 +96,13 @@ function nameProblem(name: string): string | undefined {
   return undefined;
 }
 
-/** Validate an untrusted entry; errors instead of throwing. */
-export function checkThemeEntry(entry: unknown): string[] {
+/**
+ * Validate an untrusted entry; errors instead of throwing. The name is held
+ * to what saving accepts only when it differs from `currentName`: a name the
+ * entry already has is the person's to fix (the Name field flags it), and
+ * reloading the same entry with new tokens must not fail on it.
+ */
+export function checkThemeEntry(entry: unknown, currentName?: string): string[] {
   const errors: string[] = [];
   if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
     return ["Theme entry must be an object."];
@@ -104,7 +110,7 @@ export function checkThemeEntry(entry: unknown): string[] {
   const candidate = entry as Record<string, unknown>;
   if (typeof candidate.name !== "string" || candidate.name.trim() === "") {
     errors.push("'name' must be a non-empty string.");
-  } else {
+  } else if (candidate.name !== currentName) {
     const problem = nameProblem(candidate.name);
     if (problem !== undefined) errors.push(`name: ${problem}`);
   }
@@ -279,7 +285,7 @@ export function createThemeDesigner(
       const unsafe = input.value !== "" && !isSafeTokenValue(input.value);
       issue.hidden = !unsafe;
       issue.textContent = unsafe
-        ? "INVALID_TOKEN_VALUE: unsafe value withheld from the preview (no ;{}<> url() expression())."
+        ? `INVALID_TOKEN_VALUE: unsafe value withheld from the preview. ${TOKEN_VALUE_RULE}`
         : "";
       paint(input.value);
       setToken(token, input.value);
@@ -433,7 +439,7 @@ export function createThemeDesigner(
   side.append(stylesPanel.element);
 
   function loadTheme(input: unknown): ThemeLoadResult {
-    const errors = checkThemeEntry(input);
+    const errors = checkThemeEntry(input, entry.name);
     if (errors.length > 0) return { ok: false, errors };
     entry = JSON.parse(JSON.stringify(input)) as ThemeEntry;
     for (const refreshIdentity of identityRefreshers) refreshIdentity();

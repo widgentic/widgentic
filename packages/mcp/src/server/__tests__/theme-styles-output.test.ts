@@ -130,6 +130,29 @@ describe("default themes from settings stand in for the built-ins", () => {
     expect(css).toContain(`:where(${DARK}) .wg-btn {\n  padding: 6px 10px;\n}`);
   });
 
+  it.each([
+    ["the dark default has none", "night"],
+    ["the dark default is the built-in", undefined]
+  ])("a light default's styles serve both modes when %s", (_label, dark) => {
+    const css = cssOf(render(registry((r) => {
+      r.register({ name: "night", extends: "dark", tokens: { accent: "#0a84ff" } });
+      r.setDefault("light", "brand");
+      if (dark !== undefined) r.setDefault("dark", dark);
+    })));
+    expect(css).toContain(".wg-btn {\n  padding: 4px 8px;\n}");
+    expect(css).not.toContain(":where(");
+  });
+
+  it("a dark default's styles serve both modes when the light default has none", () => {
+    const css = cssOf(render(registry((r) => {
+      r.register({ name: "day", tokens: { accent: "#123456" } });
+      r.setDefault("light", "day");
+      r.setDefault("dark", "brand-dark");
+    })));
+    expect(css).toContain(".wg-btn {\n  padding: 6px 10px;\n}");
+    expect(css).not.toContain(":where(");
+  });
+
   it("one theme serving both modes is emitted as an explicit theme is", () => {
     const both = cssOf(render(registry((r) => { r.setDefault("light", "brand"); r.setDefault("dark", "brand"); })));
     expect(both).toBe(cssOf(render(registry(), { theme: "brand" })));

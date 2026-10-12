@@ -34,7 +34,7 @@ import { invoiceWidget, weatherWidget, xPostWidget } from "@widgentic-examples/m
 // when returning to its tab so entries saved meanwhile appear) is example
 // WIRING and lives once in @widgentic-examples/shared; the seeds, persistence
 // and toggle below are the DEMO — copy those freely.
-import { mountAction, mountSchema, mountTheme, mountWidget, previewThemes } from "@widgentic-examples/shared/designers";
+import { mountAction, mountSchema, mountTheme, mountWidget, previewThemes, restoredDraft } from "@widgentic-examples/shared/designers";
 import { describeAgentTools, designerSources } from "@widgentic-examples/shared/webmcp";
 import { exposeDesigners } from "@widgentic/webmcp";
 
@@ -140,7 +140,9 @@ function mountWidgetDesigner(): void {
   // Everything saved in the other tabs is on offer here: themes for the
   // preview, schemas to reference, actions to bind, per the cooperation
   // story this demo exists to tell.
+  const restored = restoredDraft(localStorage.getItem(DRAFT_KEY));
   widgetDesigner = mountWidget(widgetHost, widgetDesigner, {
+    ...(restored === undefined ? {} : { initialWidget: restored }),
     themes: previewThemes(savedThemes()),
     schemas: savedSchemas(),
     actions: savedActions(),
@@ -151,15 +153,8 @@ function mountWidgetDesigner(): void {
     localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
     note(`draft autosaved ${new Date().toLocaleTimeString()}`);
   });
-  const saved = localStorage.getItem(DRAFT_KEY);
-  if (saved !== null) {
-    try {
-      widgetDesigner.loadWidget(JSON.parse(saved));
-      note("draft restored from localStorage");
-    } catch {
-      // Corrupt state: start fresh.
-    }
-  }
+  // A corrupt saved draft starts fresh.
+  if (restored !== undefined) note("draft restored from localStorage");
 }
 
 // --- Theme designer tab ------------------------------------------------------

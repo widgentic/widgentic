@@ -39,6 +39,7 @@ import {
   checkStoredAction,
   checkStoredSchema,
   checkStoredTheme,
+  normalizeStoredTheme,
   themeName,
   checkStoredWidget,
   SAFE_IDENTIFIER
@@ -143,7 +144,8 @@ export function createFileStore(
       if (id === undefined) return [];
       const entries = await readDirJson(join(dir, id, "themes"));
       const out: ThemeEntry[] = [];
-      for (const entry of entries) {
+      for (const raw of entries) {
+        const entry = normalizeStoredTheme(raw, (line) => report(`${line} (principal '${id}')`));
         const problem = checkStoredTheme(entry, limits);
         if (problem) {
           report(`skipped theme '${themeName(entry)}' for '${id}': ${problem.code} — ${problem.message}`);

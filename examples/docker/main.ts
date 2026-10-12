@@ -516,16 +516,21 @@ async function createKey(): Promise<void> {
 /* ------------------------------- settings ------------------------------- */
 
 let settingsDesigner: SettingsDesignerHandle | undefined;
+// True while the mounted designer stands in for a record that could not be
+// read: its empty contents are never carried into a later mount or saved.
+let settingsDesignerUnread = false;
 
 function openSettingsDesigner(): void {
   // Choices are the themes saved right now; an unsaved pick survives the remount.
   const unread = mySettings === undefined;
-  const current = unread ? {} : settingsDesigner?.getSettings() ?? mySettings ?? {};
+  const carried = settingsDesignerUnread ? undefined : settingsDesigner?.getSettings();
+  const current = unread ? {} : carried ?? mySettings ?? {};
   settingsDesigner = mountSettings($("settings-designer"), settingsDesigner, {
     themes: myThemes,
     initialSettings: current,
     readOnly: unread
   });
+  settingsDesignerUnread = unread;
   $("settings-save").hidden = unread;
   if (unread) status("settings could not be read — reload the page before changing them", "error");
 }
