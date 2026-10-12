@@ -64,6 +64,15 @@ const settingsDesigner = createSettingsDesigner(el, { themes, initialSettings, r
 
 - `createSettingsDesigner` edits the principal's settings record. Its **Default themes** subsection offers, per mode (light hosts, dark hosts), the built-in and every entry you pass in `themes`; `getSettings()` returns `{ defaultThemes: { light?, dark? } }`, built-in choices omitted, with any section it does not edit passed through untouched. Save it with `PUT /settings` on the authoring surface. A name you did not pass in `themes` shows as unavailable rather than disappearing.
 
+The preview renders widgets in your page's DOM, not in a frame. Its styles stay inside it: the widget's and the theme's rules are scoped to the preview. Your page's element rules are another matter. A rule like `header { border-bottom: … }` would dress a widget's `<header>` that no MCP Apps host dresses, so fence them out of the preview:
+
+```css
+header:where(:not(.wgd-preview *)) { border-bottom: 1px solid var(--line); }
+button:where(:not(.wgd-preview *)) { padding: 4px 10px; }
+```
+
+`:where()` keeps the rule's weight unchanged. Rules on your own classes need no fence.
+
 All five accept `appearance`, `chrome` and `readOnly`. The widget designer only selects among the themes, schemas and actions you pass; authoring each belongs to its own designer, so a host ships only what it embeds.
 
 ## Custom elements

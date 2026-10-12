@@ -150,12 +150,16 @@ The standalone theme designer SHALL edit a named theme entry — identity (`name
 ## ADDED Requirements
 
 ### Requirement: Theme styles in the widget designer's preview
-When the widget designer's preview theme is a supplied entry carrying `styles`, the preview SHALL apply those styles beneath the draft's own descriptor styles, so classes a theme defines (a shared `.wg-btn`, say) look in the draft as they will in a render under that theme. Choosing "none" SHALL apply no theme styles. The selection SHALL still never reach the exported widget.
+When the widget designer's preview theme is a supplied entry carrying `styles`, the preview SHALL apply those styles beneath the draft's own descriptor styles, so classes a theme defines (a shared `.wg-btn`, say) look in the draft as they will in a render under that theme. Choosing "none" SHALL apply no theme styles. The selection SHALL still never reach the exported widget. Every style a designer preview emits — the theme's and the widget's own, in the widget designer and in the theme designer — SHALL be scoped to that preview at no added weight, since the preview shares the host page's DOM: a widget's rule SHALL NOT reach a matching element elsewhere on the page.
 
 #### Scenario: A preview theme's shared class dresses the draft
 - **WHEN** the preview theme defines `.wg-btn { color: rgb(1, 2, 3) }` and the draft's template renders a `button` with class `wg-btn`
 - **THEN** the previewed button's computed color SHALL be `rgb(1, 2, 3)`
 - **AND** a draft style `.wg-btn { color: rgb(4, 5, 6) }` SHALL win, and choosing "none" SHALL remove the theme's rule
+
+#### Scenario: A widget's own styles stay in the preview
+- **WHEN** the draft's styles color `.wg-title` and the page holds another `.wg-title` element outside the designer
+- **THEN** the previewed title SHALL take the color and the element outside SHALL NOT
 
 ### Requirement: Settings designer
 The settings designer SHALL edit a principal's settings record (`{ defaultThemes?: { light?, dark? } }` in this version) in titled subsections, starting with "Default themes": one choice for light hosts and one for dark hosts, each offering the built-in theme of that mode (the choice that leaves the mode unset) and every theme entry the host supplies in `options.themes`. Because each mode holds one choice, choosing a theme for a mode replaces whatever that mode held, and the same theme SHALL be selectable for both. A supplied settings record naming a theme absent from `options.themes` SHALL show that name as unavailable and selected, so the person sees the problem and picks another, and SHALL NOT be silently changed. `getSettings()` SHALL return the record with built-in choices omitted, keep any section the designer does not edit exactly as it was supplied, and `subscribe` listeners SHALL be notified on every change. In read-only mode the choices SHALL be inert. `setThemes(themes)` SHALL replace the offered themes and keep the record, and the custom element SHALL take the themes through a `themes` property, settable before or after it connects, or before the element is defined (adopted at upgrade). Saving is the host's: the designer writes nothing.

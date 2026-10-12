@@ -55,7 +55,9 @@
     background: var(--host-bg);
     color: var(--host-text);
   }
-  header {
+  /* The designers preview widgets in this page's DOM: every element rule is
+     fenced out of .wgd-preview, so the preview shows what an MCP Apps host shows. */
+  header:where(:not(.wgd-preview *)) {
     display: flex;
     gap: 12px;
     align-items: center;
@@ -64,9 +66,9 @@
     padding-bottom: 12px;
     border-bottom: 1px solid var(--host-border);
   }
-  header h1 { font-size: 18px; margin: 0; }
+  header:where(:not(.wgd-preview *)) h1 { font-size: 18px; margin: 0; }
   #status, #agent-status { color: var(--host-muted); font-size: 12px; }
-  button {
+  button:where(:not(.wgd-preview *)) {
     font: inherit;
     padding: 4px 10px;
     border: 1px solid var(--host-border);
@@ -75,11 +77,11 @@
     color: var(--host-text);
     cursor: pointer;
   }
-  button:hover { background: var(--host-hover); }
-  button.active { background: var(--host-hover); border-color: currentColor; font-weight: 600; }
-  nav { display: flex; gap: 6px; margin-right: 8px; }
-  header > span[id^="controls-"] { display: inline-flex; gap: 6px; }
-  header > span[hidden] { display: none; }
+  button:where(:not(.wgd-preview *)):hover { background: var(--host-hover); }
+  button:where(:not(.wgd-preview *)).active { background: var(--host-hover); border-color: currentColor; font-weight: 600; }
+  nav:where(:not(.wgd-preview *)) { display: flex; gap: 6px; margin-right: 8px; }
+  header:where(:not(.wgd-preview *)) > span[id^="controls-"] { display: inline-flex; gap: 6px; }
+  header:where(:not(.wgd-preview *)) > span[hidden] { display: none; }
 </style>
 <body>
   <header>

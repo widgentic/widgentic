@@ -145,6 +145,24 @@ describe("theme designer styles", () => {
     expect(root.querySelector(".wgd-banner")?.textContent).toContain("INVALID_IDENTIFIER");
   });
 
+  it("keeps the widget's own styles inside the preview, as its theme's are", () => {
+    const root = host();
+    const outside = document.createElement("p");
+    outside.className = "wg-title";
+    document.body.appendChild(outside);
+    createDesigner(root, {
+      initialWidget: {
+        kind: "titled",
+        template: { tag: "h2", attrs: { class: "wg-title" }, children: ["In the preview"] },
+        descriptor: { description: "d", dataShape: "{}", styles: { ".wg-title": { color: "rgb(1, 2, 3)" } } }
+      }
+    });
+    const inside = root.querySelector(".wgd-preview .wg-title");
+    if (inside === null) throw new Error("the draft did not mount");
+    expect(getComputedStyle(inside).color).toBe("rgb(1, 2, 3)");
+    expect(getComputedStyle(outside).color).not.toBe("rgb(1, 2, 3)");
+  });
+
   it("shows what the validator would ignore in a schema, in both designers", () => {
     const schemaRoot = host();
     const schemaDesigner = createSchemaDesigner(schemaRoot);

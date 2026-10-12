@@ -9,7 +9,7 @@
  * never a blank pane (the app-template error-state lesson).
  */
 import { isPlainObject } from "@widgentic/core";
-import { createCatalog, widgetStylesToCss } from "@widgentic/core";
+import { createCatalog } from "@widgentic/core";
 import type { WidgetRenderer } from "@widgentic/core";
 import type { WidgetPayload } from "@widgentic/core";
 import { mountWidget } from "@widgentic/core";
@@ -83,6 +83,11 @@ export function createPreview(options: PreviewOptions = {}): PreviewController {
   const kindStyles = h("style");
   const scope = `wgd-preview-${previewSalt}-${++previewCount}`;
   const mountRoot = h("div", { class: "wgd-preview", "data-wgd-scope": scope });
+  // Every style the preview emits — the widget's and the theme's — is
+  // scoped to this preview at no added weight: the preview shares the host
+  // page's DOM, and a widget's `.wg-title` must not restyle the page.
+  const scoped = (styles: Record<string, Record<string, string>>) =>
+    themeStylesToCss(styles, `[data-wgd-scope="${scope}"]`);
   const pane = h("div", { class: "wgd-preview-pane" }, [banner, themeStyles, kindStyles, mountRoot]);
 
   const catalog = createCatalog();
@@ -119,7 +124,7 @@ export function createPreview(options: PreviewOptions = {}): PreviewController {
     if (isPlainObject(descriptor.styles)) {
       customStyles.set(
         widget.kind,
-        widgetStylesToCss(descriptor.styles as Record<string, Record<string, string>>)
+        scoped(descriptor.styles as Record<string, Record<string, string>>)
       );
     }
   }
@@ -174,15 +179,13 @@ export function createPreview(options: PreviewOptions = {}): PreviewController {
     // selected custom kind's (a built-in needs none).
     kindStyles.textContent = renderingDraft
       ? draft.descriptor.styles
-        ? widgetStylesToCss(draft.descriptor.styles)
+        ? scoped(draft.descriptor.styles)
         : ""
       : customStyles.get(previewKind as string) ?? "";
     // Unsafe values are also skipped inside applyTheme (lenient layer).
     applyTheme(mountRoot, draft.theme ?? {});
-    // Scoped to this preview at no added weight; the guards drop unsafe entries.
-    themeStyles.textContent = draft.themeStyles
-      ? themeStylesToCss(draft.themeStyles, `[data-wgd-scope="${scope}"]`)
-      : "";
+    // The guards drop unsafe entries.
+    themeStyles.textContent = draft.themeStyles ? scoped(draft.themeStyles) : "";
 
     const payload = {
       kind: renderingDraft ? PREVIEW_KIND : (previewKind as string),

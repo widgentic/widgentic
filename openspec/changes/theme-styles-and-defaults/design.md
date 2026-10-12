@@ -451,6 +451,24 @@ carries to `Widgentic.Mcp`. The Node assembly and the .NET host both put it in `
 on the resource declaration and on its `resources/read` content, since hosts may read either.
 The operator's `csp.resourceDomains` now rides on the read content too.
 
+### D22 — The preview shares the page: scope its styles, fence the page's
+
+The browser agent found two leaks, both because the designers preview widgets in the
+host page's DOM rather than in a frame:
+- **Out of the preview.** The widget's own styles were emitted as bare page-wide rules,
+  while the theme's were already scoped. Both are now scoped to the preview at no added
+  weight (`:where([data-wgd-scope=…])`), in the widget designer and the theme designer.
+- **Into the preview.** The example pages' element rules (`header { border-bottom … }`)
+  dressed widget elements that no MCP Apps host dresses. The examples now fence them with
+  `:where(:not(.wgd-preview *))`, as widgentic.dev already does, and the embedding docs
+  tell other hosts to do the same.
+
+happy-dom matches `:not(.wgd-preview *)` on descendants too, so the suite checks the
+fence structurally, and headless Chrome proves the computed result. Inherited properties
+(the page's font and color) still reach the preview. Rendering it in a frame or a shadow
+root would cut those too, at the cost of a larger change to the preview and its tests;
+that is not done here.
+
 ## Risks / Trade-offs
 
 - **A default theme overrides host-bridged colors** (`bg`, `fg`, …) in its mode, as an
