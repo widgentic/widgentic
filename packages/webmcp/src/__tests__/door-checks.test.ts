@@ -144,6 +144,30 @@ describe("load tools refuse what saving would refuse", () => {
     expect((result.diagnostics as { schemaRef?: string }).schemaRef).toBeUndefined();
   });
 
+  it("theme tools report the style entries the renderer would drop, naming the part at fault", async () => {
+    const loaded = await run(tools, "widgentic_theme_load", {
+      entry: {
+        name: "ocean",
+        tokens: {},
+        styles: { div: { color: "red" }, ".wg-a": { color: "red /*" }, ".wg-b": { "9x": "1px" }, ".wg-ok": { padding: "4px" } }
+      }
+    });
+    expect(loaded.ok).toBe(true);
+    const issues = (loaded.diagnostics as { styles: { selector: string; message: string }[] }).styles;
+    expect(issues.map((issue) => [issue.selector, issue.message.split(".")[0]])).toEqual([
+      ["div", "Selector would be skipped"],
+      [".wg-a", "Value would be skipped"],
+      [".wg-b", "Property would be skipped"]
+    ]);
+    // A value problem does not quote the property-name rule.
+    expect(issues[1]?.message).not.toContain("Property names must match");
+    const merged = await run(tools, "widgentic_theme_tokens_set", { tokens: { accent: "#0a84ff" } });
+    expect((merged.diagnostics as { styles: unknown[] }).styles).toHaveLength(3);
+    const clean = await run(tools, "widgentic_theme_load", { entry: { name: "ocean", tokens: {}, styles: { ".wg-ok": { padding: "4px" } } } });
+    expect((clean.diagnostics as { styles: unknown[] }).styles).toEqual([]);
+    expect((await run(tools, "widgentic_theme_get")).diagnostics).toEqual({ styles: [] });
+  });
+
   it("schema_load and definition_check warn about what the validator would ignore", async () => {
     const loaded = await run(schemaTools, "widgentic_schema_load", {
       entry: { name: "fruit", schema: { type: "object", properties: { kind: { type: "banana" } } } }

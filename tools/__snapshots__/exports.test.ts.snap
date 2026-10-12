@@ -256,6 +256,7 @@ exports[`published export surfaces > @widgentic/designer 1`] = `
   "DEFAULT_TAG",
   "DEFAULT_THEME_TAG",
   "SEEDABLE_BUILTINS",
+  "auditStyles",
   "checkActionEntry",
   "checkSchemaEntry",
   "checkThemeEntry",

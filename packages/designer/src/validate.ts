@@ -4,7 +4,7 @@
  * Everything here goes through public package entries — the designer owns
  * no validation logic of its own.
  */
-import { auditDataSchema, isPlainObject, SAFE_IDENTIFIER, STYLE_RULES } from "@widgentic/core";
+import { auditDataSchema, isPlainObject, PROPERTY_NAME, SAFE_IDENTIFIER, STYLE_RULES } from "@widgentic/core";
 import {
   createCatalog,
   validateDataAgainstSchema,
@@ -121,10 +121,15 @@ export function auditStyles(styles: WidgetStyles | undefined): StyleIssue[] {
         typeof value !== "string" ||
         widgetStylesToCss({ ".wg-probe": { [property]: value } }) === ""
       ) {
+        // Name the part at fault: the property name, or else the value.
         issues.push({
           selector,
           property,
-          message: `Declaration would be skipped. ${STYLE_RULES.propertyNames} ${STYLE_RULES.banned}`
+          message: !PROPERTY_NAME.test(property)
+            ? `Property would be skipped. ${STYLE_RULES.propertyNames}`
+            : typeof value !== "string"
+              ? "Value would be skipped: it must be a string."
+              : `Value would be skipped. ${STYLE_RULES.banned}`
         });
       }
     }

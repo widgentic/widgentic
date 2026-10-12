@@ -79,7 +79,7 @@ export type { WidgetDraft, DraftStore } from "./store.js";
 export { starterDraft } from "./store.js";
 export { seedWidgetDraft, seedThemeEntry, SEEDABLE_BUILTINS } from "./seed.js";
 export type { SeedableBuiltin } from "./seed.js";
-export { deriveDiagnostics } from "./validate.js";
+export { auditStyles, deriveDiagnostics } from "./validate.js";
 export type {
   DesignerDiagnostics,
   StyleIssue,

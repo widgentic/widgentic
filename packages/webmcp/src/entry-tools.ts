@@ -8,6 +8,7 @@ import type {
   SchemaDesignerHandle,
   ThemeDesignerHandle
 } from "@widgentic/designer";
+import { auditStyles } from "@widgentic/designer";
 import type { ThemeEntry } from "@widgentic/core";
 import { auditDataSchema, DATA_SCHEMA_TYPES, isPlainObject, TOKEN_VALUE_RULE } from "@widgentic/core";
 import { argumentsOf, invalidArgument, notMounted, okResult, rejected } from "./result.js";
@@ -18,6 +19,19 @@ import type { WebMcpTool } from "./types.js";
 const ENTRY_SCHEMA = (what: string): Record<string, unknown> =>
   objectSchema({ entry: { type: "object", description: `The ${what} entry.` } }, ["entry"]);
 
+/**
+ * The entry with what the theme designer's Styles panel shows: every style
+ * entry the renderer would drop, with its reason — the same audit a widget's
+ * styles get in its diagnostics.
+ */
+function themeResult(handle: ThemeDesignerHandle) {
+  const entry = handle.getTheme();
+  return okResult({ entry, diagnostics: { styles: auditStyles(entry.styles) } });
+}
+
+const THEME_RESULT =
+  "Returns { entry, diagnostics: { styles } } — styles lists every style entry the renderer would drop, with its reason (empty when all apply). ";
+
 export function themeTools(source: () => ThemeDesignerHandle | undefined, name: NameOf): WebMcpTool[] {
   return [
     defineTool({
@@ -25,12 +39,13 @@ export function themeTools(source: () => ThemeDesignerHandle | undefined, name: 
       title: "Read the theme entry",
       readOnly: true,
       description:
-        "Read the theme entry open in the theme designer: { entry: { name, label?, description?, extends?, tokens, styles? } } — tokens is a map of --wg-* token names (and x-<name> author variables) to CSS values; styles maps .wg- selectors to { property: value } (shared classes every widget under the theme can use).",
+        "Read the theme entry open in the theme designer: { entry: { name, label?, description?, extends?, tokens, styles? } } — tokens is a map of --wg-* token names (and x-<name> author variables) to CSS values; styles maps .wg- selectors to { property: value } (shared classes every widget under the theme can use). " +
+        THEME_RESULT,
       inputSchema: objectSchema({}),
       execute() {
         const handle = source();
         if (handle === undefined) return notMounted("theme");
-        return okResult({ entry: handle.getTheme() });
+        return themeResult(handle);
       }
     }),
     defineTool({
@@ -40,7 +55,8 @@ export function themeTools(source: () => ThemeDesignerHandle | undefined, name: 
         "Replace the WHOLE entry in the theme designer: { entry: { name, label?, description?, tokens, styles? } } — read it with theme_get first and keep its styles, or they are dropped. name: letters, digits, '.', '_' or '-'; light and dark are reserved. " +
         "tokens: bare --wg-* token names (colours: bg, surface, fg, muted, accent, accent-fg, border; shape: radius, radius-sm, radius-lg, spacing, border-width; type and status tokens — list them all with theme_token_specs) and author variables x-<name>, to plain CSS values. " + TOKEN_VALUE_RULE + " " +
         "styles: shared .wg- classes, { \".wg-btn\": { \"padding\": \"4px 8px\" } }, under the widget style rules. " +
-        "A dark theme sets bg/surface/fg/muted/border together so contrast holds. Refused → { ok: false, code: 'REJECTED', errors }. " +
+        "A dark theme sets bg/surface/fg/muted/border together so contrast holds. " + THEME_RESULT +
+        "Refused → { ok: false, code: 'REJECTED', errors }. " +
         PERSON_SAVES,
       inputSchema: ENTRY_SCHEMA("theme"),
       execute(input) {
@@ -50,7 +66,7 @@ export function themeTools(source: () => ThemeDesignerHandle | undefined, name: 
         if (!isPlainObject(entry)) return invalidArgument("entry", "object");
         const result = handle.loadTheme(entry);
         if (!result.ok) return rejected(result.errors);
-        return okResult({ entry: handle.getTheme() });
+        return themeResult(handle);
       }
     }),
     defineTool({
@@ -59,6 +75,7 @@ export function themeTools(source: () => ThemeDesignerHandle | undefined, name: 
       description:
         "Change some tokens of the theme entry open in the theme designer without retyping the rest: { tokens: { <token>: <css value> }, remove?: [<token>] }. " +
         "The result is validated as a whole; an invalid value leaves the entry unchanged and returns { ok: false, code: 'REJECTED', errors }. " +
+        THEME_RESULT +
         PERSON_SAVES,
       inputSchema: objectSchema({
         tokens: { type: "object", description: "Token name → CSS value to set.", additionalProperties: { type: "string" } },
@@ -80,7 +97,7 @@ export function themeTools(source: () => ThemeDesignerHandle | undefined, name: 
         const next: ThemeEntry = { ...current, tokens: merged as ThemeEntry["tokens"] };
         const result = handle.loadTheme(next);
         if (!result.ok) return rejected(result.errors);
-        return okResult({ entry: handle.getTheme() });
+        return themeResult(handle);
       }
     })
   ];

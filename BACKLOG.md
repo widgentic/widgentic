@@ -54,6 +54,8 @@ appears. Size: **S** one small change, **M** one change with spec deltas,
 | THM-1 | Default themes in the .NET host | P3 | S | `theme-styles-and-defaults` design |
 | THM-2 | A dark mode for page and app documents | P3 | S | `theme-styles-and-defaults` design |
 | THM-3 | Keep style rules inside the widget: sibling combinators | P3 | S | PR #29 review |
+| THM-4 | Theme `extends` from end to end | P2 | M | Browser agent, staging 2026-10-12 |
+| AGT-5 | Load-time warnings agents can act on: dropped link schemes, unreachable action hosts | P3 | S | Browser agent, staging 2026-10-12 |
 
 **Part 2 · Pairing with other technologies**
 
@@ -354,6 +356,40 @@ are reachable by direct URL.
   refuse `~`/`+` unless the compound after them is.
 - **Touches.** `widget-catalog` (the guard), `STYLE_RULES`, the guides.
 - **Origin.** 2026-10-12, PR #29 review; this behavior predates that change.
+
+#### THM-4 · Theme `extends` from end to end — P2, M
+
+- **Problem.** The registry merges a theme over its base (`extends`), and stored themes
+  may carry it, but nothing else does:
+  - The theme designer neither shows nor edits it, and its preview ignores it, so a
+    theme extending `dark` previews light.
+  - The guides and `theme_load` never mention it.
+  - Nothing checks the base at the door. A theme whose base does not exist is saved,
+    then skipped at composition (`UNKNOWN_BASE_THEME`). That breaks "never saved but
+    vanished".
+  - Deleting a base leaves the themes built on it dangling.
+- **Direction.**
+  - A base selector in the theme designer (built-ins plus the host's themes), with the
+    preview composed through a registry.
+  - Refuse an unknown base on write, as `UNKNOWN_THEME` is refused for defaults, and
+    refuse deleting a base in use, as `THEME_IN_USE` is.
+  - Describe `extends` in the guides and tool descriptions.
+- **Touches.** `widget-theming`, `widget-store`, `widget-designer`, `designer-webmcp`,
+  `authoring-api`.
+- **Origin.** 2026-10-12, the browser agent on staging (`theme_load` accepted
+  `extends: "no-such-theme"`); `extends` predates `theme-styles-and-defaults`.
+
+#### AGT-5 · Load-time warnings agents can act on — P3, S
+
+- **Problem.** Some definitions load cleanly and fail later, with no warning at load:
+  - A `javascript:` link passes the widget check. The renderer drops the `href`, so it
+    is safe, but the agent never learns why the link is dead.
+  - `action_load` accepts `https://localhost`, private addresses and an empty prompt.
+    The guarded fetch refuses those hosts at the test call and at execution.
+- **Direction.** Warnings (never refusals) in the widget diagnostics and in the action
+  tools' results, derived from `ALLOWED_SCHEMES` and the guarded fetch's host rules.
+- **Touches.** `widget-designer`, `designer-webmcp`, actions.
+- **Origin.** 2026-10-12, the browser agent on staging; predates `theme-styles-and-defaults`.
 
 ### Untriaged
 
