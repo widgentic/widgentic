@@ -119,6 +119,8 @@ let selectedWidget: string | undefined;
 function openWidgetDesigner(load?: unknown, readOnly = false): void {
   widgetDesigner = mountWidget($("widget-designer"), widgetDesigner, {
     themes: previewThemes(myThemes),
+    // The preview opens on the person's light default (built-in when unset).
+    ...(mySettings.defaultThemes?.light === undefined ? {} : { previewTheme: mySettings.defaultThemes.light }),
     schemas: mySchemas,
     actions: myActions,
     secretNames: mySecrets.map((s) => s.name),

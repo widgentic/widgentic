@@ -88,7 +88,8 @@ export function mountPanels(
   columns: PanelColumns,
   themes: ThemeEntry[] = [],
   schemas: SchemaEntry[] = [],
-  actionContext: TemplateActionContext = { actions: [], secretNames: [], schemas: [] }
+  actionContext: TemplateActionContext = { actions: [], secretNames: [], schemas: [] },
+  previewTheme?: string
 ): { dispose(): void } {
   const refreshers: Refresher[] = [];
   const disposers: (() => void)[] = [];
@@ -421,7 +422,7 @@ export function mountPanels(
   refreshers.push((draft) => stylesPanel.setValue(draft.descriptor.styles));
 
   const templatePanel = mountTemplatePanel(store, refreshers, { actionContext });
-  const themePanel = mountThemePanel(store, refreshers, themes);
+  const themePanel = mountThemePanel(store, refreshers, themes, previewTheme);
 
   // --- Load: the widget-level http GET action run once per instance -------
   const loadDiag = diagnosticLine(undefined);

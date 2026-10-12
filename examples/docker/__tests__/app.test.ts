@@ -70,6 +70,12 @@ describe("the example app's Settings section", () => {
     expect(themeRow("ocean")?.querySelector(".badge")).toBeNull();
   });
 
+  it("opens the widget designer on the light default", () => {
+    click("tab-widgets");
+    const select = document.querySelector("#widget-designer .wgd-theme-select") as HTMLSelectElement;
+    expect(select.value).toBe("google-light");
+  });
+
   it("picking a default and saving it moves the mark", async () => {
     click("tab-settings");
     expect([...lightSelect().options].map((option) => option.value)).toEqual(["", "google-light", "ocean"]);

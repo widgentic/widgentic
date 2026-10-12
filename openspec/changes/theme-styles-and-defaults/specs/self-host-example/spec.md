@@ -31,7 +31,7 @@ When `WIDGENTIC_SEED_FILE` names a readable JSON document, the authoring service
 ## ADDED Requirements
 
 ### Requirement: The app has a Settings section
-The example SHALL offer a Settings section beside its Widgets, Themes, Data schemas, Actions and Keys sections, mounting the published settings designer with the principal's stored themes as its choices and the stored settings as its record, and saving it through the authoring surface's settings route; a refusal SHALL be shown to the person with its code and message. The Themes section's list SHALL show which themes are a default, and a theme deletion refused with `THEME_IN_USE` SHALL be shown with the refusal's message, leaving the theme listed.
+The example SHALL offer a Settings section beside its Widgets, Themes, Data schemas, Actions and Keys sections, mounting the published settings designer with the principal's stored themes as its choices and the stored settings as its record, and saving it through the authoring surface's settings route; a refusal SHALL be shown to the person with its code and message. The Themes section's list SHALL show which themes are a default, and a theme deletion refused with `THEME_IN_USE` SHALL be shown with the refusal's message, leaving the theme listed. The widget designer SHALL open with the light default theme preselected as its preview theme.
 
 #### Scenario: Picking a default and saving it
 - **WHEN** `google-light` is the light default and the person picks `ocean` for light hosts in Settings and saves
@@ -44,3 +44,7 @@ The example SHALL offer a Settings section beside its Widgets, Themes, Data sche
 #### Scenario: A theme saved elsewhere becomes a choice
 - **WHEN** the person saves a new theme `night` and opens Settings
 - **THEN** `night` SHALL be offered for both modes
+
+#### Scenario: The widget designer previews under the light default
+- **WHEN** `google-light` is the light default and the person opens the Widgets section
+- **THEN** the widget designer's preview theme SHALL be `google-light`

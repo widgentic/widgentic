@@ -17,7 +17,9 @@ import type { DraftStore, WidgetDraft } from "./store.js";
 export function mountThemePanel(
   store: DraftStore,
   refreshers: ((draft: WidgetDraft) => void)[],
-  themes: ThemeEntry[] = []
+  themes: ThemeEntry[] = [],
+  /** The entry the designer opened with, so equal-content entries stay told apart. */
+  initialName?: string
 ): {
   element: HTMLElement;
   /** Show the theme validator's error — this panel owns the value. */
@@ -36,6 +38,9 @@ export function mountThemePanel(
     themeSelect.append(
       h("option", { value: entry.name }, [entry.label ?? entry.name])
     );
+  }
+  if (initialName !== undefined && themes.some((entry) => entry.name === initialName)) {
+    themeSelect.value = initialName;
   }
   themeSelect.addEventListener("change", () => {
     const entry = themes.find((candidate) => candidate.name === themeSelect.value);
@@ -88,10 +93,16 @@ export function mountThemePanel(
     if (draft.theme === undefined) {
       themeSelect.value = "";
     } else {
-      const match = themes.find(
-        (entry) => JSON.stringify(entry.tokens) === JSON.stringify(draft.theme)
-      );
-      themeSelect.value = match?.name ?? "";
+      // The chosen name stands while the draft still carries that entry;
+      // otherwise the first entry with the same tokens AND styles (a
+      // styles-only theme has the built-in light's tokens).
+      const same = (entry: ThemeEntry) =>
+        JSON.stringify(entry.tokens) === JSON.stringify(draft.theme) &&
+        JSON.stringify(entry.styles) === JSON.stringify(draft.themeStyles);
+      const chosen = themes.find((entry) => entry.name === themeSelect.value);
+      if (chosen === undefined || !same(chosen)) {
+        themeSelect.value = themes.find(same)?.name ?? "";
+      }
     }
     renderTokenReference(draft.theme);
   });

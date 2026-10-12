@@ -45,7 +45,6 @@ See proposal.md for the motivation. What shapes the approach:
 
 **Non-Goals:**
 - A dark mode for `page`/`app` documents (`prefers-color-scheme`); they have none today.
-- Preselecting the default theme as the widget designer's preview theme.
 - Import/export for settings, and WebMCP tools for the settings designer: settings are
   saved by the person, and nothing drafts them.
 - A `.NET` option for default themes (`WidgenticOptions`); it follows on the NuGet
@@ -187,6 +186,24 @@ Per the cross-repository protocol:
 
 Before the release, the same UI is exercised in the self-host example, which shares the
 designer package and the authoring surface.
+
+### D12 — The widget designer opens on a host-chosen preview theme
+
+`createDesigner` takes `previewTheme`: the name of one of the `themes` it was given. It
+opens with that entry selected, tokens and styles, and ignores a name it was not given.
+The designer stays unaware of settings; the host decides which name to pass.
+- **The apps pass the light default.** That matches documents (D8) and is one line per
+  app. Following the app's colour scheme instead is the host's choice later, with no
+  package change.
+- **Why an option, not `loadTheme`.** `loadTheme(tokens)` sets only tokens, so a theme
+  with styles would preview half-applied.
+- **Apply note: loading keeps the whole preview theme.** `loadWidget` already kept the
+  preview theme's tokens across a load, but dropped `themeStyles`, which this change
+  added. It now keeps both.
+- **Returning to Widgets resets the preview theme to the default.** The example reopens
+  the widget designer on tab return to pick up newly saved themes. A preview theme
+  picked by hand is not part of the draft the example carries over, so it resets (to
+  "none" before this change). Accepted.
 
 ## Risks / Trade-offs
 

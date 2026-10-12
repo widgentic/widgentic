@@ -40,6 +40,7 @@
 - [x] 5.4 Settings designer: `createSettingsDesigner` (handle `getSettings`, `loadSettings`, `setReadOnly`, `subscribe`, `dispose`; options `themes`, `initialSettings`, `readOnly`, `chrome`, `appearance`) and `defineSettingsDesignerElement` (`widgentic-settings-designer`). The Default themes subsection has a select per mode, an "unavailable" entry for missing names, and passes unedited sections through (design D7). Export from the entry, the browser bundle and the custom-element module; update the `tools/exports.test.ts` snapshots.
 - [x] 5.5 Tests for every widget-designer scenario, with computed-value checks for the two preview-styling scenarios.
 - [x] 5.6 WebMCP: confirm `<prefix>_theme_load` / `<prefix>_theme_get` round-trip `styles` (test). The settings designer gets no tools (design D9).
+- [x] 5.7 `createDesigner` `previewTheme` option: open with the named supplied entry selected (tokens and styles), ignore an unknown name; `loadWidget` keeps `themeStyles` beside `theme` (design D12). Tests for both new scenarios; embed docs.
 
 ## 6. Self-host example
 
@@ -48,6 +49,7 @@
 - [x] 6.3 Themes list marks the default themes; a `THEME_IN_USE` delete refusal is shown.
 - [x] 6.4 Seed: optional `settings`, applied section by section after the entries, only where the principal lacks the section; refusals logged. Set `google-light` / `google-dark` as defaults in `seed/demo.json`, and keep the conformance generator ignoring the new key.
 - [x] 6.5 Tests for every self-host-example scenario (seed tests on the SQLite store; the Settings and Themes behavior through the example's tests).
+- [x] 6.6 The example's widget designer opens with the light default preselected (`previewTheme`); app test for the scenario.
 
 ## 7. Docs, gate and staging
 
@@ -62,5 +64,5 @@
 
 ## 8. widgentic.dev (apps repository, after the release)
 
-- [ ] 8.1 Companion change in `widgentic/apps` (its `widgentic-app` spec): a Settings section in `apps/web` mounting the settings designer against `/api/settings`; the Themes list showing defaults; `THEME_IN_USE` through the feedback banner (design D11).
+- [ ] 8.1 Companion change in `widgentic/apps` (its `widgentic-app` spec): a Settings section in `apps/web` mounting the settings designer against `/api/settings`; the widget designer opened with `previewTheme` set to the light default; the Themes list showing defaults; `THEME_IN_USE` through the feedback banner (design D11).
 - [ ] 8.2 Bump the `@widgentic/*` ranges to the released versions, implement, run the apps gate (typecheck, tests, `check:theme`), merge, and deploy `vNN` (on the owner's "deploy vNN"). Verify the served bundle carries the settings designer and that a signed-in session saves defaults.

@@ -30,6 +30,12 @@ export interface DesignerOptions {
    */
   themes?: ThemeEntry[];
   /**
+   * The name of one of `themes` to open with as the preview theme — its
+   * tokens and styles applied — e.g. the person's light default. A name
+   * that matches no supplied entry is ignored. Wins over `initialTheme`.
+   */
+  previewTheme?: string;
+  /**
    * Shared data schemas the draft may reference by name (the Data schema
    * section's "use shared" mode). Schema authoring belongs to the
    * standalone schema designer; the widget designer only selects.
@@ -87,8 +93,17 @@ export function createDesigner(
   const base: WidgetDraft = options.initialWidget
     ? cloneDraft({ ...options.initialWidget })
     : starterDraft();
+  const preselected = options.themes?.find((entry) => entry.name === options.previewTheme);
   const initial: WidgetDraft =
-    options.initialTheme !== undefined ? { ...base, theme: options.initialTheme } : base;
+    preselected !== undefined
+      ? {
+          ...base,
+          theme: preselected.tokens,
+          ...(preselected.styles === undefined ? {} : { themeStyles: preselected.styles })
+        }
+      : options.initialTheme !== undefined
+        ? { ...base, theme: options.initialTheme }
+        : base;
   const store = createDraftStore(initial);
 
   const listeners = new Set<
@@ -116,7 +131,8 @@ export function createDesigner(
     { left: leftColumn, right: rightSections },
     options.themes ?? [],
     options.schemas ?? [],
-    actionContext
+    actionContext,
+    preselected?.name
   );
 
   function refresh(draft: WidgetDraft): void {

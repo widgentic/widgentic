@@ -44,7 +44,8 @@ account-wide preferences: default themes are the first such preference, not the 
   the settings designer, edits the settings record, starting with a "Default themes"
   subsection: one choice per mode among the built-in and the person's themes. The widget
   designer's preview applies the selected preview theme's styles, so shared classes are
-  visible while authoring.
+  visible while authoring, and a host can preselect the preview theme
+  (`previewTheme`); the apps preselect the light default.
 - **Agents.** `list_themes` reports each theme's styles and the effective default per
   mode; `get_authoring_guide` and the WebMCP guide describe theme styles, derived from
   the same constants as widget styles. Settings are not part of any entry agents draft.

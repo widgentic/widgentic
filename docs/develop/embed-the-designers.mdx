@@ -25,6 +25,7 @@ designer.subscribe((draft) => save(draft));
 | `initialWidget` | a widget definition to open with (otherwise a starter draft) |
 | `initialTheme` | a token map for the preview |
 | `themes` | named theme entries offered as preview themes; theme authoring lives in the theme designer |
+| `previewTheme` | the name of one of `themes` to open with as the preview theme, its tokens and shared styles applied — pass the person's light default; an unknown name is ignored |
 | `schemas` | shared data-schema entries the draft may reference by name (`descriptor.dataSchemaRef`) |
 | `actions` | shared actions the draft may bind by name, for element bindings and the widget-level `load` |
 | `secretNames` | secret names offered when an inline http action needs a header or query secret |

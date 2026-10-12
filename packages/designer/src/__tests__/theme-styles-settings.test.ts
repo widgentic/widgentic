@@ -126,6 +126,53 @@ describe("theme styles in the widget designer's preview", () => {
   });
 });
 
+describe("a host-chosen preview theme", () => {
+  const widget: WidgetDefinition = {
+    kind: "pay-card",
+    template: { tag: "button", attrs: { class: "wg-btn" }, children: ["Pay"] },
+    descriptor: { description: "A pay button.", dataShape: "{}", dataExample: {} }
+  };
+  const themes: ThemeEntry[] = [
+    { name: "light", tokens: {} },
+    { name: "brand", tokens: {}, styles: { ".wg-btn": { color: "rgb(1, 2, 3)" } } },
+    { name: "night", tokens: { accent: "#0a84ff" } }
+  ];
+  const css = (root: Element) =>
+    [...root.querySelectorAll(".wgd-preview-pane style")].map((el) => el.textContent ?? "").join("\n");
+
+  it("opens with the named entry selected, tokens and styles applied from the first render", () => {
+    const root = host();
+    const designer = createDesigner(root, { initialWidget: widget, themes, previewTheme: "brand" });
+    const select = root.querySelector(".wgd-theme-select") as HTMLSelectElement;
+    expect(select.value).toBe("brand");
+    const button = root.querySelector(".wgd-preview .wg-btn");
+    if (button === null) throw new Error("the draft did not mount");
+    expect(getComputedStyle(button).color).toBe("rgb(1, 2, 3)");
+    expect(designer.getDraft().themeStyles).toEqual({ ".wg-btn": { color: "rgb(1, 2, 3)" } });
+    change(select, "");
+    expect(css(root)).not.toContain(".wg-btn");
+    expect(designer.getDraft()).not.toHaveProperty("theme");
+  });
+
+  it("applies a tokens-only entry and ignores a name it was not given", () => {
+    const night = createDesigner(host(), { initialWidget: widget, themes, previewTheme: "night" });
+    expect(night.getDraft().theme).toEqual({ accent: "#0a84ff" });
+    const root = host();
+    const missing = createDesigner(root, { initialWidget: widget, themes, previewTheme: "missing" });
+    expect((root.querySelector(".wgd-theme-select") as HTMLSelectElement).value).toBe("");
+    expect(missing.getDraft()).not.toHaveProperty("theme");
+  });
+
+  it("keeps the preview theme, styles included, when a widget is loaded", () => {
+    const root = host();
+    const designer = createDesigner(root, { themes, previewTheme: "brand" });
+    expect(designer.loadWidget(widget)).toEqual({ ok: true });
+    expect(designer.getDraft().themeStyles).toEqual({ ".wg-btn": { color: "rgb(1, 2, 3)" } });
+    expect((root.querySelector(".wgd-theme-select") as HTMLSelectElement).value).toBe("brand");
+    expect(css(root)).toContain(".wg-btn");
+  });
+});
+
 describe("settings designer", () => {
   const themes = [
     { name: "ocean", label: "Ocean" },
