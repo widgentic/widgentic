@@ -139,27 +139,4 @@ public sealed class ConfigurationTests : IDisposable
             foreach (var descriptor in Descriptors(child)) yield return descriptor;
         }
     }
-
-    private sealed class ListLoggerProvider : ILoggerProvider
-    {
-        private readonly System.Collections.Concurrent.ConcurrentQueue<string> _messages = new();
-
-        public IReadOnlyList<string> Messages => [.. _messages];
-
-        public ILogger CreateLogger(string categoryName) => new ListLogger(_messages);
-
-        public void Dispose()
-        {
-        }
-
-        private sealed class ListLogger(System.Collections.Concurrent.ConcurrentQueue<string> messages) : ILogger
-        {
-            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-
-            public bool IsEnabled(LogLevel logLevel) => true;
-
-            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
-                messages.Enqueue(formatter(state, exception));
-        }
-    }
 }

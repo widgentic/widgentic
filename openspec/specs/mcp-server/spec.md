@@ -917,9 +917,15 @@ The package SHALL export from a `./host` entry `createWidgenticHost(config: stri
 
 `config` is a JSON string carrying optional `widgets` (designer-exported widget definitions `{ kind, template, descriptor, load? }`), `themes` (theme entries `{ name, label?, description?, tokens, styles? }`) and `schemas` (shared schema entries `{ name, label?, description?, schema }`). Every entry SHALL be validated with the same checks and structured codes the store applies on write, and built-in kinds and the `light`/`dark` theme names stay reserved. An invalid entry SHALL be skipped and reported, never served and never thrown.
 
+`config` MAY also carry `settings`, a principal settings record in the store's shape (`{ defaultThemes?: { light?, dark? } }`), so a host can choose its default themes. An absent or `null` record means no settings. Any other value SHALL be checked with the store's write rules for settings:
+- An unknown section, an unknown mode, or a name that is not a string SHALL be reported as `INVALID_SHAPE`.
+- A default naming a theme the host does not serve SHALL be reported as `UNKNOWN_THEME`. That covers a built-in name, a theme the config does not carry, and a configured theme that was refused.
+
+A reported setting SHALL be skipped, so its mode keeps the built-in, and SHALL be listed by `problems()` under the section `settings`, never thrown. The defaults a valid record sets SHALL apply exactly as the Node assembly applies a principal's stored defaults: to `render_widget` and `preview_widget` output, to `widgetPage(kind)`, and to `list_themes`' `defaults`. Without `settings`, every output SHALL be byte-identical to a host created before settings existed.
+
 The returned host SHALL take and return strings only, apart from the boolean `slim` flag of `call`:
 - `version()`: the `@widgentic/mcp` version the bundle was built from, taken from its manifest at build time.
-- `problems()`: a JSON array of `{ section, index, code, message }`, one per refused entry.
+- `problems()`: a JSON array of `{ section, index, name, code, message }`, one per refused entry or setting.
 - `definitions()`: the JSON of the tool definitions this host serves, taken from the same exported definitions as the Node assembly, with name, description and JSON-Schema `inputSchema`. The tools are `list_widgets`, `render_widget`, `list_theme_tokens`, `list_themes`, `list_schemas` and `get_authoring_guide`, plus the template's own `preview_widget`, which is marked `visibility: ["app"]` as the Node assembly registers it.
 - `call(name, argsJson, slim)`: the MCP tool result JSON of that tool's handler, with the slim flag passed through to `render_widget`. `preview_widget` SHALL be answered by the same handler as in the Node assembly, through the host's composed catalog and themes, with no rate gate: rate-limiting previews belongs to the embedding server's transport. An unknown tool name SHALL return an `isError` result, never throw.
 - `resources()`: the JSON of the served documents (the app template and the preview-page template) with name, URI or URI template, MIME type and description, and the app template's `prefersBorder`, taken from the same constants the Node assembly registers them with.
@@ -930,7 +936,7 @@ The host SHALL be render-only. Templates SHALL be compiled with http actions dis
 
 Inside the bundle, `URL` SHALL resolve to the platform's implementation when the global exists, and otherwise to a bundled, spec-compliant WHATWG URL implementation. Evaluating the bundle SHALL NOT create or modify any global binding, and the host SHALL keep no data from one call to the next.
 
-The repository SHALL keep a generated conformance corpus: render inputs paired with the exact Node-path outputs. It SHALL cover every served tool, `preview_widget` included, plus the built-in kinds, a group, named and inline themes (a named theme with styles included, as a render, a page and a preview), contract errors, hint diagnostics, number and currency formats including non-English locales, URL edge cases, and the example template widgets (with and without actions). The default gate SHALL fail when the committed corpus differs from the current Node output, or when the bundle evaluated in a bare realm (no globals beyond ECMAScript and `Intl`) produces any output that differs from the corpus.
+The repository SHALL keep a generated conformance corpus: render inputs paired with the exact Node-path outputs. It SHALL cover every served tool, `preview_widget` included, plus the built-in kinds, a group, named and inline themes (a named theme with styles included, as a render, a page and a preview), default themes from `settings` (a light default only, a dark default only, two defaults with styles, and one theme for both modes, each as a render, a page, a preview and `list_themes`), contract errors, hint diagnostics, number and currency formats including non-English locales, URL edge cases, and the example template widgets (with and without actions). The default gate SHALL fail when the committed corpus differs from the current Node output, or when the bundle evaluated in a bare realm (no globals beyond ECMAScript and `Intl`) produces any output that differs from the corpus.
 
 #### Scenario: The bundle evaluates in a bare realm
 - **WHEN** the built `./host` bundle is evaluated in a JavaScript context that exposes only ECMAScript built-ins and `Intl` (no `URL`, `process`, `Buffer` or `require`)
@@ -975,6 +981,19 @@ The repository SHALL keep a generated conformance corpus: render inputs paired w
 #### Scenario: Calls carry no state
 - **WHEN** a host renders payload A and then payload B
 - **THEN** B's output SHALL be byte-identical to B rendered by a freshly created host, and SHALL contain no string that appears only in A
+
+#### Scenario: Settings choose the host's default themes
+- **WHEN** a host is created with a configured theme `brand` and `settings: { defaultThemes: { light: "brand" } }`, and `render_widget` runs with no `theme`
+- **THEN** the output SHALL equal the Node assembly's for a principal whose stored settings choose `brand` as the light default
+- **AND** `list_themes` SHALL report `defaults: { "light": "brand", "dark": "dark" }`
+
+#### Scenario: A default naming no served theme is reported
+- **WHEN** `settings` names `ghost` as the dark default and the config carries no theme `ghost`
+- **THEN** `problems()` SHALL list one entry with section `settings` and code `UNKNOWN_THEME`, the host SHALL be created, and the dark default SHALL stay the built-in
+
+#### Scenario: Malformed settings are reported, not thrown
+- **WHEN** `settings` carries an unknown section, or a mode other than `light` and `dark`
+- **THEN** `problems()` SHALL list `INVALID_SHAPE` under section `settings`, and the host SHALL be created with the built-in defaults
 
 ### Requirement: Theme styles reach every styled output
 When a render resolves a theme that carries `styles` — a registered theme named by the `theme` input, or a default theme from the caller's settings — every output that carries the theme's tokens SHALL carry its styles too, generated under the theme-style guards: the template channel's `structuredContent.css`, the `format: "page"` and `format: "app"` documents, the `ui://widgentic/page/{kind}` page, `preview_widget`'s `css`, and every `execute_action` re-render of the widget — a named theme carrying styles SHALL also ride the payload by name (`themeName`), so a re-render resolves the same entry from the caller's registry, falling back to the held token map when the name no longer resolves. Theme styles SHALL come before the rendered kinds' registered styles, so a widget's own rule wins a tie, and the theme's token declarations SHALL follow both. An inline token map carries no styles. A theme without styles SHALL produce exactly today's output.

@@ -24,8 +24,9 @@ import {
 } from "@widgentic/core";
 import { isPlainObject } from "@widgentic/core";
 import { createThemeRegistry } from "@widgentic/core";
-import type { ThemeEntry, ThemeMode, ThemeRegistry } from "@widgentic/core";
+import type { ThemeEntry, ThemeRegistry } from "@widgentic/core";
 import type { PrincipalSettings, StoredWidget, WidgetStore } from "./types.js";
+import { THEME_MODES } from "./settings-rules.js";
 import type { StoreLimits } from "./limits.js";
 import { DEFAULT_LIMITS } from "./limits.js";
 import { checkStoredAction, checkStoredTheme, checkStoredWidget } from "./validate.js";
@@ -92,9 +93,6 @@ export interface ComposeProblem {
 }
 
 const SINGULAR = { widgets: "widget", themes: "theme", actions: "action" } as const;
-
-/** The modes a default theme is chosen for, in reporting order. */
-const THEME_MODES: readonly ThemeMode[] = ["light", "dark"];
 
 /** The diagnostic line a problem has always been reported as. */
 function diagnosticLine(problem: ComposeProblem): string {

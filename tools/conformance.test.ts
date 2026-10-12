@@ -16,6 +16,7 @@ const fresh = buildCorpus();
 describe("conformance corpus", () => {
   it("has the configuration and the case list of a fresh generation", () => {
     expect(committed.config).toBe(fresh.config);
+    expect(committed.configs).toEqual(fresh.configs);
     expect(committed.cases.map((entry) => entry.name)).toEqual(fresh.cases.map((entry) => entry.name));
   });
 

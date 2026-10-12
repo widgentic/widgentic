@@ -1,18 +1,22 @@
+using System.Security.Claims;
 using System.Text.Json;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
-using Widgentic.Mcp.Engine;
 
 namespace Widgentic.Mcp.Mcp;
 
-/// <summary>Renders through the same bundle call as <c>render_widget</c>, so the results are equal by construction.</summary>
-internal sealed class WidgenticRenderer(WidgenticEngine engine, bool assumeUi) : IWidgenticRenderer
+/// <summary>
+/// Renders through the same bundle call as <c>render_widget</c>, so the results are equal by
+/// construction. Only the <c>RequestContext</c> overload knows the caller, so only it renders
+/// with the caller's catalog; the session overload renders with the startup catalog.
+/// </summary>
+internal sealed class WidgenticRenderer(CallerCatalogs catalogs, bool assumeUi) : IWidgenticRenderer
 {
     public ValueTask<CallToolResult> RenderAsync(
         WidgetRenderRequest request,
         McpServer? session = null,
         CancellationToken cancellationToken = default) =>
-        RenderAsync(request, Slimming.For(session, null, assumeUi), cancellationToken);
+        RenderAsync(request, Slimming.For(session, null, assumeUi), null, null, cancellationToken);
 
     public ValueTask<CallToolResult> RenderAsync(
         WidgetRenderRequest request,
@@ -20,16 +24,19 @@ internal sealed class WidgenticRenderer(WidgenticEngine engine, bool assumeUi) :
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(context);
-        return RenderAsync(request, Slimming.For(context.Server, context.Params?.Meta, assumeUi), cancellationToken);
+        return RenderAsync(request, Slimming.For(context.Server, context.Params?.Meta, assumeUi), context.User, context.Services, cancellationToken);
     }
 
-    private async ValueTask<CallToolResult> RenderAsync(WidgetRenderRequest request, bool slim, CancellationToken cancellationToken)
+    private async ValueTask<CallToolResult> RenderAsync(
+        WidgetRenderRequest request, bool slim, ClaimsPrincipal? user, IServiceProvider? services, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var json = await engine.Pool.CallToolAsync(
+        var json = await catalogs.CallToolAsync(
             WidgenticToolNames.RenderWidget,
             ArgumentsJson(request),
             slim,
+            user,
+            services,
             cancellationToken).ConfigureAwait(false);
         return ToolResults.Parse(json);
     }

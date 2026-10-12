@@ -14,12 +14,13 @@ import type { WidgenticHost } from "../index.js";
 
 interface Corpus {
   config: string;
-  cases: (
+  configs: Record<string, string>;
+  cases: ({ config?: string } & (
     | { name: string; op: "call"; tool: string; args: string; slim: boolean; output: string }
     | { name: string; op: "appTemplate"; output: string }
     | { name: string; op: "resources"; output: string }
     | { name: string; op: "widgetPage"; kind: string; output: string }
-  )[];
+  ))[];
 }
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -30,6 +31,8 @@ let realm: vm.Context;
 let globalsBefore: string[];
 let createHost: (config: string) => WidgenticHost;
 let host: WidgenticHost;
+/** One host per named configuration, created like the main one. */
+const hosts = new Map<string, WidgenticHost>();
 
 function globalNames(): string[] {
   return (vm.runInContext("Object.getOwnPropertyNames(globalThis)", realm) as string[]).slice().sort();
@@ -42,6 +45,7 @@ beforeAll(async () => {
   const namespace = vm.runInContext(expression, realm) as { createWidgenticHost: (config: string) => WidgenticHost };
   createHost = namespace.createWidgenticHost;
   host = createHost(corpus.config);
+  for (const [name, config] of Object.entries(corpus.configs)) hosts.set(name, createHost(config));
 }, 60_000);
 
 describe("host bundle in a bare realm", () => {
@@ -67,14 +71,17 @@ describe("host bundle in a bare realm", () => {
   describe("reproduces the conformance corpus", () => {
     for (const entry of corpus.cases) {
       it(entry.name, () => {
+        const target = entry.config === undefined ? host : hosts.get(entry.config);
+        if (target === undefined) throw new Error(`no configuration named '${entry.config ?? ""}'`);
+        expect(target.problems()).toBe("[]");
         const output =
           entry.op === "call"
-            ? host.call(entry.tool, entry.args, entry.slim)
+            ? target.call(entry.tool, entry.args, entry.slim)
             : entry.op === "appTemplate"
-              ? host.appTemplate()
+              ? target.appTemplate()
               : entry.op === "resources"
-                ? host.resources()
-                : host.widgetPage(entry.kind);
+                ? target.resources()
+                : target.widgetPage(entry.kind);
         expect(output).toBe(entry.output);
       });
     }

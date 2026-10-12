@@ -9,7 +9,8 @@ namespace Widgentic.Mcp.Engine;
 /// configuration. A call leases one runtime, runs under <c>CallTimeout</c>, and returns it; a
 /// runtime that timed out or failed is disposed and replaced in the background, so the
 /// process keeps serving and the pool keeps its size. Pooling carries no data between calls:
-/// the bundle keeps no per-call state and every runtime holds only the startup configuration.
+/// the bundle keeps no per-call state, every runtime holds only the startup configuration, and a
+/// caller's catalog is composed inside its call and dropped with it.
 /// </summary>
 internal sealed class V8HostPool : IDisposable
 {
@@ -63,6 +64,26 @@ internal sealed class V8HostPool : IDisposable
         return outcome.Error is null ? outcome.Value! : EngineErrorResult(outcome.Error.Value);
     }
 
+    /// <summary>
+    /// As <see cref="CallToolAsync"/>, on a host composed from <paramref name="configJson"/> for
+    /// this call only; the composition runs inside the call's timeout. Engine failures become
+    /// <c>isError</c> results with no problems.
+    /// </summary>
+    public async ValueTask<ComposedResult> CallToolComposedAsync(string configJson, string tool, string argsJson, bool slim, CancellationToken cancellationToken)
+    {
+        var outcome = await RunAsync(runtime => runtime.InvokeComposed(configJson, "call", tool, argsJson, slim), cancellationToken).ConfigureAwait(false);
+        return outcome.Error is null ? outcome.Value : new ComposedResult(EngineErrorResult(outcome.Error.Value), "[]");
+    }
+
+    /// <summary>As <see cref="InvokeAsync"/>, on a host composed from <paramref name="configJson"/> for this call only.</summary>
+    public async ValueTask<ComposedResult> InvokeComposedAsync(string configJson, string method, CancellationToken cancellationToken, params object[] args)
+    {
+        var outcome = await RunAsync(runtime => runtime.InvokeComposed(configJson, method, args), cancellationToken).ConfigureAwait(false);
+        return outcome.Error is { } error
+            ? throw new InvalidOperationException($"widgentic {method}() failed: {error.Code} — {error.Message}")
+            : outcome.Value;
+    }
+
     /// <summary>Call a host method that answers with a document or JSON; engine failures throw.</summary>
     public async ValueTask<string> InvokeAsync(string method, CancellationToken cancellationToken, params object[] args)
     {
@@ -79,7 +100,7 @@ internal sealed class V8HostPool : IDisposable
         return outcome.Error is null ? outcome.Value! : EngineErrorResult(outcome.Error.Value);
     }
 
-    private async ValueTask<Outcome> RunAsync(Func<HostRuntime, string> work, CancellationToken cancellationToken)
+    private async ValueTask<Outcome<T>> RunAsync<T>(Func<HostRuntime, T> work, CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         var runtime = await _idle.Reader.ReadAsync(cancellationToken).ConfigureAwait(false);
@@ -90,7 +111,7 @@ internal sealed class V8HostPool : IDisposable
         {
             if (Interlocked.CompareExchange(ref state, 2, 0) == 0) runtime.Interrupt();
         }, null, _timeout, Timeout.InfiniteTimeSpan);
-        string? value = null;
+        T value = default!;
         EngineError? error = null;
         try
         {
@@ -108,7 +129,7 @@ internal sealed class V8HostPool : IDisposable
         if (interrupted && error is null) error = new EngineError("ENGINE_TIMEOUT", $"The widgentic call did not finish within {_timeout.TotalSeconds:0.###} s.");
         if (error is null) _idle.Writer.TryWrite(runtime);
         else Replace(runtime);
-        return new Outcome(error is null ? value : null, error);
+        return new Outcome<T>(value, error);
     }
 
     private void Replace(HostRuntime failed)
@@ -130,13 +151,16 @@ internal sealed class V8HostPool : IDisposable
     private static string RuntimeName(int index) => $"widgentic-{index}";
 
     /// <summary>An engine failure in the bundle's error vocabulary, as a tool result.</summary>
-    private static string EngineErrorResult(EngineError error)
+    private static string EngineErrorResult(EngineError error) => ErrorResult(error.Code, error.Message);
+
+    /// <summary>A failure in the bundle's error vocabulary (<c>{ code, path, message }</c>), as an <c>isError</c> tool result.</summary>
+    internal static string ErrorResult(string code, string message)
     {
         var text = JsonSerializer.Serialize(new Dictionary<string, string>
         {
-            ["code"] = error.Code,
+            ["code"] = code,
             ["path"] = "",
-            ["message"] = error.Message,
+            ["message"] = message,
         });
         using var buffer = new MemoryStream();
         using (var writer = new Utf8JsonWriter(buffer))
@@ -164,5 +188,5 @@ internal sealed class V8HostPool : IDisposable
 
     private readonly record struct EngineError(string Code, string Message);
 
-    private readonly record struct Outcome(string? Value, EngineError? Error);
+    private readonly record struct Outcome<T>(T Value, EngineError? Error);
 }

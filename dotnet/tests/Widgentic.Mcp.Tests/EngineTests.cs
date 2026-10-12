@@ -67,10 +67,11 @@ public sealed class EngineTests
     [Fact]
     public async Task ExposesNoHostObjectsToScript()
     {
-        // Only strings cross: nothing on the global object reaches .NET.
+        // Only strings cross: nothing on the global object reaches .NET. The loader's own two
+        // bindings (the startup host and the bundle's host factory) are script objects.
         using var engine = WidgenticEngine.Create(new WidgenticOptions { EnginePoolSize = 1 });
         var globals = await engine.Pool.EvaluateForTestAsync(
-            "Object.getOwnPropertyNames(globalThis).filter(n => /host|clr|xHost|lib/i.test(n) && n !== 'widgenticHost').join()",
+            "Object.getOwnPropertyNames(globalThis).filter(n => /host|clr|xHost|lib/i.test(n) && !['widgenticHost', 'widgenticCreateHost'].includes(n)).join()",
             Cancel);
         Assert.Equal("", globals);
     }

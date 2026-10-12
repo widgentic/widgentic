@@ -31,9 +31,18 @@ public sealed class RenderOnlyTests
         var requests = new List<string>();
         using var subscription = DiagnosticListener.AllListeners.Subscribe(new HttpRequestObserver(requests));
         using var engine = WidgenticEngine.Create(Repo.Corpus.Options());
-        foreach (var entry in Repo.Corpus.Cases.Where(c => c.Op == "call"))
+        var named = Repo.Corpus.Configs.Keys.ToDictionary(name => name, name => WidgenticEngine.Create(Repo.Corpus.Options(config: name)));
+        try
         {
-            Assert.Equal(entry.Output, await engine.Pool.CallToolAsync(entry.Tool!, entry.Args!, entry.Slim, Cancel));
+            foreach (var entry in Repo.Corpus.Cases.Where(c => c.Op == "call"))
+            {
+                var target = entry.Config is null ? engine : named[entry.Config];
+                Assert.Equal(entry.Output, await target.Pool.CallToolAsync(entry.Tool!, entry.Args!, entry.Slim, Cancel));
+            }
+        }
+        finally
+        {
+            foreach (var each in named.Values) each.Dispose();
         }
         Assert.Empty(requests);
     }

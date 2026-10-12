@@ -1,7 +1,10 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
+using System.Security.Cryptography;
+using System.Text.Json;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using Widgentic.Mcp.Tests.Support;
@@ -32,6 +35,7 @@ public sealed class SampleTests
         foreach (var kind in new[] { "appointment-agenda-widget", "email-inbox-widget" }) Assert.Contains($"\"kind\": \"{kind}\"", text);
         var themes = await client.CallToolAsync("list_themes", cancellationToken: Cancel);
         Assert.Contains("google-dark", Assert.IsType<TextContentBlock>(themes.Content[0]).Text);
+        Assert.Equal(("google-light", "google-dark"), await Defaults(client));
         var schemas = await client.CallToolAsync("list_schemas", cancellationToken: Cancel);
         Assert.Contains("email-inbox", Assert.IsType<TextContentBlock>(schemas.Content[0]).Text);
 
@@ -61,50 +65,163 @@ public sealed class SampleTests
     [Fact]
     public async Task ServesOverStreamableHttp()
     {
-        var url = $"http://127.0.0.1:{FreePort()}";
-        using var process = Process.Start(new ProcessStartInfo("dotnet", [SamplePath(), "--http", "--urls", url])
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-        })!;
-        // Drain the server's logs so its pipes never fill and block it.
-        process.OutputDataReceived += (_, _) => { };
-        process.ErrorDataReceived += (_, _) => { };
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
-        try
-        {
-            await WaitUntilListening(new Uri(url), process);
-            HttpClientTransport Transport() => new(new HttpClientTransportOptions
-            {
-                Name = "widgentic sample (http)",
-                Endpoint = new Uri($"{url}/mcp"),
-            });
+        using var sample = await HttpSample.StartAsync();
 
-            // Stateless (2026-07-28): each request carries its capabilities, so an MCP Apps host is slimmed...
-            await using (var apps = await McpClient.CreateAsync(Transport(), new McpClientOptions { Capabilities = TestServer.AppsHost() }, cancellationToken: Cancel))
-            {
-                Assert.Equal("2026-07-28", apps.NegotiatedProtocolVersion);
-                await AssertServesTheSample(apps, slim: true);
-            }
-            // ...and a client without the UI capability is not.
-            await using (var plain = await McpClient.CreateAsync(Transport(), cancellationToken: Cancel))
-            {
-                await AssertServesTheSample(plain, slim: false);
-            }
-            // A host on the initialize-based revision gets a session that remembers its capabilities.
-            await using var older = await McpClient.CreateAsync(
-                Transport(),
-                new McpClientOptions { Capabilities = TestServer.AppsHost(), ProtocolVersion = "2025-11-25" },
-                cancellationToken: Cancel);
-            Assert.Equal("2025-11-25", older.NegotiatedProtocolVersion);
-            await AssertServesTheSample(older, slim: true);
-        }
-        finally
+        // Stateless (2026-07-28): each request carries its capabilities, so an MCP Apps host is slimmed...
+        await using (var apps = await McpClient.CreateAsync(sample.Transport(), new McpClientOptions { Capabilities = TestServer.AppsHost() }, cancellationToken: Cancel))
         {
-            process.Kill(entireProcessTree: true);
+            Assert.Equal("2026-07-28", apps.NegotiatedProtocolVersion);
+            await AssertServesTheSample(apps, slim: true);
         }
+        // ...and a client without the UI capability is not.
+        await using (var plain = await McpClient.CreateAsync(sample.Transport(), cancellationToken: Cancel))
+        {
+            await AssertServesTheSample(plain, slim: false);
+        }
+        // A host on the initialize-based revision gets a session that remembers its capabilities.
+        await using var older = await McpClient.CreateAsync(
+            sample.Transport(),
+            new McpClientOptions { Capabilities = TestServer.AppsHost(), ProtocolVersion = "2025-11-25" },
+            cancellationToken: Cancel);
+        Assert.Equal("2025-11-25", older.NegotiatedProtocolVersion);
+        await AssertServesTheSample(older, slim: true);
+    }
+
+    [Fact]
+    public async Task ServesEachPrincipalItsCatalogOverHttp()
+    {
+        var mergeKey = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(16));
+        var replaceKey = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(16));
+        using var sample = await HttpSample.StartAsync(new Dictionary<string, string>
+        {
+            ["Widgentic__Sample__Keys__merge-demo"] = mergeKey,
+            ["Widgentic__Sample__Keys__replace-demo"] = replaceKey,
+        });
+        var seedInbox = Description(File.ReadAllText(Path.Combine(Repo.SampleSeed, "widgets", "email-inbox-widget.json")));
+
+        // Without a key: the seed.
+        await using (var keyless = await McpClient.CreateAsync(sample.Transport(), cancellationToken: Cancel))
+        {
+            var widgets = await ListWidgets(keyless);
+            Assert.Equal(seedInbox, Assert.Single(widgets, w => w.Kind == "email-inbox-widget").Description);
+            Assert.Contains(widgets, w => w.Kind == "appointment-agenda-widget");
+            Assert.DoesNotContain(widgets, w => w.Kind == "release-notes-widget");
+            Assert.Equal(("google-light", "google-dark"), await Defaults(keyless));
+        }
+        // Merge, keyed by header: the seed, with the principal's inbox in place of the seed's, and its theme.
+        await using (var merge = await McpClient.CreateAsync(sample.Transport(headers: new() { ["x-api-key"] = mergeKey }), cancellationToken: Cancel))
+        {
+            var widgets = await ListWidgets(merge);
+            var inbox = Assert.Single(widgets, w => w.Kind == "email-inbox-widget");
+            Assert.StartsWith("Displays the merge-demo principal's inbox", inbox.Description);
+            Assert.Contains(widgets, w => w.Kind == "appointment-agenda-widget");
+            var themes = await merge.CallToolAsync("list_themes", cancellationToken: Cancel);
+            var themeText = Assert.IsType<TextContentBlock>(themes.Content[0]).Text;
+            Assert.Contains("merge-demo-dark", themeText);
+            Assert.Contains("google-dark", themeText);
+            Assert.Equal(("google-light", "merge-demo-dark"), await Defaults(merge));
+        }
+        // Replace, keyed in the URL as hosts that only take a URL send it: the built-ins and its own widget.
+        await using (var replace = await McpClient.CreateAsync(sample.Transport(query: $"?key={replaceKey}"), cancellationToken: Cancel))
+        {
+            var widgets = await ListWidgets(replace);
+            Assert.Contains(widgets, w => w.Kind == "release-notes-widget");
+            Assert.Contains(widgets, w => w.Kind == "card");
+            Assert.DoesNotContain(widgets, w => w.Kind is "email-inbox-widget" or "appointment-agenda-widget");
+            // Replace composes no startup entries, so the seed's defaults never apply.
+            Assert.Equal(("light", "dark"), await Defaults(replace));
+            var data = new Dictionary<string, object?>
+            {
+                ["product"] = "Sample",
+                ["version"] = "1.2.3",
+                ["changes"] = new[] { new Dictionary<string, object?> { ["summary"] = "Only-for-replace-demo" } },
+            };
+            var rendered = await replace.CallToolAsync(
+                "render_widget",
+                new Dictionary<string, object?> { ["widget"] = "release-notes-widget", ["data"] = data },
+                cancellationToken: Cancel);
+            Assert.NotEqual(true, rendered.IsError);
+            Assert.Contains("Only-for-replace-demo", Assert.IsType<TextContentBlock>(rendered.Content[0]).Text);
+        }
+        // The server's Information logs are collected, and none of them carries a key.
+        Assert.Contains(sample.Output, line => line.Contains("Now listening on", StringComparison.Ordinal));
+        Assert.DoesNotContain(sample.Output, line => line.Contains(mergeKey, StringComparison.Ordinal) || line.Contains(replaceKey, StringComparison.Ordinal));
+    }
+
+    private static async Task<(string Kind, string? Description)[]> ListWidgets(McpClient client)
+    {
+        var listing = await client.CallToolAsync("list_widgets", cancellationToken: Cancel);
+        using var json = JsonDocument.Parse(Assert.IsType<TextContentBlock>(listing.Content[0]).Text);
+        return [.. json.RootElement.EnumerateArray().Select(w => (w.GetProperty("kind").GetString()!, w.TryGetProperty("description", out var d) ? d.GetString() : null))];
+    }
+
+    /// <summary>The effective default theme names <c>list_themes</c> reports to this client.</summary>
+    private static async Task<(string Light, string Dark)> Defaults(McpClient client)
+    {
+        var listing = await client.CallToolAsync("list_themes", cancellationToken: Cancel);
+        using var json = JsonDocument.Parse(Assert.IsType<TextContentBlock>(listing.Content[0]).Text);
+        var defaults = json.RootElement.GetProperty("defaults");
+        return (defaults.GetProperty("light").GetString()!, defaults.GetProperty("dark").GetString()!);
+    }
+
+    private static string? Description(string widgetJson)
+    {
+        using var json = JsonDocument.Parse(widgetJson);
+        return json.RootElement.GetProperty("descriptor").GetProperty("description").GetString();
+    }
+
+    /// <summary>The sample served over HTTP on a free loopback port, its output collected.</summary>
+    private sealed class HttpSample : IDisposable
+    {
+        private readonly Process _process;
+        private readonly ConcurrentQueue<string> _output = new();
+
+        private HttpSample(Process process, string url)
+        {
+            _process = process;
+            Url = url;
+            // Collecting also drains the pipes, so they never fill and block the server.
+            process.OutputDataReceived += (_, line) => { if (line.Data is not null) _output.Enqueue(line.Data); };
+            process.ErrorDataReceived += (_, line) => { if (line.Data is not null) _output.Enqueue(line.Data); };
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+        }
+
+        public string Url { get; }
+
+        public IReadOnlyCollection<string> Output => _output;
+
+        public static async Task<HttpSample> StartAsync(IReadOnlyDictionary<string, string>? environment = null)
+        {
+            var url = $"http://127.0.0.1:{FreePort()}";
+            var start = new ProcessStartInfo("dotnet", [SamplePath(), "--http", "--urls", url])
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            };
+            foreach (var (name, value) in environment ?? new Dictionary<string, string>()) start.Environment[name] = value;
+            var sample = new HttpSample(Process.Start(start)!, url);
+            try
+            {
+                await WaitUntilListening(new Uri(url), sample._process);
+                return sample;
+            }
+            catch
+            {
+                sample.Dispose();
+                throw;
+            }
+        }
+
+        public HttpClientTransport Transport(Dictionary<string, string>? headers = null, string query = "") => new(new HttpClientTransportOptions
+        {
+            Name = "widgentic sample (http)",
+            Endpoint = new Uri($"{Url}/mcp{query}"),
+            AdditionalHeaders = headers,
+        });
+
+        public void Dispose() => _process.Kill(entireProcessTree: true);
     }
 
     private static int FreePort()
