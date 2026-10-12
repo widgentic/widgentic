@@ -18,7 +18,8 @@ public static class WidgenticBuilderExtensions
     /// embedded bundle), the MCP Apps template resource, the preview pages, and an
     /// <see cref="IWidgenticRenderer"/> for the server's own tools. The engine starts here:
     /// a refused widget, theme or schema throws <see cref="WidgenticConfigurationException"/>
-    /// before the server runs.
+    /// before the server runs. Register an <see cref="IWidgenticCatalogSource"/> in the services
+    /// to serve each caller its own catalog.
     /// </summary>
     /// <param name="builder">The SDK's server builder.</param>
     /// <param name="configure">Tool selection, widgets, themes, schemas and engine limits.</param>
@@ -34,6 +35,7 @@ public static class WidgenticBuilderExtensions
         }
 
         var engine = WidgenticEngine.Create(options);
+        var catalogs = new CallerCatalogs(engine, options.PrincipalComposition);
         var domains = options.ResourceDomains
             .Select(domain => domain.Trim().ToLowerInvariant())
             .Where(domain => domain.Length > 0)
@@ -42,7 +44,7 @@ public static class WidgenticBuilderExtensions
         var tools = new List<McpServerTool>();
         foreach (var definition in SelectDefinitions(engine.Definitions, options.Tools))
         {
-            McpServerTool tool = new WidgenticTool(engine, definition, options.AssumeUi);
+            McpServerTool tool = new WidgenticTool(catalogs, definition, options.AssumeUi);
             var appOnly = definition.TryGetProperty("visibility", out var visibility);
             if (appOnly || tool.ProtocolTool.Name == WidgenticToolNames.RenderWidget)
             {
@@ -58,11 +60,11 @@ public static class WidgenticBuilderExtensions
         }
 
         var resources = new List<McpServerResource> { WidgenticResourceFactory.AppTemplate(engine, domains) };
-        if (options.IncludeWidgetPages) resources.Add(WidgenticResourceFactory.WidgetPage(engine));
+        if (options.IncludeWidgetPages) resources.Add(WidgenticResourceFactory.WidgetPage(engine, catalogs));
 
         builder.Services.AddSingleton(engine);
         builder.Services.AddSingleton(engine.Info);
-        builder.Services.AddSingleton<IWidgenticRenderer>(new WidgenticRenderer(engine, options.AssumeUi));
+        builder.Services.AddSingleton<IWidgenticRenderer>(new WidgenticRenderer(catalogs, options.AssumeUi));
         builder.Services.AddHostedService<WidgenticStartupLog>();
         return builder.WithMcpApps().WithTools(tools).WithResources(resources);
     }

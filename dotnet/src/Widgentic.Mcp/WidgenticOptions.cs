@@ -38,6 +38,12 @@ public sealed class WidgenticOptions
     public TimeSpan CallTimeout { get; set; } = TimeSpan.FromSeconds(2);
 
     /// <summary>
+    /// How a caller's catalog from an <see cref="IWidgenticCatalogSource"/> combines with the
+    /// entries configured here, unless the catalog sets its own. Default: <see cref="WidgenticComposition.Merge"/>.
+    /// </summary>
+    public WidgenticComposition PrincipalComposition { get; set; } = WidgenticComposition.Merge;
+
+    /// <summary>
     /// Add widget definitions in the designer's export shape (<c>{ kind, template, descriptor, load? }</c>):
     /// one JSON object, or a JSON array of them.
     /// </summary>

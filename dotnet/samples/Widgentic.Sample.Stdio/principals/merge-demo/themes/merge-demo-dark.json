@@ -1,0 +1,10 @@
+{
+  "description": "google-dark with a green accent, for the merge-demo principal.",
+  "extends": "google-dark",
+  "label": "Merge demo dark",
+  "name": "merge-demo-dark",
+  "tokens": {
+    "accent": "#81c995",
+    "accent-fg": "#202124"
+  }
+}

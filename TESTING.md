@@ -284,10 +284,14 @@ The suite covers:
 - **Configuration refusals.**
 - **The engine pool.** Concurrency, a runaway call, nothing leaking between
   callers, and the bundle's identity.
+- **Per-principal catalogs.** Merge and Replace and the per-catalog override,
+  refusals logged without contents, a failing source, the global surfaces, two
+  principals concurrently on one pool, and nothing kept between calls.
 - **Render-only.** No HTTP request, and prompt actions live while http actions
   render disabled.
 - **The `.nupkg` shape.**
-- **The stdio sample**, launched as a process.
+- **The sample**, launched as a process over stdio and HTTP, including its two
+  demo principals keyed by header and by URL.
 
 The same corpus runs in a bare V8 realm on the Node side
 (`packages/mcp/src/host/__tests__/bare-realm.test.ts`). A change that alters a
@@ -346,7 +350,18 @@ claude mcp add widgentic -- npx tsx /path/to/widgentic/examples/mcp-server/main.
 public HTTPS URL, so tunnel the loopback port, for example
 `devtunnel host -p 3002 --allow-anonymous` or `cloudflared tunnel --url http://localhost:3002`.
 Then add `https://<tunnel-host>/mcp` under Settings → Connectors → Add custom connector. The
-sample has no authentication, so keep the tunnel up only while testing.
+sample's keys select a catalog and gate nothing, so keep the tunnel up only while testing.
+
+**The .NET sample's demo principals.** Start the sample with both keys configured (see
+`dotnet/README.md`), then add one connection per principal, the key in the URL:
+
+```
+http://localhost:3002/mcp?key=<merge-demo-key>        # VS Code; the seed with its own inbox and theme
+https://<tunnel-host>/mcp?key=<replace-demo-key>      # a connector; the built-ins and release-notes-widget
+```
+
+A connection without a key gets the seed. Hosts cache `ui://` per chat, so test each principal
+in a fresh conversation.
 
 **Claude Desktop, the .NET sample over stdio** (`claude_desktop_config.json`; build the npm
 workspace and the sample first, then point at the built DLL):
@@ -362,6 +377,15 @@ workspace and the sample first, then point at the built DLL):
 ```
 
 ## Verification log
+
+- **Per-principal catalogs in .NET (2026-10-11, change `dotnet-principal-catalogs`, on `feature/dotnet-principal-catalogs`, `Widgentic.Mcp` 0.11.0 unreleased)**
+  - **The suite.** Windows 11, .NET SDK 10.0.401: 136 of 136.
+  - **Composition, through the resolver with real principals.** Two principals over 32 concurrent calls on a pool of 4 never saw each other's kinds. In Merge a principal's `email-inbox-widget` was listed once, with its own description, and a principal theme extending `google-dark` inherited its tokens. Replace listed the built-ins and the principal's widget only, and a catalog's own `Replace` overrode the default for its principal alone. On a pool of one, B did not see A's entries, and an entry added to A's catalog appeared on A's next call.
+  - **Refusals.** A repeated `kind` served the first entry and logged `widgets[1]`. A principal's `<script>` widget, posing as `email-inbox-widget`, was refused (`INVALID_TEMPLATE`) and still removed the seed's inbox. Unreadable JSON was logged as `INVALID_JSON`. No log line contained the entry's contents.
+  - **A failing source** answered `CATALOG_UNAVAILABLE` without the exception text, which held a fake address, and logged the failure at Error; the other principal kept working.
+  - **Global surfaces.** `list_theme_tokens`, `get_authoring_guide`, `tools/list` and the app template never called the source. Over the in-process protocol, `list_widgets` did, and a host tool rendering a principal-only kind through the `RequestContext` overload equaled `render_widget`.
+  - **The sample over HTTP**, launched as a process with two random keys from environment variables. The keyless client listed the seed. `merge-demo`, keyed by `x-api-key`, listed its inbox once with its own description plus `merge-demo-dark`. `replace-demo`, keyed by `?key=`, listed `card` and `release-notes-widget` without the seed's kinds and rendered its widget. The server's output, Information logs included, never contained either key.
+  - **NOT yet done.** Staging (6.4), and the owner's per-principal host retest.
 
 - **Wire schemas from the exported definitions (2026-10-11, change `derived-input-schemas`, `@widgentic/mcp` minor pending release)**
   - **The wire.** `server-wiring` lists the tools of `createWidgenticServer()` and finds every `inputSchema` and description equal to the exported definition's, for all nine tools: nothing added (no `$schema`), nothing missing.

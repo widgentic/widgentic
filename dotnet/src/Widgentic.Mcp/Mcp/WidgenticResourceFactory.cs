@@ -46,7 +46,8 @@ internal static class WidgenticResourceFactory
         return new JsonObject { ["ui"] = ui };
     }
 
-    public static McpServerResource WidgetPage(WidgenticEngine engine)
+    /// <summary>The preview page for a kind of the caller's catalog (the startup catalog when none resolves).</summary>
+    public static McpServerResource WidgetPage(WidgenticEngine engine, CallerCatalogs catalogs)
     {
         var resources = engine.Resources;
         return McpServerResource.Create(
@@ -54,7 +55,7 @@ internal static class WidgenticResourceFactory
             {
                 Uri = request.Params?.Uri ?? resources.WidgetPageUriTemplate.Replace("{kind}", kind, StringComparison.Ordinal),
                 MimeType = resources.WidgetPageMimeType,
-                Text = await engine.Pool.InvokeAsync("widgetPage", cancellationToken, kind).ConfigureAwait(false),
+                Text = await catalogs.WidgetPageAsync(kind, request.User, request.Services, cancellationToken).ConfigureAwait(false),
             },
             new McpServerResourceCreateOptions
             {

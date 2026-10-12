@@ -16,9 +16,11 @@ internal sealed class WidgenticEngine : IDisposable
         IReadOnlyList<JsonElement> definitions,
         HostResources resources,
         WidgenticEngineInfo info,
-        IReadOnlyList<string> notes)
+        IReadOnlyList<string> notes,
+        CatalogComposer composer)
     {
         Pool = pool;
+        Composer = composer;
         Definitions = definitions;
         Resources = resources;
         Info = info;
@@ -26,6 +28,9 @@ internal sealed class WidgenticEngine : IDisposable
     }
 
     public V8HostPool Pool { get; }
+
+    /// <summary>Builds each caller's per-call configuration from the startup entries and the caller's catalog.</summary>
+    public CatalogComposer Composer { get; }
 
     /// <summary>The bundle's tool definitions (name, description, inputSchema), in its order.</summary>
     public IReadOnlyList<JsonElement> Definitions { get; }
@@ -71,7 +76,7 @@ internal sealed class WidgenticEngine : IDisposable
                     notes.Add($"widget '{definition["kind"]}' ({widget.Source}) declares a load binding; it is inactive in this render-only version.");
                 }
             }
-            return new WidgenticEngine(pool, definitions, resources, info, notes);
+            return new WidgenticEngine(pool, definitions, resources, info, notes, new CatalogComposer(options));
         }
         catch
         {

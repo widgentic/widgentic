@@ -77,7 +77,9 @@ public sealed class TeamTools
 The result is exactly what `render_widget` would return. MCP Apps hosts mount it inline, and
 the model still receives the data in the payload block. Invalid input comes back as an
 `isError` result with a structured code, never as an exception. `[McpAppUi]` belongs to the
-SDK's experimental MCP Apps API, so projects that use it suppress `MCPEXP003`.
+SDK's experimental MCP Apps API, so projects that use it suppress `MCPEXP003`. With a catalog
+source (below), the `RequestContext` overload renders with the caller's catalog; the session
+overload always renders with the startup catalog.
 
 ## Your own widgets, themes and schemas
 
@@ -96,6 +98,58 @@ Every entry is validated by the bundle at startup. Anything refused (a forbidden
 reserved kind such as `card`, a theme named `light`, malformed JSON) stops startup with a
 `WidgenticConfigurationException` listing every problem with its file. Nothing is accepted
 and then silently missing.
+
+## A catalog per caller
+
+One server can serve each caller (a tenant, a user) its own widgets, themes and schemas.
+Authenticate callers the ASP.NET Core way and register an `IWidgenticCatalogSource`. It receives
+the caller's `ClaimsPrincipal` and the request's services, and returns a `WidgenticCatalog`, or
+`null` to serve the startup catalog. Where catalogs live is up to you:
+
+```csharp
+builder.Services.AddSingleton<IWidgenticCatalogSource, TenantCatalogs>();
+
+sealed class TenantCatalogs(ITenantWidgets store) : IWidgenticCatalogSource
+{
+    public async ValueTask<WidgenticCatalog?> GetCatalogAsync(WidgenticCaller caller, CancellationToken ct)
+    {
+        if (caller.User?.FindFirst("tenant")?.Value is not { } tenant) return null;   // the startup catalog
+        var catalog = new WidgenticCatalog();
+        foreach (var json in await store.WidgetsAsync(tenant, ct)) catalog.AddWidget(json);
+        return catalog;
+    }
+}
+```
+
+The catalog composes with the startup entries in one of two modes. `WidgenticOptions.PrincipalComposition`
+sets the default, and a catalog's own `Composition` overrides it for its caller:
+- **`Merge`** (the default): the startup entries plus the caller's. A caller's entry replaces
+  the startup entry with the same identifier (a widget's `kind`, a theme's or schema's `name`),
+  so no identifier is served twice. The remaining startup entries compose first, so the
+  caller's themes can extend startup themes and its widgets can reference startup schemas.
+- **`Replace`**: the built-ins and the caller's entries only.
+
+Built-in kinds and the `light`/`dark` themes stay reserved in both modes.
+
+`list_widgets`, `render_widget`, `preview_widget`, `list_themes`, `list_schemas`, the preview
+pages and the renderer's `RequestContext` overload answer from the caller's catalog. `tools/list`,
+`list_theme_tokens`, `get_authoring_guide` and the app template are the same for every caller
+and never call the source.
+
+- **Nothing is cached.** Each call asks the source, composes inside the leased runtime (about
+  0.05 ms per widget, 2.3 ms at 50) and drops the composition when the call ends. If fetching
+  catalogs is slow, cache in your source.
+- **A caller's refused entry never fails a call.** Startup entries stop startup, but a caller's
+  invalid entry is skipped, as is any repeat of an identifier within one catalog (the first one
+  wins). Each is logged at Warning under `Widgentic.Mcp.Catalogs` with its section, index, name
+  and code, never its contents. A refused entry still replaces the startup entry with its
+  identifier.
+- **A failing source is a result.** If the source throws, tools answer `isError` with
+  `CATALOG_UNAVAILABLE` and a preview page read fails. The exception is logged, and its message
+  never reaches the client.
+- **Limits.** The composed set counts against the limits of 100 widgets and 50 themes. In
+  `Merge` the startup entries come first, so a large startup set leaves each caller less room;
+  entries past a limit are refused with `LIMIT_REACHED`.
 
 ## Render-only, for now
 
@@ -140,8 +194,26 @@ dotnet run --project dotnet/samples/Widgentic.Sample.Stdio --launch-profile stdi
 Hosts that connect to a URL are where widgets render inline. Over HTTP the sample has been
 verified in Claude, VS Code Copilot and ChatGPT, its own `team_roster` tool included. The
 built executable still defaults to stdio when run without `--http`. Over HTTP the sample is stateless for MCP 2026-07-28 clients and keeps a session
-for clients that initialize (`SessionMode = StatefulForInitializeClients`). It binds loopback
-only, because it has no authentication.
+for clients that initialize (`SessionMode = StatefulForInitializeClients`).
+
+Over HTTP the sample also serves two demo principals, each with a small catalog under
+`principals/`. Give each one a key in configuration, `Widgentic:Sample:Keys:merge-demo` and
+`Widgentic:Sample:Keys:replace-demo` (as environment variables `Widgentic__Sample__Keys__merge-demo`
+and so on, or on the command line), and connect with the key in an `x-api-key` header or as
+`?key=` in the URL:
+
+```sh
+dotnet run --project dotnet/samples/Widgentic.Sample.Stdio -- --http \
+  --Widgentic:Sample:Keys:merge-demo=<key> --Widgentic:Sample:Keys:replace-demo=<key>
+```
+
+- **`merge-demo`** gets the seed, with its own `email-inbox-widget` in place of the seed's and a
+  `merge-demo-dark` theme extending `google-dark`.
+- **`replace-demo`** gets the built-ins and its own `release-notes-widget` only.
+- **Callers without a known key** get the seed.
+
+Keys are never logged; the request-start log, which would print `?key=`, is turned off. The keys
+select a catalog and gate nothing, so the sample binds loopback only.
 
 ## Developing this package
 
