@@ -3,6 +3,16 @@
 Versions share their major.minor with the `@widgentic/mcp` release whose host bundle they embed:
 `Widgentic.Mcp` X.Y.* runs `@widgentic/mcp` X.Y.*. The patch moves on its own for .NET-only fixes.
 
+## Unreleased
+
+Rides on the next `@widgentic/mcp` release (`theme-styles-and-defaults`).
+
+- The app template resource asks MCP Apps hosts for no border or background:
+  `_meta.ui.prefersBorder: false`, on the resource declaration and on its read content, taken
+  from the bundle.
+- **Breaking:** theme entries lose `extends`. An entry is registered as given, so merge a base
+  theme's tokens and styles into it before passing it to `AddThemes`.
+
 ## 0.10.0
 
 Embeds the `@widgentic/mcp` 0.10.0 host bundle. No behavior change: the bundle's code is

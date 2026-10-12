@@ -37,14 +37,27 @@ export function mountThemePanel(
       h("option", { value: entry.name }, [entry.label ?? entry.name])
     );
   }
+  // The selection is the person's: it names the draft's `previewTheme`
+  // and only a pick here changes it — tokens a host or agent layers on
+  // top never re-select by content.
+  const showChoice = (draft: WidgetDraft) => {
+    themeSelect.value = themes.some((entry) => entry.name === draft.previewTheme) ? draft.previewTheme ?? "" : "";
+  };
+  showChoice(store.get());
   themeSelect.addEventListener("change", () => {
     const entry = themes.find((candidate) => candidate.name === themeSelect.value);
     store.update((draft) => {
-      if (entry === undefined) {
-        const { theme: _gone, ...rest } = draft;
-        return rest;
-      }
-      return { ...draft, theme: entry.tokens };
+      const { theme: _theme, themeStyles: _styles, previewTheme: _name, ...rest } = draft;
+      if (entry === undefined) return rest;
+      // A pick replaces any layered tokens. The entry's shared styles dress
+      // the preview too, so its classes look in the draft as they will
+      // under this theme.
+      return {
+        ...rest,
+        theme: entry.tokens,
+        previewTheme: entry.name,
+        ...(entry.styles === undefined ? {} : { themeStyles: entry.styles })
+      };
     });
   });
 
@@ -82,15 +95,7 @@ export function mountThemePanel(
   renderTokenReference(store.get().theme);
 
   refreshers.push((draft) => {
-    // Reflect programmatic theme loads; an unrecognized map shows as none.
-    if (draft.theme === undefined) {
-      themeSelect.value = "";
-    } else {
-      const match = themes.find(
-        (entry) => JSON.stringify(entry.tokens) === JSON.stringify(draft.theme)
-      );
-      themeSelect.value = match?.name ?? "";
-    }
+    showChoice(draft);
     renderTokenReference(draft.theme);
   });
 

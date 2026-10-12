@@ -2,7 +2,9 @@
 
 ## Purpose
 Provides the built-in widgets (`card`, `table`, `tree`, `group`) and the registration API hosts use to add kinds without modifying the core. Renderers are pure functions producing a plain-data render tree; separate output layers serialize it to escaped HTML or mount it into the DOM. Rendering validates payloads against the contract using the catalog's registered kinds.
+
 ## Requirements
+
 ### Requirement: Built-in widget kinds
 The system SHALL provide built-in widgets: `card`, `table`, `tree`, and `group`. Each built-in widget MUST document the shape of `data` and supported `hints`.
 
@@ -373,7 +375,7 @@ The catalog SHALL store a `WidgetDescriptor` per kind — `{ kind, description, 
 - **THEN** `pattern` SHALL produce no violation (type checking is `type`'s concern)
 
 ### Requirement: Registered widget styles
-`WidgetDescriptor` SHALL accept optional `styles`: a map of CSS selectors to property/value maps, letting custom kinds ship their look as data. Every selector part SHALL target a `.wg-`-prefixed class; selectors, property names, and values are guarded (no braces, semicolons, angle brackets, `url(`, or `expression(`), and values MAY reference theme tokens via `var(--wg-*)`. Invalid entries SHALL be skipped, never emitted. `widgetStylesToCss(styles)` SHALL generate the CSS, and styles SHALL be exposed through `describe`/`list` so hosts can inject them.
+`WidgetDescriptor` SHALL accept optional `styles`: a map of CSS selectors to property/value maps, letting custom kinds ship their look as data. Every selector part — split on top-level commas, read outside brackets and quoted strings, so the commas inside `:is()`, `:not()`, `:has()`, `:where()` or an attribute value belong to it — SHALL be held to `.wg-` classes: one of its compounds SHALL name a `.wg-`-prefixed class itself, or through `:is()` or `:where()` whose every argument is so held, nested at most 16 levels so the check is bounded and the generator never throws (a `.wg-` class only inside `:not()`, `:has()`, an attribute test or a string does not count), and no part SHALL open with a combinator; selectors, property names, and values are guarded (no braces, semicolons, angle brackets, `@`, backslashes, comment markers `/*` or `*/`, unclosed brackets or strings — a newline ends a string unclosed, as in CSS — and in values no `url(`, `expression(`, `image-set(` or `src(`), and values MAY reference theme tokens via `var(--wg-*)`. The rules SHALL also be exported as text, `STYLE_RULES`, built from the constants that enforce them, for guides and designer messages to read. Invalid entries SHALL be skipped, never emitted. `widgetStylesToCss(styles)` SHALL generate the CSS, and styles SHALL be exposed through `describe`/`list` so hosts can inject them.
 
 #### Scenario: Styles registered as data generate CSS
 - **WHEN** a kind registers `styles: { ".wg-invoice": { border: "1px solid var(--wg-border, #e2e8f0)" } }`
@@ -384,6 +386,27 @@ The catalog SHALL store a `WidgetDescriptor` per kind — `{ kind, description, 
 - **WHEN** styles contain a non-`.wg-` selector (e.g. `body`), a value with `url(`, or a property with `{`
 - **THEN** the generated CSS SHALL contain none of them
 - **AND** safe sibling entries SHALL still be emitted
+
+#### Scenario: Structural tricks and URL carriers are dropped
+- **WHEN** styles hold `html /* .wg-x */`, `body:not(.wg-x)`, `:is(.wg-a, body)`, `body[data-a=".wg-"]`, `.wg-a, ~ .wg-b`, a value `red /*`, and values calling `image-set(` or `src(`, beside a safe `.wg-row:has(.wg-ok, .wg-warn)` rule
+- **THEN** the generated CSS SHALL contain only the safe rule
+
+#### Scenario: Quoted brackets cannot shift the structure
+- **WHEN** styles hold `.wg-a[title="("], body`, `body:not([title=")"] .wg-x)` and `body:not([x="]].wg-"])`
+- **THEN** the generated CSS SHALL contain none of them
+- **AND** `.wg-a[title="("], .wg-b` scoped to a mode SHALL scope both parts
+
+#### Scenario: Unclosed brackets and strings are dropped
+- **WHEN** styles hold the selectors `.wg-a:is(`, `.wg-a[title` and `.wg-a[title="a⏎b"]` (a newline inside the string), and the values `calc(1px + (2px`, `foo(`, `1px)`, `"open` and `"a⏎b"`
+- **THEN** the generated CSS SHALL contain none of them, and a rule after them in the same sheet SHALL still apply
+
+#### Scenario: Deep nesting is refused without throwing
+- **WHEN** a selector nests `:is(` 2,000 levels deep around `.wg-a`
+- **THEN** `widgetStylesToCss` SHALL return without throwing and SHALL NOT emit it
+
+#### Scenario: Selectors held through :is() and :where() are kept
+- **WHEN** styles hold `:is(.wg-btn, .wg-link):hover`, `:where(.wg-card) h3` and `.wg-a[title="("]` with the value `"("`
+- **THEN** the generated CSS SHALL contain each rule unchanged
 
 ### Requirement: Image rendering in card and table
 The `card` and `table` renderers SHALL render a string value as an image element when it is a safe image source and either auto-detection or a hint selects image treatment. A value auto-detects as an image when `isSafeImageSrc` passes and the value is a `data:image/*` URI or an `http(s)` URL whose pathname ends in `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.avif`, or `.svg` (query strings tolerated). `hints.images: Record<string, "avatar" | "thumb" | "hero" | true | false>` SHALL override per card-field / table-column key: a shape string forces image treatment with that shape, `true` forces the context default shape, and `false` suppresses detection so the value renders as text. Hints SHALL NOT bypass safety: a value failing `isSafeImageSrc` renders as text regardless of hints. The default shape SHALL be `avatar` in table cells and `thumb` in card fields. The emitted element SHALL be `img` with classes `wg-img wg-img-<shape>`, the value as `src`, the field/column key as `alt`, and `loading="lazy"` / `decoding="async"`; image treatment takes precedence over `hints.fieldFormat` for the same key.
@@ -464,3 +487,18 @@ When a `group` render composes an item, every action descriptor in that item's r
 #### Scenario: Plain items are untouched
 - **WHEN** a `group` renders items without any action binding
 - **THEN** no subtree SHALL carry a `data-wg-action` attribute and the render SHALL equal a pre-actions group render
+
+### Requirement: Data schemas can be audited for what validation ignores
+The catalog SHALL export `DATA_SCHEMA_TYPES` — the `type` names the data validator checks — and `auditDataSchema(schema, path?)`, which returns, without throwing, a warning per thing the validator would silently ignore: a `type` name outside `DATA_SCHEMA_TYPES` (or a `type` that is neither a name nor a list of names), a `pattern` it refuses to run, and an `enum`, `required`, `properties` or `items` of the wrong shape, recursing into `properties` and `items` with dotted paths from `path` (default `schema`). Unknown keywords SHALL produce no warning (they are forward compatible), and validation itself SHALL stay unchanged.
+
+#### Scenario: An unknown type is named, and validation still ignores it
+- **WHEN** a schema's property `kind` has `type: "banana"`
+- **THEN** `auditDataSchema` SHALL return a warning naming `schema.properties.kind.type` and `'banana'`, and `validateDataAgainstSchema` SHALL accept any value there
+
+#### Scenario: Unrunnable patterns and misshapen keywords are named through items
+- **WHEN** an array schema's `items` has a string `required`, a string `enum`, a nested-quantifier `pattern` on a property, and a property whose schema is a string
+- **THEN** `auditDataSchema(schema, "dataSchema")` SHALL return one warning for each, with paths under `dataSchema.items`
+
+#### Scenario: Supported schemas are silent
+- **WHEN** a schema uses only `DATA_SCHEMA_TYPES`, a runnable `pattern`, well-shaped keywords and an unknown `x-note` keyword
+- **THEN** `auditDataSchema` SHALL return no warnings

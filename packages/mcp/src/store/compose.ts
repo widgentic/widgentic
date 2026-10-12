@@ -24,8 +24,8 @@ import {
 } from "@widgentic/core";
 import { isPlainObject } from "@widgentic/core";
 import { createThemeRegistry } from "@widgentic/core";
-import type { ThemeEntry, ThemeRegistry } from "@widgentic/core";
-import type { StoredWidget, WidgetStore } from "./types.js";
+import type { ThemeEntry, ThemeMode, ThemeRegistry } from "@widgentic/core";
+import type { PrincipalSettings, StoredWidget, WidgetStore } from "./types.js";
 import type { StoreLimits } from "./limits.js";
 import { DEFAULT_LIMITS } from "./limits.js";
 import { checkStoredAction, checkStoredTheme, checkStoredWidget } from "./validate.js";
@@ -92,6 +92,9 @@ export interface ComposeProblem {
 }
 
 const SINGULAR = { widgets: "widget", themes: "theme", actions: "action" } as const;
+
+/** The modes a default theme is chosen for, in reporting order. */
+const THEME_MODES: readonly ThemeMode[] = ["light", "dark"];
 
 /** The diagnostic line a problem has always been reported as. */
 function diagnosticLine(problem: ComposeProblem): string {
@@ -333,16 +336,53 @@ export function composeThemeEntries(
   return { registry, problems };
 }
 
-/** Theme registry for one principal: built-ins plus their stored themes. */
+/**
+ * The principal's default themes, or why there are none. Defaults are
+ * cosmetic: an adapter written before settings existed (no `settings`
+ * method) or a failing read leaves the built-ins, never a failed render.
+ */
+async function readDefaults(
+  store: WidgetStore,
+  principalId: string
+): Promise<{ defaultThemes?: PrincipalSettings["defaultThemes"] } | { failure: string }> {
+  if (typeof store.settings !== "function") return {};
+  try {
+    const settings = await store.settings(principalId);
+    return settings.defaultThemes === undefined ? {} : { defaultThemes: settings.defaultThemes };
+  } catch (error) {
+    return { failure: `default themes not read (${errorMessage(error)}); the built-in themes stay the defaults.` };
+  }
+}
+
+/**
+ * Theme registry for one principal: built-ins plus their stored themes,
+ * with the default per mode their settings choose. A default naming a theme
+ * the registry does not hold (missing, or skipped as invalid) keeps the
+ * built-in and is reported, never fatal.
+ */
 export async function composeThemes(
   store: WidgetStore | undefined,
   principalId: string,
   options: ComposeOptions = {}
 ): Promise<ComposeResult<ThemeRegistry>> {
-  const stored = store === undefined ? [] : await store.themes(principalId);
+  // Both reads at once: every request composes, so latency adds up.
+  const [stored, settings] =
+    store === undefined ? [[], undefined] : await Promise.all([store.themes(principalId), readDefaults(store, principalId)]);
   const composed = composeThemeEntries(
     stored,
     options.limits === undefined ? {} : { limits: options.limits }
   );
-  return { value: composed.registry, diagnostics: composed.problems.map(diagnosticLine) };
+  const diagnostics = composed.problems.map(diagnosticLine);
+  if (settings !== undefined && "failure" in settings) diagnostics.push(settings.failure);
+  const defaults = settings !== undefined && "defaultThemes" in settings ? settings.defaultThemes : undefined;
+  for (const mode of THEME_MODES) {
+    const name = defaults?.[mode];
+    if (name === undefined) continue;
+    if (composed.registry.get(name) === undefined) {
+      diagnostics.push(`default ${mode} theme '${name}' is not available; the built-in ${mode} theme stays the default.`);
+      continue;
+    }
+    composed.registry.setDefault(mode, name);
+  }
+  return { value: composed.registry, diagnostics };
 }

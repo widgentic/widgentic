@@ -31,7 +31,7 @@ A widget is one JSON object: \{ kind, template, descriptor \}.
 
 | Field | Meaning |
 | -- | -- |
-| `dataShape` | REQUIRED string — a compact sketch of the expected data, e.g. '\{ title, lines: \[\{ item, amount \}\] \}'. |
+| `dataShape` | Strongly recommended string — a compact sketch of the expected data, e.g. '\{ title, lines: \[\{ item, amount \}\] \}'. Agents listing the widget read it; without it they see a generic placeholder, and the designer warns. |
 | `dataExample` | RECOMMENDED — an example the widget renders well; shown to agents and used as the designer's preview data. |
 | `dataSchemaRef` | OPTIONAL string — the NAME of one of the user's saved shared schemas (discover with list\_schemas), used IN PLACE of an inline dataSchema: carrying both is refused. Use this when the user names a saved schema ('use my person schema') — the server resolves it at render time, so one shared schema serves every widget that references it and edits propagate. |
 | `hints` | OPTIONAL record documenting supported hint keys. |
@@ -70,13 +70,14 @@ Call list\_actions first: it lists what the user already has, as the CONTRACT (n
 
 ## Theme entry
 
-A theme entry is one JSON object: \{ name, label?, description?, tokens \}.
+A theme entry is one JSON object: \{ name, label?, description?, tokens, styles? \}.
 
 | Field | Meaning |
 | -- | -- |
 | `name` | String identifier matching ^\[a-zA-Z0-9.\_-\]+\$. |
 | `label` | OPTIONAL human-readable display name. |
 | `tokens` | Record of registry token names (bare, no --wg- prefix) and/or custom variables to string values. |
+| `styles` | OPTIONAL shared classes, in the same shape as a widget's descriptor.styles: \{ "\<selector\>": \{ "\<cssProperty\>": "\<value\>" \} \}. |
 
 ### Custom variables
 
@@ -84,7 +85,7 @@ Names match `^x-[a-z0-9][a-z0-9-]*$`. A custom variable x-foo becomes --wg-x-foo
 
 ### Value safety
 
-Token values are plain CSS values. Rejected: ';', '\{', '\}', '\<', '\>', 'url(' and 'expression(' (case-insensitive, whitespace-tolerant). Keep values to colors, lengths, and font stacks.
+Token values are plain CSS values. Rejected: anything matching \[;\{\}\<\>\\\\\], a comment marker (/\* or \*/), an unclosed bracket or string, and calls to url(, expression(, image-set(, src( (case-insensitive, whitespace-tolerant). Keep values to colors, lengths, and font stacks.
 
 The full token table is on [Theme tokens](/reference/theme-tokens).
 
@@ -92,9 +93,9 @@ The full token table is on [Theme tokens](/reference/theme-tokens).
 
 descriptor.styles is \{ "\<selector\>": \{ "\<cssProperty\>": "\<value\>" \} \} — each declaration is a separate key/value pair, e.g. \{ ".wg-roster-row": \{ "display": "flex", "gap": "var(--wg-spacing)" \} \}.
 
-Every selector (and every comma-separated part) must target a .wg- class, e.g. '.wg-card .wg-xcard-head'. The base stylesheet also ships a wg-code monospace block utility (font-mono, surface, border) any template element can opt into via class.
+Every selector part (split on top-level commas) must be held to .wg- classes: one of its compounds names a .wg- class itself, or through :is() or :where() whose every argument does. A .wg- class only inside :not(), :has(), an attribute test or a string does not count, and no part may open with a combinator — e.g. '.wg-card .wg-xcard-head', '.wg-row:has(.wg-ok, .wg-warn)' or ':is(.wg-btn, .wg-link):hover'.
 
-Selectors, properties, or values matching \[;\{\}\<\>@\\\\\] — or containing 'url(' or 'expression(' — are dropped.
+Selectors, properties, or values matching \[;\{\}\<\>@\\\\\], holding a comment marker (/\* or \*/) or an unclosed bracket or string, or calling url(, expression(, image-set(, src( are dropped.
 
 Property names must match ^-?\[a-zA-Z\]\[a-zA-Z-\]\*\$ (letters and hyphens, optionally leading '-'); anything else is dropped.
 

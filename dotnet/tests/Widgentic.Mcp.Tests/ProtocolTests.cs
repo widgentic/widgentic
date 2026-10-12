@@ -141,6 +141,18 @@ public sealed class ProtocolTests
     }
 
     [Fact]
+    public async Task AsksTheHostForNoBorder()
+    {
+        await using var server = await TestServer.StartAsync();
+        var app = Assert.Single(await server.Client.ListResourcesAsync(cancellationToken: Cancel), r => r.Uri == WidgenticResources.AppTemplateUri);
+        Assert.False(app.ProtocolResource.Meta?["ui"]?["prefersBorder"]?.GetValue<bool>());
+        var read = await server.Client.ReadResourceAsync(WidgenticResources.AppTemplateUri, cancellationToken: Cancel);
+        var content = Assert.Single(read.Contents);
+        Assert.False(content.Meta?["ui"]?["prefersBorder"]?.GetValue<bool>());
+        Assert.Null(content.Meta?["ui"]?["csp"]);
+    }
+
+    [Fact]
     public async Task SlimsForAppsHostsOnly()
     {
         const string card = """{"widget":"card","data":{"title":"T"}}""";

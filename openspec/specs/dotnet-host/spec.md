@@ -34,7 +34,7 @@ The package SHALL extend the C# SDK's server builder with `WithWidgentic(Action<
 - the app template resource at that URI, with MIME type `text/html;profile=mcp-app` and content equal to the bundle's `appTemplate()`;
 - unless `IncludeWidgetPages` is false, the `ui://widgentic/page/{kind}` resource template, serving the bundle's `widgetPage(kind)`.
 
-`WidgenticOptions.ResourceDomains` SHALL be declared as `_meta.ui.csp.resourceDomains` on the app resource, and the key SHALL be absent when the list is empty. The list is deployment configuration: no widget, theme or render input can extend it. Model-facing output SHALL be slimmed exactly when the call's client advertised the Apps UI capability with the app MIME type. That capability is read from the session's negotiated capabilities when there are any. Otherwise it is read from the capabilities the request carries in `_meta["io.modelcontextprotocol/clientCapabilities"]`, as stateless MCP 2026-07-28 requests do; that revision is the C# SDK's default over HTTP. Only a call revealing neither SHALL fall back to `WidgenticOptions.AssumeUi` (default false), the equivalent of the Node assembly's `WIDGENTIC_ASSUME_UI`.
+The app resource's `_meta.ui` — on the declaration and on its read content alike — SHALL carry `prefersBorder` as the bundle's `resources()` gives it (`false`). `WidgenticOptions.ResourceDomains` SHALL be declared as `_meta.ui.csp.resourceDomains` on the app resource, and the key SHALL be absent when the list is empty. The list is deployment configuration: no widget, theme or render input can extend it. Model-facing output SHALL be slimmed exactly when the call's client advertised the Apps UI capability with the app MIME type. That capability is read from the session's negotiated capabilities when there are any. Otherwise it is read from the capabilities the request carries in `_meta["io.modelcontextprotocol/clientCapabilities"]`, as stateless MCP 2026-07-28 requests do; that revision is the C# SDK's default over HTTP. Only a call revealing neither SHALL fall back to `WidgenticOptions.AssumeUi` (default false), the equivalent of the Node assembly's `WIDGENTIC_ASSUME_UI`.
 
 #### Scenario: The tool declares its template
 - **WHEN** a C# SDK client lists tools
@@ -67,6 +67,10 @@ The package SHALL extend the C# SDK's server builder with `WithWidgentic(Action<
 #### Scenario: Preview pages serve the dataExample
 - **WHEN** the client reads `ui://widgentic/page/card`
 - **THEN** the content SHALL equal the bundle's `widgetPage("card")`
+
+#### Scenario: The host is asked for no border
+- **WHEN** a C# SDK client lists resources and reads `ui://widgentic/app.html`
+- **THEN** the declaration and the read content SHALL both carry `_meta.ui.prefersBorder: false`, and the read content no `csp` when no domains are configured
 
 ### Requirement: Hosts choose which tools are exposed
 `WidgenticOptions.Tools` SHALL be a flags value over `ListWidgets`, `RenderWidget`, `ListThemeTokens`, `ListThemes`, `ListSchemas` and `GetAuthoringGuide`. Its default, `WidgenticTools.Default`, SHALL include all six. `RenderWidget` SHALL also register the template's app-only `preview_widget`, which serves only `render_widget`'s streaming previews. A tool not selected SHALL NOT be registered: it is absent from `tools/list`, and a call to it is answered as an unknown tool. Any subset SHALL be valid, including `None`. The app template resource SHALL be registered whatever the selection, because a host's own tools render through it. No option SHALL register `execute_action` or `list_actions` in this version.

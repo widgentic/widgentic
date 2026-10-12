@@ -22,7 +22,9 @@ const agentTools = await exposeDesigners({
   widget: () => widgetDesigner,
   theme: () => { showTab("theme"); return themeDesigner; },
   schema: () => schemaDesigner,
-  action: () => actionDesigner
+  action: () => actionDesigner,
+  // Read by the definition check: it must never show or mount anything.
+  widgetIfMounted: () => widgetDesigner
 });
 
 // Tell the person only when it matters; everyone else sees the page unchanged.

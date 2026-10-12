@@ -1,9 +1,9 @@
 ---
 title: "Embed the designers"
-description: "Mount the widget, theme, schema and action designers in your own page as functions or custom elements, and theme their chrome."
+description: "Mount the widget, theme, schema, action and settings designers in your own page as functions or custom elements, and theme their chrome."
 ---
 
-`@widgentic/designer` ships four designers — widget, theme, schema and action — each as a function taking a container and each as an opt-in custom element. They run in the browser, depend only on `@widgentic/core`, and perform no network I/O: every edit re-runs widgentic's validators and re-renders a live preview through the real pipeline; persistence is yours.
+`@widgentic/designer` ships five designers — widget, theme, schema, action and settings — each as a function taking a container and each as an opt-in custom element. They run in the browser, depend only on `@widgentic/core`, and perform no network I/O: every edit re-runs widgentic's validators and re-renders a live preview through the real pipeline; persistence is yours.
 
 ```bash
 npm install @widgentic/designer
@@ -25,6 +25,7 @@ designer.subscribe((draft) => save(draft));
 | `initialWidget` | a widget definition to open with (otherwise a starter draft) |
 | `initialTheme` | a token map for the preview |
 | `themes` | named theme entries offered as preview themes; theme authoring lives in the theme designer |
+| `previewTheme` | the name of one of `themes` to open with as the preview theme, its tokens and shared styles applied — pass the person's light default; an unknown name is ignored |
 | `schemas` | shared data-schema entries the draft may reference by name (`descriptor.dataSchemaRef`) |
 | `actions` | shared actions the draft may bind by name, for element bindings and the widget-level `load` |
 | `secretNames` | secret names offered when an inline http action needs a header or query secret |
@@ -32,12 +33,17 @@ designer.subscribe((draft) => save(draft));
 | `chrome` | host chrome tokens, see below |
 | `readOnly` | mount with every editing surface inert |
 
-The handle is `{ getDraft, loadWidget, loadTheme, setReadOnly, subscribe, dispose }`. `getDraft()` returns a copy of the current draft; `loadWidget(definition)` and `loadTheme(theme)` validate first and return `{ ok: true }` or `{ ok: false, errors }` without touching the draft on failure; `subscribe(listener)` calls `listener(draft, diagnostics)` on every change and returns an unsubscribe function; `dispose()` removes the UI. Read-only mode — `readOnly: true` or `setReadOnly(true)` — leaves editing surfaces visible but inert while the preview, its theme selector and Export keep working: it restricts editing, not looking.
+The handle is `{ getDraft, getDiagnostics, loadWidget, checkWidget, loadTheme, setReadOnly, subscribe, dispose }`. `getDraft()` returns a copy of the current draft; `getDiagnostics()` returns its diagnostics and `checkWidget(definition)` checks a definition as a load would, without touching the draft, both resolved against the `schemas` and `actions` you supplied; `loadWidget(definition)` and `loadTheme(theme)` validate first and return `{ ok: true }` or `{ ok: false, errors }` without touching the draft on failure; `loadTheme(tokens)` layers its tokens over the preview theme the person chose, which stays selected with its styles, so `loadTheme({})` returns to it; `loadWidget` keeps the preview theme and refuses a kind Save would refuse only when the load changes the kind; `subscribe(listener)` calls `listener(draft, diagnostics)` on every change and returns an unsubscribe function; `dispose()` removes the UI. Read-only mode — `readOnly: true` or `setReadOnly(true)` — leaves editing surfaces visible but inert while the preview, its theme selector and Export keep working: it restricts editing, not looking.
 
-## Theme, schema and action designers
+## Theme, schema, action and settings designers
 
 ```ts
-import { createActionDesigner, createSchemaDesigner, createThemeDesigner } from "@widgentic/designer";
+import {
+  createActionDesigner,
+  createSchemaDesigner,
+  createSettingsDesigner,
+  createThemeDesigner
+} from "@widgentic/designer";
 
 const themeDesigner = createThemeDesigner(el, { widgets, readOnly });
 // → { getTheme, loadTheme, setReadOnly, subscribe, dispose }
@@ -47,13 +53,27 @@ const schemaDesigner = createSchemaDesigner(el, { readOnly });
 
 const actionDesigner = createActionDesigner(el, { schemas, secretNames, testCall });
 // → { getAction, loadAction, setReadOnly, subscribe, dispose }
+
+const settingsDesigner = createSettingsDesigner(el, { themes, initialSettings, readOnly });
+// → { getSettings, loadSettings, setReadOnly, subscribe, dispose }
 ```
 
-- `createThemeDesigner` edits a named entry `{ name, label?, description?, tokens }`. Its `widgets` option adds custom widget definitions to the preview-kind selector beside the built-ins, so a theme is judged against the widgets it will dress; invalid definitions are skipped. `initialTheme` opens an existing entry.
+- `createThemeDesigner` edits a named entry `{ name, label?, description?, tokens, styles? }`, its shared styles in the widget designer's own Styles panel. Its `widgets` option adds custom widget definitions to the preview-kind selector beside the built-ins, so a theme is judged against the widgets it will dress; invalid definitions are skipped. `initialTheme` opens an existing entry.
 - `createSchemaDesigner` edits a shared schema entry `{ name, label?, description?, schema }`; `initialSchema` opens one.
 - `createActionDesigner` edits a stored action `{ name, label?, description?, definition }`; `initialAction` opens one. `schemas` offers shared schemas as copy-from sources for the input and output schemas, and `secretNames` offers names for header and query values. A Test control appears only when you pass `testCall(definition, args)`, which must run through your server's execution path — the library performs no network I/O itself.
 
-All four accept `appearance`, `chrome` and `readOnly`. The widget designer only selects among the themes, schemas and actions you pass; authoring each belongs to its own designer, so a host ships only what it embeds.
+- `createSettingsDesigner` edits the principal's settings record. Its **Default themes** subsection offers, per mode (light hosts, dark hosts), the built-in and every entry you pass in `themes`; `getSettings()` returns `{ defaultThemes: { light?, dark? } }`, built-in choices omitted, with any section it does not edit passed through untouched. Save it with `PUT /settings` on the authoring surface. A name you did not pass in `themes` shows as unavailable rather than disappearing.
+
+The preview renders widgets in your page's DOM, not in a frame. Its styles stay inside it: the widget's and the theme's rules are scoped to the preview. Your page's element rules are another matter. A rule like `header { border-bottom: … }` would dress a widget's `<header>` that no MCP Apps host dresses, so fence them out of the preview:
+
+```css
+header:where(:not(.wgd-preview *)) { border-bottom: 1px solid var(--line); }
+button:where(:not(.wgd-preview *)) { padding: 4px 10px; }
+```
+
+`:where()` keeps the rule's weight unchanged. Rules on your own classes need no fence.
+
+All five accept `appearance`, `chrome` and `readOnly`. The widget designer only selects among the themes, schemas and actions you pass; authoring each belongs to its own designer, so a host ships only what it embeds.
 
 ## Custom elements
 
@@ -64,16 +84,18 @@ import {
   defineDesignerElement,
   defineThemeDesignerElement,
   defineSchemaDesignerElement,
-  defineActionDesignerElement
+  defineActionDesignerElement,
+  defineSettingsDesignerElement
 } from "@widgentic/designer";
 
-defineDesignerElement();        // <widgentic-designer>
-defineThemeDesignerElement();   // <widgentic-theme-designer>
-defineSchemaDesignerElement();  // <widgentic-schema-designer>
-defineActionDesignerElement();  // <widgentic-action-designer>
+defineDesignerElement();          // <widgentic-designer>
+defineThemeDesignerElement();     // <widgentic-theme-designer>
+defineSchemaDesignerElement();    // <widgentic-schema-designer>
+defineActionDesignerElement();    // <widgentic-action-designer>
+defineSettingsDesignerElement();  // <widgentic-settings-designer>
 ```
 
-Each registrar takes an optional tag name and does nothing if that tag is already defined. The elements wrap their factory and re-emit its subscription as bubbling `widgentic-change` CustomEvents whose `detail` carries `{ draft, diagnostics }`, `{ theme }`, `{ schema }` or `{ action }`. Two attributes are read when the element connects: `appearance` (`light` or `dark`) and `chrome` (the token map as JSON). The wrapped handle is available as the element's `designer` property.
+Each registrar takes an optional tag name and does nothing if that tag is already defined. The elements wrap their factory and re-emit its subscription as bubbling `widgentic-change` CustomEvents whose `detail` carries `{ draft, diagnostics }`, `{ theme }`, `{ schema }`, `{ action }` or `{ settings }`. Two attributes are read when the element connects: `appearance` (`light` or `dark`) and `chrome` (the token map as JSON). The wrapped handle is available as the element's `designer` property.
 
 Without a bundler, load the single-file bundle and use the elements directly:
 

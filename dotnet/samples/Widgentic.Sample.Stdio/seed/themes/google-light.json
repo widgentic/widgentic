@@ -1,7 +1,7 @@
 {
-  "description": "A bright, clean theme inspired by Google's blue, red, yellow, and green palette.",
-  "label": "Google-inspired light",
   "name": "google-light",
+  "label": "Google-inspired light",
+  "description": "A bright, clean theme inspired by Google's blue, red, yellow, and green palette.",
   "tokens": {
     "accent": "#1a73e8",
     "accent-fg": "#ffffff",
@@ -31,6 +31,186 @@
     "success-fg": "#ffffff",
     "surface": "#ffffff",
     "warning": "#f9ab00",
-    "warning-fg": "#202124"
+    "warning-fg": "#202124",
+    "x-tint": "#f1f3f4",
+    "x-hover": "#e8f0fe"
+  },
+  "styles": {
+    ".wg-panel": {
+      "background": "var(--wg-surface)",
+      "border": "var(--wg-border-width) solid var(--wg-border)",
+      "border-radius": "var(--wg-radius-lg)",
+      "box-shadow": "var(--wg-shadow)",
+      "padding": "var(--wg-spacing-lg)",
+      "font-family": "var(--wg-font-family)",
+      "font-size": "var(--wg-font-size)",
+      "line-height": "var(--wg-line-height)",
+      "color": "var(--wg-fg)"
+    },
+    ".wg-panel-head": {
+      "display": "flex",
+      "align-items": "baseline",
+      "justify-content": "space-between",
+      "flex-wrap": "wrap",
+      "gap": "var(--wg-spacing)",
+      "margin-bottom": "var(--wg-spacing)"
+    },
+    ".wg-title": {
+      "margin": "0",
+      "font-size": "var(--wg-font-size-lg)",
+      "font-weight": "var(--wg-font-weight-bold)",
+      "color": "var(--wg-fg)"
+    },
+    ".wg-subtitle": {
+      "display": "flex",
+      "align-items": "center",
+      "gap": "var(--wg-spacing-sm)",
+      "margin": "0",
+      "font-size": "var(--wg-font-size)",
+      "font-weight": "var(--wg-font-weight-bold)",
+      "color": "var(--wg-fg)"
+    },
+    ".wg-muted": {
+      "margin": "0",
+      "color": "var(--wg-muted)",
+      "font-size": "var(--wg-font-size-sm)"
+    },
+    ".wg-date": {
+      "margin": "0",
+      "color": "var(--wg-muted)",
+      "font-size": "var(--wg-font-size-sm)",
+      "font-variant-numeric": "tabular-nums",
+      "letter-spacing": "0.02em"
+    },
+    ".wg-link": {
+      "color": "var(--wg-accent)",
+      "text-decoration": "none",
+      "font-weight": "500"
+    },
+    ".wg-link:hover, .wg-link:focus-visible": {
+      "text-decoration": "underline"
+    },
+    ".wg-item": {
+      "display": "flex",
+      "flex-direction": "column",
+      "gap": "var(--wg-spacing-sm)",
+      "border-top": "var(--wg-border-width) solid var(--wg-border)",
+      "padding": "var(--wg-spacing) 0"
+    },
+    ".wg-item:first-of-type": {
+      "border-top": "0"
+    },
+    ".wg-unread": {
+      "box-shadow": "inset 3px 0 0 var(--wg-accent)",
+      "padding-left": "var(--wg-spacing)",
+      "margin-left": "calc(-1 * var(--wg-spacing))"
+    },
+    ".wg-unread .wg-subtitle": {
+      "color": "var(--wg-accent)"
+    },
+    ".wg-list": {
+      "display": "flex",
+      "flex-wrap": "wrap",
+      "gap": "var(--wg-spacing-sm)",
+      "margin": "0",
+      "padding": "0",
+      "list-style": "none"
+    },
+    ".wg-chip": {
+      "display": "inline-flex",
+      "align-items": "center",
+      "padding": "0 var(--wg-spacing)",
+      "border-radius": "999px",
+      "border": "var(--wg-border-width) solid var(--wg-border)",
+      "background": "var(--wg-x-tint, var(--wg-bg))",
+      "font-size": "var(--wg-font-size-sm)",
+      "line-height": "1.8"
+    },
+    ".wg-chip-yes": {
+      "border-color": "var(--wg-success)"
+    },
+    ".wg-chip-maybe": {
+      "border-color": "var(--wg-warning)",
+      "border-style": "dashed"
+    },
+    ".wg-card": {
+      "border-top": "calc(var(--wg-border-width) * 4) solid var(--wg-accent)"
+    },
+    ".wg-card-title": {
+      "color": "var(--wg-fg)",
+      "letter-spacing": "-0.01em"
+    },
+    ".wg-card-field": {
+      "align-items": "baseline",
+      "border-bottom": "var(--wg-border-width) dashed var(--wg-border)"
+    },
+    ".wg-card-field:last-child": {
+      "border-bottom": "0"
+    },
+    ".wg-card-field-key": {
+      "flex": "0 0 8.5em",
+      "font-size": "var(--wg-font-size-sm)",
+      "letter-spacing": "0.02em",
+      "overflow-wrap": "anywhere"
+    },
+    ".wg-card-field-value": {
+      "min-width": "0",
+      "overflow-wrap": "anywhere",
+      "font-weight": "var(--wg-font-weight-bold)",
+      "font-variant-numeric": "tabular-nums"
+    },
+    ".wg-table": {
+      "width": "100%",
+      "box-shadow": "var(--wg-shadow)",
+      "border-collapse": "separate",
+      "border-spacing": "0",
+      "overflow": "hidden"
+    },
+    ".wg-table-title": {
+      "color": "var(--wg-fg)"
+    },
+    ".wg-table-header": {
+      "background": "var(--wg-x-tint, var(--wg-bg))",
+      "text-transform": "uppercase",
+      "letter-spacing": "0.06em"
+    },
+    ".wg-table-row:nth-child(even) .wg-table-cell": {
+      "background": "var(--wg-x-tint, var(--wg-bg))"
+    },
+    ".wg-table-row:hover .wg-table-cell": {
+      "background": "var(--wg-x-hover, var(--wg-bg))"
+    },
+    ".wg-chip-no": {
+      "border-color": "var(--wg-danger)",
+      "color": "var(--wg-muted)",
+      "text-decoration": "line-through"
+    },
+    ".wg-item-cancelled .wg-subtitle": {
+      "color": "var(--wg-muted)"
+    },
+    ".wg-item-cancelled .wg-subtitle-text": {
+      "text-decoration": "line-through"
+    },
+    ".wg-item-cancelled .wg-date, .wg-item-cancelled .wg-muted": {
+      "opacity": "0.7"
+    },
+    ".wg-card-field-value .wg-link": {
+      "font-weight": "inherit"
+    },
+    ".wg-table-cell .wg-link[href^=\"tel:\"], .wg-table-cell .wg-link[href^=\"mailto:\"]": {
+      "white-space": "nowrap"
+    },
+    ".wg-table-row:last-child .wg-table-cell": {
+      "border-bottom": "0"
+    },
+    ".wg-chip-no .wg-link": {
+      "color": "var(--wg-muted)"
+    },
+    ".wg-table-cell": {
+      "vertical-align": "top"
+    },
+    ".wg-table-cell:first-child": {
+      "min-width": "8em"
+    }
   }
 }

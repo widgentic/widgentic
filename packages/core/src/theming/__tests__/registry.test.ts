@@ -5,6 +5,7 @@ import {
   DuplicateThemeError,
   validateTheme
 } from "../index.js";
+import type { ThemeEntry } from "../index.js";
 
 describe("theme registry", () => {
   it("ships light and dark built-ins", () => {
@@ -35,30 +36,27 @@ describe("theme registry", () => {
     expect(registry.list().map((e) => e.name)).toContain("brand");
   });
 
-  it("merges extends at registration and keeps the base name", () => {
+  it("holds an entry as registered: a derived theme is merged by its host first", () => {
     const registry = createThemeRegistry();
-    registry.register({
-      name: "brand-dark",
-      extends: "dark",
-      tokens: { accent: "#ff5a1f" }
-    });
+    registry.register({ name: "brand-dark", tokens: { ...darkTheme, accent: "#ff5a1f" } });
     const entry = registry.get("brand-dark");
-    // Base tokens inherited…
     expect(entry?.tokens.bg).toBe(darkTheme.bg);
-    expect(entry?.tokens.surface).toBe(darkTheme.surface);
-    // …with the override winning, and provenance retained.
     expect(entry?.tokens.accent).toBe("#ff5a1f");
-    expect(entry?.extends).toBe("dark");
   });
 
-  it("carries custom variables through registration and inheritance", () => {
+  it("ignores an extends field, like any field it does not know", () => {
+    const registry = createThemeRegistry();
+    registry.register({ name: "child", extends: "dark", tokens: { accent: "#000" } } as unknown as ThemeEntry);
+    expect(registry.get("child")).toEqual({ name: "child", tokens: { accent: "#000" } });
+  });
+
+  it("carries custom variables through registration", () => {
     const registry = createThemeRegistry();
     registry.register({ name: "base", tokens: { "x-gap": "4px" } });
-    registry.register({ name: "child", extends: "base", tokens: { accent: "#000" } });
-    expect(registry.get("child")?.tokens["x-gap"]).toBe("4px");
+    expect(registry.get("base")?.tokens["x-gap"]).toBe("4px");
   });
 
-  it("refuses duplicates, invalid tokens, unknown bases and empty names", () => {
+  it("refuses duplicates, invalid tokens and empty names", () => {
     const registry = createThemeRegistry();
     expect(() => registry.register({ name: "dark", tokens: {} })).toThrow(
       DuplicateThemeError
@@ -66,9 +64,6 @@ describe("theme registry", () => {
     expect(() =>
       registry.register({ name: "bad", tokens: { sneaky: "red" } as never })
     ).toThrow(/UNKNOWN_TOKEN|sneaky/);
-    expect(() =>
-      registry.register({ name: "orphan", extends: "nope", tokens: {} })
-    ).toThrow(/not registered/);
     expect(() => registry.register({ name: "  ", tokens: {} })).toThrow(
       /non-empty/
     );

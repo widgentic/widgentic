@@ -6,7 +6,7 @@
 import { TOKEN_SPECS } from "@widgentic/core";
 import { isPlainObject } from "@widgentic/core";
 import { deriveDiagnostics, importWidgetJson } from "@widgentic/designer";
-import type { WidgetDefinition } from "@widgentic/designer";
+import type { DesignerHandle, WidgetDefinition } from "@widgentic/designer";
 import { buildDesignerGuide, dslCheatSheet } from "./guide.js";
 import { argumentsOf, invalidArgument, okResult, rejected } from "./result.js";
 import { defineTool, objectSchema } from "./tool.js";
@@ -29,7 +29,18 @@ export function authoringGuideTool(name: NameOf, prefix: string): WebMcpTool {
   });
 }
 
-export function widgetDefinitionCheckTool(name: NameOf, prefix: string): WebMcpTool {
+/**
+ * Checked by the mounted widget designer when the host exposes it without
+ * side effects (`widgetIfMounted`), so refusals and diagnostics match a load
+ * and shared references resolve against the person's saved schemas and
+ * actions — and the person's view never moves. Otherwise the definition is
+ * checked on its own and references are left unverified (`diagnosticsDerived`).
+ */
+export function widgetDefinitionCheckTool(
+  name: NameOf,
+  prefix: string,
+  widget: (() => DesignerHandle | undefined) | undefined
+): WebMcpTool {
   return defineTool({
     name: name("widget_definition_check"),
     title: "Check a widget definition",
@@ -43,6 +54,11 @@ export function widgetDefinitionCheckTool(name: NameOf, prefix: string): WebMcpT
     execute(input) {
       const { definition } = argumentsOf(input);
       if (!isPlainObject(definition)) return invalidArgument("definition", "object");
+      const handle = widget?.();
+      if (handle !== undefined) {
+        const result = handle.checkWidget(definition);
+        return result.ok ? okResult({ diagnostics: result.diagnostics }) : rejected(result.errors);
+      }
       const checked = importWidgetJson(JSON.stringify(definition));
       if (!checked.ok) return rejected(checked.errors);
       const accepted: WidgetDefinition = checked.definition;

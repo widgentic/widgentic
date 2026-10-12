@@ -131,6 +131,7 @@ internal sealed record HostResources(
     string AppTemplateUri,
     string AppTemplateMimeType,
     string AppTemplateDescription,
+    bool AppTemplatePrefersBorder,
     string WidgetPageName,
     string WidgetPageTitle,
     string WidgetPageUriTemplate,
@@ -145,6 +146,7 @@ internal sealed record HostResources(
         string Text(JsonElement element, string name) => element.GetProperty(name).GetString() ?? "";
         return new HostResources(
             Text(app, "name"), Text(app, "uri"), Text(app, "mimeType"), Text(app, "description"),
+            app.GetProperty("prefersBorder").GetBoolean(),
             Text(page, "name"), Text(page, "title"), Text(page, "uriTemplate"), Text(page, "mimeType"), Text(page, "description"));
     }
 

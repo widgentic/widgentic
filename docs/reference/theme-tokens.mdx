@@ -71,4 +71,4 @@ Names match `^x-[a-z0-9][a-z0-9-]*$`. A custom variable x-foo becomes --wg-x-foo
 
 ## Value safety
 
-Token values are plain CSS values. Rejected: ';', '\{', '\}', '\<', '\>', 'url(' and 'expression(' (case-insensitive, whitespace-tolerant). Keep values to colors, lengths, and font stacks.
+Token values are plain CSS values. Rejected: anything matching \[;\{\}\<\>\\\\\], a comment marker (/\* or \*/), an unclosed bracket or string, and calls to url(, expression(, image-set(, src( (case-insensitive, whitespace-tolerant). Keep values to colors, lengths, and font stacks.

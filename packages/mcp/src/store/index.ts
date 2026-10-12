@@ -10,6 +10,8 @@
 export type {
   CreatedKey,
   Principal,
+  PrincipalSettings,
+  PrincipalSettingsUpdate,
   Scope,
   SecretCipher,
   SecretEntry,
@@ -36,6 +38,7 @@ export { hashKey, verifyKey, generateKey, findByKey, KEY_PREFIX } from "./keys.j
 export {
   checkStoredWidget,
   checkStoredTheme,
+  normalizeStoredTheme,
   checkStoredSchema,
   checkStoredAction,
   SAFE_IDENTIFIER

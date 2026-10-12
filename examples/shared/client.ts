@@ -14,9 +14,10 @@ import type { StoredAction, ThemeEntry } from "@widgentic/core";
 // the Node-only package while the client stays typed against the very shapes
 // the authoring surface serializes.
 import type { TestActionResult } from "@widgentic/mcp";
-import type { SecretEntry, StoredKey, StoredSchema, StoredWidget } from "@widgentic/mcp/store";
+import type { PrincipalSettings, SecretEntry, StoredKey, StoredSchema, StoredWidget } from "@widgentic/mcp/store";
 
 export type WidgetEntry = StoredWidget;
+export type Settings = PrincipalSettings;
 export type SchemaEntry = StoredSchema;
 export type KeyEntry = StoredKey;
 export type { SecretEntry };
@@ -71,6 +72,11 @@ export const authoringClient = {
   listThemes: () => call<{ themes: ThemeEntry[] }>("themes").then((r) => r.themes),
   saveTheme: (entry: ThemeEntry) => call(`themes/${encodeURIComponent(entry.name)}`, put(entry)),
   removeTheme: (name: string) => call(`themes/${encodeURIComponent(name)}`, { method: "DELETE" }),
+
+  getSettings: () => call<Settings>("settings"),
+  /** Each section sent replaces that section; the others are kept. */
+  saveSettings: (sections: Record<string, unknown>) =>
+    call<{ saved: string; settings: Settings }>("settings", put(sections)).then((r) => r.settings),
 
   listSchemas: () => call<{ schemas: SchemaEntry[] }>("schemas").then((r) => r.schemas),
   saveSchema: (entry: SchemaEntry) => call(`schemas/${encodeURIComponent(entry.name)}`, put(entry)),

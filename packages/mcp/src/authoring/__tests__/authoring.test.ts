@@ -193,6 +193,87 @@ describe("widgets and themes", () => {
   });
 });
 
+describe("theme styles and settings", () => {
+  const asCarol = (init: RequestInit = {}): RequestInit => ({
+    ...init,
+    headers: { cookie: "wg_test_session=carol", ...(init.headers ?? {}) }
+  });
+  const put = (path: string, body: unknown) =>
+    fetch(`${base}/api${path}`, asCarol({ method: "PUT", body: JSON.stringify(body) }));
+  const settings = async () => (await (await fetch(`${base}/api/settings`, asCarol())).json()) as unknown;
+
+  it("a theme's styles round-trip; a malformed styles section is refused", async () => {
+    const styles = { ".wg-btn": { padding: "4px 8px" } };
+    expect((await put("/themes/brand", { tokens: { accent: "#ff5a1f" }, styles })).status).toBe(200);
+    const list = (await (await fetch(`${base}/api/themes`, asCarol())).json()) as { themes: { name: string; styles?: unknown }[] };
+    expect(list.themes.find((t) => t.name === "brand")?.styles).toEqual(styles);
+    const bad = await put("/themes/broken", { tokens: {}, styles: { ".wg-btn": "padding: 4px" } });
+    expect(bad.status).toBe(422);
+    expect(((await bad.json()) as { error: { code: string } }).error.code).toBe("INVALID_THEME");
+  });
+
+  it("default themes are read and replaced through /settings", async () => {
+    await put("/themes/a", { tokens: {} });
+    await put("/themes/b", { tokens: {} });
+    expect(await settings()).toEqual({});
+    expect((await put("/settings", { defaultThemes: { light: "a", dark: "b" } })).status).toBe(200);
+    const second = await put("/settings", { defaultThemes: { light: "b" } });
+    expect(second.status).toBe(200);
+    expect(((await second.json()) as { settings: unknown }).settings).toEqual({ defaultThemes: { light: "b" } });
+    expect(await settings()).toEqual({ defaultThemes: { light: "b" } });
+  });
+
+  it("refusals keep the store's code and change nothing", async () => {
+    const before = await settings();
+    const unknown = await put("/settings", { defaultThemes: { dark: "missing" } });
+    expect(unknown.status).toBe(422);
+    expect(((await unknown.json()) as { error: { code: string } }).error.code).toBe("UNKNOWN_THEME");
+    const section = await put("/settings", { fonts: {} });
+    expect(section.status).toBe(422);
+    expect(((await section.json()) as { error: { code: string } }).error.code).toBe("INVALID_SHAPE");
+    const array = await fetch(`${base}/api/settings`, asCarol({ method: "PUT", body: "[]" }));
+    expect(array.status).toBe(400);
+    expect(await settings()).toEqual(before);
+  });
+
+  it("a default theme is protected from deletion", async () => {
+    await put("/settings", { defaultThemes: { light: "b" } });
+    const del = await fetch(`${base}/api/themes/b`, asCarol({ method: "DELETE" }));
+    expect(del.status).toBe(409);
+    const body = (await del.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe("THEME_IN_USE");
+    expect(body.error.message).toContain("light");
+    const list = (await (await fetch(`${base}/api/themes`, asCarol())).json()) as { themes: { name: string }[] };
+    expect(list.themes.map((t) => t.name)).toContain("b");
+  });
+
+  it("the route cannot address another principal", async () => {
+    const dave = await store.ensurePrincipal("dave");
+    await store.putTheme(dave.id, { name: "a", tokens: {} });
+    const res = await fetch(
+      `${base}/api/settings?principalId=${dave.id}`,
+      asCarol({ method: "PUT", body: JSON.stringify({ principalId: dave.id, defaultThemes: { light: "a" } }) })
+    );
+    expect(res.status).toBe(200);
+    expect(await settings()).toEqual({ defaultThemes: { light: "a" } });
+    expect(await store.settings(dave.id)).toEqual({});
+  });
+
+  it("the core handler answers exactly as the Node adapter does", async () => {
+    const erin = await store.ensurePrincipal("erin");
+    await store.putTheme(erin.id, { name: "a", tokens: {} });
+    const deps: AuthoringDeps = { store };
+    const context: PrincipalContext = { principalId: erin.id };
+    const putRes = await handleAuthoringRequest({ method: "PUT", path: "settings", body: { defaultThemes: { dark: "a" } }, context }, deps);
+    expect(putRes.status).toBe(200);
+    const getRes = await handleAuthoringRequest({ method: "GET", path: "settings", context }, deps);
+    expect(getRes.status).toBe(200);
+    expect(getRes.body).toEqual({ defaultThemes: { dark: "a" } });
+    const delRes = await handleAuthoringRequest({ method: "DELETE", path: "themes/a", context }, deps);
+    expect(delRes.status).toBe(409);
+  });
+});
+
 describe("use-as-base: a seeded save creates a second entry", () => {
   it("widget seed saves under its own kind; the source is untouched", async () => {
     await fetch(`${base}/api/widgets/base-card`, asAlice({ method: "PUT", body: WIDGET_BODY }));

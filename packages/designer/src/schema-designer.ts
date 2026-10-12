@@ -8,16 +8,12 @@
  * JSON discipline.
  */
 import { errorMessage } from "./internal.js";
-import { isPlainObject } from "@widgentic/core";
+import { auditDataSchema, isPlainObject, SAFE_IDENTIFIER } from "@widgentic/core";
 import type { DataSchema } from "@widgentic/core";
 import { applyChrome, diagnosticLine, h, injectDesignerStyles, section, textField, requireChild } from "./dom.js";
 import type { ChromeOptions } from "./dom.js";
 import { attachJsonHighlight, repaintHighlight } from "./highlight.js";
 import { createSchemaBuilder } from "./schema-builder.js";
-
-/** The store's identifier charset — kept local: `@widgentic/mcp/store` is a
- * Node-only entry and the designer runs in browsers. */
-const SAFE_NAME = /^[a-zA-Z0-9._-]+$/;
 
 export interface SchemaEntry {
   name: string;
@@ -68,7 +64,7 @@ export function checkSchemaEntry(entry: unknown): string[] {
   if (!isPlainObject(entry)) return ["Schema entry must be an object."];
   if (typeof entry.name !== "string" || entry.name.trim() === "") {
     errors.push("'name' must be a non-empty string.");
-  } else if (!SAFE_NAME.test(entry.name)) {
+  } else if (!SAFE_IDENTIFIER.test(entry.name)) {
     errors.push(
       `'${entry.name}' is not a valid schema name — use letters, digits, '.', '_' or '-'.`
     );
@@ -102,7 +98,17 @@ export function createSchemaDesigner(
     return JSON.parse(JSON.stringify(entry)) as SchemaEntry;
   }
 
+  // What the validator would ignore in the schema: a warning the person
+  // sees while editing, never a refusal (the store accepts it).
+  const schemaDiag = diagnosticLine(undefined);
+  function showSchemaWarnings(): void {
+    const warnings = isPlainObject(entry.schema) ? auditDataSchema(entry.schema) : [];
+    schemaDiag.hidden = warnings.length === 0;
+    schemaDiag.textContent = warnings.join("\n");
+  }
+
   function notify(): void {
+    showSchemaWarnings();
     for (const listener of [...listeners]) listener(getEntry());
   }
 
@@ -129,7 +135,7 @@ export function createSchemaDesigner(
       () => entry.name,
       (value) => {
         entry = { ...entry, name: value };
-        const bad = value.trim() === "" || !SAFE_NAME.test(value);
+        const bad = value.trim() === "" || !SAFE_IDENTIFIER.test(value);
         nameDiag.hidden = !bad;
         nameDiag.textContent = bad
           ? "Name must be non-empty using letters, digits, '.', '_' or '-'."
@@ -220,7 +226,8 @@ export function createSchemaDesigner(
   const definition = section("Definition", [
     h("div", { class: "wgd-row" }, [builderTab, jsonTab]),
     builder.element,
-    jsonWrap
+    jsonWrap,
+    schemaDiag
   ]);
 
   // --- Import / Export: the agent hand-off -------------------------------
@@ -279,6 +286,7 @@ export function createSchemaDesigner(
   exportSection.classList.add("wgd-view-only");
 
   panels.append(identity, definition, importSection, exportSection);
+  showSchemaWarnings();
   // The JSON layer wraps the textareas in place, so attach after assembly.
   attachJsonHighlight(jsonArea);
   attachJsonHighlight(importArea);

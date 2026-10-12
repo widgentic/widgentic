@@ -12,6 +12,7 @@
 import { describe, expect, it } from "vitest";
 import { createCosmosStore } from "../cosmos.js";
 import type {
+  CosmosBatchOperation,
   CosmosClientLike,
   CosmosContainerLike,
   CosmosQueryOptions,
@@ -20,6 +21,7 @@ import type {
 import { hashKey } from "../keys.js";
 import { DEFAULT_LIMITS } from "../types.js";
 import { describeStoreContract } from "./contract.js";
+import { composeThemes } from "../compose.js";
 import { createLocalCipher, generateLocalKek } from "../../secrets/index.js";
 
 /* ---------------------------- fake client ---------------------------- */
@@ -48,13 +50,21 @@ function param(spec: CosmosQuerySpec, name: string): string | undefined {
 
 class FakeContainer implements CosmosContainerLike {
   private partitions = new Map<string, Map<string, Doc>>();
+  private etags = 0;
+  /** Runs just before a batch commits: the seam for "a concurrent write". */
+  public beforeBatch: (() => void) | undefined = undefined;
+
+  /** Every stored document carries an _etag that changes on each write. */
+  private stamp(doc: Doc): Doc {
+    return { ...doc, _etag: `"e${++this.etags}"` };
+  }
 
   constructor(
     private readonly name: string,
     private readonly pkField: string,
     private readonly queries: RecordedQuery[],
     private readonly pointOps: RecordedPointOp[],
-    public failWith: { code: number | string; ops: string[] } | undefined = undefined
+    public failWith: { code: number | string; ops: string[]; message?: string } | undefined = undefined
   ) {}
 
   private partition(pk: string): Map<string, Doc> {
@@ -77,7 +87,7 @@ class FakeContainer implements CosmosContainerLike {
   }
 
   seed(doc: Doc): void {
-    this.partition(String(doc[this.pkField])).set(doc.id, { ...doc });
+    this.partition(String(doc[this.pkField])).set(doc.id, this.stamp(doc));
   }
 
   item(id: string, partitionKey: string) {
@@ -95,7 +105,7 @@ class FakeContainer implements CosmosContainerLike {
       replace: async (doc: unknown) => {
         record("replace");
         this.maybeFail("replace");
-        this.partition(partitionKey).set(id, { ...(doc as Doc) });
+        this.partition(partitionKey).set(id, this.stamp(doc as Doc));
         return {};
       },
       delete: async () => {
@@ -151,14 +161,50 @@ class FakeContainer implements CosmosContainerLike {
       const typed = doc as Doc;
       const pk = String(typed[this.pkField]);
       if (this.partition(pk).has(typed.id)) throw { code: 409 };
-      this.partition(pk).set(typed.id, { ...typed });
+      this.partition(pk).set(typed.id, this.stamp(typed));
       return {};
     },
     upsert: async (doc: unknown) => {
       this.maybeFail("upsert");
       const typed = doc as Doc;
-      this.partition(String(typed[this.pkField])).set(typed.id, { ...typed });
+      this.partition(String(typed[this.pkField])).set(typed.id, this.stamp(typed));
       return {};
+    },
+    // All or nothing within one partition, as the service runs it: the
+    // first refused operation fails the batch and the rest report 424.
+    // A failed batch request reaches the caller as @azure/cosmos 4.x throws
+    // it: a plain Error whose message wraps the service's, with no `code`.
+    batch: async (operations: CosmosBatchOperation[], partitionKey: string) => {
+      try {
+        this.maybeFail("batch");
+      } catch (error) {
+        const code = (error as { code: number | string }).code;
+        if (this.failWith?.message !== undefined) throw new Error(`Batch request error: ${this.failWith.message}`);
+        throw new Error(
+          code === 403
+            ? "Batch request error: Request blocked by Auth wg : Request is blocked because principal [p] does not have required RBAC permissions to perform action [Microsoft.DocumentDB/databaseAccounts/readMetadata]"
+            : `Batch request error: Message: {"Errors":["Request rate is large"]}\r\nActivityId: a, RequestStats: LSN: 403, SessionToken: -1#403, BELatencyMs: 0.403 (${String(code)})`
+        );
+      }
+      this.beforeBatch?.();
+      this.beforeBatch = undefined;
+      const part = this.partition(partitionKey);
+      const statuses = operations.map((op) => {
+        if (op.operationType === "Read") return part.has(op.id) ? 200 : 404;
+        if (op.operationType === "Delete") return part.has(op.id) ? 204 : 404;
+        if (op.operationType === "Create") return part.has(String(op.resourceBody.id)) ? 409 : 201;
+        const existing = part.get(op.id);
+        if (existing === undefined) return 404;
+        return op.ifMatch !== undefined && existing._etag !== op.ifMatch ? 412 : 200;
+      });
+      const failed = statuses.findIndex((code) => code >= 300);
+      if (failed !== -1) return { result: statuses.map((code, i) => ({ statusCode: i === failed ? code : 424 })) };
+      for (const op of operations) {
+        if (op.operationType === "Delete") part.delete(op.id);
+        else if (op.operationType === "Create") part.set(String(op.resourceBody.id), this.stamp(op.resourceBody as Doc));
+        else if (op.operationType === "Replace") part.set(op.id, this.stamp(op.resourceBody as Doc));
+      }
+      return { result: statuses.map((code) => ({ statusCode: code })) };
     }
   };
 }
@@ -257,6 +303,50 @@ describe("cosmos adapter identity model", () => {
     await expect(attempt).rejects.toThrow(/putWidget/);
   });
 
+  it.each([
+    ["putSettings", (store: ReturnType<typeof createCosmosStore>, id: string) => store.putSettings(id, { defaultThemes: { light: "a" } })],
+    ["removeTheme", (store: ReturnType<typeof createCosmosStore>, id: string) => store.removeTheme(id, "a")]
+  ])("a read-only identity's %s batch surfaces FORBIDDEN, not STORE_ERROR", async (operation, run) => {
+    const { client, data } = fakeCosmos();
+    const lines: string[] = [];
+    const store = createCosmosStore({ client, log: (line) => lines.push(line) });
+    const p = await store.ensurePrincipal(`hygiene:forbidden-${operation}`);
+    await store.putTheme(p.id, { name: "a", tokens: {} });
+    data.failWith = { code: 403, ops: ["batch"] };
+    const attempt = run(store, p.id);
+    await expect(attempt).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(attempt).rejects.toThrow(new RegExp(operation));
+    // Throttling diagnostics carry a bare "403"; that is no permission refusal.
+    data.failWith = { code: 429, ops: ["batch"] };
+    await expect(run(store, p.id)).rejects.toMatchObject({ code: "STORE_ERROR" });
+    expect(lines.join("\n")).toContain(`${operation} batch failed`);
+    expect(lines.join("\n")).toContain("Request rate is large");
+  });
+
+  it.each([
+    ["an explicit status code", "Message: {\"Errors\":[\"denied\"]}, StatusCode: 403"],
+    ["a firewall refusal", "Request originated from IP 1.2.3.4 through public internet. This is blocked by your Cosmos DB account firewall settings."]
+  ])("a batch refused with %s surfaces FORBIDDEN", async (_label, message) => {
+    const { client, data } = fakeCosmos();
+    const store = createCosmosStore({ client, log: () => {} });
+    const p = await store.ensurePrincipal(`hygiene:forbidden-${message.length}`);
+    await store.putTheme(p.id, { name: "a", tokens: {} });
+    data.failWith = { code: 500, ops: ["batch"], message };
+    await expect(store.putSettings(p.id, { defaultThemes: { light: "a" } })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("a request-level 404 never reads as the theme being gone", async () => {
+    const { client, data } = fakeCosmos();
+    const store = createCosmosStore({ client, log: () => {} });
+    const p = await store.ensurePrincipal("hygiene:request-404");
+    await store.putTheme(p.id, { name: "a", tokens: {} });
+    data.failWith = { code: 404, ops: ["batch"], message: "Message: {\"Errors\":[\"Resource Not Found\"]}, StatusCode: 404" };
+    await expect(store.removeTheme(p.id, "a")).rejects.toMatchObject({ code: "STORE_ERROR" });
+    await expect(store.putSettings(p.id, { defaultThemes: { light: "a" } })).rejects.toMatchObject({ code: "STORE_ERROR" });
+    data.failWith = undefined;
+    expect((await store.themes(p.id)).map((theme) => theme.name)).toEqual(["a"]);
+  });
+
   it("diagnostics identify entries, never keys or digests", async () => {
     const lines: string[] = [];
     const { client, data, keys } = fakeCosmos();
@@ -346,5 +436,99 @@ describe.skipIf(!EMULATOR)("cosmos adapter against a live emulator", () => {
     expect((await store.resolvePrincipal(key))?.id).toBe(p.id);
     await store.revokeKey(p.id, entry.id);
     expect(await store.resolvePrincipal(key)).toBeUndefined();
+  });
+});
+
+describe("cosmos settings written out of band", () => {
+  it("ignores a later version's section, keeps it on write, and drops a dangling default", async () => {
+    const { client, data } = fakeCosmos();
+    const store = createCosmosStore({ client, log: () => {} });
+    const p = await store.ensurePrincipal("cosmos:settings-oob");
+    await store.putTheme(p.id, { name: "a", tokens: {} });
+    data.seed({ id: "theme:legacy", principalId: p.id, theme: { name: "legacy", tokens: { accent: "#123456" } } });
+    data.seed({ id: "settings", principalId: p.id, settings: { defaultThemes: { light: "a", dark: "ghost" }, fonts: { body: "Inter" } } });
+    expect(await store.settings(p.id)).toEqual({ defaultThemes: { light: "a", dark: "ghost" } });
+    const composed = await composeThemes(store, p.id);
+    expect(composed.value.defaults()).toEqual({ light: "a", dark: "dark" });
+    expect(composed.diagnostics.join("\n")).toContain("'ghost'");
+    expect(composed.value.get("legacy")).toEqual({ name: "legacy", tokens: { accent: "#123456" } });
+    await store.putSettings(p.id, { defaultThemes: { light: "legacy" } });
+    const stored = (await data.item("settings", p.id).read()).resource;
+    expect(stored?.settings).toEqual({ defaultThemes: { light: "legacy" }, fonts: { body: "Inter" } });
+    // The settings document is no entry of any kind.
+    expect((await store.themes(p.id)).map((t) => t.name).sort()).toEqual(["a", "legacy"]);
+  });
+
+  it("a theme stored under looser token rules keeps its other tokens and still serves as a default", async () => {
+    const { client, data } = fakeCosmos();
+    const lines: string[] = [];
+    const store = createCosmosStore({ client, log: (line) => lines.push(line) });
+    const p = await store.ensurePrincipal("cosmos:legacy-theme");
+    data.seed({ id: "theme:legacy", principalId: p.id, theme: { name: "legacy", tokens: { accent: "#0b5fff /* brand */", bg: "#fafafa" } } });
+    expect(await store.themes(p.id)).toEqual([{ name: "legacy", tokens: { bg: "#fafafa" } }]);
+    expect(lines.join("\n")).toContain("theme 'legacy': token 'accent' dropped on read");
+    await store.putSettings(p.id, { defaultThemes: { light: "legacy" } });
+    expect((await composeThemes(store, p.id)).value.defaults().light).toBe("legacy");
+    // The stored document is left as it is, and a write of it is still refused.
+    expect((await data.item("theme:legacy", p.id).read()).resource?.theme).toEqual({ name: "legacy", tokens: { accent: "#0b5fff /* brand */", bg: "#fafafa" } });
+    await expect(store.putTheme(p.id, { name: "legacy", tokens: { accent: "#0b5fff /* brand */", bg: "#fafafa" } })).rejects.toMatchObject({ code: "INVALID_THEME" });
+  });
+
+  it("an update that leaves a dangling default alone is not refused for it", async () => {
+    const { client, data } = fakeCosmos();
+    const store = createCosmosStore({ client, log: () => {} });
+    const p = await store.ensurePrincipal("cosmos:dangling-untouched");
+    data.seed({ id: "settings", principalId: p.id, settings: { defaultThemes: { dark: "ghost" } } });
+    await expect(store.putSettings(p.id, {})).resolves.toBeUndefined();
+    await expect(store.putSettings(p.id, { defaultThemes: { dark: "ghost" } })).rejects.toMatchObject({ code: "UNKNOWN_THEME" });
+  });
+
+  it("a principal written before settings reads as empty settings", async () => {
+    const { client } = fakeCosmos();
+    const store = createCosmosStore({ client, log: () => {} });
+    const p = await store.ensurePrincipal("cosmos:settings-none");
+    expect(await store.settings(p.id)).toEqual({});
+    expect(await store.settings("usr_unknown")).toEqual({});
+  });
+});
+
+describe("cosmos settings writes are atomic with the theme checks", () => {
+  async function rig() {
+    const { client, data } = fakeCosmos();
+    const store = createCosmosStore({ client, log: () => {} });
+    const p = await store.ensurePrincipal("cosmos:settings-race");
+    await store.putTheme(p.id, { name: "a", tokens: {} });
+    return { store, data, p };
+  }
+
+  it("refuses a default whose theme is removed between the check and the write", async () => {
+    const { store, data, p } = await rig();
+    data.beforeBatch = () => {
+      // A concurrent removeTheme lands after putSettings read the themes.
+      void data.item("theme:a", p.id).delete();
+    };
+    await expect(store.putSettings(p.id, { defaultThemes: { light: "a" } })).rejects.toMatchObject({ code: "UNKNOWN_THEME" });
+    expect(await store.settings(p.id)).toEqual({});
+  });
+
+  it("refuses removing a theme that became a default between the check and the delete", async () => {
+    const { store, data, p } = await rig();
+    data.beforeBatch = () => {
+      // A concurrent putSettings names the theme after removeTheme checked.
+      data.seed({ id: "settings", principalId: p.id, settings: { defaultThemes: { dark: "a" } } });
+    };
+    await expect(store.removeTheme(p.id, "a")).rejects.toMatchObject({ code: "THEME_IN_USE" });
+    expect((await store.themes(p.id)).map((t) => t.name)).toEqual(["a"]);
+  });
+
+  it("keeps a section another writer added meanwhile", async () => {
+    const { store, data, p } = await rig();
+    await store.putSettings(p.id, { defaultThemes: { light: "a" } });
+    data.beforeBatch = () => {
+      data.seed({ id: "settings", principalId: p.id, settings: { defaultThemes: { light: "a" }, fonts: { body: "Inter" } } });
+    };
+    await store.putSettings(p.id, { defaultThemes: { dark: "a" } });
+    const stored = (await data.item("settings", p.id).read()).resource;
+    expect(stored?.settings).toEqual({ defaultThemes: { dark: "a" }, fonts: { body: "Inter" } });
   });
 });

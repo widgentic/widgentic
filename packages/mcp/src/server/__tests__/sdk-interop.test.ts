@@ -367,6 +367,16 @@ describe("resourceDomains declaration", () => {
     const ui = app?._meta?.ui as { csp?: unknown } | undefined;
     expect(ui?.csp).toBeUndefined();
   });
+
+  it("asks the host for no border, on the declaration and on the read content", async () => {
+    for (const domains of [undefined, ["cdn.example.com"]]) {
+      const client = await connectWithDomains(domains);
+      const app = (await client.listResources()).resources.find((r) => r.uri.startsWith("ui://"));
+      expect(app?._meta?.ui).toMatchObject({ prefersBorder: false });
+      const read = await client.readResource({ uri: app?.uri ?? "" });
+      expect(read.contents[0]?._meta?.ui).toEqual(app?._meta?.ui);
+    }
+  });
 });
 
 describe("list_actions over the protocol", () => {

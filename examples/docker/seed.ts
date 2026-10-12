@@ -1,11 +1,12 @@
 /**
  * Optional startup seed (self-host-example spec): `WIDGENTIC_SEED_FILE`
- * names a JSON document `{ schemas?, themes?, actions?, widgets? }` that the
- * authoring service loads into the single principal at boot. Every entry
- * goes through the store's validated write — the checks a person's import
- * passes — in dependency order (schemas and actions before the widgets that
- * reference them). Entries the principal already holds are skipped, never
- * overwritten, so a restart cannot undo an edit; a refused entry is logged
+ * names a JSON document `{ schemas?, themes?, actions?, widgets?, settings? }`
+ * that the authoring service loads into the single principal at boot. Every
+ * entry goes through the store's validated write — the checks a person's
+ * import passes — in dependency order (schemas and actions before the
+ * widgets that reference them, settings after the themes they name).
+ * Entries and settings sections the principal already holds are skipped,
+ * never overwritten, so a restart cannot undo an edit; a refusal is logged
  * with its code and the rest still land. A seed is a convenience: nothing
  * here stops the service, and keys and secrets are never seeded.
  */
@@ -13,7 +14,13 @@ import { readFileSync } from "node:fs";
 import { isPlainObject } from "@widgentic/core";
 import { StoreRejectionError } from "@widgentic/mcp/store";
 import type { ThemeEntry } from "@widgentic/core";
-import type { StoredAction, StoredSchema, StoredWidget, WritableWidgetStore } from "@widgentic/mcp/store";
+import type {
+  PrincipalSettingsUpdate,
+  StoredAction,
+  StoredSchema,
+  StoredWidget,
+  WritableWidgetStore
+} from "@widgentic/mcp/store";
 
 export interface SeedSummary {
   written: number;
@@ -89,10 +96,42 @@ export async function seedPrincipal(
       }
     }
   }
+  await seedSettings(store, principalId, document.settings, summary, log);
   log(
     `widgentic web: seeded from ${path}: ${summary.written} written, ${summary.skipped} already present, ${summary.refused} refused`
   );
   return summary;
+}
+
+/** Each settings section the principal lacks, one validated write each. */
+async function seedSettings(
+  store: WritableWidgetStore,
+  principalId: string,
+  settings: unknown,
+  summary: SeedSummary,
+  log: (line: string) => void
+): Promise<void> {
+  if (settings === undefined) return;
+  if (!isPlainObject(settings)) {
+    log("widgentic web: seed 'settings' ignored: expected an object of sections");
+    return;
+  }
+  const held: Record<string, unknown> = await store.settings(principalId);
+  for (const [section, value] of Object.entries(settings)) {
+    if (held[section] !== undefined) {
+      summary.skipped++;
+      continue;
+    }
+    try {
+      // The store validates the section; the cast only names its shape.
+      await store.putSettings(principalId, { [section]: value } as PrincipalSettingsUpdate);
+      summary.written++;
+    } catch (error) {
+      summary.refused++;
+      const code = error instanceof StoreRejectionError ? error.code : "STORE_ERROR";
+      log(`widgentic web: seed setting '${section}' refused: ${code}`);
+    }
+  }
 }
 
 /**

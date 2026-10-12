@@ -6,7 +6,7 @@
  */
 import type { WidgetDescriptorInput } from "@widgentic/core";
 import type { WidgetTemplate } from "@widgentic/core";
-import type { WidgetTheme } from "@widgentic/core";
+import type { WidgetStyles, WidgetTheme } from "@widgentic/core";
 import type { ActionBinding } from "@widgentic/core";
 
 /** The draft being designed — the server's `CustomWidget` shape plus session extras. */
@@ -25,6 +25,14 @@ export interface WidgetDraft {
   sampleData?: unknown;
   /** Preview theme (also the theme-designer working copy). */
   theme?: WidgetTheme;
+  /** The preview theme's shared styles; preview-only, never exported. */
+  themeStyles?: WidgetStyles;
+  /**
+   * The supplied theme the person chose for the preview, by name; `theme`
+   * is its tokens with any programmatic tokens layered over them.
+   * Preview-only, never exported.
+   */
+  previewTheme?: string;
 }
 
 export type DraftListener = (draft: WidgetDraft) => void;

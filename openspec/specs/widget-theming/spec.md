@@ -2,9 +2,11 @@
 
 ## Purpose
 Predefined styles and data-driven themes for the stable `wg-*` widget classes. A token registry (`--wg-*` custom properties) backs a generated base stylesheet with light defaults; a theme is a validated JSON token map applied per container (scoped, replace semantics) or emitted as CSS. Theme values from untrusted authors cannot escape declarations or fetch resources.
+
 ## Requirements
+
 ### Requirement: Theming programmatic surface
-The package SHALL export from a `./theming` entry: `THEME_TOKENS` (the token registry), `TOKEN_SPECS` (each token's default, value `type`, and documented `use`), `TOKEN_DEFAULTS` (derived from the specs), the `WidgetTheme`, `WidgetThemeInput`, `TokenType`, `TokenSpec` and `ThemeError` types, `baseStylesheet` (string), `injectBaseStyles(doc: Document): void`, `validateTheme(input: unknown)`, `applyTheme(container: Element, theme: WidgetTheme): void`, `themeToCss(theme: WidgetTheme, selector?: string): string`, the `darkTheme` preset, and the named-theme registry surface (`createThemeRegistry`, `DuplicateThemeError`, the `ThemeEntry` type). Themes SHALL be plain JSON-serializable maps of bare token names to string values, additionally accepting author-defined `x-*` custom variables. The `darkTheme` preset SHALL set `surface` to a value distinct from its `bg`.
+The package SHALL export from a `./theming` entry: `THEME_TOKENS` (the token registry), `TOKEN_SPECS` (each token's default, value `type`, and documented `use`), `TOKEN_DEFAULTS` (derived from the specs), the `WidgetTheme`, `WidgetThemeInput`, `TokenType`, `TokenSpec` and `ThemeError` types, `baseStylesheet` (string), `injectBaseStyles(doc: Document): void`, `validateTheme(input: unknown)`, `applyTheme(container: Element, theme: WidgetTheme): void`, `themeToCss(theme: WidgetTheme, selector?: string): string`, `themeStylesToCss(styles: WidgetStyles, scope?: string): string`, the `darkTheme` preset, and the named-theme registry surface (`createThemeRegistry`, `DuplicateThemeError`, the `ThemeEntry` and `ThemeMode` types — `ThemeMode` being `"light" | "dark"`). Themes SHALL be plain JSON-serializable maps of bare token names to string values, additionally accepting author-defined `x-*` custom variables. The `darkTheme` preset SHALL set `surface` to a value distinct from its `bg`.
 
 #### Scenario: Token registry is exported
 - **WHEN** `THEME_TOKENS` is imported
@@ -22,6 +24,10 @@ The package SHALL export from a `./theming` entry: `THEME_TOKENS` (the token reg
 - **WHEN** `TOKEN_SPECS` is inspected
 - **THEN** each token SHALL declare a `type` of `"color" | "dimension" | "number" | "font-family" | "font-weight" | "shadow"` and a non-empty `use` describing what it controls
 - **AND** every `color`-typed token's default SHALL be a hex color, so tooling can trust the declared type instead of inferring it from the value
+
+#### Scenario: Theme styles and modes are part of the surface
+- **WHEN** the `./theming` entry is imported
+- **THEN** `themeStylesToCss` SHALL be exported as a function, and a `ThemeEntry` carrying `styles` and a `ThemeMode` value SHALL type-check against the exported types
 
 ### Requirement: Predefined base stylesheet
 `baseStylesheet` SHALL begin with a generated `:root` block **defining every registry token with its default value**, so custom widget styles may reference bare `var(--wg-<token>)` and always resolve — an applied theme overrides these definitions rather than being the only source of them (before this, any token the active theme did not set was undefined, silently invalidating custom-style declarations on every surface). A token whose metadata declares a `fallback` token SHALL be defined in that block as a chain through the fallback (`--wg-<token>: var(--wg-<fallback>, <default>)`) rather than as a bare literal, so defining the token does not sever the inheritance its rules promise — a literal default at `:root` makes a `var(--wg-<token>, …)` fallback unreachable, since a `var()` fallback applies only when the property is unset. `baseStylesheet` SHALL style the documented `wg-*` classes (`wg-card`, `wg-table`, `wg-tree`, `wg-code`, `wg-template`, `wg-img` with its shape modifiers `wg-img-avatar`, `wg-img-thumb`, `wg-img-hero`, `wg-img-icon`, and their sub-element classes) using only `var(--wg-<token>, <fallback>)` references to registry tokens, with light-theme fallback values. Widget surface backgrounds (`wg-card`, `wg-table`, `wg-code`) SHALL read `var(--wg-surface, var(--wg-bg, <light default>))` so that themes without a `surface` value inherit `bg` exactly as before, while themes may set the two independently. Text SHALL derive its density from the `line-height` token, its emphasis from `font-weight-bold`, and monospace content (`wg-code`, a block utility no built-in emits — it is the styling surface template authors opt into) from `font-mono`; hairlines SHALL derive their thickness from `border-width`. The stylesheet SHALL additionally define status utility classes (`wg-status` with `wg-status-danger|success|warning|info|accent`) pairing each status color with its `-fg` text color, so status tokens are consumed rather than decorative. EVERY registry token SHALL be referenced by the stylesheet — a token that nothing consumes SHALL NOT be added. Image rules SHALL size `wg-img-avatar` from the `avatar-size` token (circular crop), `wg-img-thumb` from the `thumb-size` token (rounded rectangle), and render `wg-img-hero` as a block spanning available width; all three SHALL use `object-fit: cover` or equivalent so mis-proportioned sources stay presentable. The tree's node icons SHALL be sized to a shared em-box — `wg-tree-icon` (text) and `wg-img-icon` (image) to the SAME width — so an emoji and an image icon align on the same baseline. Tree rules SHALL style the branch disclosure rather than hide children by CSS: the `wg-tree-branch` summary SHALL suppress the platform's own marker on both engines and draw one token-colored chevron that turns in the `[open]` state, and the children list SHALL keep its indent and hairline; there SHALL be no rule hiding collapsed children, because collapsing is the disclosure's own semantics. `injectBaseStyles(doc)` SHALL append the stylesheet as a marked `<style>` element exactly once per document (idempotent).
@@ -73,7 +79,7 @@ The package SHALL export from a `./theming` entry: `THEME_TOKENS` (the token reg
 - **THEN** both SHALL declare the SAME em width, so a text icon and an image icon occupy the same slot
 
 ### Requirement: Theme validation
-`validateTheme(input)` SHALL return `{ ok: true, theme } | { ok: false, error: ThemeError }` where `ThemeError` has `code` (`"INVALID_THEME" | "UNKNOWN_TOKEN" | "INVALID_TOKEN_VALUE"`), `message`, and the offending `token` name when applicable. Non-object input SHALL fail with `INVALID_THEME`; keys outside `THEME_TOKENS` SHALL fail with `UNKNOWN_TOKEN` **unless** they match the custom-variable pattern `^x-[a-z0-9][a-z0-9-]*$`, which SHALL be accepted; values that are not strings or that contain `;`, `{`, `}`, `<`, `>`, `url(`, or `expression(` (case-insensitive, whitespace-tolerant before the parenthesis) SHALL fail with `INVALID_TOKEN_VALUE` — custom variables included. The guard rejects exfiltration and execution vectors, not invalid CSS — inert nonsense values pass.
+`validateTheme(input)` SHALL return `{ ok: true, theme } | { ok: false, error: ThemeError }` where `ThemeError` has `code` (`"INVALID_THEME" | "UNKNOWN_TOKEN" | "INVALID_TOKEN_VALUE"`), `message`, and the offending `token` name when applicable. Non-object input SHALL fail with `INVALID_THEME`; keys outside `THEME_TOKENS` SHALL fail with `UNKNOWN_TOKEN` **unless** they match the custom-variable pattern `^x-[a-z0-9][a-z0-9-]*$`, which SHALL be accepted; values that are not strings or that contain `;`, `{`, `}`, `<`, `>`, a backslash (whose escapes can spell any banned call), a comment marker (`/*` or `*/`), an unclosed bracket or string (a newline ends a string unclosed, as in CSS), `url(`, `expression(`, `image-set(` or `src(` (case-insensitive, whitespace-tolerant before the parenthesis) SHALL fail with `INVALID_TOKEN_VALUE` — custom variables included; the rule SHALL also be exported as text, `TOKEN_VALUE_RULE`, with the character class as `TOKEN_VALUE_UNSAFE`. The guard rejects exfiltration and execution vectors, not invalid CSS — inert nonsense values pass.
 
 #### Scenario: Valid theme passes
 - **WHEN** `validateTheme({ bg: "#0b0e14", "font-family": "Inter, sans-serif" })` is called
@@ -100,6 +106,14 @@ The package SHALL export from a `./theming` entry: `THEME_TOKENS` (the token reg
 - **THEN** the result SHALL have `error.code: "UNKNOWN_TOKEN"`
 - **AND WHEN** `{ "x-ok": "url(https://evil.example/x)" }` is validated
 - **THEN** the result SHALL have `error.code: "INVALID_TOKEN_VALUE"`
+
+#### Scenario: Comment markers and URL carriers are rejected
+- **WHEN** a value is `"red /*"`, `"image-set(\"https://evil.example/x\" 1x)"` or `"src(\"https://evil.example/x\")"`
+- **THEN** the result SHALL have `error.code: "INVALID_TOKEN_VALUE"`
+
+#### Scenario: Backslash escapes and unclosed brackets are rejected
+- **WHEN** a token value is `u\72 l(https://e.example/x)`, `calc(1px + (2px`, `"open`, or a string broken by a newline
+- **THEN** validation SHALL fail with `INVALID_TOKEN_VALUE`
 
 ### Requirement: Scoped theme application
 `applyTheme(container, theme)` SHALL set each valid token as a `--wg-<token>` inline custom property on the container via the CSSOM (no stylesheet parsing), custom variables as `--wg-x-<name>`, and SHALL first remove all `--wg-*` properties from a previous application (replace semantics). Invalid entries SHALL be skipped, never thrown. Two containers SHALL be able to carry different themes simultaneously.
@@ -141,7 +155,7 @@ The package SHALL export from a `./theming` entry: `THEME_TOKENS` (the token reg
 - **THEN** the output SHALL contain `--wg-x-gap: 4px;`
 
 ### Requirement: Named theme registry
-The package SHALL export `createThemeRegistry()` returning a registry of named themes with `register(entry)`, `get(name)`, `list()`, and `names()`. An entry SHALL be `{ name, label?, description?, tokens, extends? }` where `tokens` is a validated `WidgetTheme`. Registering a name twice SHALL throw `DuplicateThemeError` (matching the catalog's duplicate-kind ergonomics). `extends: <name>` SHALL be resolved **at registration** by merging the base entry's tokens under the new entry's own tokens, storing the flat result — no runtime cascade and no cycles; the `extends` name SHALL be retained on the entry for display. Registering an entry whose tokens fail validation SHALL throw with the validator's structured error. A fresh registry SHALL contain the built-in `light` (empty token map — the defaults) and `dark` (the `darkTheme` preset) entries.
+The package SHALL export `createThemeRegistry()` returning a registry of named themes with `register(entry)`, `get(name)`, `list()`, and `names()`. An entry SHALL be `{ name, label?, description?, tokens, styles? }` where `tokens` is a validated `WidgetTheme` and `styles`, when present, is a style map in the shape a widget descriptor's `styles` takes — a plain object of selectors to plain objects of property/value strings; any other `styles` value SHALL make registration throw carrying `INVALID_THEME`. Unsafe style entries inside a well-shaped map SHALL be accepted and dropped when CSS is generated, exactly as a widget's are. Registering a name twice SHALL throw `DuplicateThemeError` (matching the catalog's duplicate-kind ergonomics). An entry SHALL be complete as registered: there is no inheritance between entries, and a host that derives one theme from another merges the tokens and styles before registering; an `extends` field, like any field the registry does not know, SHALL be ignored. Registering an entry whose tokens fail validation SHALL throw with the validator's structured error. A fresh registry SHALL contain the built-in `light` (empty token map — the defaults) and `dark` (the `darkTheme` preset) entries. The registry SHALL hold one default entry per `ThemeMode`: `getDefault(mode)` SHALL return the `light` built-in for `"light"` and the `dark` built-in for `"dark"` until `setDefault(mode, name)` names another registered entry, and `defaults()` SHALL return `{ light, dark }` with the effective entries' names. `setDefault` SHALL throw for a name the registry does not hold, SHALL replace the previous default of that mode, and SHALL accept the same entry for both modes.
 
 #### Scenario: Registry ships light and dark
 - **WHEN** `createThemeRegistry().names()` is called
@@ -152,12 +166,53 @@ The package SHALL export `createThemeRegistry()` returning a registry of named t
 - **THEN** `get("brand")` SHALL return it and `list()` SHALL include it
 
 #### Scenario: extends merges at registration
-- **WHEN** `{ name: "brand-dark", extends: "dark", tokens: { accent: "#ff5a1f" } }` is registered
-- **THEN** `get("brand-dark").tokens` SHALL contain the dark preset's `bg` and the overriding `accent`
-- **AND** the entry SHALL still report `extends: "dark"`
+- **WHEN** `{ name: "child", extends: "dark", tokens: { accent: "#000" } }` is registered
+- **THEN** nothing SHALL be merged: `get("child")` SHALL be `{ name: "child", tokens: { accent: "#000" } }`, with no `dark` tokens and no `extends`
 
 #### Scenario: Duplicate names and invalid tokens are refused
 - **WHEN** a name already in the registry is registered again
 - **THEN** `DuplicateThemeError` SHALL be thrown
 - **AND WHEN** an entry's tokens contain `{ sneaky: "red" }`
 - **THEN** registration SHALL throw carrying `UNKNOWN_TOKEN`
+
+#### Scenario: Defaults start as the built-ins
+- **WHEN** `createThemeRegistry().defaults()` is called
+- **THEN** it SHALL return `{ light: "light", dark: "dark" }`
+
+#### Scenario: One default per mode
+- **WHEN** entries `a` and `b` are registered, `setDefault("light", "a")` and then `setDefault("light", "b")` are called
+- **THEN** `getDefault("light").name` SHALL be `"b"` and `getDefault("dark").name` SHALL still be `"dark"`
+- **AND** `setDefault("dark", "b")` SHALL be accepted, making `b` the default for both modes
+
+#### Scenario: Only registered entries can be defaults
+- **WHEN** `setDefault("dark", "missing")` is called on a registry that holds no `missing`
+- **THEN** it SHALL throw and the dark default SHALL be unchanged
+
+#### Scenario: Styles travel with the entry
+- **WHEN** `{ name: "base", tokens: {}, styles: { ".wg-btn": { padding: "4px", color: "red" } } }` is registered and the caller then changes its own `styles` object
+- **THEN** `get("base").styles` SHALL still be `{ ".wg-btn": { padding: "4px", color: "red" } }`
+- **AND** registering an entry whose `styles` is an array, or maps a selector to a string, SHALL throw carrying `INVALID_THEME`
+
+### Requirement: Theme styles generate scoped CSS
+`themeStylesToCss(styles, scope?)` SHALL generate CSS from a theme's style map under exactly the guards and output format of the registered-widget-styles generator — every selector part targeting a `.wg-` class, the same banned constructs and property-name rule, unsafe entries dropped and safe siblings kept, never throwing. Without `scope` its output SHALL equal that generator's for the same map. With `scope` (a selector supplied by the caller, never by theme data, and always targeting the root element), every top-level part of every emitted selector SHALL be scoped so the rule applies only inside the scope and gains no specificity from it: a part is prefixed by `:where(<scope>) `, except a part anchored at the root (`:root…` or `html…`), which takes `:where(<scope>)` as an extra condition on its root compound.
+
+#### Scenario: Unscoped theme styles match widget styles
+- **WHEN** `themeStylesToCss({ ".wg-btn": { padding: "4px 8px" } })` is called
+- **THEN** the result SHALL equal the widget-styles generator's output for the same map
+
+#### Scenario: A scope prefixes every selector part
+- **WHEN** `themeStylesToCss({ ".wg-btn, .wg-link": { color: "var(--wg-accent)" } }, ':root[data-theme="dark"]')` is called
+- **THEN** the rule's selector SHALL be `:where(:root[data-theme="dark"]) .wg-btn, :where(:root[data-theme="dark"]) .wg-link`
+
+#### Scenario: A scoped rule applies only inside its scope and keeps its own weight
+- **WHEN** a document whose root carries `data-theme="dark"` holds the CSS of `themeStylesToCss({ ".wg-btn": { color: "rgb(1, 2, 3)" } }, ':root[data-theme="dark"]')` followed by a widget rule `.wg-btn { color: rgb(4, 5, 6) }`
+- **THEN** a `.wg-btn` element's computed color SHALL be `rgb(4, 5, 6)`, since the two selectors weigh the same and the widget rule comes later
+- **AND** with the root's `data-theme` removed and the widget rule absent, the element SHALL NOT take `rgb(1, 2, 3)`
+
+#### Scenario: Pseudo-class arguments and root anchors survive scoping
+- **WHEN** `themeStylesToCss({ ".wg-row:has(.wg-ok, .wg-warn), html .wg-x": { color: "red" } }, ':root[data-theme="dark"]')` is called
+- **THEN** the selector SHALL be `:where(:root[data-theme="dark"]) .wg-row:has(.wg-ok, .wg-warn), html:where(:root[data-theme="dark"]) .wg-x`
+
+#### Scenario: Unsafe theme style entries never reach the output
+- **WHEN** the map holds a `body` selector, a value with `url(`, and a safe `.wg-btn` rule
+- **THEN** the output SHALL contain only the `.wg-btn` rule

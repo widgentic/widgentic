@@ -64,6 +64,13 @@ export interface DesignerSources {
   theme?: () => ThemeDesignerHandle | undefined;
   schema?: () => SchemaDesignerHandle | undefined;
   action?: () => ActionDesignerHandle | undefined;
+  /**
+   * The widget designer as it is, WITHOUT showing or mounting anything — the
+   * read-only definition check resolves shared references through it, so it
+   * must never switch the person's view. Omit it and the check runs on the
+   * definition alone, with references left unverified.
+   */
+  widgetIfMounted?: () => DesignerHandle | undefined;
 }
 
 export interface ToolsOptions {

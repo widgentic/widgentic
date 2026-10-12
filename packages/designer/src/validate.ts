@@ -4,7 +4,7 @@
  * Everything here goes through public package entries — the designer owns
  * no validation logic of its own.
  */
-import { isPlainObject } from "@widgentic/core";
+import { auditDataSchema, isPlainObject, PROPERTY_NAME, SAFE_IDENTIFIER, STYLE_RULES } from "@widgentic/core";
 import {
   createCatalog,
   validateDataAgainstSchema,
@@ -48,6 +48,13 @@ export interface DesignerDiagnostics {
   load?: string;
   /** Shared actions referenced by the template or `load` that are not among the supplied ones. */
   actionRefs?: string;
+  /**
+   * A warning, never blocking: without `descriptor.dataShape` agents that
+   * list the widget see a placeholder instead of the data it expects.
+   */
+  dataShape?: string;
+  /** Warnings, never blocking: what the validator would ignore in the inline `dataSchema`. */
+  dataSchema?: string[];
   /** True when the draft can be registered and previewed. */
   previewable: boolean;
 }
@@ -78,20 +85,30 @@ export function effectiveDataSchema(
 
 const BASE_KINDS = new Set(createCatalog().kinds());
 
+/** What saving would refuse about a kind, in the store's terms; `undefined` when acceptable. */
+export function kindProblem(kind: string): string | undefined {
+  if (!SAFE_IDENTIFIER.test(kind)) {
+    return `INVALID_IDENTIFIER — '${kind}' may use letters, digits, '.', '_' or '-' only.`;
+  }
+  if (BASE_KINDS.has(kind)) {
+    return `RESERVED_KIND — '${kind}' is a built-in kind; give the widget its own kind.`;
+  }
+  return undefined;
+}
+
 /**
  * Detect style entries the renderer would skip, using only the public
  * generator: a probe that produces no CSS was filtered by the safety
  * guards. Selector and per-declaration issues are reported separately.
  */
-function auditStyles(styles: WidgetStyles | undefined): StyleIssue[] {
+export function auditStyles(styles: WidgetStyles | undefined): StyleIssue[] {
   if (!isPlainObject(styles)) return [];
   const issues: StyleIssue[] = [];
   for (const [selector, declarations] of Object.entries(styles)) {
     if (widgetStylesToCss({ [selector]: { color: "red" } }) === "") {
       issues.push({
         selector,
-        message:
-          "Selector would be skipped — every comma-separated part must target a .wg- class and avoid ;{}<>@\\."
+        message: `Selector would be skipped. ${STYLE_RULES.selectors} ${STYLE_RULES.banned}`
       });
       continue;
     }
@@ -104,11 +121,15 @@ function auditStyles(styles: WidgetStyles | undefined): StyleIssue[] {
         typeof value !== "string" ||
         widgetStylesToCss({ ".wg-probe": { [property]: value } }) === ""
       ) {
+        // Name the part at fault: the property name, or else the value.
         issues.push({
           selector,
           property,
-          message:
-            "Declaration would be skipped — unsafe property name or value (no url(), expression(), or ;{}<>@\\)."
+          message: !PROPERTY_NAME.test(property)
+            ? `Property would be skipped. ${STYLE_RULES.propertyNames}`
+            : typeof value !== "string"
+              ? "Value would be skipped: it must be a string."
+              : `Value would be skipped. ${STYLE_RULES.banned}`
         });
       }
     }
@@ -125,8 +146,21 @@ export function deriveDiagnostics(
 
   if (typeof draft.kind !== "string" || draft.kind.trim().length === 0) {
     diagnostics.kind = "Kind must be a non-empty id.";
-  } else if (BASE_KINDS.has(draft.kind)) {
-    diagnostics.kind = `'${draft.kind}' is a built-in kind — pick a distinct id.`;
+  } else {
+    const problem = kindProblem(draft.kind);
+    if (problem !== undefined) diagnostics.kind = problem;
+  }
+
+  const dataShape = draft.descriptor?.dataShape;
+  if (typeof dataShape !== "string" || dataShape.trim() === "") {
+    diagnostics.dataShape =
+      "Data shape is empty — agents listing this widget will see a placeholder instead of the data it expects.";
+  }
+
+  const inlineSchema = draft.descriptor?.dataSchema;
+  if (isPlainObject(inlineSchema)) {
+    const warnings = auditDataSchema(inlineSchema, "dataSchema");
+    if (warnings.length > 0) diagnostics.dataSchema = warnings;
   }
 
   const template = validateTemplate(draft.template);
@@ -148,7 +182,9 @@ export function deriveDiagnostics(
       diagnostics.schemaRef =
         "A descriptor carries 'dataSchema' OR 'dataSchemaRef', never both.";
     } else if (
-      (options.schemas ?? []).every((entry) => entry.name !== ref)
+      // Unverifiable without the host's schemas: never a false "unknown".
+      options.schemas !== undefined &&
+      options.schemas.every((entry) => entry.name !== ref)
     ) {
       diagnostics.schemaRef = `References unknown schema '${ref}' — it is not among the supplied shared schemas.`;
     }

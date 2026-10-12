@@ -1,6 +1,7 @@
 /**
- * The self-hosted authoring client: the four designers over the authoring
- * surface, plus write-only secrets and API keys. Deliberately plainer than
+ * The self-hosted authoring client: the widget, theme, schema, action and
+ * settings designers over the authoring surface, plus write-only secrets
+ * and API keys. Deliberately plainer than
  * widgentic.dev's app — one list and one designer per tab — while covering
  * the same authoring capability: list, create, open read-only, edit, save,
  * delete, test an action, write a secret, mint and revoke a key.
@@ -8,6 +9,7 @@
  * Wiring comes from the shared example module (mount discipline, typed API
  * client); everything on this page is the demo a reader copies.
  */
+import { isPlainObject } from "@widgentic/core";
 import type { StoredAction, ThemeEntry } from "@widgentic/core";
 import type {
   ActionDesignerHandle,
@@ -15,12 +17,13 @@ import type {
   DesignerHandle,
   SchemaDesignerHandle,
   SchemaEntry,
+  SettingsDesignerHandle,
   ThemeDesignerHandle
 } from "@widgentic/designer";
 import type { HttpActionDefinition } from "@widgentic/core";
 import { authoringClient as api, AuthoringApiError } from "@widgentic-examples/shared/client";
-import type { KeyEntry, SecretEntry, WidgetEntry } from "@widgentic-examples/shared/client";
-import { mountAction, mountSchema, mountTheme, mountWidget, previewThemes } from "@widgentic-examples/shared/designers";
+import type { KeyEntry, SecretEntry, Settings, WidgetEntry } from "@widgentic-examples/shared/client";
+import { draftDefinition, mountAction, mountSchema, mountSettings, mountTheme, mountWidget, previewThemes } from "@widgentic-examples/shared/designers";
 import { describeAgentTools, designerSources } from "@widgentic-examples/shared/webmcp";
 import { exposeDesigners } from "@widgentic/webmcp";
 import { invoiceWidget } from "@widgentic-examples/mcp-server/widgets";
@@ -55,6 +58,9 @@ let myThemes: ThemeEntry[] = [];
 let mySchemas: SchemaEntry[] = [];
 let myActions: StoredAction[] = [];
 let mySecrets: SecretEntry[] = [];
+// Unknown until read: Settings never saves over a record it could not read
+// (a save sends the whole defaultThemes section).
+let mySettings: Settings | undefined;
 let secretsEnabled = false;
 
 
@@ -67,7 +73,8 @@ function renderList(
   emptyText: string,
   onOpen: (name: string) => void,
   onEdit: (name: string) => void,
-  onRemove: (name: string) => void
+  onRemove: (name: string) => void,
+  badge: (name: string) => string | undefined = () => undefined
 ): void {
   const list = $(listId);
   list.replaceChildren();
@@ -85,6 +92,14 @@ function renderList(
     label.className = "name";
     label.textContent = name;
     label.addEventListener("click", () => onOpen(name));
+    const note = badge(name);
+    const extra: HTMLElement[] = [];
+    if (note !== undefined) {
+      const tag = document.createElement("span");
+      tag.className = "badge";
+      tag.textContent = note;
+      extra.push(tag);
+    }
     const edit = document.createElement("button");
     edit.type = "button";
     edit.textContent = "Edit";
@@ -94,7 +109,7 @@ function renderList(
     remove.className = "danger";
     remove.textContent = "Delete";
     remove.addEventListener("click", () => onRemove(name));
-    row.append(label, edit, remove);
+    row.append(label, ...extra, edit, remove);
     list.append(row);
   }
 }
@@ -105,18 +120,24 @@ let widgetDesigner: DesignerHandle | undefined;
 let widgetMode: Mode = "new";
 let selectedWidget: string | undefined;
 
-function openWidgetDesigner(load?: unknown, readOnly = false): void {
+function openWidgetDesigner(widget?: unknown, readOnly = false): void {
+  // The widget is the designer's initial draft, never a load after mounting:
+  // a remount carries the in-progress draft, whose kind may be one Save
+  // would refuse, and it must survive (the designer flags the kind).
+  const initial = draftDefinition(widget);
+  // A remounted draft keeps the person's preview pick; anything else opens
+  // on their light default (built-in when unset).
+  const picked = isPlainObject(widget) && typeof widget.previewTheme === "string" ? widget.previewTheme : undefined;
+  const previewTheme = picked ?? mySettings?.defaultThemes?.light;
   widgetDesigner = mountWidget($("widget-designer"), widgetDesigner, {
+    ...(initial === undefined ? {} : { initialWidget: initial }),
     themes: previewThemes(myThemes),
+    ...(previewTheme === undefined ? {} : { previewTheme }),
     schemas: mySchemas,
     actions: myActions,
     secretNames: mySecrets.map((s) => s.name),
     readOnly
   });
-  if (load !== undefined) {
-    const result = widgetDesigner.loadWidget(load);
-    if (!result.ok) status(`load failed: ${result.errors.join("; ")}`, "error");
-  }
 }
 
 function showWidgets(): void {
@@ -207,14 +228,23 @@ function showThemes(): void {
       showThemes();
     },
     (name) => {
+      // A default theme is refused with THEME_IN_USE; attempt() shows why.
       void attempt(() => api.removeTheme(name)).then(async (done) => {
         if (done === undefined) return;
         status(`removed ${name}`);
         await refreshThemes();
       });
-    }
+    },
+    defaultBadge
   );
   $("theme-save").hidden = themeMode === "viewing";
+}
+
+/** "default light", "default dark" or both, for a theme the settings name. */
+function defaultBadge(name: string): string | undefined {
+  const defaults = mySettings?.defaultThemes ?? {};
+  const modes = (["light", "dark"] as const).filter((mode) => defaults[mode] === name);
+  return modes.length === 0 ? undefined : `default ${modes.join(" & ")}`;
 }
 
 async function refreshThemes(): Promise<void> {
@@ -488,11 +518,55 @@ async function createKey(): Promise<void> {
   await refreshKeys();
 }
 
+/* ------------------------------- settings ------------------------------- */
+
+let settingsDesigner: SettingsDesignerHandle | undefined;
+// True while the mounted designer stands in for a record that could not be
+// read: its empty contents are never carried into a later mount or saved.
+let settingsDesignerUnread = false;
+
+function openSettingsDesigner(): void {
+  // Choices are the themes saved right now; an unsaved pick survives the remount.
+  const unread = mySettings === undefined;
+  const carried = settingsDesignerUnread ? undefined : settingsDesigner?.getSettings();
+  const current = unread ? {} : carried ?? mySettings ?? {};
+  settingsDesigner = mountSettings($("settings-designer"), settingsDesigner, {
+    themes: myThemes,
+    initialSettings: current,
+    readOnly: unread
+  });
+  settingsDesignerUnread = unread;
+  $("settings-save").hidden = unread;
+  if (unread) status("settings could not be read — reload the page before changing them", "error");
+}
+
+async function refreshSettings(): Promise<void> {
+  mySettings = (await attempt(() => api.getSettings())) ?? mySettings;
+}
+
+async function saveSettings(): Promise<void> {
+  if (settingsDesigner === undefined || mySettings === undefined) return;
+  const saved = await attempt(() => api.saveSettings(settingsDesigner?.getSettings() ?? {}));
+  if (saved === undefined) return;
+  mySettings = saved;
+  settingsDesigner = undefined; // reopen from the stored record
+  openSettingsDesigner();
+  showThemes();
+  status("saved settings");
+}
+
 /* ---------------------------------- tabs --------------------------------- */
 
-const SECTIONS = ["widgets", "themes", "schemas", "actions", "secrets", "keys"] as const;
+const SECTIONS = ["widgets", "themes", "schemas", "actions", "secrets", "keys", "settings"] as const;
+
+let activeSection: (typeof SECTIONS)[number] | undefined;
 
 function showTab(name: (typeof SECTIONS)[number]): void {
+  // Remounts happen on ENTERING a section: an agent's tool call on the
+  // section already shown must leave its designer, preview pick and preview
+  // tokens alone.
+  const entering = name !== activeSection;
+  activeSection = name;
   for (const section of SECTIONS) {
     $(`pane-${section}`).hidden = section !== name;
     $(`tab-${section}`).classList.toggle("active", section === name);
@@ -501,7 +575,13 @@ function showTab(name: (typeof SECTIONS)[number]): void {
   // actions and secrets saved meanwhile appear in its selectors — carrying
   // the in-progress draft, which must survive a trip to the Schemas tab
   // (the store itself forces that trip for a dangling schema ref).
-  if (name === "widgets" && widgetMode === "new") openWidgetDesigner(widgetDesigner?.getDraft());
+  if (entering && name === "widgets" && widgetMode === "new") openWidgetDesigner(widgetDesigner?.getDraft());
+  // Themes saved meanwhile become choices; an unread record is read again on
+  // any click, the section shown or not.
+  if (name === "settings" && (entering || mySettings === undefined)) {
+    if (mySettings === undefined) void refreshSettings().then(openSettingsDesigner);
+    else openSettingsDesigner();
+  }
 }
 
 for (const section of SECTIONS) {
@@ -529,6 +609,7 @@ $("theme-new").addEventListener("click", () => {
   showThemes();
 });
 $("theme-save").addEventListener("click", () => void saveTheme());
+$("settings-save").addEventListener("click", () => void saveSettings());
 $("schema-new").addEventListener("click", () => {
   selectedSchema = undefined;
   schemaMode = "new";
@@ -565,7 +646,8 @@ $("key-form").addEventListener("submit", (event) => {
 async function boot(): Promise<void> {
   const me = await attempt(() => api.me());
   if (me !== undefined) secretsEnabled = me.secretsEnabled;
-  await Promise.all([refreshWidgets(), refreshThemes(), refreshSchemas(), refreshActions(), refreshSecrets(), refreshKeys()]);
+  await Promise.all([refreshWidgets(), refreshSettings(), refreshSchemas(), refreshActions(), refreshSecrets(), refreshKeys()]);
+  await refreshThemes(); // after settings, so the list shows the defaults
   openThemeDesigner();
   openSchemaDesigner();
   openActionDesigner();
@@ -580,6 +662,7 @@ async function boot(): Promise<void> {
   const agentTools = await exposeDesigners(
     designerSources({
       show: (kind) => showTab(`${kind}s`),
+      isShown: (kind) => activeSection === `${kind}s`,
       current: {
         widget: () => widgetDesigner,
         theme: () => themeDesigner,

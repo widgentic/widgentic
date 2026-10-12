@@ -13,19 +13,29 @@ describe("designerSources", () => {
   it("shows the section, then returns the live handle", () => {
     const shown: DesignerKind[] = [];
     let mounted: { getDraft(): unknown } | undefined;
+    let onScreen: DesignerKind | undefined;
     const sources = designerSources({
       show: (kind) => {
         shown.push(kind);
+        onScreen = kind;
         if (kind === "widget") mounted = { getDraft: () => ({ kind: "after-show" }) };
       },
+      isShown: (kind) => onScreen === kind,
       current: { widget: () => mounted as never, theme: () => undefined }
     });
-    expect(Object.keys(sources).sort()).toEqual(["theme", "widget"]);
+    expect(Object.keys(sources).sort()).toEqual(["theme", "widget", "widgetIfMounted"]);
+    // The side-effect-free source the definition check reads shows nothing.
+    expect(sources.widgetIfMounted?.()).toBeUndefined();
+    expect(shown).toEqual([]);
     const handle = sources.widget?.();
     expect(shown).toEqual(["widget"]);
     expect(handle?.getDraft()).toEqual({ kind: "after-show" });
+    // While shown it answers; once another section is shown it does not, since a
+    // hidden designer holds the schemas it was mounted with.
+    expect(sources.widgetIfMounted?.()).toBe(handle);
     expect(sources.theme?.()).toBeUndefined();
     expect(shown).toEqual(["widget", "theme"]);
+    expect(sources.widgetIfMounted?.()).toBeUndefined();
   });
 });
 

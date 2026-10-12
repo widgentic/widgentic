@@ -24,10 +24,10 @@
 ## 5. Release and records
 
 - [x] 5.1 Changeset: minor `@widgentic/mcp`.
-- [ ] 5.2 TESTING log entry (done); BACKLOG AGT-4 removed at archive.
+- [x] 5.2 TESTING log entry (done); BACKLOG AGT-4 removed at archive.
 - [x] 5.3 Gate: typecheck, `npm test`, build, `pack:check`, `openspec validate`, `dotnet test`.
 
 ## 6. Staging
 
-- [ ] 6.1 Stage on `demo.widgentic.dev` from this branch (`Dockerfile.source`) and read the served bytes: the listing equals the definitions, and a raw `{ kind, data }` call gets the named error.
-- [ ] 6.2 Owner host retest on staging, in fresh conversations.
+- [x] 6.1 Stage on `demo.widgentic.dev` from this branch (`Dockerfile.source`) and read the served bytes: the listing equals the definitions, and a raw `{ kind, data }` call gets the named error.
+- [x] 6.2 Owner host retest on staging, in fresh conversations (2026-10-12: the owner reported the staging testing went well; staging carried this change since PR #28).
