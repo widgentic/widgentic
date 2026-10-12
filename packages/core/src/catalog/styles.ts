@@ -60,16 +60,24 @@ const COMBINATOR = (char: string) => /[\s>+~]/.test(char);
  * through `:is()`/`:where()` to a list that does. A `.wg-` hidden in
  * `:not()`, `:has()`, an attribute test or a string constrains nothing.
  */
-function isConstrainedList(selector: string): boolean {
+function isConstrainedList(selector: string, depth: number): boolean {
   const parts = splitTopLevel(selector, (char) => char === ",");
-  return parts.length > 0 && parts.every(isConstrainedPart);
+  return parts.length > 0 && parts.every((part) => isConstrainedPart(part, depth));
 }
 
-function isConstrainedPart(part: string): boolean {
+/**
+ * How deep `:is()`/`:where()` may nest before a selector is refused: the
+ * check recurses per level, and a generator that runs on every render must
+ * never throw. Real selectors nest two or three levels.
+ */
+const MAX_FORWARDING_DEPTH = 16;
+
+function isConstrainedPart(part: string, depth = 0): boolean {
+  if (depth > MAX_FORWARDING_DEPTH) return false;
   return splitTopLevel(part, COMBINATOR).some(
     (compound) =>
       topLevelText(compound).includes(".wg-") ||
-      pseudoArguments(compound, FORWARDING_PSEUDOS).some(isConstrainedList)
+      pseudoArguments(compound, FORWARDING_PSEUDOS).some((argument) => isConstrainedList(argument, depth + 1))
   );
 }
 

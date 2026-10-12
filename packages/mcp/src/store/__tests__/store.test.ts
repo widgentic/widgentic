@@ -226,6 +226,8 @@ describe("file store", () => {
     const store = createFileStore(dir, { onDiagnostic: (line) => lines.push(line) });
     expect((await store.themes("alice")).find((theme) => theme.name === "legacy")).toEqual({ name: "legacy", tokens: { bg: "#fafafa" } });
     expect(lines.join("\n")).toContain("theme 'legacy': token 'accent' dropped on read");
+    await writeFile(join(dir, "alice", "settings.json"), JSON.stringify({ defaultThemes: { light: "legacy" } }));
+    expect((await composeThemes(store, "alice")).value.defaults().light).toBe("legacy");
   });
 
   it("reads no settings for a principal with entries but no settings.json", async () => {

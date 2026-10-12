@@ -53,6 +53,7 @@ appears. Size: **S** one small change, **M** one change with spec deltas,
 | RND-5 | More image sources per render | P3 | M | Owner finding, v82 |
 | THM-1 | Default themes in the .NET host | P3 | S | `theme-styles-and-defaults` design |
 | THM-2 | A dark mode for page and app documents | P3 | S | `theme-styles-and-defaults` design |
+| THM-3 | Keep style rules inside the widget: sibling combinators | P3 | S | PR #29 review |
 
 **Part 2 · Pairing with other technologies**
 
@@ -342,6 +343,17 @@ are reachable by direct URL.
   the built-in dark preset applies there too when no dark default is chosen.
 - **Touches.** `mcp-server` (document composition), the conformance corpus.
 - **Origin.** 2026-10-11, `theme-styles-and-defaults` design (non-goal, D8).
+
+#### THM-3 · Keep style rules inside the widget: sibling combinators — P3, S
+
+- **Problem.** The style guard requires each selector part to be held to a `.wg-`
+  class, but `.wg-a ~ *` and `.wg-a + div` match siblings outside the widget. In an
+  MCP Apps frame the widget is the whole document, so nothing else is there to
+  restyle; in a host page embedding a rendered widget, siblings are the host's.
+- **Direction.** Require the subject compound (the last one) to be held to `.wg-`, or
+  refuse `~`/`+` unless the compound after them is.
+- **Touches.** `widget-catalog` (the guard), `STYLE_RULES`, the guides.
+- **Origin.** 2026-10-12, PR #29 review; this behavior predates that change.
 
 ### Untriaged
 

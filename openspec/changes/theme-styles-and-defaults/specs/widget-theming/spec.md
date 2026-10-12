@@ -65,7 +65,7 @@ The package SHALL export `createThemeRegistry()` returning a registry of named t
 - **AND** registering an entry whose `styles` is an array, or maps a selector to a string, SHALL throw carrying `INVALID_THEME`
 
 ### Requirement: Theme validation
-`validateTheme(input)` SHALL return `{ ok: true, theme } | { ok: false, error: ThemeError }` where `ThemeError` has `code` (`"INVALID_THEME" | "UNKNOWN_TOKEN" | "INVALID_TOKEN_VALUE"`), `message`, and the offending `token` name when applicable. Non-object input SHALL fail with `INVALID_THEME`; keys outside `THEME_TOKENS` SHALL fail with `UNKNOWN_TOKEN` **unless** they match the custom-variable pattern `^x-[a-z0-9][a-z0-9-]*$`, which SHALL be accepted; values that are not strings or that contain `;`, `{`, `}`, `<`, `>`, a backslash (whose escapes can spell any banned call), a comment marker (`/*` or `*/`), an unclosed bracket or string, `url(`, `expression(`, `image-set(` or `src(` (case-insensitive, whitespace-tolerant before the parenthesis) SHALL fail with `INVALID_TOKEN_VALUE` — custom variables included; the rule SHALL also be exported as text, `TOKEN_VALUE_RULE`, with the character class as `TOKEN_VALUE_UNSAFE`. The guard rejects exfiltration and execution vectors, not invalid CSS — inert nonsense values pass.
+`validateTheme(input)` SHALL return `{ ok: true, theme } | { ok: false, error: ThemeError }` where `ThemeError` has `code` (`"INVALID_THEME" | "UNKNOWN_TOKEN" | "INVALID_TOKEN_VALUE"`), `message`, and the offending `token` name when applicable. Non-object input SHALL fail with `INVALID_THEME`; keys outside `THEME_TOKENS` SHALL fail with `UNKNOWN_TOKEN` **unless** they match the custom-variable pattern `^x-[a-z0-9][a-z0-9-]*$`, which SHALL be accepted; values that are not strings or that contain `;`, `{`, `}`, `<`, `>`, a backslash (whose escapes can spell any banned call), a comment marker (`/*` or `*/`), an unclosed bracket or string (a newline ends a string unclosed, as in CSS), `url(`, `expression(`, `image-set(` or `src(` (case-insensitive, whitespace-tolerant before the parenthesis) SHALL fail with `INVALID_TOKEN_VALUE` — custom variables included; the rule SHALL also be exported as text, `TOKEN_VALUE_RULE`, with the character class as `TOKEN_VALUE_UNSAFE`. The guard rejects exfiltration and execution vectors, not invalid CSS — inert nonsense values pass.
 
 #### Scenario: Valid theme passes
 - **WHEN** `validateTheme({ bg: "#0b0e14", "font-family": "Inter, sans-serif" })` is called
@@ -97,11 +97,11 @@ The package SHALL export `createThemeRegistry()` returning a registry of named t
 - **WHEN** a value is `"red /*"`, `"image-set(\"https://evil.example/x\" 1x)"` or `"src(\"https://evil.example/x\")"`
 - **THEN** the result SHALL have `error.code: "INVALID_TOKEN_VALUE"`
 
-## ADDED Requirements
-
 #### Scenario: Backslash escapes and unclosed brackets are rejected
-- **WHEN** a token value is `u\72 l(https://e.example/x)`, `calc(1px + (2px`, or `"open`
+- **WHEN** a token value is `u\72 l(https://e.example/x)`, `calc(1px + (2px`, `"open`, or a string broken by a newline
 - **THEN** validation SHALL fail with `INVALID_TOKEN_VALUE`
+
+## ADDED Requirements
 
 ### Requirement: Theme styles generate scoped CSS
 `themeStylesToCss(styles, scope?)` SHALL generate CSS from a theme's style map under exactly the guards and output format of the registered-widget-styles generator — every selector part targeting a `.wg-` class, the same banned constructs and property-name rule, unsafe entries dropped and safe siblings kept, never throwing. Without `scope` its output SHALL equal that generator's for the same map. With `scope` (a selector supplied by the caller, never by theme data, and always targeting the root element), every top-level part of every emitted selector SHALL be scoped so the rule applies only inside the scope and gains no specificity from it: a part is prefixed by `:where(<scope>) `, except a part anchored at the root (`:root…` or `html…`), which takes `:where(<scope>)` as an extra condition on its root compound.

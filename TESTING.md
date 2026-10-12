@@ -405,6 +405,11 @@ workspace and the sample first, then point at the built DLL):
     - **Designers and WebMCP:** `widget_example_data_set` on a draft the person kinded `my widget` succeeds, with `INVALID_IDENTIFIER` in its diagnostics, and `theme_tokens_set` on a theme named `dark` succeeds; loading `table` or `light` is still refused. The Styles JSON tab's parse error clears after a load, and the widget designer's JSON tab is gated on the styles shape.
     - **Settings element (headless Chrome):** a page sets `themes` on `<widgentic-settings-designer>` before the bundle loads. Before the upgrade it is an own property; afterwards it is not, and the light choices are `["", "ocean", "night"]`. happy-dom does not upgrade, so the unit test exercises `upgradeProperty` directly.
     - **Example apps:** after a failed read, a later Settings visit opens the stored `google-light` and saving keeps it. The demo restores an autosaved draft as the person left it.
+  - **Third review round at `5969a8b` (2026-10-12), triaged for the normal flow (D17).**
+    - **Guards:** a newline inside a quoted string, in a selector, a value or a token value, is dropped, including `:where(.wg-a[x="⏎], body, [y="⏎])`. A rule after such an entry in the same sheet still applies (computed check). A selector list split across lines is still kept. `:is(` nested 2,000 deep is refused without throwing, and three levels still render.
+    - **Cosmos:** a 429 whose diagnostics carry `LSN: 403` stays `STORE_ERROR`, and the batch failure is logged with the service's first line.
+    - **Self-host example:** a new draft given the kind `my widget` keeps that kind across a trip to the Themes tab, flagged `INVALID_IDENTIFIER`, with no "load failed".
+    - **Old-shape tests:** the Cosmos test now also refuses the write, and the file-store test serves the trimmed theme as the light default.
   - **Not verified yet:** the hosts. Staging on `demo.widgentic.dev`, and widgentic.dev's Settings section, follow.
 - **Wire schemas from the exported definitions (2026-10-11, change `derived-input-schemas`, `@widgentic/mcp` minor pending release)**
   - **The wire.** `server-wiring` lists the tools of `createWidgenticServer()` and finds every `inputSchema` and description equal to the exported definition's, for all nine tools: nothing added (no `$schema`), nothing missing.

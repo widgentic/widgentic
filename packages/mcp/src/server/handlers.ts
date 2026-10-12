@@ -12,6 +12,7 @@ import {
   THEME_TOKENS,
   TOKEN_DEFAULTS,
   TOKEN_SPECS,
+  TOKEN_VALUE_RULE,
   baseStylesheet,
   darkTheme,
   themeStylesToCss,
@@ -159,8 +160,8 @@ export function handleListThemeTokens(): McpToolResult {
     })),
     presets: { dark: darkTheme },
     rules:
-      "Values are CSS strings (e.g. '6px', not 6). Unsafe values are " +
-      "rejected: no ';', braces, angle brackets, url(), or expression(). " +
+      "Values are CSS strings (e.g. '6px', not 6). " +
+      `${TOKEN_VALUE_RULE} ` +
       "Unset tokens fall back to the light defaults. Keys named " +
       "'x-<lowercase-kebab>' are accepted as custom variables and emitted " +
       "as --wg-x-<name>, for widgets that need their own knobs. Pass the " +

@@ -241,12 +241,22 @@ function isServiceError(error: unknown): error is { code: number | string } {
 /**
  * The service code of a failed batch request. `@azure/cosmos` 4.x rethrows
  * it as `new Error("Batch request error: <message>")` without its `code`,
- * so a permission refusal is recognized from the message it wraps.
+ * so a permission refusal is recognized from the phrases its message uses
+ * (a bare "403" also appears in throttling diagnostics, as an LSN or a
+ * session token), and any other code only from an explicit `StatusCode:`.
  */
 function batchFailureCode(error: unknown): number {
   if (isServiceError(error)) return Number(error.code);
   const message = error instanceof Error ? error.message : "";
-  return /\b403\b|forbidden|RBAC permissions|blocked by Auth/i.test(message) ? 403 : Number.NaN;
+  if (/\bForbidden\b|RBAC permissions|blocked by Auth|firewall/i.test(message)) return 403;
+  const stated = /StatusCode:\s*(\d{3})\b/i.exec(message)?.[1];
+  return stated === undefined ? Number.NaN : Number(stated);
+}
+
+/** The first line of a failure's message, bounded: enough to tell a 429 from a timeout. */
+function failureSummary(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return (message.split(/\r?\n/)[0] ?? "").slice(0, 200);
 }
 
 /** Wrap a Cosmos failure without letting credential/key material through. */
@@ -388,6 +398,7 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
     } catch (error) {
       const code = batchFailureCode(error);
       if (code === 403) throw operationError(operation, { code });
+      log(`widgentic store: ${operation} batch failed for ${principalId}: ${failureSummary(error)}`);
       return { ok: false, statuses: operations.map(() => code) };
     }
   }

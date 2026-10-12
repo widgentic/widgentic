@@ -53,8 +53,8 @@ account-wide preferences: default themes are the first such preference, not the 
   shows which themes are defaults; the seed may carry `settings`, and the demo seed sets
   its two Google-inspired themes as defaults.
 - **widgentic.dev.** The hosted app gains the same Settings section with its Default
-  themes subsection, adopted from the released packages in a companion change in the
-  apps repository (its `widgentic-app` spec).
+  themes subsection, adopted from the released packages in the apps repository's own change,
+  `adopt-theme-settings` (its `widgentic-app` spec).
 
 ## Capabilities
 
@@ -79,7 +79,7 @@ None.
   (found in review; theme styles reach every render, so the gaps mattered more).
 
 The `widgentic-app` capability (Settings section on widgentic.dev) changes in the apps
-repository's companion change.
+repository's change `adopt-theme-settings`, tracked there.
 
 ## Impact
 

@@ -133,10 +133,32 @@ describe("the shared style guards", () => {
     ["an unclosed bracket in a value", { ".wg-a": { width: "calc(1px + (2px" } }],
     ["an unclosed call in a value", { ".wg-a": { color: "foo(" } }],
     ["a stray closer in a value", { ".wg-a": { width: "1px)" } }],
-    ["an unclosed string in a value", { ".wg-a": { content: '"open' } }]
+    ["an unclosed string in a value", { ".wg-a": { content: '"open' } }],
+    ["a newline inside a string in a selector", { '.wg-a[title="a\nb"]': { color: "red" } }],
+    ["a newline inside a string in :where()", { ':where(.wg-a[x="\n], body, [y="\n])': { color: "red" } }],
+    ["a newline inside a string in a value", { ".wg-a": { "font-family": '"a\nb"' } }],
+    ["a carriage return inside a string in a value", { ".wg-a": { content: '"a\rb"' } }],
+    ["selectors nested past the depth limit", { [":is(".repeat(40) + ".wg-a" + ")".repeat(40)]: { color: "red" } }]
   ])("drops %s", (_label, styles) => {
     expect(css(styles)).toBe("");
     expect(widgetStylesToCss(styles)).toBe("");
+  });
+
+  it("never throws on a selector nested thousands deep", () => {
+    const deep = ":is(".repeat(2000) + ".wg-a" + ")".repeat(2000);
+    expect(() => widgetStylesToCss({ [deep]: { color: "red" } })).not.toThrow();
+    expect(css({ [":is(".repeat(3) + ".wg-a" + ")".repeat(3)]: { color: "red" } })).toContain(".wg-a)))");
+  });
+
+  it("keeps newlines outside strings: a selector list across lines", () => {
+    expect(css({ ".wg-a,\n.wg-b": { color: "red" } })).toContain(".wg-a,\n.wg-b {");
+  });
+
+  it("an emitted newline string cannot wipe the rules after it (computed)", () => {
+    const sheet = themeStylesToCss({ '.wg-a[title="a\nb"]': { color: "red" }, ".wg-b": { color: "rgb(3, 4, 5)" } });
+    document.head.innerHTML = `<style>${sheet}</style>`;
+    document.body.innerHTML = '<p class="wg-b">ok</p>';
+    expect(getComputedStyle(document.querySelector(".wg-b") as Element).color).toBe("rgb(3, 4, 5)");
   });
 
   it("keeps selectors held to .wg- through :is() and :where(), and quoted brackets that close", () => {
@@ -160,7 +182,8 @@ describe("the shared style guards", () => {
       "src(\"https://e.example/x\")",
       "u\\72 l(https://e.example/x)",
       "calc(1px + (2px",
-      "\"open"
+      "\"open",
+      "\"Inter\nSans\""
     ]) {
       const result = validateTheme({ accent: value });
       expect(result.ok, value).toBe(false);

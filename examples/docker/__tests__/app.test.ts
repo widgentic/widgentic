@@ -76,6 +76,23 @@ describe("the example app's Settings section", () => {
     expect(select.value).toBe("google-light");
   });
 
+  it("keeps an in-progress draft, whatever its kind, across a trip to another tab", () => {
+    click("tab-widgets");
+    const kindField = [...document.querySelectorAll("#widget-designer .wgd-field")].find((field) =>
+      field.textContent?.startsWith("Kind (id)")
+    )?.querySelector("input") as HTMLInputElement;
+    kindField.value = "my widget";
+    kindField.dispatchEvent(new Event("input", { bubbles: true }));
+    click("tab-themes");
+    click("tab-widgets");
+    const remounted = [...document.querySelectorAll("#widget-designer .wgd-field")].find((field) =>
+      field.textContent?.startsWith("Kind (id)")
+    )?.querySelector("input") as HTMLInputElement;
+    expect(remounted.value).toBe("my widget");
+    expect(document.querySelector("#widget-designer")?.textContent).toContain("INVALID_IDENTIFIER");
+    expect(status()).not.toContain("load failed");
+  });
+
   it("picking a default and saving it moves the mark", async () => {
     click("tab-settings");
     expect([...lightSelect().options].map((option) => option.value)).toEqual(["", "google-light", "ocean"]);

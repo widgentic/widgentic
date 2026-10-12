@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Registered widget styles
-`WidgetDescriptor` SHALL accept optional `styles`: a map of CSS selectors to property/value maps, letting custom kinds ship their look as data. Every selector part — split on top-level commas, read outside brackets and quoted strings, so the commas inside `:is()`, `:not()`, `:has()`, `:where()` or an attribute value belong to it — SHALL be held to `.wg-` classes: one of its compounds SHALL name a `.wg-`-prefixed class itself, or through `:is()` or `:where()` whose every argument is so held (a `.wg-` class only inside `:not()`, `:has()`, an attribute test or a string does not count), and no part SHALL open with a combinator; selectors, property names, and values are guarded (no braces, semicolons, angle brackets, `@`, backslashes, comment markers `/*` or `*/`, unclosed brackets or strings, and in values no `url(`, `expression(`, `image-set(` or `src(`), and values MAY reference theme tokens via `var(--wg-*)`. The rules SHALL also be exported as text, `STYLE_RULES`, built from the constants that enforce them, for guides and designer messages to read. Invalid entries SHALL be skipped, never emitted. `widgetStylesToCss(styles)` SHALL generate the CSS, and styles SHALL be exposed through `describe`/`list` so hosts can inject them.
+`WidgetDescriptor` SHALL accept optional `styles`: a map of CSS selectors to property/value maps, letting custom kinds ship their look as data. Every selector part — split on top-level commas, read outside brackets and quoted strings, so the commas inside `:is()`, `:not()`, `:has()`, `:where()` or an attribute value belong to it — SHALL be held to `.wg-` classes: one of its compounds SHALL name a `.wg-`-prefixed class itself, or through `:is()` or `:where()` whose every argument is so held, nested at most 16 levels so the check is bounded and the generator never throws (a `.wg-` class only inside `:not()`, `:has()`, an attribute test or a string does not count), and no part SHALL open with a combinator; selectors, property names, and values are guarded (no braces, semicolons, angle brackets, `@`, backslashes, comment markers `/*` or `*/`, unclosed brackets or strings — a newline ends a string unclosed, as in CSS — and in values no `url(`, `expression(`, `image-set(` or `src(`), and values MAY reference theme tokens via `var(--wg-*)`. The rules SHALL also be exported as text, `STYLE_RULES`, built from the constants that enforce them, for guides and designer messages to read. Invalid entries SHALL be skipped, never emitted. `widgetStylesToCss(styles)` SHALL generate the CSS, and styles SHALL be exposed through `describe`/`list` so hosts can inject them.
 
 #### Scenario: Styles registered as data generate CSS
 - **WHEN** a kind registers `styles: { ".wg-invoice": { border: "1px solid var(--wg-border, #e2e8f0)" } }`
@@ -23,8 +23,12 @@
 - **AND** `.wg-a[title="("], .wg-b` scoped to a mode SHALL scope both parts
 
 #### Scenario: Unclosed brackets and strings are dropped
-- **WHEN** styles hold the selectors `.wg-a:is(` and `.wg-a[title`, and the values `calc(1px + (2px`, `foo(`, `1px)` and `"open`
-- **THEN** the generated CSS SHALL contain none of them
+- **WHEN** styles hold the selectors `.wg-a:is(`, `.wg-a[title` and `.wg-a[title="a⏎b"]` (a newline inside the string), and the values `calc(1px + (2px`, `foo(`, `1px)`, `"open` and `"a⏎b"`
+- **THEN** the generated CSS SHALL contain none of them, and a rule after them in the same sheet SHALL still apply
+
+#### Scenario: Deep nesting is refused without throwing
+- **WHEN** a selector nests `:is(` 2,000 levels deep around `.wg-a`
+- **THEN** `widgetStylesToCss` SHALL return without throwing and SHALL NOT emit it
 
 #### Scenario: Selectors held through :is() and :where() are kept
 - **WHEN** styles hold `:is(.wg-btn, .wg-link):hover`, `:where(.wg-card) h3` and `.wg-a[title="("]` with the value `"("`

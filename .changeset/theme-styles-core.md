@@ -10,8 +10,8 @@ Themes gain shared styles and a default per host mode.
 - **`isStyleMap(value)`** (`./catalog`) is the one shape check for widget and theme styles.
 - **Stricter style and token guards (widget styles included).**
   - Each selector part must be held to `.wg-` classes: one of its compounds names a `.wg-` class itself, or through `:is()`/`:where()` whose every argument does. So `:is(.wg-btn, .wg-link):hover` and `:where(.wg-card) h3` are kept, while `body:not(.wg-x)`, `body:has(.wg-x)` and `:is(.wg-a, body)` are dropped.
-  - A part may not open with a combinator.
-  - Brackets and quotes are read as CSS: a parenthesis inside an attribute value can no longer hide a comma or close a pseudo-class.
+  - A part may not open with a combinator, and `:is()`/`:where()` may nest at most 16 levels, so the generator never throws.
+  - Brackets and quotes are read as CSS: a parenthesis inside an attribute value can no longer hide a comma or close a pseudo-class, and a newline ends a string unclosed.
   - Selectors, properties and values may not hold comment markers (`/*`, `*/`) or an unclosed bracket or string.
   - Values and theme token values may not call `image-set(` or `src(`, which carry URLs like `url(`. Token values also refuse `\`, whose escapes can spell any refused call.
   - Scoped theme styles split on top-level commas and scope a root-anchored part (`:root[…] .wg-x`, `html .wg-x`) on its root compound.

@@ -113,23 +113,26 @@ export function previewThemes(saved: readonly ThemeEntry[]): ThemeEntry[] {
 }
 
 /**
- * An autosaved draft, ready to mount as `initialWidget`: the definition
- * fields only (the preview theme belongs to the session, not the draft),
- * or `undefined` when the text is not a draft. It is the person's own
- * work, so it is not held to what Save accepts — a kind Save would refuse
- * is restored and flagged by the designer, never silently dropped.
+ * A draft or stored widget, ready to mount as `initialWidget`: the
+ * definition fields only (the preview theme belongs to the session, not the
+ * draft), or `undefined` when the value is not a widget. Mounting with it,
+ * rather than loading it after, keeps the person's work whatever its kind:
+ * a load holds the kind to what Save accepts, the mount shows the problem.
  */
+export function draftDefinition(value: unknown): WidgetDefinition | undefined {
+  if (!isPlainObject(value) || typeof value.kind !== "string" || !isPlainObject(value.descriptor) || value.template === undefined) {
+    return undefined;
+  }
+  const { kind, template, descriptor, load } = value;
+  return { kind, template, descriptor, ...(load === undefined ? {} : { load }) } as unknown as WidgetDefinition;
+}
+
+/** An autosaved draft's text as `draftDefinition` reads it; corrupt text is no draft. */
 export function restoredDraft(text: string | null): WidgetDefinition | undefined {
   if (text === null) return undefined;
-  let parsed: unknown;
   try {
-    parsed = JSON.parse(text);
+    return draftDefinition(JSON.parse(text));
   } catch {
     return undefined;
   }
-  if (!isPlainObject(parsed) || typeof parsed.kind !== "string" || !isPlainObject(parsed.descriptor) || parsed.template === undefined) {
-    return undefined;
-  }
-  const { kind, template, descriptor, load } = parsed;
-  return { kind, template, descriptor, ...(load === undefined ? {} : { load }) } as unknown as WidgetDefinition;
 }

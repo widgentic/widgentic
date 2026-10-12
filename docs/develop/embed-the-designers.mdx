@@ -33,7 +33,7 @@ designer.subscribe((draft) => save(draft));
 | `chrome` | host chrome tokens, see below |
 | `readOnly` | mount with every editing surface inert |
 
-The handle is `{ getDraft, loadWidget, loadTheme, setReadOnly, subscribe, dispose }`. `getDraft()` returns a copy of the current draft; `loadWidget(definition)` and `loadTheme(theme)` validate first and return `{ ok: true }` or `{ ok: false, errors }` without touching the draft on failure; `subscribe(listener)` calls `listener(draft, diagnostics)` on every change and returns an unsubscribe function; `dispose()` removes the UI. Read-only mode — `readOnly: true` or `setReadOnly(true)` — leaves editing surfaces visible but inert while the preview, its theme selector and Export keep working: it restricts editing, not looking.
+The handle is `{ getDraft, loadWidget, loadTheme, setReadOnly, subscribe, dispose }`. `getDraft()` returns a copy of the current draft; `loadWidget(definition)` and `loadTheme(theme)` validate first and return `{ ok: true }` or `{ ok: false, errors }` without touching the draft on failure; `loadTheme(tokens)` layers its tokens over the preview theme the person chose, which stays selected with its styles, so `loadTheme({})` returns to it; `loadWidget` keeps the preview theme and refuses a kind Save would refuse only when the load changes the kind; `subscribe(listener)` calls `listener(draft, diagnostics)` on every change and returns an unsubscribe function; `dispose()` removes the UI. Read-only mode — `readOnly: true` or `setReadOnly(true)` — leaves editing surfaces visible but inert while the preview, its theme selector and Export keep working: it restricts editing, not looking.
 
 ## Theme, schema, action and settings designers
 

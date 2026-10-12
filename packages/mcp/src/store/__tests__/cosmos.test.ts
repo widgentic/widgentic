@@ -182,7 +182,7 @@ class FakeContainer implements CosmosContainerLike {
         throw new Error(
           code === 403
             ? "Batch request error: Request blocked by Auth wg : Request is blocked because principal [p] does not have required RBAC permissions to perform action [Microsoft.DocumentDB/databaseAccounts/readMetadata]"
-            : `Batch request error: Message: {"Errors":["service unavailable"]} (${String(code)})`
+            : `Batch request error: Message: {"Errors":["Request rate is large"]}\r\nActivityId: a, RequestStats: LSN: 403, SessionToken: -1#403, BELatencyMs: 0.403 (${String(code)})`
         );
       }
       this.beforeBatch?.();
@@ -307,15 +307,19 @@ describe("cosmos adapter identity model", () => {
     ["removeTheme", (store: ReturnType<typeof createCosmosStore>, id: string) => store.removeTheme(id, "a")]
   ])("a read-only identity's %s batch surfaces FORBIDDEN, not STORE_ERROR", async (operation, run) => {
     const { client, data } = fakeCosmos();
-    const store = createCosmosStore({ client, log: () => {} });
+    const lines: string[] = [];
+    const store = createCosmosStore({ client, log: (line) => lines.push(line) });
     const p = await store.ensurePrincipal(`hygiene:forbidden-${operation}`);
     await store.putTheme(p.id, { name: "a", tokens: {} });
     data.failWith = { code: 403, ops: ["batch"] };
     const attempt = run(store, p.id);
     await expect(attempt).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(attempt).rejects.toThrow(new RegExp(operation));
-    data.failWith = { code: 503, ops: ["batch"] };
+    // Throttling diagnostics carry a bare "403"; that is no permission refusal.
+    data.failWith = { code: 429, ops: ["batch"] };
     await expect(run(store, p.id)).rejects.toMatchObject({ code: "STORE_ERROR" });
+    expect(lines.join("\n")).toContain(`${operation} batch failed`);
+    expect(lines.join("\n")).toContain("Request rate is large");
   });
 
   it("diagnostics identify entries, never keys or digests", async () => {
@@ -440,8 +444,9 @@ describe("cosmos settings written out of band", () => {
     expect(lines.join("\n")).toContain("theme 'legacy': token 'accent' dropped on read");
     await store.putSettings(p.id, { defaultThemes: { light: "legacy" } });
     expect((await composeThemes(store, p.id)).value.defaults().light).toBe("legacy");
-    // The stored document is left as it is.
+    // The stored document is left as it is, and a write of it is still refused.
     expect((await data.item("theme:legacy", p.id).read()).resource?.theme).toEqual({ name: "legacy", tokens: { accent: "#0b5fff /* brand */", bg: "#fafafa" } });
+    await expect(store.putTheme(p.id, { name: "legacy", tokens: { accent: "#0b5fff /* brand */", bg: "#fafafa" } })).rejects.toMatchObject({ code: "INVALID_THEME" });
   });
 
   it("an update that leaves a dangling default alone is not refused for it", async () => {

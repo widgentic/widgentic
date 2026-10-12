@@ -218,6 +218,10 @@ Per the cross-repository protocol:
    surfaced through the existing feedback banner.
 3. The apps change is deployed as the next `vNN`.
 
+That change is `adopt-theme-settings` in widgentic/apps. It carries its own tasks (the
+release bump, the Settings section, the pre-deploy scan and the deploy), so this change
+completes without them.
+
 Before the release, the same UI is exercised in the self-host example, which shares the
 designer package and the authoring surface.
 
@@ -328,6 +332,43 @@ effects:
   read-only placeholder.
 - **Settings element.** It adopts a `themes` property set before the element was defined.
 
+### D17 — Third review round: fix the normal flow, record the edge cases
+
+The re-reviews of `5969a8b` were triaged against normal use: importing, exporting and
+editing in the designers, and agents driving them.
+
+Fixed:
+- **Newlines in strings.** As in CSS, a newline now ends a string unclosed, so a string
+  broken across lines fails the balance check in selectors, style values and token
+  values. One such entry could otherwise erase every rule after it.
+- **Bounded nesting.** `:is()`/`:where()` nest at most 16 levels, so the generator,
+  which runs on every render, can never overflow the stack.
+- **Self-host remount.** The example remounts the widget designer with the draft as
+  `initialWidget`, so a draft whose kind Save would refuse survives a tab switch,
+  including the switches the WebMCP tools trigger. The apps change takes the same fix.
+- **Cosmos.** A permission refusal is recognized only from its phrases or an explicit
+  `StatusCode: 403`; a bare "403" also appears in throttling diagnostics. Other batch
+  failures are logged with their first line.
+- **Steering.** `list_theme_tokens` reads `TOKEN_VALUE_RULE`.
+
+Kept as is:
+- **A kind problem freezes the preview,** with the problem in the banner. The
+  `widget-designer` spec requires that for reserved kinds, and malformed kinds now
+  behave the same way.
+
+Accepted, not fixed (outside normal use):
+- **Re-saving a theme stored under the old token rules** stores it without the dropped
+  token. The scan in the apps change will show whether any such theme exists.
+- **A corrupt autosave in the designer demo** (`load: null`, say) can fail its Widgets
+  tab. The designer never writes one.
+- **Mode scoping counts styles that produce no CSS:** a default whose every rule the
+  guard drops still scopes the other default's styles.
+- **`composeThemeEntries` does not normalize.** Config-supplied themes, as in the .NET
+  host, are authored now and are refused loudly rather than trimmed.
+- **`widget_definition_check` is stricter than `draft_load`** for a draft whose own kind
+  is reserved: the check always holds the kind to what Save accepts.
+- **Sibling combinators** (`.wg-a ~ *`) predate this change; they are `BACKLOG.md` THM-3.
+
 ## Risks / Trade-offs
 
 - **A default theme overrides host-bridged colors** (`bg`, `fg`, …) in its mode, as an
@@ -343,8 +384,9 @@ effects:
   → The contract tests list every kind after settings are written, so a stray read fails
   a test.
 - **Custom adapters written against the earlier port have no `settings`.**
-  → `composeThemes` keeps the built-in defaults with a diagnostic when the method is
-  missing or its read fails, because defaults are cosmetic. The changeset says adapters
+  → `composeThemes` keeps the built-in defaults when the method is missing (silently:
+  such an adapter has no settings) or its read fails (with a diagnostic), because
+  defaults are cosmetic. The changeset says adapters
   now implement `settings` and `putSettings`.
 - **The settings designer offers only the themes the host passes.** → Hosts pass the
   stored list; an absent name shows as "unavailable".
@@ -365,9 +407,10 @@ No data migration:
 - **Stricter guards (D16):** a stored token value the new token rules refuse is dropped
   on read with a diagnostic; the theme itself is served (old-shape tests in SQLite,
   Cosmos and the file store). Style entries the new selector and value rules refuse are
-  dropped when CSS is generated, as unsafe entries always were. Before the apps deploy
-  (task 8.3), a read-only scan of the stored themes and widget styles under the new
-  guards records how many entries are affected, and the result is noted here.
+  dropped when CSS is generated, as unsafe entries always were. Before the
+  widgentic.dev deploy, the apps change `adopt-theme-settings` runs a read-only scan of
+  the stored themes and widget styles under the new guards and records how many entries
+  are affected in its RUNBOOK.
 
 Rollback by redeploying the previous version:
 - **Old code ignores `styles`:** themes validate on tokens only.
@@ -377,4 +420,5 @@ Rollback by redeploying the previous version:
 
 Release:
 - core, designer and mcp minor, webmcp patch.
-- After publishing, the apps companion change adopts the new versions and deploys.
+- After publishing, the apps change `adopt-theme-settings` (widgentic/apps) adopts the new
+  versions and deploys; its work is tracked there, not here.

@@ -22,7 +22,7 @@ import type {
 import type { HttpActionDefinition } from "@widgentic/core";
 import { authoringClient as api, AuthoringApiError } from "@widgentic-examples/shared/client";
 import type { KeyEntry, SecretEntry, Settings, WidgetEntry } from "@widgentic-examples/shared/client";
-import { mountAction, mountSchema, mountSettings, mountTheme, mountWidget, previewThemes } from "@widgentic-examples/shared/designers";
+import { draftDefinition, mountAction, mountSchema, mountSettings, mountTheme, mountWidget, previewThemes } from "@widgentic-examples/shared/designers";
 import { describeAgentTools, designerSources } from "@widgentic-examples/shared/webmcp";
 import { exposeDesigners } from "@widgentic/webmcp";
 import { invoiceWidget } from "@widgentic-examples/mcp-server/widgets";
@@ -119,8 +119,13 @@ let widgetDesigner: DesignerHandle | undefined;
 let widgetMode: Mode = "new";
 let selectedWidget: string | undefined;
 
-function openWidgetDesigner(load?: unknown, readOnly = false): void {
+function openWidgetDesigner(widget?: unknown, readOnly = false): void {
+  // The widget is the designer's initial draft, never a load after mounting:
+  // a remount carries the in-progress draft, whose kind may be one Save
+  // would refuse, and it must survive (the designer flags the kind).
+  const initial = draftDefinition(widget);
   widgetDesigner = mountWidget($("widget-designer"), widgetDesigner, {
+    ...(initial === undefined ? {} : { initialWidget: initial }),
     themes: previewThemes(myThemes),
     // The preview opens on the person's light default (built-in when unset).
     ...(mySettings?.defaultThemes?.light === undefined ? {} : { previewTheme: mySettings.defaultThemes.light }),
@@ -129,10 +134,6 @@ function openWidgetDesigner(load?: unknown, readOnly = false): void {
     secretNames: mySecrets.map((s) => s.name),
     readOnly
   });
-  if (load !== undefined) {
-    const result = widgetDesigner.loadWidget(load);
-    if (!result.ok) status(`load failed: ${result.errors.join("; ")}`, "error");
-  }
 }
 
 function showWidgets(): void {

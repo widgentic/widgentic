@@ -3,7 +3,12 @@
  * Depth counts `(` and `[` only outside quoted strings, so a parenthesis
  * inside an attribute value can neither hide a comma nor close a
  * pseudo-class early. Strings carry no escapes here: every guard bans `\`.
+ * As in CSS, a newline ends a string unclosed (a bad string), so a string
+ * broken across lines never counts as closed.
  */
+
+/** A line break that ends a CSS string: LF, CR or FF. */
+const isNewline = (char: string) => char === "\n" || char === "\r" || char === "\f";
 
 interface ScannedChar {
   char: string;
@@ -23,7 +28,7 @@ function scan(text: string): ScannedChar[] {
     const char = text.charAt(i);
     if (quote !== undefined) {
       out.push({ char, depth, quoted: true });
-      if (char === quote) quote = undefined;
+      if (char === quote || isNewline(char)) quote = undefined;
     } else if (char === '"' || char === "'") {
       quote = char;
       out.push({ char, depth, quoted: true });
@@ -53,6 +58,7 @@ export function isBalanced(text: string): boolean {
   for (let i = 0; i < text.length; i++) {
     const char = text.charAt(i);
     if (quote !== undefined) {
+      if (isNewline(char)) return false;
       if (char === quote) quote = undefined;
     } else if (char === '"' || char === "'") {
       quote = char;
