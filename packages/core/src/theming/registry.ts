@@ -1,13 +1,10 @@
 /**
  * Named theme registry — themes as addressable entities rather than
- * anonymous token maps, mirroring the widget catalog's ergonomics.
- *
- * `extends` is resolved AT REGISTRATION into a flat token map and a flat
- * styles map: no runtime cascade, no cycles, and what a host persists is
- * exactly what renders. The base name is retained on the entry for
- * display and re-editing. The registry also knows which entry each mode
- * falls back to when a render names no theme — the built-ins until a
- * caller's settings choose otherwise.
+ * anonymous token maps, mirroring the widget catalog's ergonomics. Each
+ * entry is complete as registered: a host that derives one theme from
+ * another merges the tokens and styles before registering. The registry
+ * also knows which entry each mode falls back to when a render names no
+ * theme — the built-ins until a caller's settings choose otherwise.
  */
 import { isStyleMap } from "../catalog/styles.js";
 import type { WidgetStyles } from "../catalog/styles.js";
@@ -22,14 +19,12 @@ export interface ThemeEntry {
   name: string;
   label?: string;
   description?: string;
-  /** Name of the entry this one was derived from (already merged in). */
-  extends?: string;
   tokens: WidgetThemeInput;
   /** Shared `.wg-` classes for every widget the theme dresses. */
   styles?: WidgetStyles;
 }
 
-/** Entry as supplied to `register` — `tokens` may omit inherited values. */
+/** Entry as supplied to `register`. */
 export type ThemeEntryInput = ThemeEntry;
 
 export class DuplicateThemeError extends Error {
@@ -56,7 +51,7 @@ export class InvalidThemeEntryError extends Error {
 }
 
 export interface ThemeRegistry {
-  /** Register an entry; `extends` is merged eagerly. Throws on conflicts. */
+  /** Register an entry. Throws on conflicts and invalid entries. */
   register(entry: ThemeEntryInput): void;
   get(name: string): ThemeEntry | undefined;
   list(): ThemeEntry[];
@@ -69,15 +64,11 @@ export interface ThemeRegistry {
   defaults(): Record<ThemeMode, string>;
 }
 
-/** Base styles under own styles: per selector, then per property. */
-function mergeStyles(base: WidgetStyles | undefined, own: WidgetStyles | undefined): WidgetStyles {
-  const merged: WidgetStyles = {};
-  for (const source of [base ?? {}, own ?? {}]) {
-    for (const [selector, declarations] of Object.entries(source)) {
-      merged[selector] = { ...(merged[selector] ?? {}), ...declarations };
-    }
-  }
-  return merged;
+/** A copy of the styles, so later edits to the input never reach the registry. */
+function copyStyles(styles: WidgetStyles | undefined): WidgetStyles {
+  const copy: WidgetStyles = {};
+  for (const [selector, declarations] of Object.entries(styles ?? {})) copy[selector] = { ...declarations };
+  return copy;
 }
 
 /**
@@ -119,27 +110,11 @@ export function createThemeRegistry(): ThemeRegistry {
         );
       }
 
-      let tokens: WidgetThemeInput = validated.theme;
-      let styles: WidgetStyles = mergeStyles(undefined, entry.styles);
-      if (entry.extends !== undefined) {
-        const base = entries.get(entry.extends);
-        if (base === undefined) {
-          throw new InvalidThemeEntryError(
-            entry.name,
-            "UNKNOWN_BASE_THEME",
-            `extends '${entry.extends}' which is not registered.`
-          );
-        }
-        // Merge once: base first, own tokens and styles win. Flat from here on.
-        tokens = { ...base.tokens, ...validated.theme };
-        styles = mergeStyles(base.styles, entry.styles);
-      }
-
-      const stored: ThemeEntry = { name: entry.name, tokens };
+      const styles = copyStyles(entry.styles);
+      const stored: ThemeEntry = { name: entry.name, tokens: validated.theme };
       if (Object.keys(styles).length > 0) stored.styles = styles;
       if (entry.label !== undefined) stored.label = entry.label;
       if (entry.description !== undefined) stored.description = entry.description;
-      if (entry.extends !== undefined) stored.extends = entry.extends;
       entries.set(entry.name, stored);
     },
     get: (name) => entries.get(name),

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from "vitest";
-import { createCatalog, createThemeRegistry } from "@widgentic/core";
+import { createCatalog, createThemeRegistry, darkTheme } from "@widgentic/core";
 import type { ThemeRegistry, WidgetCatalog } from "@widgentic/core";
 import { checkThemeEntry } from "@widgentic/designer";
 import { checkStoredTheme } from "../../store/validate.js";
@@ -42,7 +42,7 @@ function invoiceCatalog(): WidgetCatalog {
 function registry(setup: (r: ThemeRegistry) => void = () => {}): ThemeRegistry {
   const r = createThemeRegistry();
   r.register({ name: "brand", tokens: { accent: "#ff5a1f" }, styles: { ...BTN, body: { color: "red" } } });
-  r.register({ name: "brand-dark", extends: "dark", tokens: { accent: "#ff8a5c" }, styles: { ".wg-btn": { padding: "6px 10px" } } });
+  r.register({ name: "brand-dark", tokens: { ...darkTheme, accent: "#ff8a5c" }, styles: { ".wg-btn": { padding: "6px 10px" } } });
   setup(r);
   return r;
 }
@@ -135,7 +135,7 @@ describe("default themes from settings stand in for the built-ins", () => {
     ["the dark default is the built-in", undefined]
   ])("a light default's styles serve both modes when %s", (_label, dark) => {
     const css = cssOf(render(registry((r) => {
-      r.register({ name: "night", extends: "dark", tokens: { accent: "#0a84ff" } });
+      r.register({ name: "night", tokens: { ...darkTheme, accent: "#0a84ff" } });
       r.setDefault("light", "brand");
       if (dark !== undefined) r.setDefault("dark", dark);
     })));

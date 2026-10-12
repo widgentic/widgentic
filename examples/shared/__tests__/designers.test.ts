@@ -4,22 +4,20 @@ import type { ThemeEntry } from "@widgentic/core";
 import { previewThemes, restoredDraft } from "../designers.js";
 
 describe("previewThemes", () => {
-  it("merges an entry's base in, as render_widget does, whatever the order", () => {
+  it("offers the saved entries after the built-ins, as registered", () => {
     const saved: ThemeEntry[] = [
-      { name: "child", extends: "base", tokens: { accent: "#0000ff" }, styles: { ".wg-btn": { color: "blue" } } },
-      { name: "base", tokens: { bg: "#111111" }, styles: { ".wg-btn": { padding: "4px" } } }
+      { name: "ocean", tokens: { accent: "#0000ff" }, styles: { ".wg-btn": { color: "blue" } } },
+      { name: "base", tokens: { bg: "#111111" } }
     ];
     const entries = previewThemes(saved);
-    expect(entries.map((entry) => entry.name)).toEqual(["light", "dark", "base", "child"]);
-    const child = entries.find((entry) => entry.name === "child");
-    expect(child?.tokens).toEqual({ bg: "#111111", accent: "#0000ff" });
-    expect(child?.styles).toEqual({ ".wg-btn": { padding: "4px", color: "blue" } });
+    expect(entries.map((entry) => entry.name)).toEqual(["light", "dark", "ocean", "base"]);
+    expect(entries.find((entry) => entry.name === "ocean")?.styles).toEqual({ ".wg-btn": { color: "blue" } });
   });
 
-  it("keeps the built-ins first and leaves out an entry that never registers", () => {
+  it("keeps the built-ins and leaves out an entry the registry refuses", () => {
     const entries = previewThemes([
       { name: "dark", tokens: { bg: "#ff0000" } },
-      { name: "orphan", extends: "missing", tokens: {} }
+      { name: "bad", tokens: { sneaky: "red" } as unknown as ThemeEntry["tokens"] }
     ]);
     expect(entries.map((entry) => entry.name)).toEqual(["light", "dark"]);
     expect(entries.find((entry) => entry.name === "dark")?.tokens.bg).not.toBe("#ff0000");

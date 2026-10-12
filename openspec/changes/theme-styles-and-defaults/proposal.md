@@ -13,7 +13,7 @@ account-wide preferences: default themes are the first such preference, not the 
   same `selector → { property: value }` map a widget's descriptor carries, under the same
   guards (every selector part targets a `.wg-` class; no braces, semicolons, angle
   brackets, `@`, backslashes, `url(` or `expression(`). Theme styles define shared classes
-  any widget can use (`.wg-btn`, `.wg-badge-ok`). `extends` merges them like tokens.
+  any widget can use (`.wg-btn`, `.wg-badge-ok`).
 - **Theme styles at runtime.** Wherever a theme's tokens are emitted — the template
   channel's `css`, `format: "page"` and `format: "app"` documents, `preview_widget` — its
   styles are emitted too, before the rendered kinds' own styles, so a widget's own rule

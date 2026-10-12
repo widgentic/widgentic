@@ -7,19 +7,11 @@ import type { ThemeEntry } from "../index.js";
 const DARK = ':root[data-theme="dark"]';
 
 describe("theme styles in the registry", () => {
-  it("travel with the entry and merge through extends", () => {
+  it("travel with the entry, copied", () => {
     const registry = createThemeRegistry();
-    registry.register({ name: "base", tokens: {}, styles: { ".wg-btn": { padding: "4px", color: "red" } } });
-    registry.register({
-      name: "child",
-      extends: "base",
-      tokens: {},
-      styles: { ".wg-btn": { color: "blue" }, ".wg-badge": { "font-weight": "700" } }
-    });
-    expect(registry.get("child")?.styles).toEqual({
-      ".wg-btn": { padding: "4px", color: "blue" },
-      ".wg-badge": { "font-weight": "700" }
-    });
+    const styles = { ".wg-btn": { padding: "4px", color: "red" } };
+    registry.register({ name: "base", tokens: {}, styles });
+    styles[".wg-btn"].color = "blue";
     expect(registry.get("base")?.styles).toEqual({ ".wg-btn": { padding: "4px", color: "red" } });
   });
 

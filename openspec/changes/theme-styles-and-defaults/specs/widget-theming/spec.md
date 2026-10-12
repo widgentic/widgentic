@@ -25,7 +25,7 @@ The package SHALL export from a `./theming` entry: `THEME_TOKENS` (the token reg
 - **THEN** `themeStylesToCss` SHALL be exported as a function, and a `ThemeEntry` carrying `styles` and a `ThemeMode` value SHALL type-check against the exported types
 
 ### Requirement: Named theme registry
-The package SHALL export `createThemeRegistry()` returning a registry of named themes with `register(entry)`, `get(name)`, `list()`, and `names()`. An entry SHALL be `{ name, label?, description?, tokens, styles?, extends? }` where `tokens` is a validated `WidgetTheme` and `styles`, when present, is a style map in the shape a widget descriptor's `styles` takes — a plain object of selectors to plain objects of property/value strings; any other `styles` value SHALL make registration throw carrying `INVALID_THEME`. Unsafe style entries inside a well-shaped map SHALL be accepted and dropped when CSS is generated, exactly as a widget's are. Registering a name twice SHALL throw `DuplicateThemeError` (matching the catalog's duplicate-kind ergonomics). `extends: <name>` SHALL be resolved **at registration** by merging the base entry's tokens under the new entry's own tokens, and the base entry's styles under the new entry's own styles (per selector, then per property: a selector both define keeps the base's other properties and takes the new entry's values), storing the flat result — no runtime cascade and no cycles; the `extends` name SHALL be retained on the entry for display. Registering an entry whose tokens fail validation SHALL throw with the validator's structured error. A fresh registry SHALL contain the built-in `light` (empty token map — the defaults) and `dark` (the `darkTheme` preset) entries. The registry SHALL hold one default entry per `ThemeMode`: `getDefault(mode)` SHALL return the `light` built-in for `"light"` and the `dark` built-in for `"dark"` until `setDefault(mode, name)` names another registered entry, and `defaults()` SHALL return `{ light, dark }` with the effective entries' names. `setDefault` SHALL throw for a name the registry does not hold, SHALL replace the previous default of that mode, and SHALL accept the same entry for both modes.
+The package SHALL export `createThemeRegistry()` returning a registry of named themes with `register(entry)`, `get(name)`, `list()`, and `names()`. An entry SHALL be `{ name, label?, description?, tokens, styles? }` where `tokens` is a validated `WidgetTheme` and `styles`, when present, is a style map in the shape a widget descriptor's `styles` takes — a plain object of selectors to plain objects of property/value strings; any other `styles` value SHALL make registration throw carrying `INVALID_THEME`. Unsafe style entries inside a well-shaped map SHALL be accepted and dropped when CSS is generated, exactly as a widget's are. Registering a name twice SHALL throw `DuplicateThemeError` (matching the catalog's duplicate-kind ergonomics). An entry SHALL be complete as registered: there is no inheritance between entries, and a host that derives one theme from another merges the tokens and styles before registering; an `extends` field, like any field the registry does not know, SHALL be ignored. Registering an entry whose tokens fail validation SHALL throw with the validator's structured error. A fresh registry SHALL contain the built-in `light` (empty token map — the defaults) and `dark` (the `darkTheme` preset) entries. The registry SHALL hold one default entry per `ThemeMode`: `getDefault(mode)` SHALL return the `light` built-in for `"light"` and the `dark` built-in for `"dark"` until `setDefault(mode, name)` names another registered entry, and `defaults()` SHALL return `{ light, dark }` with the effective entries' names. `setDefault` SHALL throw for a name the registry does not hold, SHALL replace the previous default of that mode, and SHALL accept the same entry for both modes.
 
 #### Scenario: Registry ships light and dark
 - **WHEN** `createThemeRegistry().names()` is called
@@ -36,9 +36,8 @@ The package SHALL export `createThemeRegistry()` returning a registry of named t
 - **THEN** `get("brand")` SHALL return it and `list()` SHALL include it
 
 #### Scenario: extends merges at registration
-- **WHEN** `{ name: "brand-dark", extends: "dark", tokens: { accent: "#ff5a1f" } }` is registered
-- **THEN** `get("brand-dark").tokens` SHALL contain the dark preset's `bg` and the overriding `accent`
-- **AND** the entry SHALL still report `extends: "dark"`
+- **WHEN** `{ name: "child", extends: "dark", tokens: { accent: "#000" } }` is registered
+- **THEN** nothing SHALL be merged: `get("child")` SHALL be `{ name: "child", tokens: { accent: "#000" } }`, with no `dark` tokens and no `extends`
 
 #### Scenario: Duplicate names and invalid tokens are refused
 - **WHEN** a name already in the registry is registered again
@@ -59,9 +58,9 @@ The package SHALL export `createThemeRegistry()` returning a registry of named t
 - **WHEN** `setDefault("dark", "missing")` is called on a registry that holds no `missing`
 - **THEN** it SHALL throw and the dark default SHALL be unchanged
 
-#### Scenario: Styles travel with the entry and merge through extends
-- **WHEN** `{ name: "base", tokens: {}, styles: { ".wg-btn": { padding: "4px", color: "red" } } }` is registered, then `{ name: "child", extends: "base", tokens: {}, styles: { ".wg-btn": { color: "blue" }, ".wg-badge": { "font-weight": "700" } } }`
-- **THEN** `get("child").styles` SHALL be `{ ".wg-btn": { padding: "4px", color: "blue" }, ".wg-badge": { "font-weight": "700" } }`
+#### Scenario: Styles travel with the entry
+- **WHEN** `{ name: "base", tokens: {}, styles: { ".wg-btn": { padding: "4px", color: "red" } } }` is registered and the caller then changes its own `styles` object
+- **THEN** `get("base").styles` SHALL still be `{ ".wg-btn": { padding: "4px", color: "red" } }`
 - **AND** registering an entry whose `styles` is an array, or maps a selector to a string, SHALL throw carrying `INVALID_THEME`
 
 ### Requirement: Theme validation

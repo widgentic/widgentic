@@ -2,9 +2,9 @@
 
 See proposal.md for the motivation. What shapes the approach:
 
-- **Themes.** A theme is a registry entry `{ name, label?, description?, tokens, extends? }`.
-  The core registry merges `extends` at registration. `composeThemes` builds a fresh
-  registry per request from the built-ins plus the principal's stored themes.
+- **Themes.** A theme is a registry entry `{ name, label?, description?, tokens }`, complete
+  as registered (D20 removed `extends`). `composeThemes` builds a fresh registry per
+  request from the built-ins plus the principal's stored themes.
 - **Widget styles.** Widget styles are `Record<selector, Record<property, value>>` on the
   descriptor:
   - `widgetStylesToCss` drops unsafe entries at emission, and the store does not refuse
@@ -420,6 +420,24 @@ Reviewer 1's re-review of `8841d0a` found one regression and four smaller gaps.
   schemas and actions it was mounted with, so a schema saved in another section read as
   unknown in the check. The examples' `widgetIfMounted` answers only while the Widgets
   section is shown; otherwise the check leaves references unverified.
+
+### D20 — Theme `extends` is removed
+
+The browser agent found a theme with `extends: "no-such-theme"` accepted by
+`theme_load`. Tracing it showed the registry merged a base at registration, and the
+store accepted the field unchecked. But nothing used it: no designer, seed, guide or tool
+set it, and "a theme based on another" on widgentic.dev is a one-time copy
+(`seedThemeEntry`). Kept, it would have needed its own guards:
+- an unknown or deleted base made a stored theme vanish;
+- composition depended on the order themes are read;
+- the theme designer previewed without the base.
+
+The owner chose to remove it rather than complete it. An entry is complete as registered,
+and a host that derives one theme from another merges the tokens and styles before
+registering. An `extends` field is ignored like any unknown field, so no refusal, exclusion
+or read seam is needed. The apps change's pre-deploy scan counts stored themes that carry
+one, to confirm none relies on it. Removing it in this change means the styles merge
+through `extends`, added here, never ships.
 
 ## Risks / Trade-offs
 

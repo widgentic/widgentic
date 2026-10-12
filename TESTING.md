@@ -427,7 +427,12 @@ workspace and the sample first, then point at the built DLL):
   - **Reviewer 1 at `1fbce0e`: ready to merge.** Its two non-blocking notes are addressed:
     - An app-level test (`app-webmcp.test.ts`) boots the self-host page on a stand-in model context. On Widgets, the check resolves `inbox` through the designer. On Data schemas, a schema `orders` saved meanwhile is not reported unknown (`diagnosticsDerived: true`), and the view stays on Data schemas.
     - The spec no longer says "never" for View and Edit mode.
-  - **Browser agent on staging `1fbce0e` (2026-10-12).** `theme_load` with a `div` selector, a `red /*` value and a `9x` property, beside a safe rule, returns `ok` with three `diagnostics.styles` entries: a skipped selector, value and property. The value's message no longer quotes the property-name rule. `theme_tokens_set` and `theme_get` report the same audit. Queued, because they predate this change: `extends` end to end (BACKLOG THM-4), and link and host warnings at load (AGT-5).
+  - **Browser agent on staging `1fbce0e` (2026-10-12).** `theme_load` with a `div` selector, a `red /*` value and a `9x` property, beside a safe rule, returns `ok` with three `diagnostics.styles` entries: a skipped selector, value and property. The value's message no longer quotes the property-name rule. `theme_tokens_set` and `theme_get` report the same audit. Queued, because it predates this change: link and host warnings at load (AGT-5). `extends` was removed instead (see below).
+  - **Theme `extends` removed (2026-10-12, D20).**
+    - An entry registered with `extends: "dark"` is held as registered: no dark tokens and no `extends`.
+    - Derived themes in the tests merge `darkTheme` themselves.
+    - `previewThemes` offers saved entries after the built-ins, and leaves out an entry the registry refuses.
+    - The conformance corpus is unchanged, since no case used `extends`.
   - **Not verified yet:** the hosts. Staging on `demo.widgentic.dev`, and widgentic.dev's Settings section, follow.
 - **Wire schemas from the exported definitions (2026-10-11, change `derived-input-schemas`, `@widgentic/mcp` minor pending release)**
   - **The wire.** `server-wiring` lists the tools of `createWidgenticServer()` and finds every `inputSchema` and description equal to the exported definition's, for all nine tools: nothing added (no `$schema`), nothing missing.
