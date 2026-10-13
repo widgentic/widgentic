@@ -210,6 +210,23 @@ export function buildCorpus(): Corpus {
   const card = { title: "Quarterly", subtitle: "Q3", fields: { revenue: "1.2M" } };
   render("theme by name dark", { widget: "card", data: card, theme: "dark" });
   render("theme by name configured", { widget: "card", data: card, theme: "corpus-brand" });
+
+  // Field labels: the card's keys and the table's headers (columns selected), image alt text included.
+  const labelledCard = {
+    widget: "card",
+    data: { fields: { first_name: "Ada", order_total: 42, avatar_url: "https://cdn.example/a/ada.png" } },
+    hints: { labels: { first_name: "First Name", order_total: "Order Total", avatar_url: "Avatar" }, images: { avatar_url: "avatar" } }
+  };
+  const labelledTable = {
+    widget: "table",
+    data: [{ first_name: "Ada", last_name: "Lovelace", id: 1 }, { first_name: "Alan", last_name: "Turing", id: 2 }],
+    hints: { columns: ["last_name", "first_name"], labels: { first_name: "First Name", last_name: "Last Name" } }
+  };
+  for (const [label, args] of [["card", labelledCard], ["table", labelledTable]] as const) {
+    render(`labels ${label}`, args);
+    render(`labels ${label} as a page`, { ...args, format: "page" });
+    call(`labels ${label} preview`, "preview_widget", args);
+  }
   render("theme with styles", { widget: "card", data: card, theme: "corpus-styled" });
   render("theme with styles as a page", { widget: "card", data: card, theme: "corpus-styled", format: "page" });
   render("theme inline", { widget: "card", data: card, theme: { accent: "#c0ffee", bg: "#101010" } });

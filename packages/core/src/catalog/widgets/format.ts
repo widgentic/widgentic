@@ -30,6 +30,16 @@ export function formatValue(value: unknown): string {
   }
 }
 
+/**
+ * The label a reader sees for a card field or table column: its
+ * `hints.labels` entry when that is a non-blank string, else the key.
+ */
+export function labelFor(key: string, hints: unknown): string {
+  const labels = isPlainObject(hints) && isPlainObject(hints.labels) ? hints.labels : undefined;
+  const label = labels?.[key];
+  return typeof label === "string" && label.trim() !== "" ? label : key;
+}
+
 /** Apply a `fieldFormat` pattern: substitute `{value}`, or append when absent. */
 export function applyPattern(pattern: string, value: string): string {
   return pattern.includes("{value}")

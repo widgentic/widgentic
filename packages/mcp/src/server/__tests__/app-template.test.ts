@@ -2,6 +2,7 @@
 import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it } from "vitest";
 import { buildAppTemplate } from "../index.js";
+import { handleRenderWidget } from "../handlers.js";
 import { customWidgets } from "@widgentic-examples/mcp-server/widgets";
 import { createCatalog, renderToHtml } from "@widgentic/core";
 import type { WidgetNode } from "@widgentic/core";
@@ -309,6 +310,34 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 30));
 describe("streaming input preview", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
+  });
+
+  it("a streamed table previews its labels from the first row", async () => {
+    const t = bootTemplate();
+    // Hints before data, as render_widget's description asks.
+    t.dispatch(
+      toolInputPartial({ widget: "table", hints: { labels: { first_name: "First Name" } }, data: [{ first_name: "Ada" }] })
+    );
+    await settle();
+    expect([...t.root().querySelectorAll(".wg-table-header")].map((th) => th.textContent)).toEqual(["First Name"]);
+  });
+
+  it("a card previews its labels as the result renders them, and converges when hints come last", async () => {
+    const t = bootTemplate();
+    t.dispatch(toolInputPartial({ widget: "card", data: { fields: { order_total: 42 } } }));
+    await settle();
+    expect(t.root().querySelector(".wg-card-field-key")?.textContent).toBe("order_total");
+    t.dispatch(
+      toolInputPartial({ widget: "card", data: { fields: { order_total: 42 } }, hints: { labels: { order_total: "Order Total" } } })
+    );
+    await settle();
+    expect(t.root().querySelector(".wg-card-field-key")?.textContent).toBe("Order Total");
+    const rendered = handleRenderWidget(createCatalog(), {
+      widget: "card",
+      data: { fields: { order_total: 42 } },
+      hints: { labels: { order_total: "Order Total" } }
+    });
+    expect(JSON.stringify((rendered.structuredContent as { tree: unknown }).tree)).toContain('"children":["Order Total"]');
   });
 
   it("growing table rows patch in place, marked in progress", async () => {

@@ -4,6 +4,7 @@
  * taught, and — the test the change exists for — an "agent" that follows
  * ONLY the guide produces a widget and theme that import cleanly.
  */
+import { LABEL_STYLE_RULE } from "@widgentic/core";
 import { describe, expect, it } from "vitest";
 import {
   PATTERN_MAX_LENGTH,
@@ -240,6 +241,7 @@ describe("guide teaches shared-schema references", () => {
     expect(ref).toContain("list_schemas");
     expect(ref).toContain("IN PLACE of");
     expect(guide.rules.template.dataModeling).toContain("dataSchemaRef");
+    expect((guide.rules.template as unknown as { labels: string }).labels).toContain(LABEL_STYLE_RULE);
     expect(guide.rules.template.dataModeling).toContain("do NOT reconstruct");
     expect(guide.workflow.related).toContain("list_schemas");
   });

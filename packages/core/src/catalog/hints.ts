@@ -244,6 +244,31 @@ export function analyzeHints(
           });
         }
       }
+    } else if (key === "labels") {
+      if (!isPlainObject(value)) {
+        diagnostics.push({
+          hint: "labels",
+          code: "INVALID_VALUE",
+          message: "'labels' must be a Record<key, label string>"
+        });
+        continue;
+      }
+      const keys = kind === "table" ? tableColumns(data) : cardFields(data);
+      for (const [field, label] of Object.entries(value)) {
+        if (!keys.has(field)) {
+          diagnostics.push({
+            hint: `labels.${field}`,
+            code: "NO_MATCH",
+            message: `'${field}' matches no ${kind === "table" ? "column" : "field"} in data`
+          });
+        } else if (typeof label !== "string" || label.trim() === "") {
+          diagnostics.push({
+            hint: `labels.${field}`,
+            code: "INVALID_VALUE",
+            message: `the label for '${field}' must be a non-empty string (the key is shown instead)`
+          });
+        }
+      }
     } else if (key === "links") {
       if (!isPlainObject(value)) {
         diagnostics.push({

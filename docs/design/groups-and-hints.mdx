@@ -62,6 +62,20 @@ Hints are advisory keys beside `data`. Each built-in documents the hints it supp
 
 `card` and `table` render a string as an image when it is a safe source and either auto-detection or a hint selects image treatment. Auto-detection accepts `data:image/*` URIs and `http(s)` URLs whose path ends in `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.avif` or `.svg`. `hints.images` overrides per field or column: `"avatar"`, `"thumb"` or `"hero"` forces that shape, `true` forces the context default (`avatar` in table cells, `thumb` in card fields), and `false` renders the value as text. Hints never bypass safety: a value that fails the image-source guard renders as text whatever the hint says. Image treatment wins over `fieldFormat` and `links` for the same key.
 
+### Labels
+
+A card labels each field with its key, and a table heads each column with its key, so `first_name` shows up as `first_name`. `hints.labels` maps a key to the label the reader sees, and keeps the data as the data names it:
+
+```json
+{
+  "widget": "table",
+  "data": [{ "first_name": "Ada", "last_name": "Lovelace", "order_total": 42 }],
+  "hints": { "labels": { "first_name": "First Name", "last_name": "Last Name", "order_total": "Order Total" } }
+}
+```
+
+The label also becomes an image field's `alt` text. Every other hint, `columns` included, still names the key, and a key without a label (or with a blank one) shows the key. Labels are plain text, escaped like any value. Agents are told to write labels in Title Case unless the user asks for another style or language: the rule is part of the card and table hint documentation `list_widgets` serves, and of the authoring guide. A streaming preview shows the labels as soon as the hints arrive, which is why `render_widget` asks for `hints` before `data`.
+
 ### Field formatting
 
 `hints.fieldFormat` maps a field (card) or column (table) to a pattern. `{value}` is replaced by the value; a pattern without the placeholder appends it. Formatting is display only. The payload keeps typed values, so `11471334.78` stays a number for the host while the cell shows `$11471334.78`. Output is escaped like any text, so a pattern cannot inject markup.

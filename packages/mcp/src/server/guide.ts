@@ -13,6 +13,7 @@
  */
 import {
   DATA_SCHEMA_TYPES,
+  LABEL_STYLE_RULE,
   PATTERN_MAX_LENGTH,
   STYLE_RULES,
   TOKEN_VALUE_RULE,
@@ -231,6 +232,11 @@ export function buildAuthoringGuide(): Record<string, unknown> {
           maxInterpretedNodes: DEFAULT_MAX_NODES,
           note: "Validation rejects deeper nesting; interpretation stops at the node budget and marks the render truncated."
         },
+        labels:
+          LABEL_STYLE_RULE +
+          " It applies to the labels a template writes as literals, and to the " +
+          "built-in card's and table's hints.labels (a field's or column's label " +
+          "in place of its key).",
         dataModeling:
           "PREFER binding only properties declared in descriptor.dataSchema " +
           "— schema-declared data is validated with dotted paths, so agents " +

@@ -1,7 +1,7 @@
 import type { WidgetPayload } from "../../contract/types.js";
 import type { WidgetNode } from "../node.js";
 import { el } from "../node.js";
-import { applyPattern, formatValue, isPlainObject, linkOrText } from "./format.js";
+import { applyPattern, formatValue, isPlainObject, labelFor, linkOrText } from "./format.js";
 import { imageNode, resolveImage } from "./images.js";
 import { keysFromIds } from "./keys.js";
 
@@ -10,7 +10,8 @@ import { keysFromIds } from "./keys.js";
  *
  * One row per record; columns are the union of record keys in first-seen
  * order, overridable via `hints.columns`. Non-array data becomes a
- * single-record array; non-object rows are wrapped as `{ value }`. Missing
+ * single-record array; non-object rows are wrapped as `{ value }`. A
+ * header shows its column's `hints.labels` entry, or its key. Missing
  * cells render empty. Body rows are keyed by record `id` when every record
  * carries a distinct one, so a reordering re-render moves rows instead of
  * re-pairing them. Total: never throws.
@@ -72,7 +73,7 @@ export function renderTable(payload: WidgetPayload): WidgetNode {
         "tr",
         undefined,
         columns.map((column) =>
-          el("th", { class: "wg-table-header" }, [column])
+          el("th", { class: "wg-table-header" }, [labelFor(column, payload.hints)])
         )
       )
     ]),
@@ -92,7 +93,7 @@ export function renderTable(payload: WidgetPayload): WidgetNode {
             const image = resolveImage(column, value, payload.hints, "avatar");
             let display: WidgetNode;
             if (image) {
-              display = imageNode(column, image.src, image.shape);
+              display = imageNode(labelFor(column, payload.hints), image.src, image.shape);
             } else {
               const raw = formatValue(value);
               const pattern = fieldFormat?.[column];

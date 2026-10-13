@@ -425,7 +425,8 @@ function runLoads(list) {
 // --- Streaming input preview ----------------------------------------------
 // Hosts stream partial tool arguments (host-healed snapshots) while the
 // model generates them; built-in kinds preview client-side through the SAME
-// tree mounter so the widget draws itself as the agent types. Preview trees
+// tree mounter so the widget draws itself as the agent types, wearing the
+// theme CSS the server answers for the caller (requestThemeCss). Preview trees
 // mirror the catalog renderers' shapes (drift is pinned by tests comparing
 // against the real renderers); custom kinds get a labeled skeleton — never
 // a guessed render. The tool result stays the only authority.
@@ -545,6 +546,12 @@ function withoutGrowingUrl(value) {
   }
   return copy;
 }
+// A field's or column's label, as the core renderers choose it.
+function labelOf(key, hints) {
+  const labels = isObj(hints) && isObj(hints.labels) ? hints.labels : undefined;
+  const label = labels !== undefined ? labels[key] : undefined;
+  return typeof label === "string" && label.trim() !== "" ? label : key;
+}
 function previewCard(data, hints, meta) {
   let title, subtitle, entries = [], value;
   if (isObj(data)) {
@@ -579,7 +586,7 @@ function previewCard(data, hints, meta) {
           ? [imagePlace("wg-img wg-img-" + shape)]
           : cellNode(entry[0], entry[1], hints, "x").children;
         return { tag: "div", attrs: { class: "wg-card-field" }, children: [
-          { tag: "dt", attrs: { class: "wg-card-field-key" }, children: [entry[0]] },
+          { tag: "dt", attrs: { class: "wg-card-field-key" }, children: [labelOf(entry[0], hints)] },
           { tag: "dd", attrs: { class: "wg-card-field-value" }, children: display }
         ] };
       }) });
@@ -616,7 +623,7 @@ function previewTable(data, hints, meta) {
   }
   children.push({ tag: "thead", attrs: { class: "wg-table-head" }, children: [
     { tag: "tr", children: columns.map(function (column) {
-      return { tag: "th", attrs: { class: "wg-table-header" }, children: [column] };
+      return { tag: "th", attrs: { class: "wg-table-header" }, children: [labelOf(column, hints)] };
     }) }
   ] });
   children.push({ tag: "tbody", attrs: { class: "wg-table-body" },
@@ -807,6 +814,50 @@ function requestServerPreview(args) {
     if (next !== undefined && live()) requestServerPreview(next);
   });
 }
+// Built-in previews build their trees here, but the caller's default themes
+// live on the server, so the frame asks preview_widget for the CSS alone:
+// once per run, and again only when a different theme settles. Its state is
+// apart from the custom-kind queue above, so neither waits on the other.
+function newThemePreview() {
+  return { sent: undefined, inFlight: false, next: undefined, stopped: false };
+}
+let themePreview = newThemePreview();
+// The theme input as a request key: "" for none, its JSON once settled,
+// undefined while it is still arriving.
+function themeKey(args) {
+  if (args.theme === undefined) return "";
+  const keys = Object.keys(args);
+  if (keys.indexOf("theme") === keys.length - 1 && !previewComplete) return undefined;
+  try { return JSON.stringify(args.theme); } catch (e) { return undefined; }
+}
+function requestThemeCss(widget, args) {
+  const state = themePreview;
+  if (state.stopped || resultRendered) return;
+  if (!serverToolsAvailable()) { state.stopped = true; return; }
+  const key = themeKey(args);
+  if (key === undefined || key === state.sent) return;
+  if (state.inFlight) { state.next = { widget: widget, args: args }; return; }
+  state.inFlight = true;
+  state.sent = key;
+  const input = { widget: widget };
+  if (widget === "group") input.data = { items: [] };
+  if (args.theme !== undefined) input.theme = args.theme;
+  const live = function () { return state === themePreview && !resultRendered; };
+  request("tools/call", { name: "preview_widget", arguments: input }, ACTION_TIMEOUT_MS).then(
+    function (result) {
+      if (!live()) return;
+      const sc = result && result.structuredContent;
+      if (!result || result.isError || !isObj(sc)) { state.stopped = true; return; }
+      if (typeof sc.css === "string") dynamicCss.textContent = sc.css;
+    },
+    function () { state.stopped = true; }
+  ).then(function () {
+    state.inFlight = false;
+    const next = state.next;
+    state.next = undefined;
+    if (next !== undefined && live()) requestThemeCss(next.widget, next.args);
+  });
+}
 function applyPreview() {
   previewQueued = false;
   if (resultRendered || previewArgs === undefined) return;
@@ -827,11 +878,15 @@ function applyPreview() {
   }
   const tree = previewFor(widget, coerceData(args.data), args.hints, args.meta);
   mountPreviewTree(tree !== undefined ? tree : skeletonTree(widget));
+  if (BUILT_INS.indexOf(widget) !== -1 && !needsServer(args)) requestThemeCss(widget, args);
 }
 function onToolInput(params, complete) {
   // Input after a result (or a cancel) is a NEW call on a reused frame
   // (basic-host reuses frames; claude.ai mounts per render).
-  if (resultRendered || previewArgs === undefined) serverPreview = newServerPreview();
+  if (resultRendered || previewArgs === undefined) {
+    serverPreview = newServerPreview();
+    themePreview = newThemePreview();
+  }
   resultRendered = false;
   heldPayload = undefined;
   loadFired = false;

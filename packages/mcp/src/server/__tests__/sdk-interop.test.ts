@@ -227,7 +227,8 @@ describe("SDK interoperability (in-memory transport, library assembly)", () => {
     const props = (render?.inputSchema as {
       properties?: Record<string, { description?: string }>;
     })?.properties;
-    expect(render?.description).toContain("Write 'widget' before 'data'");
+    // Widget first and hints before data, so a streamed preview has its labels from the first row.
+    expect(render?.description).toContain("Write 'widget' first and any 'hints' before 'data'");
     expect(props?.theme?.description).toContain("pass the NAME");
     expect(props?.theme?.description).toContain("do NOT reconstruct");
     expect(props?.widget?.description).toBeTruthy();

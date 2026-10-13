@@ -1,7 +1,7 @@
 import type { WidgetPayload } from "../../contract/types.js";
 import type { WidgetNode } from "../node.js";
 import { el } from "../node.js";
-import { applyPattern, formatValue, isPlainObject, linkOrText } from "./format.js";
+import { applyPattern, formatValue, isPlainObject, labelFor, linkOrText } from "./format.js";
 import { imageNode, resolveImage } from "./images.js";
 
 /**
@@ -10,7 +10,8 @@ import { imageNode, resolveImage } from "./images.js";
  * Uses `data.title`/`data.subtitle`/`data.fields` when present; other
  * plain-object entries become field key/value pairs; primitives and `null`
  * render as a single value line. `meta.title`/`meta.subtitle` fill in when
- * `data` does not provide them. Total: never throws.
+ * `data` does not provide them. A field shows its `hints.labels` entry, or
+ * its key; every other hint still addresses it by key. Total: never throws.
  */
 export function renderCard(payload: WidgetPayload): WidgetNode {
   const { data, meta } = payload;
@@ -58,11 +59,12 @@ export function renderCard(payload: WidgetPayload): WidgetNode {
         "dl",
         { class: "wg-card-fields" },
         fieldEntries.map(([key, fieldValue]) => {
+          const label = labelFor(key, payload.hints);
           // Image treatment wins over fieldFormat for the same key.
           const image = resolveImage(key, fieldValue, payload.hints, "thumb");
           let display: WidgetNode;
           if (image) {
-            display = imageNode(key, image.src, image.shape);
+            display = imageNode(label, image.src, image.shape);
           } else {
             const raw = formatValue(fieldValue);
             const pattern = fieldFormat?.[key];
@@ -71,7 +73,7 @@ export function renderCard(payload: WidgetPayload): WidgetNode {
             display = linkOrText(key, fieldValue, payload.hints, text);
           }
           return el("div", { class: "wg-card-field" }, [
-            el("dt", { class: "wg-card-field-key" }, [key]),
+            el("dt", { class: "wg-card-field-key" }, [label]),
             el("dd", { class: "wg-card-field-value" }, [display])
           ]);
         })

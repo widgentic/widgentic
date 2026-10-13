@@ -21,6 +21,7 @@ import {
   FORMAT_DECIMALS_MAX,
   FORMAT_DECIMALS_MIN,
   FORMAT_TYPES,
+  LABEL_STYLE_RULE,
   MAX_TEMPLATE_DEPTH,
   DATA_SCHEMA_TYPES,
   PATTERN_MAX_LENGTH,
@@ -190,6 +191,11 @@ export function buildDesignerGuide(prefix: string): Record<string, unknown> {
           maxInterpretedNodes: DEFAULT_MAX_NODES,
           note: "Validation rejects deeper nesting; interpretation stops at the node budget and marks the render truncated."
         },
+        labels:
+          LABEL_STYLE_RULE +
+          " It applies to the labels a template writes as literals, and to the " +
+          "built-in card's and table's hints.labels (a field's or column's label " +
+          "in place of its key).",
         dataModeling:
           "PREFER binding only properties declared in descriptor.dataSchema — schema-declared data is validated with dotted paths, so you get correctable errors instead of silently blank output. " +
           "'$meta.x' exists (reads the payload's meta) but meta is NOT covered by dataSchema validation: avoid it. If the widget needs a title, declare `title` as an optional schema property. " +
