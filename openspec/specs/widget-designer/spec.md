@@ -519,7 +519,7 @@ When the widget designer's preview theme is a supplied entry carrying `styles`, 
 - **THEN** the previewed title SHALL take the color and the element outside SHALL NOT
 
 ### Requirement: Settings designer
-The settings designer SHALL edit a principal's settings record (`{ defaultThemes?: { light?, dark? } }` in this version) in titled subsections, starting with "Default themes": one choice for light hosts and one for dark hosts, each offering the built-in theme of that mode (the choice that leaves the mode unset) and every theme entry the host supplies in `options.themes`. Because each mode holds one choice, choosing a theme for a mode replaces whatever that mode held, and the same theme SHALL be selectable for both. A supplied settings record naming a theme absent from `options.themes` SHALL show that name as unavailable and selected, so the person sees the problem and picks another, and SHALL NOT be silently changed. `getSettings()` SHALL return the record with built-in choices omitted, keep any section the designer does not edit exactly as it was supplied, and `subscribe` listeners SHALL be notified on every change. In read-only mode the choices SHALL be inert. `setThemes(themes)` SHALL replace the offered themes and keep the record, and the custom element SHALL take the themes through a `themes` property, settable before or after it connects, or before the element is defined (adopted at upgrade). Saving is the host's: the designer writes nothing.
+The settings designer SHALL edit a principal's settings record (`{ defaultThemes?: { light?, dark? }, resourceDomains?: string[] }` in this version) in titled subsections, starting with "Default themes": one choice for light hosts and one for dark hosts, each offering the built-in theme of that mode (the choice that leaves the mode unset) and every theme entry the host supplies in `options.themes`. Because each mode holds one choice, choosing a theme for a mode replaces whatever that mode held, and the same theme SHALL be selectable for both. A supplied settings record naming a theme absent from `options.themes` SHALL show that name as unavailable and selected, so the person sees the problem and picks another, and SHALL NOT be silently changed. A second subsection, "Resource domains", SHALL list the record's domains for the person to add, edit and remove. Each entry SHALL be checked as it is edited by the rule and limit the store applies, exported by the core package. A valid entry SHALL be recorded and shown in its canonical `https://` form. An invalid entry SHALL be recorded as typed and marked with the rule's reason, never dropped, so a save's refusal names it. The add control SHALL be disabled at the limit. The subsection SHALL state the accepted forms and the limit, derived from the exported rule. It SHALL also state the trust a declaration grants: hosts that honor declared domains may load images from a listed domain directly when the server does not inline them, so any render, including image addresses an agent supplies, may load from that domain in the viewer's browser, and only domains the person controls belong there. `getSettings()` SHALL return the record with built-in choices omitted. It SHALL carry `resourceDomains` whenever the supplied record had it or the person edited the list, possibly empty, so a save clears a list the person emptied. It SHALL keep any section the designer does not edit exactly as it was supplied, and `subscribe` listeners SHALL be notified on every change. `loadSettings` SHALL refuse a record whose `resourceDomains` is not an array of strings, keeping the current record. In read-only mode the choices and the domain list SHALL be inert. `setThemes(themes)` SHALL replace the offered themes and keep the record, and the custom element SHALL take the themes through a `themes` property, settable before or after it connects, or before the element is defined (adopted at upgrade). Saving is the host's: the designer writes nothing.
 
 #### Scenario: Choosing defaults edits the record
 - **WHEN** the designer is created with themes `ocean` and `night` and no settings, and the person picks `ocean` for light hosts and `night` for dark hosts
@@ -540,11 +540,36 @@ The settings designer SHALL edit a principal's settings record (`{ defaultThemes
 
 #### Scenario: Read-only settings are visible but inert
 - **WHEN** the designer is created with `readOnly: true`
-- **THEN** both choices SHALL show their values and SHALL NOT be operable
+- **THEN** both choices and every listed domain SHALL show their values, and none SHALL be operable
 
 #### Scenario: The element is given themes
 - **WHEN** a `<widgentic-settings-designer>` gets `themes` before it connects, the person picks one for light hosts, and later `themes` grows by `dusk`
 - **THEN** the change event SHALL carry `{ settings: { defaultThemes: { light: <picked> } } }`, and `dusk` SHALL then be offered for both modes with the record unchanged
+
+#### Scenario: Adding a domain records its canonical form
+- **WHEN** the designer is created with no settings and the person adds `CDN.example.com`
+- **THEN** the entry SHALL show as `https://cdn.example.com`, and `getSettings().resourceDomains` SHALL be `["https://cdn.example.com"]`, with listeners notified
+
+#### Scenario: An invalid domain is kept and marked
+- **WHEN** the person adds `http://cdn.example.com`
+- **THEN** the entry SHALL be marked with the rule's reason, and `getSettings().resourceDomains` SHALL carry `http://cdn.example.com` as typed
+
+#### Scenario: Emptying the list clears it
+- **WHEN** the designer is loaded with `{ resourceDomains: ["https://cdn.example.com"] }` and the person removes that entry
+- **THEN** `getSettings().resourceDomains` SHALL be `[]`
+- **AND** a designer loaded with `{ defaultThemes: { light: "ocean" } }` whose list is never edited SHALL return no `resourceDomains`
+
+#### Scenario: The limit disables adding
+- **WHEN** the designer is loaded with as many domains as the exported limit
+- **THEN** the add control SHALL be disabled, and removing one entry SHALL enable it
+
+#### Scenario: A malformed list is refused on load
+- **WHEN** `loadSettings({ resourceDomains: "cdn.example.com" })` is called
+- **THEN** it SHALL return `{ ok: false }` with an error naming `resourceDomains`, and the record SHALL be unchanged
+
+#### Scenario: The subsection states its rule and its trust
+- **WHEN** the designer renders the "Resource domains" subsection
+- **THEN** its text SHALL state the exported limit's value and the accepted forms, and that any render may load from a listed domain in the viewer's browser
 
 ### Requirement: Designers refuse at import what saving would refuse
 The widget designer's import (and `loadWidget`) SHALL refuse a definition whose `kind` is not a safe identifier — the same pattern the store enforces, exported by core as `SAFE_IDENTIFIER` — with an `INVALID_IDENTIFIER` error, or names a built-in kind with a `RESERVED_KIND` error, and its diagnostics SHALL flag the draft's own kind the same way while the person types. The theme designer's import (and `loadTheme`) SHALL refuse a `name` that is not a safe identifier (`INVALID_IDENTIFIER`) or names a built-in theme (`RESERVED_THEME`), and its Name field SHALL show the same message inline while the person types, so a name saving would refuse is visible before Save. A definition whose descriptor carries both `dataSchema` and `dataSchemaRef`, or a `dataSchemaRef` that is not a schema name, SHALL be refused at import and load with `INVALID_SHAPE`, as saving refuses it; a `dataSchema` that is not an object SHALL be refused too, because the designer cannot open it. Without the host's shared schemas, a reference SHALL NOT be reported as unknown — it cannot be verified. These identity checks SHALL apply only when a load changes the identity: a kind or name the draft or entry already has is the person's to fix, and reloading it with new data or tokens SHALL NOT be refused for it. The Styles panel's JSON tab SHALL clear its parse error once a valid value arrives through the Tree view or a load. The widget designer SHALL show a warning under the data-shape field while the shape is empty — agents listing the widget would see a placeholder — without affecting whether the draft previews.

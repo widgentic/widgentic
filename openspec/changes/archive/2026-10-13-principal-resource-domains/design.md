@@ -274,7 +274,9 @@ the bundle and the store would then each need to know which section uses which c
   then the settings section, canonical and deduplicated. The key is absent when the
   list is empty, so the corpus output for configs without domains is unchanged.
 - Refused entries are listed in `problems()`: under section `resourceDomains` for
-  operator entries, and under `settings` for the settings section.
+  operator entries, and under `settings` for the settings section. A refused settings
+  entry is named `resourceDomains.<entry>`, after the `defaultThemes.<mode>` pattern, so
+  `Widgentic.Mcp` attributes it to the right section in Merge (decided during apply).
 
 This keeps the C# side to declaring what the bundle reports, with no port of the rule.
 The Node assembly and the bundle share the parser, and the conformance corpus pins
