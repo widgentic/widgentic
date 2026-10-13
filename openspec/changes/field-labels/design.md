@@ -146,6 +146,9 @@ theme when the result arrived.
   field keys keep their case under the shipped themes.
 - **[Long labels]** → A label wraps like any text. Nothing caps its length beyond the payload
   limits.
+- **[The first streamed chunk can show the base theme]** → The CSS request goes out when
+  the widget name settles, so chunks drawn before its answer use the base styling, and then
+  the preview switches. The owner accepted this on claude.ai (2026-10-13).
 - **[Hints after data]** → An agent that ignores the new argument order gets keys in its
   preview until the hints arrive. The result is unaffected.
 

@@ -405,6 +405,7 @@ workspace and the sample first, then point at the built DLL):
     - **The template.** The served template carries `requestThemeCss` and `labelOf`.
   - **The owner's host check on claude.ai (task 6.2).** The prompt asked for a customer card and an orders table and named no label style.
     - **Title Case by default.** The card showed Account Manager, First Name, Last Name, Last Order Date and Lifetime Value on the default theme. The table's call carried Title Case `hints.labels` (the Google theme uppercases headers, so the call data was the check).
+    - **Streaming.** Built-in previews streamed in the default theme. The first chunk may show the base theme for the round trip of the CSS request, then switch, which the owner accepted.
     - **The user's style wins.** Asked again for the base light theme and lower-case labels, the table showed `order id`, `order date`, `order total` and `payment status`. Those are labels with spaces, not the keys, on the base light theme.
 
 - **Per-principal resource domains (2026-10-13, change `principal-resource-domains`, on `feature/principal-resource-domains`, core/designer/mcp minor and `Widgentic.Mcp` 0.11.0 pending release)**
