@@ -26,5 +26,5 @@
 
 ## 5. Release (after merge to main, on the owner's word)
 
-- [ ] 5.1 Publish `@widgentic/mcp` 0.11.1 through the Version Packages PR.
-- [ ] 5.2 Bump `WidgenticMcpVersion` and `Widgentic.Mcp` to 0.11.1, date the CHANGELOG, and run `release-dotnet.yml`.
+- [x] 5.1 Publish `@widgentic/mcp` 0.11.1 through the Version Packages PR.
+- [x] 5.2 Bump `WidgenticMcpVersion` and `Widgentic.Mcp` to 0.11.1, date the CHANGELOG, and run `release-dotnet.yml`.
