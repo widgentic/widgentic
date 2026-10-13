@@ -389,6 +389,7 @@ workspace and the sample first, then point at the built DLL):
   - **.NET.** `WidgenticTool` deserializes the bundle's `annotations` into `Tool.Annotations`. A C# SDK client sees every widgentic tool's annotations equal to the bundle's, and `list_widgets` read-only, non-destructive, idempotent and closed-world (`ListedToolsCarryTheBundlesAnnotations`).
   - **Docs.** The generated MCP tools reference lists each tool's annotations.
   - **Gates.** Typecheck, `npm test` (1764 passed, 1 skipped), build, `pack:check`, docs check, `openspec validate --strict` and `--specs` (19), and `dotnet test` (196).
+  - **Staging (`tool-annotations-97b3c8c`, revision `widgentic-selfhost--0000023`).** A keyless 2026-07-28 `tools/list`, saved to a file, lists 9 tools. Seven are read-only, non-destructive, idempotent and closed-world, `render_widget` is the same but open-world, and `execute_action` is a write (not read-only, destructive, not idempotent, open-world).
 
 - **Field labels (2026-10-13, change `field-labels`, on `feature/field-labels`, core/mcp minor and webmcp patch pending release)**
   - **Rendering.** `hints.labels` relabels card field keys and table headers, and image `alt` takes the label, in 9 core tests.

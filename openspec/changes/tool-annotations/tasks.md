@@ -22,7 +22,7 @@
 ## 4. Gates and staging
 
 - [x] 4.1 Run typecheck, `npm test`, build, `pack:check`, `openspec validate --strict tool-annotations` and `--specs`, then `dotnet test`.
-- [ ] 4.2 Deploy the branch to staging and check from the served bytes that `tools/list` carries the annotations.
+- [x] 4.2 Deploy the branch to staging and check from the served bytes that `tools/list` carries the annotations.
 
 ## 5. Release (after merge to main, on the owner's word)
 
