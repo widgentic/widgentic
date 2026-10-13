@@ -12,9 +12,11 @@
  *     tool, deliberately. Saving is the user's authenticated act.
  */
 import {
+  DATA_SCHEMA_TYPES,
+  LABEL_STYLE_RULE,
   PATTERN_MAX_LENGTH,
-  PROPERTY_NAME,
-  UNSAFE,
+  STYLE_RULES,
+  TOKEN_VALUE_RULE,
   createCatalog,
   formatBoundValue
 } from "@widgentic/core";
@@ -78,7 +80,7 @@ export function buildAuthoringGuide(): Record<string, unknown> {
         template: "A template DSL node (see rules.template).",
         descriptor: {
           description: "REQUIRED string — what the widget shows, for agents.",
-          dataShape: "REQUIRED string — a compact sketch of the expected data, e.g. '{ title, lines: [{ item, amount }] }'.",
+          dataShape: "Strongly recommended string — a compact sketch of the expected data, e.g. '{ title, lines: [{ item, amount }] }'. Agents listing the widget read it; without it they see a generic placeholder, and the designer warns.",
           dataExample:
             "RECOMMENDED — an example the widget renders well; shown to agents and used as the designer's preview data.",
           dataSchemaRef:
@@ -146,13 +148,30 @@ export function buildAuthoringGuide(): Record<string, unknown> {
     theme: {
       shape: {
         description:
-          "A theme entry is one JSON object: { name, label?, description?, tokens }.",
+          "A theme entry is one JSON object: { name, label?, description?, tokens, styles? }.",
         name: `String identifier matching ${SAFE_IDENTIFIER.source}.`,
         label: "OPTIONAL human-readable display name.",
         tokens:
           "Record of registry token names (bare, no --wg- prefix) and/or " +
-          "custom variables to string values."
+          "custom variables to string values.",
+        styles:
+          "OPTIONAL shared classes, in the same shape as a widget's " +
+          "descriptor.styles: { \"<selector>\": { \"<cssProperty>\": \"<value>\" } }."
       },
+      styles: {
+        purpose:
+          "A theme's styles define classes every widget rendered under the " +
+          "theme can use (e.g. .wg-btn for buttons), so a look is written " +
+          "once instead of copied into each widget. They are emitted before " +
+          "the widget's own styles, so a widget's rule wins a tie.",
+        // The same guard as widget styles: one rule object for both.
+        ...STYLE_RULES
+      },
+      defaults:
+        "Which theme dresses renders that name no theme — one for light " +
+        "hosts, one for dark — is a setting the user chooses in Settings " +
+        "at widgentic.dev, not part of the theme entry. list_themes shows " +
+        "the current defaults.",
       tokens: Object.entries(TOKEN_SPECS).map(([name, spec]) => ({
         name,
         type: spec.type,
@@ -165,11 +184,7 @@ export function buildAuthoringGuide(): Record<string, unknown> {
           "A custom variable x-foo becomes --wg-x-foo on the themed scope; " +
           "reference it from widget styles as var(--wg-x-foo)."
       },
-      valueSafety:
-        "Token values are plain CSS values. Rejected: ';', '{', '}', '<', " +
-        "'>', 'url(' and 'expression(' (case-insensitive, " +
-        "whitespace-tolerant). Keep values to colors, lengths, and font " +
-        "stacks."
+      valueSafety: TOKEN_VALUE_RULE
     },
     rules: {
       template: {
@@ -217,6 +232,11 @@ export function buildAuthoringGuide(): Record<string, unknown> {
           maxInterpretedNodes: DEFAULT_MAX_NODES,
           note: "Validation rejects deeper nesting; interpretation stops at the node budget and marks the render truncated."
         },
+        labels:
+          LABEL_STYLE_RULE +
+          " It applies to the labels a template writes as literals, and to the " +
+          "built-in card's and table's hints.labels (a field's or column's label " +
+          "in place of its key).",
         dataModeling:
           "PREFER binding only properties declared in descriptor.dataSchema " +
           "— schema-declared data is validated with dotted paths, so agents " +
@@ -237,22 +257,10 @@ export function buildAuthoringGuide(): Record<string, unknown> {
           "\"<value>\" } } — each declaration is a separate key/value " +
           "pair, e.g. { \".wg-roster-row\": { \"display\": \"flex\", " +
           "\"gap\": \"var(--wg-spacing)\" } }.",
-        selectors:
-          "Every selector (and every comma-separated part) must target a " +
-          ".wg- class, e.g. '.wg-card .wg-xcard-head'. The base stylesheet " +
-          "also ships a wg-code monospace block utility (font-mono, " +
-          "surface, border) any template element can opt into via class.",
-        // Derived: the guard's own character class, plus the two
-        // function forms the value check rejects on top of it.
-        banned:
-          `Selectors, properties, or values matching ${UNSAFE.source} — or ` +
-          "containing 'url(' or 'expression(' — are dropped.",
-        // The property rule is an ALLOWLIST, not merely "no banned
-        // characters": a property with a digit or underscore is dropped
-        // even though it contains nothing banned.
-        propertyNames:
-          `Property names must match ${PROPERTY_NAME.source} (letters and ` +
-          "hyphens, optionally leading '-'); anything else is dropped.",
+        ...STYLE_RULES,
+        utilities:
+          "The base stylesheet also ships a wg-code monospace block utility " +
+          "(font-mono, surface, border) any template element can opt into via class.",
         tokens:
           "Reference theme tokens with var(--wg-<token>) and custom " +
           "variables with var(--wg-x-<name>); prefer tokens over literals " +
@@ -264,8 +272,7 @@ export function buildAuthoringGuide(): Record<string, unknown> {
       },
       dataSchema: {
         keywords:
-          "Supported subset: type (object/array/string/number/integer/" +
-          "boolean/null, or an array of those), properties, required, " +
+          `Supported subset: type (${DATA_SCHEMA_TYPES.join("/")}, or an array of those), properties, required, ` +
           "items, enum, pattern. Unknown keywords are ignored.",
         pattern:
           `pattern is a bounded regex: max ${PATTERN_MAX_LENGTH} chars, no nested ` +

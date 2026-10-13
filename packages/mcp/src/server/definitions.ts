@@ -51,7 +51,11 @@ export const APP_TEMPLATE_RESOURCE = {
   name: "Widgentic App",
   uri: WIDGENTIC_APP_TEMPLATE_URI,
   mimeType: WIDGENTIC_APP_MIME_TYPE,
-  description: "Widgentic app template — renders render_widget results inline."
+  description: "Widgentic app template — renders render_widget results inline.",
+  // MCP Apps `_meta.ui.prefersBorder`: widgets draw their own surface, so the
+  // host adds no border or background. Set explicitly, as the specification
+  // recommends, since hosts' defaults differ.
+  prefersBorder: false
 } as const;
 
 /** The per-kind preview page resource template, likewise shared. */
@@ -125,9 +129,12 @@ export const LIST_ACTIONS_TOOL: McpToolDefinition = {
 export const LIST_THEMES_TOOL: McpToolDefinition = {
   name: "list_themes",
   description:
-    "List the themes registered on this server — name, label, description " +
-    "and token map for each. Pass any listed name as render_widget's " +
-    "'theme' input instead of composing tokens by hand.",
+    "List the themes registered on this server — name, label, description, " +
+    "token map and shared styles for each — and 'defaults', the theme the " +
+    "user chose for light and for dark hosts. Leave render_widget's 'theme' " +
+    "out to use those defaults; pass a listed name only when the user asks " +
+    "for a different theme. A theme's 'styles' define .wg- classes (a " +
+    ".wg-btn, say) that widgets rendered under it can use in their templates.",
   inputSchema: {
     type: "object",
     properties: {},
@@ -156,8 +163,9 @@ export const RENDER_WIDGET_TOOL: McpToolDefinition = {
     "natively. On invalid input, returns a structured error describing what " +
     "to correct. To show several widgets at once, render ONE 'group' " +
     "(items of mixed kinds, layout hints) instead of calling repeatedly. " +
-    "Write 'widget' before 'data' in the arguments: hosts that stream the " +
-    "call can then show the widget while its data arrives.",
+    "Write 'widget' first and any 'hints' before 'data' in the arguments: " +
+    "hosts that stream the call can then show the widget, with its labels, " +
+    "columns and image places, while its data arrives.",
   inputSchema: {
     type: "object",
     properties: {
@@ -205,8 +213,10 @@ export const RENDER_WIDGET_TOOL: McpToolDefinition = {
           "drifts the moment they edit it). Inline maps are for one-off, " +
           "unsaved styling. Discover tokens, defaults, and presets with " +
           "list_theme_tokens; author extras as 'x-<name>' custom " +
-          "variables. Applied to 'page' output and embedded in the widget " +
-          "payload for native hosts on every format."
+          "variables. Leave this out to use the user's default themes for " +
+          "light and dark hosts (list_themes shows them); a theme you pass " +
+          "replaces those defaults in both modes. Applied to 'page' output " +
+          "and embedded in the widget payload for native hosts on every format."
       }
     },
     required: ["widget", "data"],

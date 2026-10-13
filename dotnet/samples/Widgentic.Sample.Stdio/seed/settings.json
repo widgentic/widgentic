@@ -1,0 +1,10 @@
+{
+  "defaultThemes": {
+    "light": "google-light",
+    "dark": "google-dark"
+  },
+  "resourceDomains": [
+    "https://api.dicebear.com",
+    "https://*.pravatar.cc"
+  ]
+}

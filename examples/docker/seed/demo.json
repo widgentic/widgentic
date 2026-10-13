@@ -1,9 +1,9 @@
 {
   "schemas": [
     {
-      "description": "A dated agenda containing scheduled appointments, participants, locations, and attendance state.",
-      "label": "Appointment agenda",
       "name": "appointment-agenda",
+      "label": "Appointment agenda",
+      "description": "A dated agenda containing scheduled appointments, participants, locations, and attendance state.",
       "schema": {
         "properties": {
           "appointments": {
@@ -90,9 +90,9 @@
       }
     },
     {
-      "description": "A mailbox with account context and an ordered collection of email messages.",
-      "label": "Email inbox",
       "name": "email-inbox",
+      "label": "Email inbox",
+      "description": "A mailbox with account context and an ordered collection of email messages.",
       "schema": {
         "properties": {
           "account": {
@@ -153,45 +153,9 @@
   ],
   "themes": [
     {
-      "description": "A dark theme inspired by Google's deep surfaces and signature blue, red, yellow, and green accents.",
-      "label": "Google-inspired dark",
-      "name": "google-dark",
-      "tokens": {
-        "accent": "#8ab4f8",
-        "accent-fg": "#202124",
-        "bg": "#202124",
-        "border": "#5f6368",
-        "border-width": "1px",
-        "danger": "#f28b82",
-        "danger-fg": "#202124",
-        "fg": "#e8eaed",
-        "font-family": "Google Sans, Roboto, Arial, sans-serif",
-        "font-size": "14px",
-        "font-size-lg": "20px",
-        "font-size-sm": "12px",
-        "font-weight-bold": "600",
-        "info": "#8ab4f8",
-        "info-fg": "#202124",
-        "line-height": "1.5",
-        "muted": "#bdc1c6",
-        "radius": "8px",
-        "radius-lg": "16px",
-        "radius-sm": "4px",
-        "shadow": "0 1px 2px rgba(0,0,0,0.45)",
-        "spacing": "8px",
-        "spacing-lg": "16px",
-        "spacing-sm": "4px",
-        "success": "#81c995",
-        "success-fg": "#202124",
-        "surface": "#292a2d",
-        "warning": "#fdd663",
-        "warning-fg": "#202124"
-      }
-    },
-    {
-      "description": "A bright, clean theme inspired by Google's blue, red, yellow, and green palette.",
-      "label": "Google-inspired light",
       "name": "google-light",
+      "label": "Google-inspired light",
+      "description": "A bright, clean theme inspired by Google's blue, red, yellow, and green palette.",
       "tokens": {
         "accent": "#1a73e8",
         "accent-fg": "#ffffff",
@@ -221,7 +185,403 @@
         "success-fg": "#ffffff",
         "surface": "#ffffff",
         "warning": "#f9ab00",
-        "warning-fg": "#202124"
+        "warning-fg": "#202124",
+        "x-tint": "#f1f3f4",
+        "x-hover": "#e8f0fe"
+      },
+      "styles": {
+        ".wg-panel": {
+          "background": "var(--wg-surface)",
+          "border": "var(--wg-border-width) solid var(--wg-border)",
+          "border-radius": "var(--wg-radius-lg)",
+          "box-shadow": "var(--wg-shadow)",
+          "padding": "var(--wg-spacing-lg)",
+          "font-family": "var(--wg-font-family)",
+          "font-size": "var(--wg-font-size)",
+          "line-height": "var(--wg-line-height)",
+          "color": "var(--wg-fg)"
+        },
+        ".wg-panel-head": {
+          "display": "flex",
+          "align-items": "baseline",
+          "justify-content": "space-between",
+          "flex-wrap": "wrap",
+          "gap": "var(--wg-spacing)",
+          "margin-bottom": "var(--wg-spacing)"
+        },
+        ".wg-title": {
+          "margin": "0",
+          "font-size": "var(--wg-font-size-lg)",
+          "font-weight": "var(--wg-font-weight-bold)",
+          "color": "var(--wg-fg)"
+        },
+        ".wg-subtitle": {
+          "display": "flex",
+          "align-items": "center",
+          "gap": "var(--wg-spacing-sm)",
+          "margin": "0",
+          "font-size": "var(--wg-font-size)",
+          "font-weight": "var(--wg-font-weight-bold)",
+          "color": "var(--wg-fg)"
+        },
+        ".wg-muted": {
+          "margin": "0",
+          "color": "var(--wg-muted)",
+          "font-size": "var(--wg-font-size-sm)"
+        },
+        ".wg-date": {
+          "margin": "0",
+          "color": "var(--wg-muted)",
+          "font-size": "var(--wg-font-size-sm)",
+          "font-variant-numeric": "tabular-nums",
+          "letter-spacing": "0.02em"
+        },
+        ".wg-link": {
+          "color": "var(--wg-accent)",
+          "text-decoration": "none",
+          "font-weight": "500"
+        },
+        ".wg-link:hover, .wg-link:focus-visible": {
+          "text-decoration": "underline"
+        },
+        ".wg-item": {
+          "display": "flex",
+          "flex-direction": "column",
+          "gap": "var(--wg-spacing-sm)",
+          "border-top": "var(--wg-border-width) solid var(--wg-border)",
+          "padding": "var(--wg-spacing) 0"
+        },
+        ".wg-item:first-of-type": {
+          "border-top": "0"
+        },
+        ".wg-unread": {
+          "box-shadow": "inset 3px 0 0 var(--wg-accent)",
+          "padding-left": "var(--wg-spacing)",
+          "margin-left": "calc(-1 * var(--wg-spacing))"
+        },
+        ".wg-unread .wg-subtitle": {
+          "color": "var(--wg-accent)"
+        },
+        ".wg-list": {
+          "display": "flex",
+          "flex-wrap": "wrap",
+          "gap": "var(--wg-spacing-sm)",
+          "margin": "0",
+          "padding": "0",
+          "list-style": "none"
+        },
+        ".wg-chip": {
+          "display": "inline-flex",
+          "align-items": "center",
+          "padding": "0 var(--wg-spacing)",
+          "border-radius": "999px",
+          "border": "var(--wg-border-width) solid var(--wg-border)",
+          "background": "var(--wg-x-tint, var(--wg-bg))",
+          "font-size": "var(--wg-font-size-sm)",
+          "line-height": "1.8"
+        },
+        ".wg-chip-yes": {
+          "border-color": "var(--wg-success)"
+        },
+        ".wg-chip-maybe": {
+          "border-color": "var(--wg-warning)",
+          "border-style": "dashed"
+        },
+        ".wg-card": {
+          "border-top": "calc(var(--wg-border-width) * 4) solid var(--wg-accent)"
+        },
+        ".wg-card-title": {
+          "color": "var(--wg-fg)",
+          "letter-spacing": "-0.01em"
+        },
+        ".wg-card-field": {
+          "align-items": "baseline",
+          "border-bottom": "var(--wg-border-width) dashed var(--wg-border)"
+        },
+        ".wg-card-field:last-child": {
+          "border-bottom": "0"
+        },
+        ".wg-card-field-key": {
+          "flex": "0 0 8.5em",
+          "font-size": "var(--wg-font-size-sm)",
+          "letter-spacing": "0.02em",
+          "overflow-wrap": "anywhere"
+        },
+        ".wg-card-field-value": {
+          "min-width": "0",
+          "overflow-wrap": "anywhere",
+          "font-weight": "var(--wg-font-weight-bold)",
+          "font-variant-numeric": "tabular-nums"
+        },
+        ".wg-table": {
+          "width": "100%",
+          "box-shadow": "var(--wg-shadow)",
+          "border-collapse": "separate",
+          "border-spacing": "0",
+          "overflow": "hidden"
+        },
+        ".wg-table-title": {
+          "color": "var(--wg-fg)"
+        },
+        ".wg-table-header": {
+          "background": "var(--wg-x-tint, var(--wg-bg))",
+          "text-transform": "uppercase",
+          "letter-spacing": "0.06em"
+        },
+        ".wg-table-row:nth-child(even) .wg-table-cell": {
+          "background": "var(--wg-x-tint, var(--wg-bg))"
+        },
+        ".wg-table-row:hover .wg-table-cell": {
+          "background": "var(--wg-x-hover, var(--wg-bg))"
+        },
+        ".wg-chip-no": {
+          "border-color": "var(--wg-danger)",
+          "color": "var(--wg-muted)",
+          "text-decoration": "line-through"
+        },
+        ".wg-item-cancelled .wg-subtitle": {
+          "color": "var(--wg-muted)"
+        },
+        ".wg-item-cancelled .wg-subtitle-text": {
+          "text-decoration": "line-through"
+        },
+        ".wg-item-cancelled .wg-date, .wg-item-cancelled .wg-muted": {
+          "opacity": "0.7"
+        },
+        ".wg-card-field-value .wg-link": {
+          "font-weight": "inherit"
+        },
+        ".wg-table-cell .wg-link[href^=\"tel:\"], .wg-table-cell .wg-link[href^=\"mailto:\"]": {
+          "white-space": "nowrap"
+        },
+        ".wg-table-row:last-child .wg-table-cell": {
+          "border-bottom": "0"
+        },
+        ".wg-chip-no .wg-link": {
+          "color": "var(--wg-muted)"
+        },
+        ".wg-table-cell": {
+          "vertical-align": "top"
+        },
+        ".wg-table-cell:first-child": {
+          "min-width": "8em"
+        }
+      }
+    },
+    {
+      "name": "google-dark",
+      "label": "Google-inspired dark",
+      "description": "A dark theme inspired by Google's deep surfaces and signature blue, red, yellow, and green accents.",
+      "tokens": {
+        "accent": "#8ab4f8",
+        "accent-fg": "#202124",
+        "bg": "#202124",
+        "border": "#5f6368",
+        "border-width": "1px",
+        "danger": "#f28b82",
+        "danger-fg": "#202124",
+        "fg": "#e8eaed",
+        "font-family": "Google Sans, Roboto, Arial, sans-serif",
+        "font-size": "14px",
+        "font-size-lg": "20px",
+        "font-size-sm": "12px",
+        "font-weight-bold": "600",
+        "info": "#8ab4f8",
+        "info-fg": "#202124",
+        "line-height": "1.5",
+        "muted": "#bdc1c6",
+        "radius": "8px",
+        "radius-lg": "16px",
+        "radius-sm": "4px",
+        "shadow": "0 1px 2px rgba(0,0,0,0.45)",
+        "spacing": "8px",
+        "spacing-lg": "16px",
+        "spacing-sm": "4px",
+        "success": "#81c995",
+        "success-fg": "#202124",
+        "surface": "#292a2d",
+        "warning": "#fdd663",
+        "warning-fg": "#202124",
+        "x-tint": "#35363a",
+        "x-hover": "#3c4043"
+      },
+      "styles": {
+        ".wg-panel": {
+          "background": "var(--wg-surface)",
+          "border": "var(--wg-border-width) solid var(--wg-border)",
+          "border-radius": "var(--wg-radius-lg)",
+          "box-shadow": "var(--wg-shadow)",
+          "padding": "var(--wg-spacing-lg)",
+          "font-family": "var(--wg-font-family)",
+          "font-size": "var(--wg-font-size)",
+          "line-height": "var(--wg-line-height)",
+          "color": "var(--wg-fg)"
+        },
+        ".wg-panel-head": {
+          "display": "flex",
+          "align-items": "baseline",
+          "justify-content": "space-between",
+          "flex-wrap": "wrap",
+          "gap": "var(--wg-spacing)",
+          "margin-bottom": "var(--wg-spacing)"
+        },
+        ".wg-title": {
+          "margin": "0",
+          "font-size": "var(--wg-font-size-lg)",
+          "font-weight": "var(--wg-font-weight-bold)",
+          "color": "var(--wg-fg)"
+        },
+        ".wg-subtitle": {
+          "display": "flex",
+          "align-items": "center",
+          "gap": "var(--wg-spacing-sm)",
+          "margin": "0",
+          "font-size": "var(--wg-font-size)",
+          "font-weight": "var(--wg-font-weight-bold)",
+          "color": "var(--wg-fg)"
+        },
+        ".wg-muted": {
+          "margin": "0",
+          "color": "var(--wg-muted)",
+          "font-size": "var(--wg-font-size-sm)"
+        },
+        ".wg-date": {
+          "margin": "0",
+          "color": "var(--wg-muted)",
+          "font-size": "var(--wg-font-size-sm)",
+          "font-variant-numeric": "tabular-nums",
+          "letter-spacing": "0.02em"
+        },
+        ".wg-link": {
+          "color": "var(--wg-accent)",
+          "text-decoration": "none",
+          "font-weight": "500"
+        },
+        ".wg-link:hover, .wg-link:focus-visible": {
+          "text-decoration": "underline"
+        },
+        ".wg-item": {
+          "display": "flex",
+          "flex-direction": "column",
+          "gap": "var(--wg-spacing-sm)",
+          "border-top": "var(--wg-border-width) solid var(--wg-border)",
+          "padding": "var(--wg-spacing) 0"
+        },
+        ".wg-item:first-of-type": {
+          "border-top": "0"
+        },
+        ".wg-unread": {
+          "box-shadow": "inset 3px 0 0 var(--wg-accent)",
+          "padding-left": "var(--wg-spacing)",
+          "margin-left": "calc(-1 * var(--wg-spacing))"
+        },
+        ".wg-unread .wg-subtitle": {
+          "color": "var(--wg-accent)"
+        },
+        ".wg-list": {
+          "display": "flex",
+          "flex-wrap": "wrap",
+          "gap": "var(--wg-spacing-sm)",
+          "margin": "0",
+          "padding": "0",
+          "list-style": "none"
+        },
+        ".wg-chip": {
+          "display": "inline-flex",
+          "align-items": "center",
+          "padding": "0 var(--wg-spacing)",
+          "border-radius": "999px",
+          "border": "var(--wg-border-width) solid var(--wg-border)",
+          "background": "var(--wg-x-tint, var(--wg-bg))",
+          "font-size": "var(--wg-font-size-sm)",
+          "line-height": "1.8"
+        },
+        ".wg-chip-yes": {
+          "border-color": "var(--wg-success)"
+        },
+        ".wg-chip-maybe": {
+          "border-color": "var(--wg-warning)",
+          "border-style": "dashed"
+        },
+        ".wg-card": {
+          "border-top": "calc(var(--wg-border-width) * 4) solid var(--wg-accent)"
+        },
+        ".wg-card-title": {
+          "color": "var(--wg-fg)",
+          "letter-spacing": "-0.01em"
+        },
+        ".wg-card-field": {
+          "align-items": "baseline",
+          "border-bottom": "var(--wg-border-width) dashed var(--wg-border)"
+        },
+        ".wg-card-field:last-child": {
+          "border-bottom": "0"
+        },
+        ".wg-card-field-key": {
+          "flex": "0 0 8.5em",
+          "font-size": "var(--wg-font-size-sm)",
+          "letter-spacing": "0.02em",
+          "overflow-wrap": "anywhere"
+        },
+        ".wg-card-field-value": {
+          "min-width": "0",
+          "overflow-wrap": "anywhere",
+          "font-weight": "var(--wg-font-weight-bold)",
+          "font-variant-numeric": "tabular-nums"
+        },
+        ".wg-table": {
+          "width": "100%",
+          "box-shadow": "var(--wg-shadow)",
+          "border-collapse": "separate",
+          "border-spacing": "0",
+          "overflow": "hidden"
+        },
+        ".wg-table-title": {
+          "color": "var(--wg-fg)"
+        },
+        ".wg-table-header": {
+          "background": "var(--wg-x-tint, var(--wg-bg))",
+          "text-transform": "uppercase",
+          "letter-spacing": "0.06em"
+        },
+        ".wg-table-row:nth-child(even) .wg-table-cell": {
+          "background": "var(--wg-x-tint, var(--wg-bg))"
+        },
+        ".wg-table-row:hover .wg-table-cell": {
+          "background": "var(--wg-x-hover, var(--wg-bg))"
+        },
+        ".wg-chip-no": {
+          "border-color": "var(--wg-danger)",
+          "color": "var(--wg-muted)",
+          "text-decoration": "line-through"
+        },
+        ".wg-item-cancelled .wg-subtitle": {
+          "color": "var(--wg-muted)"
+        },
+        ".wg-item-cancelled .wg-subtitle-text": {
+          "text-decoration": "line-through"
+        },
+        ".wg-item-cancelled .wg-date, .wg-item-cancelled .wg-muted": {
+          "opacity": "0.7"
+        },
+        ".wg-card-field-value .wg-link": {
+          "font-weight": "inherit"
+        },
+        ".wg-table-cell .wg-link[href^=\"tel:\"], .wg-table-cell .wg-link[href^=\"mailto:\"]": {
+          "white-space": "nowrap"
+        },
+        ".wg-table-row:last-child .wg-table-cell": {
+          "border-bottom": "0"
+        },
+        ".wg-chip-no .wg-link": {
+          "color": "var(--wg-muted)"
+        },
+        ".wg-table-cell": {
+          "vertical-align": "top"
+        },
+        ".wg-table-cell:first-child": {
+          "min-width": "8em"
+        }
       }
     }
   ],
@@ -229,84 +589,135 @@
     {
       "kind": "appointment-agenda-widget",
       "template": {
+        "tag": "section",
         "attrs": {
-          "class": "wg-agenda"
+          "class": "wg-panel wg-agenda"
         },
         "children": [
           {
+            "tag": "header",
+            "attrs": {
+              "class": "wg-panel-head"
+            },
             "children": [
               {
+                "tag": "h2",
+                "attrs": {
+                  "class": "wg-title"
+                },
                 "children": [
                   "Agenda"
-                ],
-                "tag": "h2"
+                ]
               },
               {
+                "when": "date",
                 "template": {
+                  "tag": "p",
                   "attrs": {
-                    "class": "wg-muted"
+                    "class": "wg-date"
                   },
                   "children": [
                     {
-                      "bind": "date"
+                      "bind": "date",
+                      "format": {
+                        "type": "date",
+                        "pattern": "yyyy-MM-dd"
+                      }
                     }
-                  ],
-                  "tag": "p"
-                },
-                "when": "date"
+                  ]
+                }
               }
-            ],
-            "tag": "header"
+            ]
           },
           {
             "each": "appointments",
+            "key": "id",
             "empty": {
+              "tag": "p",
               "attrs": {
                 "class": "wg-muted"
               },
               "children": [
                 "No appointments."
-              ],
-              "tag": "p"
+              ]
             },
             "template": {
+              "tag": "article",
               "attrs": {
-                "class": "wg-agenda-item"
+                "class": {
+                  "bind": "status",
+                  "map": {
+                    "cancelled": "wg-item wg-item-cancelled"
+                  },
+                  "default": "wg-item"
+                }
               },
               "children": [
                 {
+                  "tag": "h3",
+                  "attrs": {
+                    "class": "wg-subtitle"
+                  },
                   "children": [
                     {
-                      "bind": "title"
+                      "tag": "span",
+                      "attrs": {
+                        "class": "wg-subtitle-text"
+                      },
+                      "children": [
+                        {
+                          "bind": "title"
+                        }
+                      ]
+                    },
+                    {
+                      "tag": "span",
+                      "attrs": {
+                        "class": {
+                          "bind": "status",
+                          "map": {
+                            "confirmed": "wg-status wg-status-success",
+                            "tentative": "wg-status wg-status-warning",
+                            "cancelled": "wg-status wg-status-danger"
+                          },
+                          "default": "wg-status wg-status-info"
+                        }
+                      },
+                      "children": [
+                        {
+                          "bind": "status"
+                        }
+                      ]
                     }
-                  ],
-                  "tag": "h3"
+                  ]
                 },
                 {
+                  "tag": "p",
                   "attrs": {
-                    "class": "wg-agenda-time"
+                    "class": "wg-date"
                   },
                   "children": [
                     {
                       "bind": "startsAt",
                       "format": {
-                        "pattern": "yyyy-MM-dd HH:ss",
-                        "type": "date"
+                        "type": "date",
+                        "pattern": "yyyy-MM-dd HH:mm"
                       }
                     },
                     " — ",
                     {
                       "bind": "endsAt",
                       "format": {
-                        "pattern": "yyyy-MM-dd HH:ss",
-                        "type": "date"
+                        "type": "date",
+                        "pattern": "HH:mm"
                       }
                     }
-                  ],
-                  "tag": "p"
+                  ]
                 },
                 {
+                  "when": "location",
                   "template": {
+                    "tag": "p",
                     "attrs": {
                       "class": "wg-muted"
                     },
@@ -314,39 +725,54 @@
                       {
                         "bind": "location"
                       }
-                    ],
-                    "tag": "p"
-                  },
-                  "when": "location"
+                    ]
+                  }
                 },
                 {
+                  "when": "meetingUrl",
                   "template": {
+                    "tag": "a",
                     "attrs": {
-                      "class": "wg-agenda-link",
+                      "class": "wg-link",
                       "href": {
                         "bind": "meetingUrl"
                       }
                     },
                     "children": [
                       "Join meeting"
-                    ],
-                    "tag": "a"
-                  },
-                  "when": "meetingUrl"
+                    ]
+                  }
                 },
                 {
+                  "when": "attendees",
                   "template": {
+                    "tag": "ul",
+                    "attrs": {
+                      "class": "wg-list"
+                    },
                     "children": [
                       {
                         "each": "attendees",
                         "template": {
+                          "tag": "li",
+                          "attrs": {
+                            "class": {
+                              "bind": "response",
+                              "map": {
+                                "accepted": "wg-chip wg-chip-yes",
+                                "tentative": "wg-chip wg-chip-maybe",
+                                "declined": "wg-chip wg-chip-no"
+                              },
+                              "default": "wg-chip"
+                            }
+                          },
                           "children": [
                             {
-                              "else": {
-                                "bind": "name"
-                              },
+                              "when": "email",
                               "template": {
+                                "tag": "a",
                                 "attrs": {
+                                  "class": "wg-link",
                                   "href": {
                                     "bind": "email",
                                     "prefix": "mailto:"
@@ -356,28 +782,27 @@
                                   {
                                     "bind": "name"
                                   }
-                                ],
-                                "tag": "a"
+                                ]
                               },
-                              "when": "email"
+                              "else": {
+                                "bind": "name"
+                              }
                             }
-                          ],
-                          "tag": "li"
+                          ]
                         }
                       }
-                    ],
-                    "tag": "ul"
-                  },
-                  "when": "attendees"
+                    ]
+                  }
                 }
-              ],
-              "tag": "article"
+              ]
             }
           }
-        ],
-        "tag": "section"
+        ]
       },
       "descriptor": {
+        "description": "Displays a day agenda with formatted appointment times, attendance, and email links for attendees.",
+        "dataShape": "{ date?, timezone?, appointments: [{ id, title, startsAt, endsAt, location?, meetingUrl?, description?, status, attendees?: [{ name, email?, response? }] }] }",
+        "dataSchemaRef": "appointment-agenda",
         "dataExample": {
           "appointments": [
             {
@@ -419,103 +844,152 @@
           ],
           "date": "2026-09-03",
           "timezone": "America/Bogota"
-        },
-        "dataSchemaRef": "appointment-agenda",
-        "dataShape": "{ date?, timezone?, appointments: [{ id, title, startsAt, endsAt, location?, meetingUrl?, description?, status, attendees?: [{ name, email?, response? }] }] }",
-        "description": "Displays a day agenda with formatted appointment times, attendance, and email links for attendees.",
-        "styles": {
-          ".wg-agenda": {
-            "background": "var(--wg-surface)",
-            "border": "var(--wg-border-width) solid var(--wg-border)",
-            "border-radius": "var(--wg-radius-lg)",
-            "padding": "var(--wg-spacing-lg)"
-          },
-          ".wg-agenda-item": {
-            "border-top": "var(--wg-border-width) solid var(--wg-border)",
-            "padding": "var(--wg-spacing)"
-          },
-          ".wg-agenda-link": {
-            "color": "var(--wg-accent)"
-          },
-          ".wg-agenda-time": {
-            "color": "var(--wg-muted)"
-          }
         }
       }
     },
     {
       "kind": "email-inbox-widget",
       "template": {
+        "tag": "section",
         "attrs": {
-          "class": "wg-inbox"
+          "class": "wg-panel wg-inbox"
         },
         "children": [
           {
+            "tag": "header",
+            "attrs": {
+              "class": "wg-panel-head"
+            },
             "children": [
               {
+                "tag": "h2",
+                "attrs": {
+                  "class": "wg-title"
+                },
                 "children": [
                   "Inbox"
-                ],
-                "tag": "h2"
+                ]
               },
               {
+                "when": "unreadCount",
                 "template": {
+                  "tag": "span",
                   "attrs": {
-                    "class": "wg-muted"
+                    "class": "wg-status wg-status-accent"
+                  },
+                  "children": [
+                    {
+                      "bind": "unreadCount"
+                    },
+                    " unread"
+                  ]
+                }
+              },
+              {
+                "when": "account",
+                "template": {
+                  "tag": "p",
+                  "attrs": {
+                    "class": "wg-muted wg-inbox-account"
                   },
                   "children": [
                     {
                       "bind": "account"
                     }
-                  ],
-                  "tag": "p"
-                },
-                "when": "account"
+                  ]
+                }
               }
-            ],
-            "tag": "header"
+            ]
           },
           {
             "each": "messages",
+            "key": "id",
             "empty": {
+              "tag": "p",
               "attrs": {
                 "class": "wg-muted"
               },
               "children": [
                 "No messages."
-              ],
-              "tag": "p"
+              ]
             },
             "template": {
+              "tag": "article",
               "attrs": {
-                "class": "wg-inbox-email"
+                "class": {
+                  "bind": "isRead",
+                  "map": {
+                    "false": "wg-item wg-unread"
+                  },
+                  "default": "wg-item"
+                }
               },
               "children": [
                 {
+                  "tag": "div",
                   "attrs": {
-                    "class": "wg-inbox-sender",
-                    "href": {
-                      "bind": "from",
-                      "prefix": "mailto:"
-                    }
+                    "class": "wg-inbox-meta"
                   },
                   "children": [
                     {
-                      "bind": "from"
+                      "tag": "a",
+                      "attrs": {
+                        "class": "wg-link",
+                        "href": {
+                          "bind": "from",
+                          "prefix": "mailto:"
+                        }
+                      },
+                      "children": [
+                        {
+                          "bind": "from"
+                        }
+                      ]
+                    },
+                    {
+                      "tag": "small",
+                      "attrs": {
+                        "class": "wg-date"
+                      },
+                      "children": [
+                        {
+                          "bind": "receivedAt",
+                          "format": {
+                            "type": "date",
+                            "pattern": "yyyy-MM-dd HH:mm"
+                          }
+                        }
+                      ]
                     }
-                  ],
-                  "tag": "a"
+                  ]
                 },
                 {
+                  "tag": "h3",
+                  "attrs": {
+                    "class": "wg-subtitle"
+                  },
                   "children": [
+                    {
+                      "when": "isStarred",
+                      "template": {
+                        "tag": "span",
+                        "attrs": {
+                          "class": "wg-inbox-star"
+                        },
+                        "children": [
+                          "★"
+                        ]
+                      }
+                    },
                     {
                       "bind": "subject"
                     }
-                  ],
-                  "tag": "h3"
+                  ]
                 },
                 {
+                  "when": "preview",
                   "template": {
+                    "tag": "p",
                     "attrs": {
                       "class": "wg-muted"
                     },
@@ -523,34 +997,43 @@
                       {
                         "bind": "preview"
                       }
-                    ],
-                    "tag": "p"
-                  },
-                  "when": "preview"
+                    ]
+                  }
                 },
                 {
-                  "attrs": {
-                    "class": "wg-muted"
-                  },
-                  "children": [
-                    {
-                      "bind": "receivedAt",
-                      "format": {
-                        "pattern": "yyyy-MM-dd HH:ss",
-                        "type": "date"
+                  "when": "labels",
+                  "template": {
+                    "tag": "ul",
+                    "attrs": {
+                      "class": "wg-list"
+                    },
+                    "children": [
+                      {
+                        "each": "labels",
+                        "template": {
+                          "tag": "li",
+                          "attrs": {
+                            "class": "wg-chip"
+                          },
+                          "children": [
+                            {
+                              "bind": "."
+                            }
+                          ]
+                        }
                       }
-                    }
-                  ],
-                  "tag": "small"
+                    ]
+                  }
                 }
-              ],
-              "tag": "article"
+              ]
             }
           }
-        ],
-        "tag": "section"
+        ]
       },
       "descriptor": {
+        "description": "Displays an email inbox as a readable list, with each sender address as an email link.",
+        "dataShape": "{ account?, unreadCount?, messages: [{ id, from, subject, preview?, receivedAt, isRead, isStarred?, labels? }] }",
+        "dataSchemaRef": "email-inbox",
         "dataExample": {
           "account": "alex@example.com",
           "messages": [
@@ -581,25 +1064,31 @@
           ],
           "unreadCount": 2
         },
-        "dataSchemaRef": "email-inbox",
-        "dataShape": "{ account?, unreadCount?, messages: [{ id, from, subject, preview?, receivedAt, isRead, isStarred?, labels? }] }",
-        "description": "Displays an email inbox as a readable list, with each sender address as an email link.",
         "styles": {
-          ".wg-inbox": {
-            "background": "var(--wg-surface)",
-            "border": "var(--wg-border-width) solid var(--wg-border)",
-            "border-radius": "var(--wg-radius-lg)",
-            "padding": "var(--wg-spacing-lg)"
+          ".wg-inbox-meta": {
+            "display": "flex",
+            "justify-content": "space-between",
+            "align-items": "baseline",
+            "gap": "var(--wg-spacing)"
           },
-          ".wg-inbox-email": {
-            "border-top": "var(--wg-border-width) solid var(--wg-border)",
-            "padding": "var(--wg-spacing)"
+          ".wg-inbox-account": {
+            "flex-basis": "100%"
           },
-          ".wg-inbox-sender": {
-            "color": "var(--wg-accent)"
+          ".wg-inbox-star": {
+            "color": "var(--wg-warning)"
           }
         }
       }
     }
-  ]
+  ],
+  "settings": {
+    "defaultThemes": {
+      "light": "google-light",
+      "dark": "google-dark"
+    },
+    "resourceDomains": [
+      "https://api.dicebear.com",
+      "https://*.pravatar.cc"
+    ]
+  }
 }

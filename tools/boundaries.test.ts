@@ -266,13 +266,13 @@ describe("package boundaries", () => {
     for (const peer of Object.keys(mcp.peerDependencies ?? {})) {
       expect(mcp.peerDependenciesMeta?.[peer]?.optional, peer).toBe(true);
     }
-    // The ./sdk entry is built on SDK 2.x: its server package, ext-apps 2 and
-    // a zod with Standard JSON Schema; never the superseded 1.x package.
-    expect(mcp.peerDependencies).toMatchObject({
+    // The ./sdk entry is built on SDK 2.x: its server package and ext-apps 2,
+    // never the superseded 1.x package. It imports no schema library: the
+    // tools' schemas are the exported definitions.
+    const mcpPeers = Object.entries(mcp.peerDependencies ?? {}).filter(([name]) => !name.startsWith("@azure/"));
+    expect(Object.fromEntries(mcpPeers)).toEqual({
       "@modelcontextprotocol/server": "^2.3.0",
-      "@modelcontextprotocol/ext-apps": "^2",
-      zod: "^4.2.0"
+      "@modelcontextprotocol/ext-apps": "^2"
     });
-    expect(mcp.peerDependencies).not.toHaveProperty(["@modelcontextprotocol/sdk"]);
   });
 });

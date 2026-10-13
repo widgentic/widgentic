@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateDataAgainstSchema, createCatalog, el } from "../index.js";
+import { auditDataSchema, DATA_SCHEMA_TYPES, validateDataAgainstSchema, createCatalog, el } from "../index.js";
 import type { DataSchema } from "../index.js";
 
 const invoiceSchema: DataSchema = {
@@ -158,5 +158,40 @@ describe("bounded pattern checks", () => {
       validateDataAgainstSchema(schema, "a".repeat(10_000) + "b")
     ).toBeUndefined();
     expect(validateDataAgainstSchema(schema, "a".repeat(50) + "b")).toBeDefined();
+  });
+});
+
+describe("auditDataSchema: what the validator would ignore", () => {
+  it("names an unknown type, and the validator indeed lets anything through", () => {
+    const schema: DataSchema = { type: "object", properties: { kind: { type: "banana" }, tags: { type: ["string", "fruit"] } } };
+    expect(auditDataSchema(schema)).toEqual([
+      expect.stringContaining("schema.properties.kind.type: 'banana' is not one of"),
+      expect.stringContaining("schema.properties.tags.type: 'fruit'")
+    ]);
+    expect(validateDataAgainstSchema(schema, { kind: 42 })).toBeUndefined();
+  });
+
+  it("flags patterns it will not run and keywords of the wrong shape, through items", () => {
+    const schema: DataSchema = {
+      type: "array",
+      items: {
+        type: "object",
+        required: "name",
+        enum: "a",
+        properties: { name: { type: "string", pattern: "(a+)+$" }, bad: "string" }
+      }
+    };
+    const warnings = auditDataSchema(schema, "dataSchema");
+    expect(warnings).toEqual([
+      expect.stringContaining("dataSchema.items.enum:"),
+      expect.stringContaining("dataSchema.items.required:"),
+      expect.stringContaining("dataSchema.items.properties.name.pattern: not run"),
+      expect.stringContaining("dataSchema.items.properties.bad: must be a schema object")
+    ]);
+  });
+
+  it("is silent on every supported type and unknown keywords", () => {
+    for (const type of DATA_SCHEMA_TYPES) expect(auditDataSchema({ type })).toEqual([]);
+    expect(auditDataSchema({ type: ["string", "null"], pattern: "^a", required: ["x"], enum: [1], "x-note": true })).toEqual([]);
   });
 });

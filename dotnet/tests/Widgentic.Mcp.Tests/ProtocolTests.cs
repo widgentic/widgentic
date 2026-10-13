@@ -135,9 +135,55 @@ public sealed class ProtocolTests
             Assert.Null(app.ProtocolResource.Meta?["ui"]?["csp"]);
         }
         await using var configured = await TestServer.StartAsync(o => o.ResourceDomains.Add("CDN.example.com "));
-        var declared = Assert.Single(await configured.Client.ListResourcesAsync(cancellationToken: Cancel), r => r.Uri == WidgenticResources.AppTemplateUri);
-        var domains = declared.ProtocolResource.Meta?["ui"]?["csp"]?["resourceDomains"]?.AsArray().Select(d => d!.GetValue<string>());
-        Assert.Equal(["cdn.example.com"], domains);
+        Assert.Equal(["https://cdn.example.com"], await DeclaredAsync(configured));
+    }
+
+    [Fact]
+    public async Task StartupSettingsDeclareTheirDomainsAfterTheOperators()
+    {
+        await using var server = await TestServer.StartAsync(o =>
+        {
+            o.ResourceDomains.Add("assets.example.org");
+            o.UseSettings("""{"resourceDomains":["cdn.example.com","https://assets.example.org"]}""", "test settings");
+        });
+        Assert.Equal(["https://assets.example.org", "https://cdn.example.com"], await DeclaredAsync(server));
+    }
+
+    [Fact]
+    public void ARefusedDomainStopsStartup()
+    {
+        var options = new WidgenticOptions();
+        options.ResourceDomains.Add("http://cdn.example.com");
+        var refused = Assert.Throws<WidgenticConfigurationException>(() => WidgenticEngine.Create(options).Dispose());
+        var problem = Assert.Single(refused.Problems);
+        Assert.Equal(("resourceDomains", "ResourceDomains[0]", "INVALID_DOMAIN"), (problem.Section, problem.Source, problem.Code));
+
+        var settings = new WidgenticOptions().UseSettings("""{"resourceDomains":["localhost"]}""", "test settings");
+        var refusedSetting = Assert.Throws<WidgenticConfigurationException>(() => WidgenticEngine.Create(settings).Dispose());
+        Assert.Equal(("settings", "test settings", "INVALID_DOMAIN"), (refusedSetting.Problems[0].Section, refusedSetting.Problems[0].Source, refusedSetting.Problems[0].Code));
+    }
+
+    /// <summary>The app resource's declared domains on <c>resources/list</c>, asserted equal to those on <c>resources/read</c>.</summary>
+    internal static async Task<string[]> DeclaredAsync(TestServer server)
+    {
+        var listed = Assert.Single(await server.Client.ListResourcesAsync(cancellationToken: Cancel), r => r.Uri == WidgenticResources.AppTemplateUri);
+        var read = Assert.Single((await server.Client.ReadResourceAsync(WidgenticResources.AppTemplateUri, cancellationToken: Cancel)).Contents);
+        string[] Domains(JsonObject? meta) => [.. meta?["ui"]?["csp"]?["resourceDomains"]?.AsArray().Select(d => d!.GetValue<string>()) ?? []];
+        var declared = Domains(listed.ProtocolResource.Meta);
+        Assert.Equal(declared, Domains(read.Meta));
+        return declared;
+    }
+
+    [Fact]
+    public async Task AsksTheHostForNoBorder()
+    {
+        await using var server = await TestServer.StartAsync();
+        var app = Assert.Single(await server.Client.ListResourcesAsync(cancellationToken: Cancel), r => r.Uri == WidgenticResources.AppTemplateUri);
+        Assert.False(app.ProtocolResource.Meta?["ui"]?["prefersBorder"]?.GetValue<bool>());
+        var read = await server.Client.ReadResourceAsync(WidgenticResources.AppTemplateUri, cancellationToken: Cancel);
+        var content = Assert.Single(read.Contents);
+        Assert.False(content.Meta?["ui"]?["prefersBorder"]?.GetValue<bool>());
+        Assert.Null(content.Meta?["ui"]?["csp"]);
     }
 
     [Fact]

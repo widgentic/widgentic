@@ -4,11 +4,18 @@
  * page without a bundler can host the designers. Bundler users import the
  * package root instead.
  */
-import { defineActionDesignerElement, defineDesignerElement, defineSchemaDesignerElement, defineThemeDesignerElement } from "./index.js";
+import {
+  defineActionDesignerElement,
+  defineDesignerElement,
+  defineSchemaDesignerElement,
+  defineSettingsDesignerElement,
+  defineThemeDesignerElement
+} from "./index.js";
 
 defineActionDesignerElement();
 defineDesignerElement();
 defineSchemaDesignerElement();
 defineThemeDesignerElement();
+defineSettingsDesignerElement();
 
 export {};

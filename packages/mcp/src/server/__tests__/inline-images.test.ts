@@ -5,6 +5,7 @@ import {
   inlineImagesInHtml,
   inlineRenderResultImages
 } from "../inline-images.js";
+import { parseResourceDomains } from "@widgentic/core";
 import { isPrivateAddress } from "../guarded-fetch.js";
 import type { InlineImageDeps } from "../inline-images.js";
 
@@ -383,44 +384,84 @@ describe("DNS-rebinding pinning", () => {
   });
 });
 
-describe("declared resource domains skip inlining", () => {
-  it("a declared host stays a URL while an undeclared one inlines", async () => {
+describe("declared resource domains are inlined last", () => {
+  const declared = (...entries: string[]) => parseResourceDomains(entries).domains;
+  const img = (url: string) => `<img class="wg-img wg-img-thumb" src="${url}" alt="x">`;
+
+  it("a declared source is inlined when room remains, exactly as an undeclared one", async () => {
     const calls: string[] = [];
-    const html =
-      '<img src="https://cdn.example/keep.png" alt="k">' +
-      '<img src="https://other.example/inline.png" alt="i">';
-    const out = await inlineImagesInHtml(html, {
-      ...deps(pngFetch(calls)),
-      skipHosts: new Set(["cdn.example"])
-    });
-    expect(calls).toEqual(["https://other.example/inline.png"]);
-    expect(out).toContain("https://cdn.example/keep.png");
-    expect(out).not.toContain("https://other.example/inline.png");
-    expect(out).toContain("data:image/png;base64,");
+    const html = img("https://cdn.example.com/keep.png") + img("https://other.example/inline.png");
+    const out = await inlineImagesInHtml(html, { ...deps(pngFetch(calls)), declaredDomains: declared("cdn.example.com") });
+    expect(calls.sort()).toEqual(["https://cdn.example.com/keep.png", "https://other.example/inline.png"]);
+    expect(out).not.toContain("https://");
   });
 
-  it("the result-level pass honors the skip across html and tree", async () => {
+  it("undeclared sources take the cap first; declared leftovers keep their URLs unfetched", async () => {
     const calls: string[] = [];
+    const declaredUrls = Array.from({ length: 10 }, (_v, n) => `https://cdn.example.com/d${n}.png`);
+    const undeclaredUrls = Array.from({ length: 20 }, (_v, n) => `https://u${n}.example.org/u.png`);
+    const html = [...declaredUrls, ...undeclaredUrls].map(img).join("");
+    const out = await inlineImagesInHtml(html, { ...deps(pngFetch(calls)), declaredDomains: declared("cdn.example.com") });
+    expect(calls).toHaveLength(24);
+    for (const url of undeclaredUrls) expect(calls).toContain(url);
+    expect(calls.filter((url) => url.includes("cdn.example.com"))).toEqual(declaredUrls.slice(0, 4));
+    for (const url of declaredUrls.slice(4)) expect(out).toContain(url);
+    for (const url of [...undeclaredUrls, ...declaredUrls.slice(0, 4)]) expect(out).not.toContain(url);
+  });
+
+  it("a wildcard covers subdomains at any depth, never its apex", async () => {
+    const calls: string[] = [];
+    const others = Array.from({ length: 22 }, (_v, n) => `https://o${n}.example.org/o.png`);
+    const html = [
+      "https://a.example.com/w.png",
+      "https://a.b.example.com/w.png",
+      ...others,
+      "https://example.com/apex.png"
+    ].map(img).join("");
+    await inlineImagesInHtml(html, { ...deps(pngFetch(calls)), declaredDomains: declared("https://*.example.com") });
+    // The apex ranks as undeclared, ahead of the two declared subdomains despite coming last.
+    expect(calls).toContain("https://example.com/apex.png");
+    expect(calls).toContain("https://a.example.com/w.png");
+    expect(calls).not.toContain("https://a.b.example.com/w.png");
+  });
+
+  it("the stderr note counts declared leftovers apart, with no URL", async () => {
+    const lines: string[] = [];
+    const original = console.error;
+    console.error = (line: unknown) => lines.push(String(line));
+    try {
+      const html = [
+        ...Array.from({ length: 26 }, (_v, n) => `https://u${n}.example.org/u.png`),
+        ...Array.from({ length: 6 }, (_v, n) => `https://cdn.example.com/d${n}.png`)
+      ].map(img).join("");
+      await inlineImagesInHtml(html, { ...deps(pngFetch()), declaredDomains: declared("cdn.example.com") });
+    } finally {
+      console.error = original;
+    }
+    expect(lines).toEqual([
+      "widgentic: 2 image source(s) left external (fetch cap: 2, byte budget: 0), and 6 on declared resource domains (fetch cap: 6, byte budget: 0)"
+    ]);
+  });
+
+  it("the result-level pass keeps a declared leftover external in html and tree alike", async () => {
+    const calls: string[] = [];
+    const undeclaredUrls = Array.from({ length: 24 }, (_v, n) => `https://u${n}.example.org/u.png`);
+    const keep = "https://cdn.example.com/keep.png";
+    const urls = [keep, ...undeclaredUrls];
     const result = {
       structuredContent: {
-        html: '<img src="https://cdn.example/keep.png" alt="k"><img src="https://other.example/i.png" alt="i">',
-        tree: {
-          tag: "div",
-          children: [
-            { tag: "img", attrs: { src: "https://cdn.example/keep.png" } },
-            { tag: "img", attrs: { src: "https://other.example/i.png" } }
-          ]
-        }
+        html: urls.map(img).join(""),
+        tree: { tag: "div", children: urls.map((src) => ({ tag: "img", attrs: { src, class: "wg-img wg-img-thumb" } })) }
       } as Record<string, unknown>,
       content: []
     };
-    await inlineRenderResultImages(result, {
-      ...deps(pngFetch(calls)),
-      skipHosts: new Set(["cdn.example"])
-    });
-    expect(calls).toEqual(["https://other.example/i.png"]);
+    await inlineRenderResultImages(result, { ...deps(pngFetch(calls)), declaredDomains: declared("cdn.example.com") });
+    expect(calls).not.toContain(keep);
     const html = String(result.structuredContent.html);
-    expect(html).toContain("https://cdn.example/keep.png");
-    expect(html).toContain("data:image/png;base64,");
+    expect(html).toContain(keep);
+    expect(html).not.toContain("https://u0.example.org");
+    const tree = result.structuredContent.tree as { children: { attrs: { src: string } }[] };
+    expect(tree.children[0]?.attrs.src).toBe(keep);
+    expect(tree.children[1]?.attrs.src).toMatch(/^data:image\/png/);
   });
 });

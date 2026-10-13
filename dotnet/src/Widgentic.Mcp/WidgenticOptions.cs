@@ -9,15 +9,22 @@ public sealed class WidgenticOptions
     internal List<ConfigEntry> Widgets { get; } = [];
     internal List<ConfigEntry> Themes { get; } = [];
     internal List<ConfigEntry> Schemas { get; } = [];
+
+    /// <summary>The settings record and where it came from, or null for none.</summary>
+    internal ConfigEntry? SettingsEntry { get; private set; }
     internal List<WidgenticConfigurationProblem> ParseProblems { get; } = [];
 
     /// <summary>The widgentic tools to expose. Default: <see cref="WidgenticTools.Default"/>.</summary>
     public WidgenticTools Tools { get; set; } = WidgenticTools.Default;
 
     /// <summary>
-    /// Hosts the MCP Apps frame may load assets from directly, declared as the app resource's
-    /// <c>_meta.ui.csp.resourceDomains</c>. Deployment configuration only: no widget, theme or
-    /// render input can extend it. Empty by default.
+    /// Domains the MCP Apps frame may load assets from directly (<c>cdn.example.com</c>,
+    /// <c>*.example.com</c>, either with <c>https://</c>), declared on the app resource's
+    /// <c>_meta.ui.csp.resourceDomains</c> as canonical origins, followed by the settings record's
+    /// <c>resourceDomains</c> section (the caller's, with a catalog source). Read by the bundle's
+    /// resource-domain rule: a refused entry stops startup. No widget, theme or render input can
+    /// extend the list. Empty by default. This package does not inline images, so in hosts that
+    /// enforce <c>img-src</c> a declared domain is the only way an external image displays.
     /// </summary>
     public IList<string> ResourceDomains { get; } = new List<string>();
 
@@ -38,6 +45,12 @@ public sealed class WidgenticOptions
     public TimeSpan CallTimeout { get; set; } = TimeSpan.FromSeconds(2);
 
     /// <summary>
+    /// How a caller's catalog from an <see cref="IWidgenticCatalogSource"/> combines with the
+    /// entries configured here, unless the catalog sets its own. Default: <see cref="WidgenticComposition.Merge"/>.
+    /// </summary>
+    public WidgenticComposition PrincipalComposition { get; set; } = WidgenticComposition.Merge;
+
+    /// <summary>
     /// Add widget definitions in the designer's export shape (<c>{ kind, template, descriptor, load? }</c>):
     /// one JSON object, or a JSON array of them.
     /// </summary>
@@ -50,7 +63,7 @@ public sealed class WidgenticOptions
     /// <param name="path">A directory of designer exports, one definition or an array per file.</param>
     public WidgenticOptions AddWidgetsFromDirectory(string path) => AddFromDirectory(path, AddWidget);
 
-    /// <summary>Add theme entries (<c>{ name, label?, description?, extends?, tokens }</c>): one object or an array.</summary>
+    /// <summary>Add theme entries (<c>{ name, label?, description?, tokens, styles? }</c>): one object or an array.</summary>
     /// <param name="json">The theme JSON.</param>
     /// <param name="source">Where it came from, named in configuration errors.</param>
     public WidgenticOptions AddTheme(string json, string? source = null) =>
@@ -69,6 +82,33 @@ public sealed class WidgenticOptions
     /// <summary>Add every <c>*.json</c> file in <paramref name="path"/> (ordinal file-name order) as shared schema entries.</summary>
     /// <param name="path">A directory of shared schemas, one entry or an array per file.</param>
     public WidgenticOptions AddSchemasFromDirectory(string path) => AddFromDirectory(path, AddSchema);
+
+    /// <summary>
+    /// Set the settings record, in the store's shape (<c>{ "defaultThemes": { "light"?, "dark"? } }</c>):
+    /// its default themes stand in for the built-ins when a render names no theme. The bundle
+    /// checks it at startup against the configured themes, and a refused setting stops startup
+    /// like a refused entry. A later call replaces the record.
+    /// </summary>
+    /// <param name="json">The settings record JSON.</param>
+    /// <param name="source">Where it came from, named in configuration errors.</param>
+    public WidgenticOptions UseSettings(string json, string? source = null)
+    {
+        ArgumentNullException.ThrowIfNull(json);
+        source ??= "settings JSON";
+        try
+        {
+            SettingsEntry = new ConfigEntry(JsonNode.Parse(json), source);
+        }
+        catch (JsonException error)
+        {
+            ParseProblems.Add(new WidgenticConfigurationProblem("settings", source, "INVALID_JSON", error.Message));
+        }
+        return this;
+    }
+
+    /// <summary>Set the settings record from a file, named in configuration errors.</summary>
+    /// <param name="path">A JSON file holding the settings record.</param>
+    public WidgenticOptions UseSettingsFromFile(string path) => UseSettings(File.ReadAllText(path), path);
 
     /// <summary>Each file's text, with its path as the source named in configuration errors.</summary>
     private WidgenticOptions AddFromDirectory(string path, Func<string, string?, WidgenticOptions> add)

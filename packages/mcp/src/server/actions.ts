@@ -167,6 +167,17 @@ export async function handleExecuteAction(
   if (!isPlainObject(input.payload) || input.payload.kind !== widget) {
     return errorResult("INVALID_TYPE", "'payload' must be the widget's current payload (kind must match 'widget').", "payload");
   }
+  // Optional, but never ignored when present and mistyped: a call the
+  // handler cannot read as sent is refused before anything runs.
+  if (input.args !== undefined && !isPlainObject(input.args)) {
+    return errorResult("INVALID_TYPE", "'args' must be an object of the binding's declared arguments.", "args");
+  }
+  if (input.at !== undefined && typeof input.at !== "string") {
+    return errorResult("INVALID_TYPE", "'at' must be a string locating a group item (data.items.<index>).", "at");
+  }
+  if (input.item !== undefined && typeof input.item !== "string") {
+    return errorResult("INVALID_TYPE", "'item' must be the group item's kind.", "item");
+  }
   const payload = input.payload;
   const args = isPlainObject(input.args) ? input.args : {};
   // Inside a group render the bound element belongs to an ITEM: `at`
@@ -266,7 +277,13 @@ export async function handleExecuteAction(
   const renderInput: Record<string, unknown> = { widget, data: rootData };
   if (payload.hints !== undefined) renderInput.hints = payload.hints;
   if (payload.meta !== undefined) renderInput.meta = payload.meta;
-  if (payload.theme !== undefined) renderInput.theme = payload.theme;
+  // A named theme resolves again from the caller's registry (tokens AND
+  // styles); one that no longer exists falls back to the held token map.
+  const themeName = typeof payload.themeName === "string" && options.themes?.get(payload.themeName) !== undefined
+    ? payload.themeName
+    : undefined;
+  if (themeName !== undefined) renderInput.theme = themeName;
+  else if (payload.theme !== undefined) renderInput.theme = payload.theme;
   const rendered = handleRenderWidget(catalog, renderInput, {
     slim: true,
     themes: options.themes,

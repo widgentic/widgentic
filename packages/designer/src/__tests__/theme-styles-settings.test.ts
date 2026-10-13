@@ -1,0 +1,531 @@
+// @vitest-environment happy-dom
+import { beforeEach, describe, expect, it } from "vitest";
+import { RESOURCE_DOMAIN_LIMIT } from "@widgentic/core";
+import type { ThemeEntry } from "@widgentic/core";
+import {
+  createDesigner,
+  createSchemaDesigner,
+  createSettingsDesigner,
+  createThemeDesigner,
+  defineSettingsDesignerElement
+} from "../index.js";
+import type { SettingsRecord, WidgetDefinition } from "../index.js";
+import { upgradeProperty } from "../element.js";
+
+beforeEach(() => {
+  document.body.innerHTML = "";
+  document.head.innerHTML = "";
+});
+
+function host(): HTMLElement {
+  const el = document.createElement("div");
+  document.body.appendChild(el);
+  return el;
+}
+
+function sectionTitled(root: Element, title: string): HTMLElement {
+  const found = [...root.querySelectorAll(".wgd-section")].find((section) =>
+    section.querySelector(".wgd-section-title, summary, h3")?.textContent?.includes(title)
+  );
+  if (found === undefined) throw new Error(`No section titled '${title}'`);
+  return found as HTMLElement;
+}
+
+function change(control: HTMLInputElement | HTMLSelectElement, value: string): void {
+  control.value = value;
+  control.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+describe("theme designer styles", () => {
+  it("edits styles with the widget designer's Tree and JSON tabs", () => {
+    const root = host();
+    const designer = createThemeDesigner(root);
+    const styles = sectionTitled(root, "Styles");
+    expect([...styles.querySelectorAll(".wgd-tab")].map((tab) => tab.textContent)).toEqual(["Tree", "JSON"]);
+
+    (styles.querySelector(".wgd-st-add") as HTMLButtonElement).click();
+    change(styles.querySelector(".wgd-st-selector") as HTMLInputElement, ".wg-btn");
+    (styles.querySelector('button[title="Add declaration"]') as HTMLButtonElement).click();
+    change(styles.querySelector(".wgd-st-prop") as HTMLInputElement, "padding");
+    change(styles.querySelector(".wgd-st-value") as HTMLInputElement, "4px 8px");
+
+    expect(designer.getTheme().styles).toEqual({ ".wg-btn": { padding: "4px 8px" } });
+    // The JSON view shows the same value.
+    const json = styles.querySelector("textarea") as HTMLTextAreaElement;
+    expect(JSON.parse(json.value)).toEqual({ ".wg-btn": { padding: "4px 8px" } });
+  });
+
+  it("sits under the preview, as in the widget designer, and goes inert when read-only", () => {
+    const root = host();
+    const designer = createThemeDesigner(root);
+    const styles = sectionTitled(root, "Styles");
+    const side = root.querySelector(".wgd-side") as HTMLElement;
+    expect(styles.parentElement).toBe(side);
+    // Preview kind selector, then the preview, then Styles — nothing between.
+    expect(styles.previousElementSibling?.classList.contains("wgd-preview-pane")).toBe(true);
+    expect(root.querySelector(".wgd-panels")?.contains(styles)).toBe(false);
+    designer.setReadOnly(true);
+    expect(styles.querySelector(".wgd-section-body")?.hasAttribute("inert")).toBe(true);
+    designer.setReadOnly(false);
+    expect(styles.querySelector(".wgd-section-body")?.hasAttribute("inert")).toBe(false);
+  });
+
+  it("refuses a malformed map in the JSON tab and treats an empty one as no styles", () => {
+    const root = host();
+    const designer = createThemeDesigner(root, {
+      initialTheme: { name: "brand", tokens: {}, styles: { ".wg-btn": { padding: "4px" } } }
+    });
+    const json = sectionTitled(root, "Styles").querySelector("textarea") as HTMLTextAreaElement;
+    json.value = '{".wg-btn": "padding: 4px"}';
+    json.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(designer.getTheme().styles).toEqual({ ".wg-btn": { padding: "4px" } });
+    expect(sectionTitled(root, "Styles").textContent).toContain("Styles must map selectors to objects");
+    json.value = "{}";
+    json.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(designer.getTheme()).not.toHaveProperty("styles");
+  });
+
+  it("clears the JSON tab's parse error once a valid value arrives another way", () => {
+    const root = host();
+    const designer = createThemeDesigner(root, { initialTheme: { name: "brand", tokens: {} } });
+    const styles = () => sectionTitled(root, "Styles");
+    const json = styles().querySelector("textarea") as HTMLTextAreaElement;
+    json.value = '{".wg-btn": "padding: 4px"}';
+    json.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(styles().textContent).toContain("Styles must map selectors to objects");
+    expect(designer.loadTheme({ name: "brand", tokens: {}, styles: { ".wg-a": { color: "red" } } }).ok).toBe(true);
+    expect(styles().textContent).not.toContain("Styles must map selectors to objects");
+    expect(json.value).toContain(".wg-a");
+  });
+
+  it("gates the widget designer's JSON tab on the styles shape too", () => {
+    const root = host();
+    const designer = createDesigner(root);
+    const before = designer.getDraft().descriptor.styles;
+    const json = sectionTitled(root, "Styles").querySelector("textarea") as HTMLTextAreaElement;
+    json.value = '{".wg-btn": "padding: 4px"}';
+    json.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(designer.getDraft().descriptor.styles).toEqual(before);
+    expect(sectionTitled(root, "Styles").textContent).toContain("Styles must map selectors to objects");
+    json.value = "{}";
+    json.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(designer.getDraft().descriptor).not.toHaveProperty("styles");
+  });
+
+  it("resolves diagnostics against the host's shared schemas, for the draft and for a check", () => {
+    const inbox = { name: "email-inbox", schema: { type: "object", properties: { unreadCount: { type: "number" } } } };
+    const referencing = (example: unknown): WidgetDefinition => ({
+      kind: "inbox-card",
+      template: { tag: "div", children: [{ bind: "unreadCount" }] },
+      descriptor: { description: "d", dataShape: "{ unreadCount }", dataSchemaRef: "email-inbox", dataExample: example } as WidgetDefinition["descriptor"]
+    });
+    const designer = createDesigner(host(), { schemas: [inbox], initialWidget: referencing({ unreadCount: 3 }) });
+    expect(designer.getDiagnostics().schemaRef).toBeUndefined();
+    const checked = designer.checkWidget(referencing({ unreadCount: "three" }));
+    expect(checked.ok && checked.diagnostics.example?.code).toBe("INVALID_TYPE");
+    expect(designer.getDraft().descriptor.dataExample).toEqual({ unreadCount: 3 });
+    expect(designer.checkWidget({ ...referencing({}), kind: "table" }).ok).toBe(false);
+  });
+
+  it("calls a reference unknown only against schemas the host supplied", () => {
+    const referencing: WidgetDefinition = {
+      kind: "inbox-card",
+      template: { tag: "div", children: ["x"] },
+      descriptor: { description: "d", dataShape: "{}", dataSchemaRef: "email-inbox" } as WidgetDefinition["descriptor"]
+    };
+    expect(createDesigner(host(), { initialWidget: referencing }).getDiagnostics().schemaRef).toBeUndefined();
+    expect(createDesigner(host(), { initialWidget: referencing, schemas: [] }).getDiagnostics().schemaRef).toContain("'email-inbox'");
+  });
+
+  it("shows the empty state, with the problem in the banner, for a malformed initial kind", () => {
+    const root = host();
+    createDesigner(root, {
+      initialWidget: { kind: "my widget", template: { tag: "div", children: ["hi"] }, descriptor: { description: "d", dataShape: "s" } }
+    });
+    expect(root.querySelector(".wgd-preview .wgd-preview-empty")).not.toBeNull();
+    expect(root.querySelector(".wgd-banner")?.textContent).toContain("INVALID_IDENTIFIER");
+  });
+
+  it("keeps the widget's own styles inside the preview, as its theme's are", () => {
+    const root = host();
+    const outside = document.createElement("p");
+    outside.className = "wg-title";
+    document.body.appendChild(outside);
+    createDesigner(root, {
+      initialWidget: {
+        kind: "titled",
+        template: { tag: "h2", attrs: { class: "wg-title" }, children: ["In the preview"] },
+        descriptor: { description: "d", dataShape: "{}", styles: { ".wg-title": { color: "rgb(1, 2, 3)" } } }
+      }
+    });
+    const inside = root.querySelector(".wgd-preview .wg-title");
+    if (inside === null) throw new Error("the draft did not mount");
+    expect(getComputedStyle(inside).color).toBe("rgb(1, 2, 3)");
+    expect(getComputedStyle(outside).color).not.toBe("rgb(1, 2, 3)");
+  });
+
+  it("shows what the validator would ignore in a schema, in both designers", () => {
+    const schemaRoot = host();
+    const schemaDesigner = createSchemaDesigner(schemaRoot);
+    const warning = () => [...schemaRoot.querySelectorAll<HTMLElement>(".wgd-diagnostic")].map((el) => (el.hidden ? "" : el.textContent ?? "")).join("\n");
+    expect(warning()).not.toContain("banana");
+    expect(schemaDesigner.loadSchema({ name: "fruit", schema: { type: "banana" } })).toEqual({ ok: true });
+    expect(warning()).toContain("schema.type: 'banana'");
+    schemaDesigner.loadSchema({ name: "fruit", schema: { type: "string" } });
+    expect(warning()).not.toContain("banana");
+
+    const widgetRoot = host();
+    const designer = createDesigner(widgetRoot);
+    const draft = designer.getDraft();
+    expect(designer.loadWidget({ kind: "fruit-card", template: draft.template, descriptor: { ...draft.descriptor, dataSchema: { type: "banana" } } }).ok).toBe(true);
+    expect(sectionTitled(widgetRoot, "Data schema").textContent).toContain("dataSchema.type: 'banana'");
+  });
+
+  it("flags a name saving would refuse as it is typed, and refuses it on import", () => {
+    const root = host();
+    const designer = createThemeDesigner(root);
+    const name = [...root.querySelectorAll(".wgd-field")].find((field) => field.textContent?.startsWith("Name (id)"))?.querySelector("input") as HTMLInputElement;
+    name.value = "dark";
+    name.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(sectionTitled(root, "Theme").textContent).toContain("RESERVED_THEME");
+    name.value = "ocean";
+    name.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(sectionTitled(root, "Theme").textContent).not.toContain("RESERVED_THEME");
+    expect(designer.loadTheme({ name: "my theme", tokens: {} }).ok).toBe(false);
+    expect(designer.getTheme().name).toBe("ocean");
+  });
+
+  it("omits styles from the export when emptied and round-trips them otherwise", () => {
+    const entry: ThemeEntry = { name: "brand", tokens: { accent: "#ff5a1f" }, styles: { ".wg-btn": { padding: "4px" } } };
+    const designer = createThemeDesigner(host(), { initialTheme: entry });
+    expect(designer.getTheme()).toEqual(entry);
+    expect(designer.loadTheme({ name: "plain", tokens: {} })).toEqual({ ok: true });
+    expect(designer.getTheme()).not.toHaveProperty("styles");
+    const refused = designer.loadTheme({ name: "bad", tokens: {}, styles: { ".wg-btn": "padding: 4px" } });
+    expect(refused.ok).toBe(false);
+    expect(designer.getTheme().name).toBe("plain");
+  });
+
+  it("dresses the preview with the theme's styles", () => {
+    const root = host();
+    createThemeDesigner(root, {
+      initialTheme: { name: "brand", tokens: {}, styles: { ".wg-card-title": { color: "rgb(1, 2, 3)" } } }
+    });
+    const title = root.querySelector(".wgd-preview .wg-card-title");
+    if (title === null) throw new Error("the card preview did not mount");
+    expect(getComputedStyle(title).color).toBe("rgb(1, 2, 3)");
+  });
+
+  it("flags entries the renderer would drop and keeps them out of the preview", () => {
+    const root = host();
+    createThemeDesigner(root, {
+      initialTheme: { name: "brand", tokens: {}, styles: { body: { color: "red" }, ".wg-card-title": { color: "rgb(1, 2, 3)" } } }
+    });
+    const styles = sectionTitled(root, "Styles");
+    expect(styles.textContent).toContain("body: Selector would be skipped");
+    const css = [...root.querySelectorAll(".wgd-preview-pane style")].map((el) => el.textContent ?? "").join("\n");
+    expect(css).not.toMatch(/(^|\s)body \{/);
+    expect(css).toContain(".wg-card-title");
+  });
+});
+
+describe("theme styles in the widget designer's preview", () => {
+  const widget: WidgetDefinition = {
+    kind: "pay-card",
+    template: { tag: "button", attrs: { class: "wg-btn" }, children: ["Pay"] },
+    descriptor: { description: "A pay button.", dataShape: "{}", dataExample: {} }
+  };
+  const themes: ThemeEntry[] = [{ name: "brand", tokens: {}, styles: { ".wg-btn": { color: "rgb(1, 2, 3)" } } }];
+
+  function previewColor(definition: WidgetDefinition, theme: string): string {
+    const root = host();
+    createDesigner(root, { initialWidget: definition, themes });
+    change(root.querySelector(".wgd-theme-select") as HTMLSelectElement, theme);
+    const button = root.querySelector(".wgd-preview .wg-btn");
+    if (button === null) throw new Error("the draft did not mount");
+    return getComputedStyle(button).color;
+  }
+
+  it("applies the selected theme's shared class", () => {
+    expect(previewColor(widget, "brand")).toBe("rgb(1, 2, 3)");
+  });
+
+  it("lets the draft's own rule win", () => {
+    const styled = { ...widget, descriptor: { ...widget.descriptor, styles: { ".wg-btn": { color: "rgb(4, 5, 6)" } } } };
+    expect(previewColor(styled, "brand")).toBe("rgb(4, 5, 6)");
+  });
+
+  it("removes the theme's rule when none is chosen and never exports it", () => {
+    const root = host();
+    const designer = createDesigner(root, { initialWidget: widget, themes });
+    const select = root.querySelector(".wgd-theme-select") as HTMLSelectElement;
+    change(select, "brand");
+    const css = () => [...root.querySelectorAll(".wgd-preview-pane style")].map((el) => el.textContent ?? "").join("\n");
+    expect(css()).toContain(".wg-btn");
+    expect(Object.keys(designer.getDraft())).toContain("themeStyles");
+    change(select, "");
+    expect(css()).not.toContain(".wg-btn");
+    expect(designer.getDraft()).not.toHaveProperty("themeStyles");
+  });
+});
+
+describe("a host-chosen preview theme", () => {
+  const widget: WidgetDefinition = {
+    kind: "pay-card",
+    template: { tag: "button", attrs: { class: "wg-btn" }, children: ["Pay"] },
+    descriptor: { description: "A pay button.", dataShape: "{}", dataExample: {} }
+  };
+  const themes: ThemeEntry[] = [
+    { name: "light", tokens: {} },
+    { name: "brand", tokens: {}, styles: { ".wg-btn": { color: "rgb(1, 2, 3)" } } },
+    { name: "night", tokens: { accent: "#0a84ff" } }
+  ];
+  const css = (root: Element) =>
+    [...root.querySelectorAll(".wgd-preview-pane style")].map((el) => el.textContent ?? "").join("\n");
+
+  it("opens with the named entry selected, tokens and styles applied from the first render", () => {
+    const root = host();
+    const designer = createDesigner(root, { initialWidget: widget, themes, previewTheme: "brand" });
+    const select = root.querySelector(".wgd-theme-select") as HTMLSelectElement;
+    expect(select.value).toBe("brand");
+    const button = root.querySelector(".wgd-preview .wg-btn");
+    if (button === null) throw new Error("the draft did not mount");
+    expect(getComputedStyle(button).color).toBe("rgb(1, 2, 3)");
+    expect(designer.getDraft().themeStyles).toEqual({ ".wg-btn": { color: "rgb(1, 2, 3)" } });
+    change(select, "");
+    expect(css(root)).not.toContain(".wg-btn");
+    expect(designer.getDraft()).not.toHaveProperty("theme");
+  });
+
+  it("applies a tokens-only entry and ignores a name it was not given", () => {
+    const night = createDesigner(host(), { initialWidget: widget, themes, previewTheme: "night" });
+    expect(night.getDraft().theme).toEqual({ accent: "#0a84ff" });
+    const root = host();
+    const missing = createDesigner(root, { initialWidget: widget, themes, previewTheme: "missing" });
+    expect((root.querySelector(".wgd-theme-select") as HTMLSelectElement).value).toBe("");
+    expect(missing.getDraft()).not.toHaveProperty("theme");
+  });
+
+  it("loadTheme layers tokens over the chosen theme, which stays chosen; {} returns to it", () => {
+    const root = host();
+    const tide: ThemeEntry = {
+      name: "tide",
+      tokens: { accent: "#0a84ff", bg: "#001b2e" },
+      styles: { ".wg-btn": { color: "rgb(1, 2, 3)" } }
+    };
+    const designer = createDesigner(root, { initialWidget: widget, themes: [...themes, tide], previewTheme: "tide" });
+    const select = root.querySelector(".wgd-theme-select") as HTMLSelectElement;
+    expect(designer.loadTheme({ accent: "#123456" })).toEqual({ ok: true });
+    expect(select.value).toBe("tide");
+    expect(designer.getDraft().theme).toEqual({ accent: "#123456", bg: "#001b2e" });
+    expect(designer.getDraft().themeStyles).toEqual(tide.styles);
+    expect(css(root)).toContain(".wg-btn");
+    expect(designer.loadTheme({})).toEqual({ ok: true });
+    expect(designer.getDraft().theme).toEqual(tide.tokens);
+    expect(select.value).toBe("tide");
+    // With nothing chosen the tokens are the whole preview theme.
+    change(select, "");
+    expect(designer.loadTheme({ accent: "#123456" })).toEqual({ ok: true });
+    expect(select.value).toBe("");
+    expect(designer.getDraft().theme).toEqual({ accent: "#123456" });
+    expect(designer.getDraft()).not.toHaveProperty("themeStyles");
+    expect(css(root)).not.toContain(".wg-btn");
+  });
+  it("keeps the preview theme, styles included, when a widget is loaded", () => {
+    const root = host();
+    const designer = createDesigner(root, { themes, previewTheme: "brand" });
+    expect(designer.loadWidget(widget)).toEqual({ ok: true });
+    expect(designer.getDraft().themeStyles).toEqual({ ".wg-btn": { color: "rgb(1, 2, 3)" } });
+    expect((root.querySelector(".wgd-theme-select") as HTMLSelectElement).value).toBe("brand");
+    expect(css(root)).toContain(".wg-btn");
+  });
+});
+
+describe("settings designer", () => {
+  const themes = [
+    { name: "ocean", label: "Ocean" },
+    { name: "night", label: "Night" }
+  ];
+  const select = (root: Element, mode: "light" | "dark") =>
+    root.querySelector(`select.wgd-default-theme[data-mode="${mode}"]`) as HTMLSelectElement;
+
+  it("mounts on its own and registers its element on the explicit call only", () => {
+    const root = host();
+    createSettingsDesigner(root, { themes });
+    expect(root.querySelector(".wgd-settings-designer")).not.toBeNull();
+    expect(root.querySelector(".wgd-preview-pane")).toBeNull();
+    expect(root.querySelector(".wgd-styles")).toBeNull();
+    expect(customElements.get("widgentic-settings-designer")).toBeUndefined();
+    defineSettingsDesignerElement();
+    const element = document.createElement("widgentic-settings-designer") as HTMLElement & {
+      themes: { name: string; label?: string }[];
+    };
+    element.themes = themes; // before connecting
+    const seen: unknown[] = [];
+    element.addEventListener("widgentic-change", (event) => seen.push((event as CustomEvent).detail));
+    document.body.appendChild(element);
+    expect([...select(element, "light").options].map((option) => option.value)).toEqual(["", "ocean", "night"]);
+    change(select(element, "light"), "ocean");
+    expect(seen.at(-1)).toEqual({ settings: { defaultThemes: { light: "ocean" } } });
+    // ...and after: a theme saved meanwhile becomes a choice, the record stays.
+    element.themes = [...themes, { name: "dusk" }];
+    expect([...select(element, "dark").options].map((option) => option.value)).toEqual(["", "ocean", "night", "dusk"]);
+    change(select(element, "dark"), "dusk");
+    expect(seen.at(-1)).toEqual({ settings: { defaultThemes: { light: "ocean", dark: "dusk" } } });
+  });
+
+  it("keeps themes set on the element before it was defined", () => {
+    defineSettingsDesignerElement("wg-settings-early");
+    const early = document.createElement("wg-settings-early") as HTMLElement & { themes: { name: string }[] };
+    // What an element set up before its definition loaded carries at upgrade:
+    // an own data property shadowing the accessor (happy-dom does not
+    // upgrade, so the shadowing is made by hand; Chrome is probed in TESTING.md).
+    Object.defineProperty(early, "themes", { value: themes, writable: true, configurable: true, enumerable: true });
+    upgradeProperty(early, "themes");
+    expect(Object.prototype.hasOwnProperty.call(early, "themes")).toBe(false);
+    document.body.appendChild(early);
+    expect([...select(early, "light").options].map((option) => option.value)).toEqual(["", "ocean", "night"]);
+  });
+  it("choosing defaults edits the record and notifies", () => {
+    const root = host();
+    const designer = createSettingsDesigner(root, { themes });
+    const heard: SettingsRecord[] = [];
+    designer.subscribe((settings) => heard.push(settings));
+    change(select(root, "light"), "ocean");
+    change(select(root, "dark"), "night");
+    expect(designer.getSettings()).toEqual({ defaultThemes: { light: "ocean", dark: "night" } });
+    expect(heard.at(-1)).toEqual({ defaultThemes: { light: "ocean", dark: "night" } });
+    change(select(root, "dark"), "");
+    expect(designer.getSettings()).toEqual({ defaultThemes: { light: "ocean" } });
+  });
+
+  it("offers the built-in first and lets one theme serve both modes", () => {
+    const root = host();
+    const designer = createSettingsDesigner(root, { themes });
+    expect([...select(root, "light").options].map((o) => o.textContent)).toEqual(["Built-in light", "Ocean", "Night"]);
+    expect([...select(root, "dark").options].map((o) => o.textContent)).toEqual(["Built-in dark", "Ocean", "Night"]);
+    change(select(root, "light"), "ocean");
+    change(select(root, "dark"), "ocean");
+    expect(designer.getSettings()).toEqual({ defaultThemes: { light: "ocean", dark: "ocean" } });
+  });
+
+  it("shows a missing theme as unavailable instead of dropping it", () => {
+    const root = host();
+    const designer = createSettingsDesigner(root, { themes });
+    expect(designer.loadSettings({ defaultThemes: { dark: "gone" } })).toEqual({ ok: true });
+    const dark = select(root, "dark");
+    expect(dark.value).toBe("gone");
+    expect(dark.selectedOptions[0]?.textContent).toBe("gone (unavailable)");
+    expect(designer.getSettings()).toEqual({ defaultThemes: { dark: "gone" } });
+    change(dark, "night");
+    expect(designer.getSettings()).toEqual({ defaultThemes: { dark: "night" } });
+  });
+
+  it("passes sections it does not edit through untouched", () => {
+    const root = host();
+    const designer = createSettingsDesigner(root, {
+      themes,
+      initialSettings: { defaultThemes: { light: "ocean" }, fonts: { body: "Inter" } }
+    });
+    change(select(root, "light"), "night");
+    expect(designer.getSettings()).toEqual({ defaultThemes: { light: "night" }, fonts: { body: "Inter" } });
+  });
+
+  it("refuses a malformed record without changing the current one", () => {
+    const designer = createSettingsDesigner(host(), { themes, initialSettings: { defaultThemes: { light: "ocean" } } });
+    expect(designer.loadSettings({ defaultThemes: { sepia: "ocean" } }).ok).toBe(false);
+    expect(designer.loadSettings([]).ok).toBe(false);
+    expect(designer.getSettings()).toEqual({ defaultThemes: { light: "ocean" } });
+  });
+
+  it("is visible but inert when read-only", () => {
+    const root = host();
+    const designer = createSettingsDesigner(root, {
+      themes,
+      readOnly: true,
+      initialSettings: { defaultThemes: { light: "night" }, resourceDomains: ["https://cdn.example.com"] }
+    });
+    expect(select(root, "light").value).toBe("night");
+    expect(select(root, "light").closest("[inert]")).not.toBeNull();
+    const domain = root.querySelector<HTMLInputElement>("input.wgd-domain");
+    expect(domain?.value).toBe("https://cdn.example.com");
+    expect(domain?.closest("[inert]")).not.toBeNull();
+    expect(root.querySelector("input.wgd-domain-add")?.closest("[inert]")).not.toBeNull();
+    designer.setReadOnly(false);
+    expect(select(root, "light").closest("[inert]")).toBeNull();
+    expect(domain?.closest("[inert]")).toBeNull();
+  });
+
+  describe("resource domains", () => {
+    const addInput = (root: Element) => root.querySelector("input.wgd-domain-add") as HTMLInputElement;
+    const addButton = (root: Element) => root.querySelector('button[title="Add domain"]') as HTMLButtonElement;
+    const add = (root: Element, value: string) => {
+      addInput(root).value = value;
+      addButton(root).click();
+    };
+    const entries = (root: Element) => [...root.querySelectorAll<HTMLElement>(".wgd-domain-entry")];
+
+    it("records an added domain in its canonical form and shows it", () => {
+      const root = host();
+      const designer = createSettingsDesigner(root, { themes });
+      const heard: SettingsRecord[] = [];
+      designer.subscribe((settings) => heard.push(settings));
+      add(root, "CDN.example.com");
+      expect(designer.getSettings().resourceDomains).toEqual(["https://cdn.example.com"]);
+      expect(heard.at(-1)?.resourceDomains).toEqual(["https://cdn.example.com"]);
+      expect(entries(root)[0]?.querySelector("input")?.value).toBe("https://cdn.example.com");
+      expect(entries(root)[0]?.querySelector(".wgd-domain-origin")?.textContent).toBe("https://cdn.example.com");
+      expect(addInput(root).value).toBe("");
+    });
+
+    it("keeps an invalid domain as typed and marks it with the rule's reason", () => {
+      const root = host();
+      const designer = createSettingsDesigner(root, { themes });
+      add(root, "http://cdn.example.com");
+      expect(designer.getSettings().resourceDomains).toEqual(["http://cdn.example.com"]);
+      const mark = entries(root)[0]?.querySelector(".wgd-diagnostic");
+      expect(mark?.textContent).toContain("only https://");
+      // Fixing it in place records the canonical form and clears the mark.
+      change(entries(root)[0]?.querySelector("input") as HTMLInputElement, "https://cdn.example.com/");
+      expect(designer.getSettings().resourceDomains).toEqual(["https://cdn.example.com"]);
+      expect(entries(root)[0]?.querySelector(".wgd-diagnostic")).toBeNull();
+    });
+
+    it("carries an emptied list so a save clears it, and adds none unasked", () => {
+      const root = host();
+      const designer = createSettingsDesigner(root, { themes, initialSettings: { resourceDomains: ["https://cdn.example.com"] } });
+      (entries(root)[0]?.querySelector('button[title="Remove domain"]') as HTMLButtonElement).click();
+      expect(designer.getSettings().resourceDomains).toEqual([]);
+      const untouched = createSettingsDesigner(host(), { themes, initialSettings: { defaultThemes: { light: "ocean" } } });
+      expect(untouched.getSettings()).toEqual({ defaultThemes: { light: "ocean" } });
+    });
+
+    it("disables adding at the exported limit and enables it when one is removed", () => {
+      const root = host();
+      const full = Array.from({ length: RESOURCE_DOMAIN_LIMIT }, (_v, n) => `https://cdn${n}.example.com`);
+      const designer = createSettingsDesigner(root, { themes });
+      expect(designer.loadSettings({ resourceDomains: full })).toEqual({ ok: true });
+      expect(addInput(root).disabled).toBe(true);
+      expect(addButton(root).disabled).toBe(true);
+      (entries(root)[0]?.querySelector('button[title="Remove domain"]') as HTMLButtonElement).click();
+      expect(addButton(root).disabled).toBe(false);
+    });
+
+    it("refuses a malformed list on load, keeping the current record", () => {
+      const designer = createSettingsDesigner(host(), { themes, initialSettings: { resourceDomains: ["https://cdn.example.com"] } });
+      const refused = designer.loadSettings({ resourceDomains: "cdn.example.com" });
+      expect(refused.ok).toBe(false);
+      expect(refused.ok ? [] : refused.errors.join("\n")).toContain("resourceDomains");
+      expect(designer.getSettings().resourceDomains).toEqual(["https://cdn.example.com"]);
+    });
+
+    it("states its rule, its limit and the trust a declaration grants", () => {
+      const root = host();
+      createSettingsDesigner(root, { themes });
+      const text = sectionTitled(root, "Resource domains").textContent ?? "";
+      expect(text).toContain(`at most ${RESOURCE_DOMAIN_LIMIT}`);
+      expect(text).toContain("*.example.com");
+      expect(text).toContain("viewer's browser");
+    });
+  });
+});

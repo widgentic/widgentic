@@ -2,7 +2,9 @@
 
 ## Purpose
 Provides the built-in widgets (`card`, `table`, `tree`, `group`) and the registration API hosts use to add kinds without modifying the core. Renderers are pure functions producing a plain-data render tree; separate output layers serialize it to escaped HTML or mount it into the DOM. Rendering validates payloads against the contract using the catalog's registered kinds.
+
 ## Requirements
+
 ### Requirement: Built-in widget kinds
 The system SHALL provide built-in widgets: `card`, `table`, `tree`, and `group`. Each built-in widget MUST document the shape of `data` and supported `hints`.
 
@@ -373,7 +375,7 @@ The catalog SHALL store a `WidgetDescriptor` per kind — `{ kind, description, 
 - **THEN** `pattern` SHALL produce no violation (type checking is `type`'s concern)
 
 ### Requirement: Registered widget styles
-`WidgetDescriptor` SHALL accept optional `styles`: a map of CSS selectors to property/value maps, letting custom kinds ship their look as data. Every selector part SHALL target a `.wg-`-prefixed class; selectors, property names, and values are guarded (no braces, semicolons, angle brackets, `url(`, or `expression(`), and values MAY reference theme tokens via `var(--wg-*)`. Invalid entries SHALL be skipped, never emitted. `widgetStylesToCss(styles)` SHALL generate the CSS, and styles SHALL be exposed through `describe`/`list` so hosts can inject them.
+`WidgetDescriptor` SHALL accept optional `styles`: a map of CSS selectors to property/value maps, letting custom kinds ship their look as data. Every selector part — split on top-level commas, read outside brackets and quoted strings, so the commas inside `:is()`, `:not()`, `:has()`, `:where()` or an attribute value belong to it — SHALL be held to `.wg-` classes: one of its compounds SHALL name a `.wg-`-prefixed class itself, or through `:is()` or `:where()` whose every argument is so held, nested at most 16 levels so the check is bounded and the generator never throws (a `.wg-` class only inside `:not()`, `:has()`, an attribute test or a string does not count), and no part SHALL open with a combinator; selectors, property names, and values are guarded (no braces, semicolons, angle brackets, `@`, backslashes, comment markers `/*` or `*/`, unclosed brackets or strings — a newline ends a string unclosed, as in CSS — and in values no `url(`, `expression(`, `image-set(` or `src(`), and values MAY reference theme tokens via `var(--wg-*)`. The rules SHALL also be exported as text, `STYLE_RULES`, built from the constants that enforce them, for guides and designer messages to read. Invalid entries SHALL be skipped, never emitted. `widgetStylesToCss(styles)` SHALL generate the CSS, and styles SHALL be exposed through `describe`/`list` so hosts can inject them.
 
 #### Scenario: Styles registered as data generate CSS
 - **WHEN** a kind registers `styles: { ".wg-invoice": { border: "1px solid var(--wg-border, #e2e8f0)" } }`
@@ -385,8 +387,29 @@ The catalog SHALL store a `WidgetDescriptor` per kind — `{ kind, description, 
 - **THEN** the generated CSS SHALL contain none of them
 - **AND** safe sibling entries SHALL still be emitted
 
+#### Scenario: Structural tricks and URL carriers are dropped
+- **WHEN** styles hold `html /* .wg-x */`, `body:not(.wg-x)`, `:is(.wg-a, body)`, `body[data-a=".wg-"]`, `.wg-a, ~ .wg-b`, a value `red /*`, and values calling `image-set(` or `src(`, beside a safe `.wg-row:has(.wg-ok, .wg-warn)` rule
+- **THEN** the generated CSS SHALL contain only the safe rule
+
+#### Scenario: Quoted brackets cannot shift the structure
+- **WHEN** styles hold `.wg-a[title="("], body`, `body:not([title=")"] .wg-x)` and `body:not([x="]].wg-"])`
+- **THEN** the generated CSS SHALL contain none of them
+- **AND** `.wg-a[title="("], .wg-b` scoped to a mode SHALL scope both parts
+
+#### Scenario: Unclosed brackets and strings are dropped
+- **WHEN** styles hold the selectors `.wg-a:is(`, `.wg-a[title` and `.wg-a[title="a⏎b"]` (a newline inside the string), and the values `calc(1px + (2px`, `foo(`, `1px)`, `"open` and `"a⏎b"`
+- **THEN** the generated CSS SHALL contain none of them, and a rule after them in the same sheet SHALL still apply
+
+#### Scenario: Deep nesting is refused without throwing
+- **WHEN** a selector nests `:is(` 2,000 levels deep around `.wg-a`
+- **THEN** `widgetStylesToCss` SHALL return without throwing and SHALL NOT emit it
+
+#### Scenario: Selectors held through :is() and :where() are kept
+- **WHEN** styles hold `:is(.wg-btn, .wg-link):hover`, `:where(.wg-card) h3` and `.wg-a[title="("]` with the value `"("`
+- **THEN** the generated CSS SHALL contain each rule unchanged
+
 ### Requirement: Image rendering in card and table
-The `card` and `table` renderers SHALL render a string value as an image element when it is a safe image source and either auto-detection or a hint selects image treatment. A value auto-detects as an image when `isSafeImageSrc` passes and the value is a `data:image/*` URI or an `http(s)` URL whose pathname ends in `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.avif`, or `.svg` (query strings tolerated). `hints.images: Record<string, "avatar" | "thumb" | "hero" | true | false>` SHALL override per card-field / table-column key: a shape string forces image treatment with that shape, `true` forces the context default shape, and `false` suppresses detection so the value renders as text. Hints SHALL NOT bypass safety: a value failing `isSafeImageSrc` renders as text regardless of hints. The default shape SHALL be `avatar` in table cells and `thumb` in card fields. The emitted element SHALL be `img` with classes `wg-img wg-img-<shape>`, the value as `src`, the field/column key as `alt`, and `loading="lazy"` / `decoding="async"`; image treatment takes precedence over `hints.fieldFormat` for the same key.
+The `card` and `table` renderers SHALL render a string value as an image element when it is a safe image source and either auto-detection or a hint selects image treatment. A value auto-detects as an image when `isSafeImageSrc` passes and the value is a `data:image/*` URI or an `http(s)` URL whose pathname ends in `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.avif`, or `.svg` (query strings tolerated). `hints.images: Record<string, "avatar" | "thumb" | "hero" | true | false>` SHALL override per card-field / table-column key: a shape string forces image treatment with that shape, `true` forces the context default shape, and `false` suppresses detection so the value renders as text. Hints SHALL NOT bypass safety: a value failing `isSafeImageSrc` renders as text regardless of hints. The default shape SHALL be `avatar` in table cells and `thumb` in card fields. The emitted element SHALL be `img` with classes `wg-img wg-img-<shape>`, the value as `src`, the field's or column's label as `alt` when `hints.labels` gives one and its key otherwise, and `loading="lazy"` / `decoding="async"`; image treatment takes precedence over `hints.fieldFormat` for the same key.
 
 #### Scenario: Avatar URL auto-detects in a table cell
 - **WHEN** `table` renders `data: [{ user: "Ada", avatar: "https://cdn.example/a/ada.png" }]`
@@ -413,8 +436,12 @@ The `card` and `table` renderers SHALL render a string value as an image element
 - **WHEN** a field value is `data:image/png;base64,iVBORw0KGgo=` (any valid `data:image/*` payload)
 - **THEN** the field SHALL contain an `img` element with that value as `src`
 
+#### Scenario: A labelled image takes its label as alt text
+- **WHEN** `table` renders `data: [{ avatar_url: "https://cdn.example/a/ada.png" }]` with `hints: { labels: { avatar_url: "Avatar" } }`
+- **THEN** the cell's `img` SHALL carry `alt` `"Avatar"`
+
 ### Requirement: Hint-coherence analysis
-The catalog SHALL export a pure `analyzeHints(kind, data, hints, descriptor)` that inspects a render request without rendering it and returns an array of never-fatal diagnostics `{ hint, code, message, suggestion? }` with codes `UNKNOWN_HINT`, `NO_MATCH`, `INVALID_VALUE`, `UNSAFE_IMAGE_SOURCE`, and `UNSAFE_LINK_TARGET`. It SHALL report: top-level hint keys not advertised in the descriptor's `hints` (adding a `suggestion` when an advertised key is within Levenshtein distance 2); `columns`, `fieldFormat`, `images`, and `links` entries whose key matches no column or field in the supplied `data` (`fieldFormat` validated against columns when `kind` is `"table"`, fields otherwise); `images` values outside `"avatar" | "thumb" | "hero" | true | false`; `links` values that are neither booleans nor strings; values targeted by an image hint that fail `isSafeImageSrc`; values targeted by a `true` link hint that are not strings passing the URL scheme guard, and prefix link hints whose target is not a non-empty string or whose composed href fails the guard; non-number `expandDepth`; and for `kind: "group"`, `layout`/`gap` values outside their preset vocabularies, non-number or out-of-range `columns`, and `columns` supplied without `layout: "grid"`. Analysis SHALL never throw, never mutate inputs, and never affect rendering; renderers SHALL remain unaware of it. An empty or absent `hints` SHALL produce no diagnostics.
+The catalog SHALL export a pure `analyzeHints(kind, data, hints, descriptor)` that inspects a render request without rendering it and returns an array of never-fatal diagnostics `{ hint, code, message, suggestion? }` with codes `UNKNOWN_HINT`, `NO_MATCH`, `INVALID_VALUE`, `UNSAFE_IMAGE_SOURCE`, and `UNSAFE_LINK_TARGET`. It SHALL report: top-level hint keys not advertised in the descriptor's `hints` (adding a `suggestion` when an advertised key is within Levenshtein distance 2); `columns`, `fieldFormat`, `images`, `links`, and `labels` entries whose key matches no column or field in the supplied `data` (`fieldFormat` and `labels` validated against columns when `kind` is `"table"`, fields otherwise); `labels` values that are not non-empty strings; `images` values outside `"avatar" | "thumb" | "hero" | true | false`; `links` values that are neither booleans nor strings; values targeted by an image hint that fail `isSafeImageSrc`; values targeted by a `true` link hint that are not strings passing the URL scheme guard, and prefix link hints whose target is not a non-empty string or whose composed href fails the guard; non-number `expandDepth`; and for `kind: "group"`, `layout`/`gap` values outside their preset vocabularies, non-number or out-of-range `columns`, and `columns` supplied without `layout: "grid"`. Analysis SHALL never throw, never mutate inputs, and never affect rendering; renderers SHALL remain unaware of it. An empty or absent `hints` SHALL produce no diagnostics.
 
 #### Scenario: Unknown hint gets a spelling suggestion
 - **WHEN** `analyzeHints("table", [{ a: 1 }], { colums: ["a"] }, tableDescriptor)` is called
@@ -454,6 +481,11 @@ The catalog SHALL export a pure `analyzeHints(kind, data, hints, descriptor)` th
 - **THEN** `layout` and `gap` SHALL yield `INVALID_VALUE` diagnostics
 - **AND** `columns` SHALL yield `NO_MATCH` because the layout is not `"grid"`
 
+#### Scenario: Label hints are checked against the fields
+- **WHEN** `analyzeHints("card", { fields: { first_name: "Ada" } }, { labels: { first_name: "First Name", last_name: "Last Name", age: 7 } }, cardDescriptor)` is called
+- **THEN** `labels.last_name` SHALL yield `NO_MATCH`, `labels.age` SHALL yield `NO_MATCH`, and `labels.first_name` SHALL produce no diagnostic
+- **AND** `labels: { first_name: "" }` or `labels: { first_name: 1 }` SHALL yield `INVALID_VALUE` for `labels.first_name`, and a non-object `labels` SHALL yield `INVALID_VALUE` for `labels`
+
 ### Requirement: Group items keep their action identity
 When a `group` render composes an item, every action descriptor in that item's rendered subtree SHALL be stamped with `at`: the dotted path of the item's payload within the group payload (`data.items.<i>`). Descriptors keep the `widget` their own template set, so a host can execute an item's binding against the item's kind and fold the result back into the right item. Items without descriptors SHALL render exactly as before, and the `tree`/`html` equivalence of the group render SHALL hold.
 
@@ -464,3 +496,47 @@ When a `group` render composes an item, every action descriptor in that item's r
 #### Scenario: Plain items are untouched
 - **WHEN** a `group` renders items without any action binding
 - **THEN** no subtree SHALL carry a `data-wg-action` attribute and the render SHALL equal a pre-actions group render
+
+### Requirement: Data schemas can be audited for what validation ignores
+The catalog SHALL export `DATA_SCHEMA_TYPES` — the `type` names the data validator checks — and `auditDataSchema(schema, path?)`, which returns, without throwing, a warning per thing the validator would silently ignore: a `type` name outside `DATA_SCHEMA_TYPES` (or a `type` that is neither a name nor a list of names), a `pattern` it refuses to run, and an `enum`, `required`, `properties` or `items` of the wrong shape, recursing into `properties` and `items` with dotted paths from `path` (default `schema`). Unknown keywords SHALL produce no warning (they are forward compatible), and validation itself SHALL stay unchanged.
+
+#### Scenario: An unknown type is named, and validation still ignores it
+- **WHEN** a schema's property `kind` has `type: "banana"`
+- **THEN** `auditDataSchema` SHALL return a warning naming `schema.properties.kind.type` and `'banana'`, and `validateDataAgainstSchema` SHALL accept any value there
+
+#### Scenario: Unrunnable patterns and misshapen keywords are named through items
+- **WHEN** an array schema's `items` has a string `required`, a string `enum`, a nested-quantifier `pattern` on a property, and a property whose schema is a string
+- **THEN** `auditDataSchema(schema, "dataSchema")` SHALL return one warning for each, with paths under `dataSchema.items`
+
+#### Scenario: Supported schemas are silent
+- **WHEN** a schema uses only `DATA_SCHEMA_TYPES`, a runnable `pattern`, well-shaped keywords and an unknown `x-note` keyword
+- **THEN** `auditDataSchema` SHALL return no warnings
+
+### Requirement: Field and column labels
+The `card` and `table` renderers SHALL honor `hints.labels: Record<string, string>`, which maps a card field's key or a table column's key to the label the reader sees. A card field SHALL show its label as the `wg-card-field-key` text, and a table column its label as the `wg-table-header` text, for the columns `hints.columns` selects as for detected ones. A key without a label, or whose label is not a non-empty string, SHALL show the key, so a render without `labels` is byte-identical to one made before labels existed. A label SHALL be plain text, escaped like any value, and SHALL change nothing else: the data, the payload's keys, `fieldFormat`, `images`, `links` and column order still address fields and columns by key. The `card` and `table` descriptors SHALL document `labels` among their hints, and that documentation SHALL include the label-style rule the core package exports. The rule tells agents to write labels in Title Case ("First Name") unless the user asks for another style or language, and to leave the data's keys as they are. The catalog SHALL export the rule so every surface that steers agents derives it.
+
+#### Scenario: A card shows its labels
+- **WHEN** `card` renders `data: { fields: { first_name: "Ada", order_total: 42 } }` with `hints: { labels: { first_name: "First Name", order_total: "Order Total" } }`
+- **THEN** the field keys SHALL read `First Name` and `Order Total`, and the values `Ada` and `42`
+- **AND** the extracted payload SHALL still carry `first_name` and `order_total` as keys
+
+#### Scenario: A table shows its labels in the selected columns
+- **WHEN** `table` renders `data: [{ first_name: "Ada", last_name: "Lovelace", id: 1 }]` with `hints: { columns: ["last_name", "first_name"], labels: { first_name: "First Name", last_name: "Last Name" } }`
+- **THEN** the headers SHALL read `Last Name` then `First Name`, and the cells SHALL follow the same column order
+
+#### Scenario: An unlabelled key shows the key
+- **WHEN** `card` renders `data: { a: 1, b: 2 }` with `hints: { labels: { a: "Alpha", b: "" } }`
+- **THEN** the field keys SHALL read `Alpha` and `b`
+- **AND** a render of the same data without `labels` SHALL be byte-identical to today's output
+
+#### Scenario: A label cannot inject markup
+- **WHEN** a label is `<b>Total</b>`
+- **THEN** the serialized output SHALL contain the escaped text, not an element
+
+#### Scenario: Labels leave the other hints keyed by data
+- **WHEN** `card` renders `data: { fields: { unit_price: 9.99 } }` with `hints: { labels: { unit_price: "Unit Price" }, fieldFormat: { unit_price: "${value}" } }`
+- **THEN** the field SHALL read `Unit Price` with the value `$9.99`
+
+#### Scenario: The descriptors carry the steering rule
+- **WHEN** the built-in `card` and `table` descriptors are read
+- **THEN** each SHALL document a `labels` hint whose text contains the exported label-style rule

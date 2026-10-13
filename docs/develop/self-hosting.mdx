@@ -14,7 +14,9 @@ docker compose up --build
 
 - **`web`** (port 8080) — the authoring app: the widget, theme, schema and
   action designers over the published authoring surface
-  (`@widgentic/mcp/authoring`), plus write-only secrets and API keys.
+  (`@widgentic/mcp/authoring`), plus write-only secrets, API keys, and
+  **Settings** (your default themes for light and dark hosts, and the
+  resource domains your widgets' images may load from directly).
 - **`mcp`** (port 8081) — the Streamable HTTP MCP endpoint at `/mcp`. Mint a
   key under **Keys** and connect any MCP host with an `x-api-key` header (or
   `?key=` where the host cannot send headers).

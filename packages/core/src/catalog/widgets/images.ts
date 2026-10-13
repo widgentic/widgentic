@@ -45,19 +45,19 @@ export function resolveImage(
 }
 
 /**
- * The standard image element: stable classes, key as alt, lazy loading.
- * An empty `key` yields an empty `alt` — decorative images whose meaning
- * the neighbouring text already carries.
+ * The standard image element: stable classes, the field's label (its key
+ * when unlabelled) as alt, lazy loading. An empty `alt` marks decorative
+ * images whose meaning the neighbouring text already carries.
  */
 export function imageNode(
-  key: string,
+  alt: string,
   src: string,
   shape: RenderImageShape
 ): WidgetElementNode {
   return el("img", {
     class: `wg-img wg-img-${shape}`,
     src,
-    alt: key,
+    alt,
     loading: "lazy",
     decoding: "async"
   });

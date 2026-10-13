@@ -79,17 +79,13 @@
     "@azure/identity": "^4",
     "@azure/keyvault-keys": "^4",
     "@modelcontextprotocol/ext-apps": "^2",
-    "@modelcontextprotocol/server": "^2.3.0",
-    "zod": "^4.2.0"
+    "@modelcontextprotocol/server": "^2.3.0"
   },
   "peerDependenciesMeta": {
     "@modelcontextprotocol/server": {
       "optional": true
     },
     "@modelcontextprotocol/ext-apps": {
-      "optional": true
-    },
-    "zod": {
       "optional": true
     },
     "@azure/cosmos": {

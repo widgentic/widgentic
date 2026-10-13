@@ -12,8 +12,10 @@
  */
 import { describe, expect, it } from "vitest";
 import type { WritableWidgetStore } from "../types.js";
-import { StoreRejectionError } from "../types.js";
-import type { StoredAction, StoredWidget } from "../types.js";
+import { ANONYMOUS_PRINCIPAL, StoreRejectionError } from "../types.js";
+import type { PrincipalSettingsUpdate, StoredAction, StoredWidget } from "../types.js";
+import type { ThemeEntry } from "@widgentic/core";
+import { composeResourceDomains, composeThemes, readPrincipalSettings } from "../compose.js";
 
 export interface ContractContext {
   /** Built WITH a secret cipher — the suite exercises secrets. */
@@ -341,6 +343,202 @@ export function describeStoreContract(
       await expect(store.createKey(p.id, "writer", ["write"])).rejects.toMatchObject({ code: "INVALID_SCOPES" });
       const listed = await store.listKeys(p.id);
       expect(listed.find((k) => k.name === "runner")?.scopes).toEqual(["read", "execute"]);
+    });
+
+    it("themes round-trip their styles; a malformed styles section is refused", async () => {
+      const { store } = await factory();
+      const p = await store.ensurePrincipal("contract:theme-styles");
+      const styles = { ".wg-btn": { padding: "4px 8px" } };
+      await store.putTheme(p.id, { name: "brand", tokens: { accent: "#ff5a1f" }, styles });
+      expect((await store.themes(p.id)).find((t) => t.name === "brand")?.styles).toEqual(styles);
+      const malformed = { name: "bad", tokens: {}, styles: { ".wg-btn": "padding: 4px" } };
+      await expect(store.putTheme(p.id, malformed as unknown as ThemeEntry)).rejects.toMatchObject({ code: "INVALID_THEME" });
+      expect((await store.themes(p.id)).map((t) => t.name)).toEqual(["brand"]);
+      const composed = await composeThemes(store, p.id);
+      expect(composed.value.get("brand")?.styles).toEqual(styles);
+    });
+
+    it("settings: default themes round-trip, replace, and reach the composed registry", async () => {
+      const { store } = await factory();
+      const p = await store.ensurePrincipal("contract:settings");
+      expect(await store.settings(p.id)).toEqual({});
+      await store.putTheme(p.id, { name: "a", tokens: {} });
+      await store.putTheme(p.id, { name: "b", tokens: {} });
+      await store.putSettings(p.id, { defaultThemes: { light: "a", dark: "b" } });
+      await store.putSettings(p.id, { defaultThemes: { light: "b" } });
+      expect(await store.settings(p.id)).toEqual({ defaultThemes: { light: "b" } });
+      expect((await composeThemes(store, p.id)).value.defaults()).toEqual({ light: "b", dark: "dark" });
+      // One theme may serve both modes.
+      await store.putSettings(p.id, { defaultThemes: { light: "a", dark: "a" } });
+      expect((await composeThemes(store, p.id)).value.defaults()).toEqual({ light: "a", dark: "a" });
+    });
+
+    it("settings: unmentioned sections are kept, null and an empty section remove", async () => {
+      const { store } = await factory();
+      const p = await store.ensurePrincipal("contract:settings-sections");
+      await store.putTheme(p.id, { name: "a", tokens: {} });
+      await store.putSettings(p.id, { defaultThemes: { light: "a" } });
+      await store.putSettings(p.id, {});
+      expect(await store.settings(p.id)).toEqual({ defaultThemes: { light: "a" } });
+      // An undefined section is an absent one, in every adapter alike.
+      await store.putSettings(p.id, { defaultThemes: undefined } as unknown as PrincipalSettingsUpdate);
+      expect(await store.settings(p.id)).toEqual({ defaultThemes: { light: "a" } });
+      await store.putSettings(p.id, { defaultThemes: null });
+      expect(await store.settings(p.id)).toEqual({});
+      await store.putSettings(p.id, { defaultThemes: { light: "a" } });
+      await store.putSettings(p.id, { defaultThemes: {} });
+      expect(await store.settings(p.id)).toEqual({});
+    });
+
+    it("settings: refusals change nothing", async () => {
+      const { store } = await factory();
+      const p = await store.ensurePrincipal("contract:settings-refusals");
+      await store.putTheme(p.id, { name: "a", tokens: {} });
+      await store.putSettings(p.id, { defaultThemes: { light: "a" } });
+      await expect(store.putSettings(p.id, { defaultThemes: { dark: "missing" } })).rejects.toMatchObject({ code: "UNKNOWN_THEME" });
+      const sepia = { defaultThemes: { sepia: "a" } } as unknown as PrincipalSettingsUpdate;
+      await expect(store.putSettings(p.id, sepia)).rejects.toMatchObject({ code: "INVALID_SHAPE" });
+      const fonts = { fonts: {} } as unknown as PrincipalSettingsUpdate;
+      await expect(store.putSettings(p.id, fonts)).rejects.toMatchObject({ code: "INVALID_SHAPE" });
+      const mixed = { defaultThemes: { dark: "a" }, fonts: {} } as unknown as PrincipalSettingsUpdate;
+      await expect(store.putSettings(p.id, mixed)).rejects.toMatchObject({ code: "INVALID_SHAPE" });
+      const numeric = { defaultThemes: { light: 7 } } as unknown as PrincipalSettingsUpdate;
+      await expect(store.putSettings(p.id, numeric)).rejects.toMatchObject({ code: "INVALID_SHAPE" });
+      expect(await store.settings(p.id)).toEqual({ defaultThemes: { light: "a" } });
+      await expect(store.putSettings("usr_nobody", { defaultThemes: null })).rejects.toMatchObject({ code: "UNKNOWN_PRINCIPAL" });
+    });
+
+    it("settings: a default theme cannot be removed until it is unset", async () => {
+      const { store } = await factory();
+      const p = await store.ensurePrincipal("contract:settings-in-use");
+      await store.putTheme(p.id, { name: "a", tokens: {} });
+      await store.putSettings(p.id, { defaultThemes: { light: "a", dark: "a" } });
+      const refusal = store.removeTheme(p.id, "a");
+      await expect(refusal).rejects.toMatchObject({ code: "THEME_IN_USE" });
+      await expect(refusal).rejects.toThrow(/light and dark/);
+      expect((await store.themes(p.id)).map((t) => t.name)).toEqual(["a"]);
+      await store.putSettings(p.id, { defaultThemes: null });
+      await store.removeTheme(p.id, "a");
+      expect(await store.themes(p.id)).toEqual([]);
+    });
+
+    it("settings never cross principals and leave entry listings alone", async () => {
+      const { store } = await factory();
+      const a = await store.ensurePrincipal("contract:settings-a");
+      const b = await store.ensurePrincipal("contract:settings-b");
+      await store.putTheme(a.id, { name: "brand", tokens: {} });
+      await store.putTheme(b.id, { name: "brand", tokens: {} });
+      await store.putSettings(a.id, { defaultThemes: { light: "brand" } });
+      expect(await store.settings(b.id)).toEqual({});
+      expect((await composeThemes(store, b.id)).value.defaults()).toEqual({ light: "light", dark: "dark" });
+      expect((await composeThemes(store, ANONYMOUS_PRINCIPAL.id)).value.defaults()).toEqual({ light: "light", dark: "dark" });
+      // The settings record is not an entry of any kind.
+      expect((await store.themes(a.id)).map((t) => t.name)).toEqual(["brand"]);
+      expect(await store.widgets(a.id)).toEqual([]);
+      expect(await store.schemas(a.id)).toEqual([]);
+      expect(await store.actions(a.id)).toEqual([]);
+      expect(await store.listSecrets(a.id)).toEqual([]);
+    });
+
+    it("resource domains: accepted forms are stored canonical and deduplicated", async () => {
+      const { store } = await factory();
+      const p = await store.ensurePrincipal("contract:domains");
+      await store.putSettings(p.id, {
+        resourceDomains: ["CDN.Example.com", "https://*.example.org/", "https://cdn.example.com"]
+      });
+      expect(await store.settings(p.id)).toEqual({ resourceDomains: ["https://cdn.example.com", "https://*.example.org"] });
+      const composed = await composeResourceDomains(store, p.id);
+      expect(composed).toEqual({ value: ["https://cdn.example.com", "https://*.example.org"], diagnostics: [] });
+    });
+
+    it("resource domains: unacceptable entries are refused by name and change nothing", async () => {
+      const { store } = await factory();
+      const p = await store.ensurePrincipal("contract:domains-refused");
+      await store.putSettings(p.id, { resourceDomains: ["cdn.example.com"] });
+      for (const entry of [
+        "http://cdn.example.com",
+        "https://cdn.example.com:8443",
+        "https://cdn.example.com/img",
+        "192.168.1.10",
+        "localhost",
+        "*",
+        "*.com",
+        "a.*.example.com",
+        "exämple.com",
+        "cdn.example.com; script-src *",
+        "'self'"
+      ]) {
+        const refusal = store.putSettings(p.id, { resourceDomains: ["img.example.com", entry] });
+        await expect(refusal).rejects.toMatchObject({ code: "INVALID_DOMAIN" });
+        await expect(refusal).rejects.toThrow(entry);
+      }
+      expect(await store.settings(p.id)).toEqual({ resourceDomains: ["https://cdn.example.com"] });
+    });
+
+    it("resource domains: shape and limit are refused as shape", async () => {
+      const { store } = await factory();
+      const p = await store.ensurePrincipal("contract:domains-shape");
+      const asString = { resourceDomains: "cdn.example.com" } as unknown as PrincipalSettingsUpdate;
+      await expect(store.putSettings(p.id, asString)).rejects.toMatchObject({ code: "INVALID_SHAPE" });
+      const numeric = { resourceDomains: [42] } as unknown as PrincipalSettingsUpdate;
+      await expect(store.putSettings(p.id, numeric)).rejects.toMatchObject({ code: "INVALID_SHAPE" });
+      const many = (count: number) => Array.from({ length: count }, (_value, index) => `cdn${index}.example.com`);
+      await expect(store.putSettings(p.id, { resourceDomains: many(21) })).rejects.toMatchObject({ code: "INVALID_SHAPE" });
+      expect(await store.settings(p.id)).toEqual({});
+      await store.putSettings(p.id, { resourceDomains: many(20) });
+      expect((await store.settings(p.id)).resourceDomains).toHaveLength(20);
+    });
+
+    it("resource domains: an empty list removes the section, as null does", async () => {
+      const { store } = await factory();
+      const p = await store.ensurePrincipal("contract:domains-empty");
+      await store.putSettings(p.id, { resourceDomains: ["cdn.example.com"] });
+      await store.putSettings(p.id, { resourceDomains: [] });
+      expect(await store.settings(p.id)).toEqual({});
+      await store.putSettings(p.id, { resourceDomains: ["cdn.example.com"] });
+      await store.putSettings(p.id, { resourceDomains: null });
+      expect(await store.settings(p.id)).toEqual({});
+    });
+
+    it("resource domains: sections stay independent", async () => {
+      const { store } = await factory();
+      const p = await store.ensurePrincipal("contract:domains-sections");
+      await store.putTheme(p.id, { name: "a", tokens: {} });
+      await store.putTheme(p.id, { name: "b", tokens: {} });
+      await store.putSettings(p.id, { defaultThemes: { light: "a" } });
+      await store.putSettings(p.id, { resourceDomains: ["cdn.example.com"] });
+      expect(await store.settings(p.id)).toEqual({
+        defaultThemes: { light: "a" },
+        resourceDomains: ["https://cdn.example.com"]
+      });
+      await store.putSettings(p.id, { defaultThemes: { dark: "b" } });
+      expect(await store.settings(p.id)).toEqual({
+        defaultThemes: { dark: "b" },
+        resourceDomains: ["https://cdn.example.com"]
+      });
+      // A domains-only update names no theme, so a theme removed meanwhile cannot refuse it.
+      await store.putSettings(p.id, { defaultThemes: null });
+      await store.removeTheme(p.id, "a");
+      await store.putSettings(p.id, { resourceDomains: ["img.example.com"] });
+      expect(await store.settings(p.id)).toEqual({ resourceDomains: ["https://img.example.com"] });
+    });
+
+    it("resource domains: composition yields only the caller's, from one shared read", async () => {
+      const { store } = await factory();
+      const a = await store.ensurePrincipal("contract:domains-a");
+      const b = await store.ensurePrincipal("contract:domains-b");
+      await store.putTheme(a.id, { name: "brand", tokens: {} });
+      await store.putSettings(a.id, { defaultThemes: { light: "brand" }, resourceDomains: ["cdn.a.example"] });
+      expect((await composeResourceDomains(store, a.id)).value).toEqual(["https://cdn.a.example"]);
+      expect((await composeResourceDomains(store, b.id)).value).toEqual([]);
+      expect((await composeResourceDomains(store, ANONYMOUS_PRINCIPAL.id)).value).toEqual([]);
+      const read = readPrincipalSettings(store, a.id);
+      const [themes, domains] = await Promise.all([
+        composeThemes(store, a.id, { settings: read }),
+        composeResourceDomains(store, a.id, { settings: read })
+      ]);
+      expect(themes.value.defaults()).toEqual({ light: "brand", dark: "dark" });
+      expect(domains.value).toEqual(["https://cdn.a.example"]);
     });
   });
 }

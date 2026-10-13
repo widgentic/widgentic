@@ -1,4 +1,4 @@
-export { THEME_TOKENS, TOKEN_DEFAULTS, TOKEN_SPECS, isSafeTokenValue } from "./tokens.js";
+export { THEME_TOKENS, TOKEN_DEFAULTS, TOKEN_SPECS, TOKEN_VALUE_RULE, TOKEN_VALUE_UNSAFE, isSafeTokenValue } from "./tokens.js";
 export type {
   ThemeToken,
   TokenType,
@@ -22,4 +22,5 @@ export {
   DuplicateThemeError,
   InvalidThemeEntryError
 } from "./registry.js";
-export type { ThemeEntry, ThemeEntryInput, ThemeRegistry } from "./registry.js";
+export type { ThemeEntry, ThemeEntryInput, ThemeMode, ThemeRegistry } from "./registry.js";
+export { themeStylesToCss } from "./styles.js";

@@ -25,7 +25,8 @@ import {
 import { isPlainObject } from "@widgentic/core";
 import { createThemeRegistry } from "@widgentic/core";
 import type { ThemeEntry, ThemeRegistry } from "@widgentic/core";
-import type { StoredWidget, WidgetStore } from "./types.js";
+import type { PrincipalSettings, StoredWidget, WidgetStore } from "./types.js";
+import { THEME_MODES } from "./settings-rules.js";
 import type { StoreLimits } from "./limits.js";
 import { DEFAULT_LIMITS } from "./limits.js";
 import { checkStoredAction, checkStoredTheme, checkStoredWidget } from "./validate.js";
@@ -333,16 +334,81 @@ export function composeThemeEntries(
   return { registry, problems };
 }
 
-/** Theme registry for one principal: built-ins plus their stored themes. */
+/** A principal's settings, read once for a request, or why they could not be read. */
+export type SettingsRead = { settings: PrincipalSettings } | { failure: string };
+
+/**
+ * Read the principal's settings once, for every composition of a request
+ * to share. Never throws: an adapter written before settings existed (no
+ * `settings` method) reads as no settings, and a failing read is returned
+ * as its failure, which each consumer reports in its own words.
+ */
+export async function readPrincipalSettings(store: WidgetStore | undefined, principalId: string): Promise<SettingsRead> {
+  if (store === undefined || typeof store.settings !== "function") return { settings: {} };
+  try {
+    return { settings: await store.settings(principalId) };
+  } catch (error) {
+    return { failure: errorMessage(error) };
+  }
+}
+
+/** Options for the compositions that read the principal's settings. */
+export interface SettingsComposeOptions {
+  /** A read already started for this request, so the settings are read once. */
+  settings?: Promise<SettingsRead>;
+}
+
+/**
+ * The principal's resource domains: the canonical origins their settings
+ * declare, for the app resource's CSP. Cosmetic like default themes: an
+ * unreadable record declares none, with a diagnostic, and never fails the
+ * request.
+ */
+export async function composeResourceDomains(
+  store: WidgetStore | undefined,
+  principalId: string,
+  options: SettingsComposeOptions = {}
+): Promise<ComposeResult<string[]>> {
+  const read = await (options.settings ?? readPrincipalSettings(store, principalId));
+  if ("failure" in read) {
+    return { value: [], diagnostics: [`resource domains not read (${read.failure}); none are declared.`] };
+  }
+  return { value: [...(read.settings.resourceDomains ?? [])], diagnostics: [] };
+}
+
+/**
+ * Theme registry for one principal: built-ins plus their stored themes,
+ * with the default per mode their settings choose. A default naming a theme
+ * the registry does not hold (missing, or skipped as invalid) keeps the
+ * built-in and is reported, never fatal.
+ */
 export async function composeThemes(
   store: WidgetStore | undefined,
   principalId: string,
-  options: ComposeOptions = {}
+  options: ComposeOptions & SettingsComposeOptions = {}
 ): Promise<ComposeResult<ThemeRegistry>> {
-  const stored = store === undefined ? [] : await store.themes(principalId);
+  // Both reads at once: every request composes, so latency adds up.
+  const [stored, settings] =
+    store === undefined
+      ? [[], undefined]
+      : await Promise.all([store.themes(principalId), options.settings ?? readPrincipalSettings(store, principalId)]);
   const composed = composeThemeEntries(
     stored,
     options.limits === undefined ? {} : { limits: options.limits }
   );
-  return { value: composed.registry, diagnostics: composed.problems.map(diagnosticLine) };
+  const diagnostics = composed.problems.map(diagnosticLine);
+  if (settings !== undefined && "failure" in settings) {
+    diagnostics.push(`default themes not read (${settings.failure}); the built-in themes stay the defaults.`);
+  }
+  const defaults = settings !== undefined && "settings" in settings ? settings.settings.defaultThemes : undefined;
+  for (const mode of THEME_MODES) {
+    const name = defaults?.[mode];
+    if (name === undefined) continue;
+    if (composed.registry.get(name) === undefined) {
+      diagnostics.push(`default ${mode} theme '${name}' is not available; the built-in ${mode} theme stays the default.`);
+      continue;
+    }
+    composed.registry.setDefault(mode, name);
+  }
+  return { value: composed.registry, diagnostics };
 }

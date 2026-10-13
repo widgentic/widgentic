@@ -1,25 +1,30 @@
 /**
  * Named theme registry — themes as addressable entities rather than
- * anonymous token maps, mirroring the widget catalog's ergonomics.
- *
- * `extends` is resolved AT REGISTRATION into a flat token map: no runtime
- * cascade, no cycles, and what a host persists is exactly what renders.
- * The base name is retained on the entry for display and re-editing.
+ * anonymous token maps, mirroring the widget catalog's ergonomics. Each
+ * entry is complete as registered: a host that derives one theme from
+ * another merges the tokens and styles before registering. The registry
+ * also knows which entry each mode falls back to when a render names no
+ * theme — the built-ins until a caller's settings choose otherwise.
  */
+import { isStyleMap } from "../catalog/styles.js";
+import type { WidgetStyles } from "../catalog/styles.js";
 import { darkTheme, validateTheme } from "./apply.js";
 import type { WidgetThemeInput } from "./tokens.js";
 
-/** A registered theme: identity, optional prose, and its token map. */
+/** The host colour schemes a default theme is chosen for. */
+export type ThemeMode = "light" | "dark";
+
+/** A registered theme: identity, optional prose, tokens and shared styles. */
 export interface ThemeEntry {
   name: string;
   label?: string;
   description?: string;
-  /** Name of the entry this one was derived from (already merged in). */
-  extends?: string;
   tokens: WidgetThemeInput;
+  /** Shared `.wg-` classes for every widget the theme dresses. */
+  styles?: WidgetStyles;
 }
 
-/** Entry as supplied to `register` — `tokens` may omit inherited values. */
+/** Entry as supplied to `register`. */
 export type ThemeEntryInput = ThemeEntry;
 
 export class DuplicateThemeError extends Error {
@@ -46,11 +51,24 @@ export class InvalidThemeEntryError extends Error {
 }
 
 export interface ThemeRegistry {
-  /** Register an entry; `extends` is merged eagerly. Throws on conflicts. */
+  /** Register an entry. Throws on conflicts and invalid entries. */
   register(entry: ThemeEntryInput): void;
   get(name: string): ThemeEntry | undefined;
   list(): ThemeEntry[];
   names(): string[];
+  /** Make a registered entry the mode's default. Throws for an unknown name. */
+  setDefault(mode: ThemeMode, name: string): void;
+  /** The mode's default entry: the built-in of that mode until set. */
+  getDefault(mode: ThemeMode): ThemeEntry;
+  /** The effective default name per mode. */
+  defaults(): Record<ThemeMode, string>;
+}
+
+/** A copy of the styles, so later edits to the input never reach the registry. */
+function copyStyles(styles: WidgetStyles | undefined): WidgetStyles {
+  const copy: WidgetStyles = {};
+  for (const [selector, declarations] of Object.entries(styles ?? {})) copy[selector] = { ...declarations };
+  return copy;
 }
 
 /**
@@ -59,6 +77,7 @@ export interface ThemeRegistry {
  */
 export function createThemeRegistry(): ThemeRegistry {
   const entries = new Map<string, ThemeEntry>();
+  const defaultNames: Record<ThemeMode, string> = { light: "light", dark: "dark" };
 
   const registry: ThemeRegistry = {
     register(entry) {
@@ -83,29 +102,38 @@ export function createThemeRegistry(): ThemeRegistry {
         );
       }
 
-      let tokens: WidgetThemeInput = validated.theme;
-      if (entry.extends !== undefined) {
-        const base = entries.get(entry.extends);
-        if (base === undefined) {
-          throw new InvalidThemeEntryError(
-            entry.name,
-            "UNKNOWN_BASE_THEME",
-            `extends '${entry.extends}' which is not registered.`
-          );
-        }
-        // Merge once: base first, own tokens win. Flat from here on.
-        tokens = { ...base.tokens, ...validated.theme };
+      if (entry.styles !== undefined && !isStyleMap(entry.styles)) {
+        throw new InvalidThemeEntryError(
+          entry.name,
+          "INVALID_THEME",
+          "styles must map selectors to objects of property/value strings."
+        );
       }
 
-      const stored: ThemeEntry = { name: entry.name, tokens };
+      const styles = copyStyles(entry.styles);
+      const stored: ThemeEntry = { name: entry.name, tokens: validated.theme };
+      if (Object.keys(styles).length > 0) stored.styles = styles;
       if (entry.label !== undefined) stored.label = entry.label;
       if (entry.description !== undefined) stored.description = entry.description;
-      if (entry.extends !== undefined) stored.extends = entry.extends;
       entries.set(entry.name, stored);
     },
     get: (name) => entries.get(name),
     list: () => [...entries.values()],
-    names: () => [...entries.keys()]
+    names: () => [...entries.keys()],
+    setDefault(mode, name) {
+      if (!entries.has(name)) {
+        throw new InvalidThemeEntryError(name, "UNKNOWN_THEME", "it is not registered, so it cannot be a default.");
+      }
+      defaultNames[mode] = name;
+    },
+    getDefault(mode) {
+      // Defaults only ever name registered entries and entries are never
+      // removed, so this cannot miss; narrowed rather than asserted.
+      const entry = entries.get(defaultNames[mode]);
+      if (entry === undefined) throw new Error(`No ${mode} default theme is registered.`);
+      return entry;
+    },
+    defaults: () => ({ ...defaultNames })
   };
 
   registry.register({

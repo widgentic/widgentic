@@ -16,9 +16,11 @@ internal sealed class WidgenticEngine : IDisposable
         IReadOnlyList<JsonElement> definitions,
         HostResources resources,
         WidgenticEngineInfo info,
-        IReadOnlyList<string> notes)
+        IReadOnlyList<string> notes,
+        CatalogComposer composer)
     {
         Pool = pool;
+        Composer = composer;
         Definitions = definitions;
         Resources = resources;
         Info = info;
@@ -26,6 +28,9 @@ internal sealed class WidgenticEngine : IDisposable
     }
 
     public V8HostPool Pool { get; }
+
+    /// <summary>Builds each caller's per-call configuration from the startup entries and the caller's catalog.</summary>
+    public CatalogComposer Composer { get; }
 
     /// <summary>The bundle's tool definitions (name, description, inputSchema), in its order.</summary>
     public IReadOnlyList<JsonElement> Definitions { get; }
@@ -48,6 +53,11 @@ internal sealed class WidgenticEngine : IDisposable
             ["themes"] = Section(options.Themes),
             ["schemas"] = Section(options.Schemas),
         };
+        if (options.ResourceDomains.Count > 0)
+        {
+            config["resourceDomains"] = new JsonArray([.. options.ResourceDomains.Select(domain => (JsonNode?)JsonValue.Create(domain))]);
+        }
+        if (options.SettingsEntry is { } settings) config["settings"] = settings.Value?.DeepClone();
         var pool = new V8HostPool(bundle.Text, config.ToJsonString(), options.EnginePoolSize, options.CallTimeout);
         try
         {
@@ -71,7 +81,7 @@ internal sealed class WidgenticEngine : IDisposable
                     notes.Add($"widget '{definition["kind"]}' ({widget.Source}) declares a load binding; it is inactive in this render-only version.");
                 }
             }
-            return new WidgenticEngine(pool, definitions, resources, info, notes);
+            return new WidgenticEngine(pool, definitions, resources, info, notes, new CatalogComposer(options));
         }
         catch
         {
@@ -100,7 +110,12 @@ internal sealed class WidgenticEngine : IDisposable
                 "schemas" => options.Schemas,
                 _ => null,
             };
-            var source = entries is not null && index >= 0 && index < entries.Count ? entries[index].Source : section;
+            var source = section switch
+            {
+                "settings" => options.SettingsEntry?.Source ?? section,
+                "resourceDomains" => $"ResourceDomains[{index}]",
+                _ => entries is not null && index >= 0 && index < entries.Count ? entries[index].Source : section,
+            };
             problems.Add(new WidgenticConfigurationProblem(
                 section,
                 source,
@@ -125,12 +140,17 @@ internal sealed class WidgenticEngine : IDisposable
     public void Dispose() => Pool.Dispose();
 }
 
-/// <summary>The bundle's documents: where they are served and how they are described.</summary>
+/// <summary>
+/// The bundle's documents: where they are served and how they are described, and the domains the
+/// app template declares (canonical origins, empty when none).
+/// </summary>
 internal sealed record HostResources(
     string AppTemplateName,
     string AppTemplateUri,
     string AppTemplateMimeType,
     string AppTemplateDescription,
+    bool AppTemplatePrefersBorder,
+    IReadOnlyList<string> AppTemplateResourceDomains,
     string WidgetPageName,
     string WidgetPageTitle,
     string WidgetPageUriTemplate,
@@ -145,6 +165,8 @@ internal sealed record HostResources(
         string Text(JsonElement element, string name) => element.GetProperty(name).GetString() ?? "";
         return new HostResources(
             Text(app, "name"), Text(app, "uri"), Text(app, "mimeType"), Text(app, "description"),
+            app.GetProperty("prefersBorder").GetBoolean(),
+            app.TryGetProperty("resourceDomains", out var domains) ? [.. domains.EnumerateArray().Select(domain => domain.GetString() ?? "")] : [],
             Text(page, "name"), Text(page, "title"), Text(page, "uriTemplate"), Text(page, "mimeType"), Text(page, "description"));
     }
 

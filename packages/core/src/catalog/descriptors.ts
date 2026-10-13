@@ -35,6 +35,15 @@ export interface WidgetDescriptor {
 export type WidgetDescriptorInput = Omit<WidgetDescriptor, "kind">;
 
 /**
+ * How agents should write the labels a reader sees — the `labels` hint of
+ * the built-in card and table, and the literals a template writes. One
+ * text, derived by every surface that steers agents.
+ */
+export const LABEL_STYLE_RULE =
+  'Labels are what the reader sees: write them in Title Case ("First Name", "Order Total") ' +
+  "unless the user asks for another style or language, and keep the data's keys as they are.";
+
+/**
  * Honest documentation of the built-ins' actual (lenient) behavior. Every
  * `dataExample` is asserted by tests to render successfully.
  */
@@ -52,7 +61,8 @@ export const BUILTIN_DESCRIPTORS: Record<
       "field values typed (e.g. price: 9.99, not '$9.99') and use " +
       "hints.fieldFormat for display formatting — the payload keeps the " +
       "typed value while the render gets its unit. Field values that are " +
-      "image URLs render as images (see hints.images).",
+      "image URLs render as images (see hints.images). Each field is labelled " +
+      "by its key unless hints.labels names it.",
     dataExample: {
       title: "Essence Mascara",
       subtitle: "beauty",
@@ -72,6 +82,11 @@ export const BUILTIN_DESCRIPTORS: Record<
         "true forces the default shape, false keeps the URL as text. " +
         "Unsafe sources always render as text; image treatment wins over " +
         "fieldFormat for the same key.",
+      labels:
+        "Record<fieldKey, string> — the label shown for a field instead of " +
+        "its key (also an image field's alt text); every other hint still " +
+        "names the key. " +
+        LABEL_STYLE_RULE,
       links:
         "Record<fieldKey, boolean | prefix> — true links a field whose " +
         "value already IS an http(s)/mailto/tel URL; a prefix string " +
@@ -98,6 +113,11 @@ export const BUILTIN_DESCRIPTORS: Record<
     ],
     hints: {
       columns: "string[] — overrides column selection and order",
+      labels:
+        "Record<columnKey, string> — the header shown for a column instead " +
+        "of its key (also its images' alt text); every other hint, " +
+        "columns included, still names the key. " +
+        LABEL_STYLE_RULE,
       fieldFormat:
         "Record<columnKey, pattern> — formats matching cell values by " +
         "substituting {value} in the pattern (e.g. { total: '${value}' }); " +

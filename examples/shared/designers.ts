@@ -11,12 +11,13 @@
  * palette, and a page that wants to match it derives its own properties from
  * `chromeCss(CHROME_DEFAULTS)`.
  */
-import { createThemeRegistry } from "@widgentic/core";
+import { createThemeRegistry, isPlainObject } from "@widgentic/core";
 import type { ThemeEntry } from "@widgentic/core";
 import {
   createActionDesigner,
   createDesigner,
   createSchemaDesigner,
+  createSettingsDesigner,
   createThemeDesigner
 } from "@widgentic/designer";
 import type {
@@ -26,8 +27,11 @@ import type {
   DesignerOptions,
   SchemaDesignerHandle,
   SchemaDesignerOptions,
+  SettingsDesignerHandle,
+  SettingsDesignerOptions,
   ThemeDesignerHandle,
-  ThemeDesignerOptions
+  ThemeDesignerOptions,
+  WidgetDefinition
 } from "@widgentic/designer";
 
 function clear(host: HTMLElement, previous: { dispose(): void } | undefined): void {
@@ -62,6 +66,15 @@ export function mountSchema(
   return createSchemaDesigner(host, options);
 }
 
+export function mountSettings(
+  host: HTMLElement,
+  previous: SettingsDesignerHandle | undefined,
+  options: SettingsDesignerOptions = {}
+): SettingsDesignerHandle {
+  clear(host, previous);
+  return createSettingsDesigner(host, options);
+}
+
 export function mountAction(
   host: HTMLElement,
   previous: ActionDesignerHandle | undefined,
@@ -78,7 +91,40 @@ export function mountAction(
  * cannot drift on it.
  */
 export function previewThemes(saved: readonly ThemeEntry[]): ThemeEntry[] {
-  const builtIns = createThemeRegistry().list();
-  const names = new Set(builtIns.map((entry) => entry.name));
-  return [...builtIns, ...saved.filter((entry) => !names.has(entry.name))];
+  // Registered, not passed raw: an entry the registry refuses is left out,
+  // and a saved entry named like a built-in never displaces it.
+  const registry = createThemeRegistry();
+  for (const entry of saved) {
+    try {
+      registry.register(entry);
+    } catch {
+      // left out of the preview choices
+    }
+  }
+  return registry.list();
+}
+
+/**
+ * A draft or stored widget, ready to mount as `initialWidget`: the
+ * definition fields only (the preview theme belongs to the session, not the
+ * draft), or `undefined` when the value is not a widget. Mounting with it,
+ * rather than loading it after, keeps the person's work whatever its kind:
+ * a load holds the kind to what Save accepts, the mount shows the problem.
+ */
+export function draftDefinition(value: unknown): WidgetDefinition | undefined {
+  if (!isPlainObject(value) || typeof value.kind !== "string" || !isPlainObject(value.descriptor) || value.template === undefined) {
+    return undefined;
+  }
+  const { kind, template, descriptor, load } = value;
+  return { kind, template, descriptor, ...(load === undefined ? {} : { load }) } as unknown as WidgetDefinition;
+}
+
+/** An autosaved draft's text as `draftDefinition` reads it; corrupt text is no draft. */
+export function restoredDraft(text: string | null): WidgetDefinition | undefined {
+  if (text === null) return undefined;
+  try {
+    return draftDefinition(JSON.parse(text));
+  } catch {
+    return undefined;
+  }
 }

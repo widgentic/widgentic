@@ -1,0 +1,87 @@
+{
+  "kind": "release-notes-widget",
+  "template": {
+    "attrs": {
+      "class": "wg-release-notes"
+    },
+    "children": [
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "bind": "product"
+              },
+              " ",
+              {
+                "bind": "version"
+              }
+            ],
+            "tag": "h2"
+          },
+          {
+            "template": {
+              "attrs": {
+                "class": "wg-muted"
+              },
+              "children": [
+                {
+                  "bind": "releasedAt",
+                  "format": {
+                    "pattern": "yyyy-MM-dd",
+                    "type": "date"
+                  }
+                }
+              ],
+              "tag": "p"
+            },
+            "when": "releasedAt"
+          }
+        ],
+        "tag": "header"
+      },
+      {
+        "children": [
+          {
+            "each": "changes",
+            "template": {
+              "children": [
+                {
+                  "bind": "summary"
+                }
+              ],
+              "tag": "li"
+            }
+          }
+        ],
+        "tag": "ul"
+      }
+    ],
+    "tag": "section"
+  },
+  "descriptor": {
+    "dataExample": {
+      "changes": [
+        {
+          "summary": "Each caller can be served its own catalog."
+        },
+        {
+          "summary": "Refused entries are skipped and logged."
+        }
+      ],
+      "product": "Widgentic.Mcp",
+      "releasedAt": "2026-10-11",
+      "version": "0.11.0"
+    },
+    "dataShape": "{ product, version, releasedAt?, changes: [{ summary }] }",
+    "description": "Shows a product release's notes: its version, release date and the list of changes.",
+    "styles": {
+      ".wg-release-notes": {
+        "background": "var(--wg-surface)",
+        "border": "var(--wg-border-width) solid var(--wg-border)",
+        "border-radius": "var(--wg-radius-lg)",
+        "padding": "var(--wg-spacing-lg)"
+      }
+    }
+  }
+}

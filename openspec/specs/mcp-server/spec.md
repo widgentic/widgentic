@@ -2,7 +2,9 @@
 
 ## Purpose
 The Widgentic MCP server: exposes the widget catalog to any MCP client via `list_widgets` (descriptor discovery) and `render_widget` (validate, render, return HTML plus the embedded widgentic payload). Handlers are pure, SDK-free functions over a catalog; errors are structured and agent-correctable in the tool's input vocabulary; client marshalling artifacts (string-encoded data) are recovered safely. Hardened by live multi-agent testing.
+
 ## Requirements
+
 ### Requirement: Server module programmatic surface
 The package SHALL export from a `./mcp-server` entry: tool definitions as plain data (`LIST_WIDGETS_TOOL`, `RENDER_WIDGET_TOOL`, `LIST_THEME_TOKENS_TOOL` — each with `name`, `description`, and a JSON-Schema `inputSchema` object) and pure handlers `handleListWidgets(catalog)`, `handleRenderWidget(catalog, input: unknown)`, and `handleListThemeTokens()` returning MCP-shaped tool results. The module SHALL NOT depend on an MCP SDK.
 
@@ -24,7 +26,7 @@ The package SHALL export from a `./mcp-server` entry: tool definitions as plain 
 - **THEN** it SHALL include `description`, `dataShape`, and a `dataExample` an agent can imitate
 
 ### Requirement: Widget rendering tool
-`handleRenderWidget(catalog, input)` SHALL accept `{ widget, data, hints?, meta?, format?, theme? }`, validate the widget id against the catalog, the assembled payload against the contract, and `data` against the kind's `dataSchema` when present, render on success, and return content per the selected `format` — by default the rendered HTML as a text block **and** the validated payload as a widgentic resource block (extractable by `extractWidgetPayload`). The tool description SHALL steer callers who need several widgets in one response toward a single `group` render instead of repeated calls.
+`handleRenderWidget(catalog, input)` SHALL accept `{ widget, data, hints?, meta?, format?, theme? }`, validate the widget id against the catalog, the assembled payload against the contract, and `data` against the kind's `dataSchema` when present, render on success, and return content per the selected `format` — by default the rendered HTML as a text block **and** the validated payload as a widgentic resource block (extractable by `extractWidgetPayload`). The tool description SHALL steer callers who need several widgets in one response toward a single `group` render instead of repeated calls. It SHALL also ask callers to write `widget` first and any `hints` before `data`, so a host that streams the call can preview the widget with its labels, columns and image places from the first row.
 
 #### Scenario: Valid request renders dual-format
 - **WHEN** `handleRenderWidget(catalog, { widget: "table", data: [{ a: 1 }] })` runs
@@ -49,6 +51,10 @@ The package SHALL export from a `./mcp-server` entry: tool definitions as plain 
 - **WHEN** `handleRenderWidget` is called with `widget: "group"` and items of kinds `card` and a stored custom template kind
 - **THEN** the result SHALL contain both items' markup in one response
 - **AND** the tool description SHALL mention the group steering
+
+#### Scenario: The description orders the arguments for streaming
+- **WHEN** the `render_widget` description is read
+- **THEN** it SHALL ask for `widget` first and for `hints` before `data`
 
 ### Requirement: Structured data marshalling
 When `data` arrives as a string that encodes a JSON object or array (a client-side marshalling artifact), `handleRenderWidget` SHALL parse it before payload assembly, so the rendered output and the embedded payload carry the structured value. Multiply-encoded strings (a JSON string encoding a JSON string encoding a structured value) SHALL be unwrapped the same way, to a bounded depth. Unwrapping SHALL commit only when it reaches an object or array; strings that do not (including quoted plain text and stringified primitives) SHALL pass through unchanged and verbatim as literal string data. When the target kind's `dataSchema` declares string-typed `data` (and neither object nor array), string `data` SHALL bypass unwrapping entirely, making literal JSON-shaped text expressible.
@@ -75,7 +81,7 @@ When `data` arrives as a string that encodes a JSON object or array (a client-si
 - **THEN** the rendered output and extracted payload SHALL carry that exact string
 
 ### Requirement: Rendering error contract
-Failures SHALL be returned as `isError: true` results whose text content is the JSON of a structured error using the existing contract vocabulary: unknown `widget` → `UNKNOWN_KIND`; missing or non-object input, missing `widget`/`data`, or invalid `hints`/`meta` → the corresponding `MISSING_FIELD`/`INVALID_TYPE` error. Error `path`s SHALL use the tool's input vocabulary (`widget`, not the payload's `kind`), and unknown-widget errors SHALL list the available kinds so recovery requires no extra round trip. Handlers SHALL never throw regardless of input.
+Failures SHALL be returned as `isError: true` results whose text content is the JSON of a structured error using the existing contract vocabulary: unknown `widget` → `UNKNOWN_KIND`; missing or non-object input, missing `widget`/`data`, or invalid `hints`/`meta` → the corresponding `MISSING_FIELD`/`INVALID_TYPE` error. Error `path`s SHALL use the tool's input vocabulary (`widget`, not the payload's `kind`), and unknown-widget errors SHALL list the available kinds so recovery requires no extra round trip. A call that omits `widget` but carries a string `kind` SHALL get the `MISSING_FIELD` error on `widget` with a message that names the mix-up: `kind` is the payload's field, and the tool takes that value as `widget`. `preview_widget` SHALL answer the same way. Handlers SHALL never throw regardless of input. These errors SHALL reach clients through the server assembly unchanged, because the assembly does not validate arguments itself.
 
 #### Scenario: Unknown widget id is correctable in one step
 - **WHEN** `handleRenderWidget(catalog, { widget: "nope", data: 1 })` runs
@@ -86,6 +92,15 @@ Failures SHALL be returned as `isError: true` results whose text content is the 
 #### Scenario: Missing data is a structured error
 - **WHEN** `handleRenderWidget(catalog, { widget: "card" })` runs
 - **THEN** the parsed error SHALL have `code: "MISSING_FIELD"` and `path: "data"`
+
+#### Scenario: The payload's field name is named
+- **WHEN** `render_widget` is called with `{ kind: "card", data: { title: "T" } }`
+- **THEN** the result SHALL be `isError: true` with `code: "MISSING_FIELD"` and `path: "widget"`
+- **AND** its message SHALL say that `kind` is the payload's field and that the value belongs in `widget`
+
+#### Scenario: Malformed arguments reach the handler through the protocol
+- **WHEN** an SDK client calls `render_widget` through `createWidgenticServer()` with `{ kind: "card", data: 1 }`, and with `{ widget: "card", data: 1, format: "pdf" }`
+- **THEN** each delivered result SHALL be the handler's structured error (`MISSING_FIELD` on `widget`, `INVALID_TYPE` on `format`), not an SDK input-validation message
 
 #### Scenario: Garbage input never throws
 - **WHEN** `handleRenderWidget(catalog, x)` runs for `null`, `42`, `"str"`, and `[]`
@@ -111,7 +126,7 @@ The repository SHALL provide `examples/mcp-server/main.ts` serving the library's
 - **THEN** the MCP SDK packages SHALL appear only as optional `peerDependencies` (for the `./sdk` entry), `@widgentic/core` as its sole `dependencies` entry, and tsx only under the workspace's `devDependencies`
 
 ### Requirement: Server assembly is a library export
-The package SHALL export `createWidgenticServer(options?: { catalog?, themes? })` from the `@widgentic/mcp/sdk` entry, producing a connectable `McpServer` from the official MCP TypeScript SDK 2.x (`@modelcontextprotocol/server`) with the full wiring: the tools, the formal Apps declaration, the app-template resource, capability-aware slimming, and image inlining. The same assembly SHALL serve both protocol eras: the 2025-era revisions, and revision 2026-07-28. It does so through the SDK's serving entries (`createMcpHandler` over HTTP, `serveStdio` over stdio) and through a directly connected transport. Its MCP SDK packages SHALL be optional peer dependencies — installed only by hosts importing this entry — and the base `@widgentic/mcp` entry SHALL remain importable without any SDK present. No workspace source SHALL import the superseded 1.x SDK package `@modelcontextprotocol/sdk`. With no options the assembly SHALL serve exactly the built-in kinds and built-in themes; compiled-in extras are the host's explicit choice via `catalog`.
+The package SHALL export `createWidgenticServer(options?: { catalog?, themes? })` from the `@widgentic/mcp/sdk` entry, producing a connectable `McpServer` from the official MCP TypeScript SDK 2.x (`@modelcontextprotocol/server`) with the full wiring: the tools, the formal Apps declaration, the app-template resource, capability-aware slimming, and image inlining. The same assembly SHALL serve both protocol eras: the 2025-era revisions, and revision 2026-07-28. It does so through the SDK's serving entries (`createMcpHandler` over HTTP, `serveStdio` over stdio) and through a directly connected transport. Its MCP SDK packages SHALL be optional peer dependencies — installed only by hosts importing this entry — and the base `@widgentic/mcp` entry SHALL remain importable without any SDK present. No workspace source SHALL import the superseded 1.x SDK package `@modelcontextprotocol/sdk`. Every tool SHALL be registered with its exported definition's `inputSchema` exactly as exported, so the schemas clients read are the ones the `./host` bundle serves; the assembly SHALL restate no schema. The assembly SHALL perform no argument validation of its own: the SDK passes every call's arguments to the tool's handler unchanged, and the handler answers malformed input with its structured errors. This makes the Node assembly and every embedding host answer malformed arguments identically. With no options the assembly SHALL serve exactly the built-in kinds and built-in themes; compiled-in extras are the host's explicit choice via `catalog`.
 
 #### Scenario: One assembly serves every transport
 - **WHEN** the HTTP entry, the stdio example, and the in-memory interop tests construct their servers
@@ -128,6 +143,10 @@ The package SHALL export `createWidgenticServer(options?: { catalog?, themes? })
 #### Scenario: Both protocol eras through one assembly
 - **WHEN** a 2026-07-28 client reaches `createWidgenticServer()` through `createMcpHandler`, and a 2025-era client reaches it through the in-memory transport
 - **THEN** both SHALL list the same tools and receive the same `structuredContent` from `render_widget` for the same arguments
+
+#### Scenario: Wire schemas are the exported definitions
+- **WHEN** a client lists the tools of `createWidgenticServer()`
+- **THEN** every tool's `inputSchema` SHALL deep-equal its exported definition's `inputSchema`, with no key added or removed
 
 #### Scenario: The 1.x SDK is never imported
 - **WHEN** the workspace's TypeScript sources are scanned
@@ -194,16 +213,20 @@ The server SHALL expose `list_theme_tokens` (no input): a discovery tool returni
 - **THEN** the rules text SHALL explain that `x-*` keys are accepted as custom variables
 
 ### Requirement: Named theme listing tool
-The server SHALL expose `list_themes` (no input): a discovery tool returning every registered theme as `{ name, label?, description?, extends?, tokens }` so an agent can pick a theme by name instead of composing tokens. `handleListThemes(registry)` SHALL be a pure handler taking the registry explicitly, mirroring `handleListWidgets(catalog)`.
+The server SHALL expose `list_themes` (no input): a discovery tool returning every registered theme as `{ name, label?, description?, tokens, styles? }` so an agent can pick a theme by name instead of composing tokens and can use the classes a theme's styles define, plus `defaults: { light, dark }` naming the theme each mode uses when a render names none — a built-in name when the caller's settings choose none. Its description SHALL tell agents that leaving `render_widget`'s `theme` out uses those defaults and that a passed theme replaces them, and `render_widget`'s `theme` description SHALL say the same. `handleListThemes(registry)` SHALL be a pure handler taking the registry explicitly, mirroring `handleListWidgets(catalog)`.
 
 #### Scenario: Registered themes are listed with their tokens
 - **WHEN** `handleListThemes(registry)` runs on a registry holding `light`, `dark`, and a registered `brand`
-- **THEN** the parsed result SHALL contain all three entries with their token maps
+- **THEN** the parsed result SHALL contain all three entries with their token maps, and `defaults` SHALL be `{ "light": "light", "dark": "dark" }`
 - **AND** each listed name SHALL be usable as `render_widget`'s `theme` input
 
 #### Scenario: Discoverable through the protocol
 - **WHEN** an SDK client lists tools
 - **THEN** `list_themes` SHALL appear alongside `list_widgets`, `list_theme_tokens`, and `render_widget`
+
+#### Scenario: Styles and default themes are listed
+- **WHEN** `handleListThemes(registry)` runs on a registry whose `brand` entry carries `styles` and whose light default is `brand`
+- **THEN** the `brand` entry SHALL carry its `styles`, and `defaults` SHALL be `{ "light": "brand", "dark": "dark" }`
 
 ### Requirement: App format output
 `render_widget` SHALL accept `format: "app"`, returning content composed of: a one-line text fallback naming the widget, an embedded resource block with `uri: "ui://widgentic/page/<kind>"` and the MCP Apps mime type `"text/html;profile=mcp-app"` whose text is the self-contained styled page (identical composition to `format: "page"` — themed body, registered kind styles, theme tokens) for legacy embedded-resource hosts, and the widgentic JSON payload block. The emitted page SHALL contain no scripts; the only external references permitted are image sources inside widget content that passed the shared `isSafeImageSrc` guard (`http(s)` or `data:image/*`). `WIDGENTIC_UI_URI_PREFIX` and `WIDGENTIC_APP_MIME_TYPE` SHALL be exported for interop.
@@ -265,7 +288,7 @@ Every successful `render_widget` result SHALL carry `structuredContent: { html, 
 - **AND** for a caller without `execute`, or a kind without `load`, the key SHALL be absent
 
 ### Requirement: Formal Apps declaration at the wiring layer
-The server assembly SHALL declare the tool↔UI linkage per the MCP Apps specification using the official `@modelcontextprotocol/ext-apps` server helpers: `render_widget` registered with `_meta.ui.resourceUri: "ui://widgentic/app.html"`, and the app template registered as a resource with mime type `"text/html;profile=mcp-app"`. When the assembly is given `resourceDomains` (a list of hostnames the operator trusts the frame to load assets from), the app resource SHALL declare them as `_meta.ui.csp.resourceDomains` (the Apps CSP block) and the same list SHALL govern the inliner's declared-domain skip; with none given, nothing is declared and every external image faces inlining. The list is deployment configuration — stored widgets and render inputs SHALL have no way to extend it. The assembly SHALL detect the client's Apps capability (`extensions["io.modelcontextprotocol/ui"]`) after initialization and note the outcome on stderr. SDK and host-flavor specifics SHALL live only behind the `@widgentic/mcp/sdk` entry; the base `@widgentic/mcp` entry remains SDK-free (per the server-assembly requirement).
+The server assembly SHALL declare the tool↔UI linkage per the MCP Apps specification using the official `@modelcontextprotocol/ext-apps` server helpers: `render_widget` registered with `_meta.ui.resourceUri: "ui://widgentic/app.html"`, and the app template registered as a resource with mime type `"text/html;profile=mcp-app"` whose `_meta.ui` — on the resource declaration and on its `resources/read` content alike — SHALL carry `prefersBorder: false`, since widgets draw their own surface; the value is explicit because hosts' defaults differ, and it comes from the shared app-template resource descriptor. The assembly MAY be given `resourceDomains`: the domains the frame may load assets from directly. The list is the union of the operator's configuration and the caller's `resourceDomains` setting, which the transport edge composes. Each entry SHALL be read by the store's resource-domain rule. The app resource SHALL declare the accepted entries as `_meta.ui.csp.resourceDomains` (the Apps CSP block), in canonical `https://` origin form, deduplicated in first-seen order. An entry the rule refuses SHALL be dropped from the declaration and from the inliner's ranking alike, and the same accepted list SHALL govern the inliner's declared-domain ranking. With no entries given, or none accepted, nothing is declared and every external image faces inlining first. Only the operator and a person, through their settings, can extend the list; stored widgets and render inputs SHALL have no way to extend it. The assembly SHALL detect the client's Apps capability (`extensions["io.modelcontextprotocol/ui"]`) after initialization and note the outcome on stderr. SDK and host-flavor specifics SHALL live only behind the `@widgentic/mcp/sdk` entry; the base `@widgentic/mcp` entry remains SDK-free (per the server-assembly requirement).
 
 #### Scenario: Tool declares its template
 - **WHEN** an SDK client lists tools
@@ -276,9 +299,18 @@ The server assembly SHALL declare the tool↔UI linkage per the MCP Apps specifi
 - **THEN** all tools SHALL behave exactly as before (text/page/widget outputs), with the template simply unmounted
 
 #### Scenario: Declared domains reach the resource metadata
-- **WHEN** the assembly is created with `resourceDomains: ["cdn.example.com"]` and an SDK client reads the app resource
-- **THEN** the resource SHALL carry `_meta.ui.csp.resourceDomains: ["cdn.example.com"]`
+- **WHEN** the assembly is created with `resourceDomains: ["cdn.example.com"]` and an SDK client lists and reads the app resource
+- **THEN** the declaration and the read content SHALL both carry `_meta.ui.csp.resourceDomains: ["https://cdn.example.com"]`
 - **AND** with no domains configured the key SHALL be absent
+
+#### Scenario: The host is asked for no border
+- **WHEN** an SDK client lists resources and reads the app resource, with or without configured `resourceDomains`
+- **THEN** the declaration and the read content SHALL both carry `_meta.ui.prefersBorder: false`, with the same `_meta.ui`
+
+#### Scenario: Refused domains are not declared
+- **WHEN** the assembly is created with `resourceDomains: ["cdn.example.com", "http://old.example.com", "https://*.example.org", "CDN.example.com"]`
+- **THEN** the app resource SHALL declare exactly `["https://cdn.example.com", "https://*.example.org"]`
+- **AND** an image on `old.example.com` SHALL rank as undeclared
 
 ### Requirement: App template loader
 The repository SHALL provide the app template (`ui://widgentic/app.html`): a self-contained document with the widgentic base stylesheet and a minimal inline bridge implementing the MCP Apps iframe protocol — the `ui/initialize` handshake (protocol version `2026-01-26`), the `ui/notifications/initialized` notification, `ping`/`ui/resource-teardown` responders, a streaming input preview — on `ui/notifications/tool-input-partial` (and `tool-input`), built-in kinds (`card`, `table`, `tree`, and `group`s whose items are built-ins) SHALL mount a client-built preview tree from the partial `{ widget, data, hints }` through the same native mounter, marked visibly in-progress, with successive partials patching in place; custom and unknown kinds SHALL show a generating-state skeleton naming the kind, never a client-built guess, until a SERVER preview arrives: when the host advertises `serverTools`, the template SHALL request the app-only `preview_widget` tool for any render that names a kind outside the built-ins (alone or as a `group` item) — at most one request in flight per frame, the latest input snapshot sent once the previous request settles, and no request once the tool result has arrived — and SHALL mount each successful answer's `tree` (applying its `css`) through the same native mounter, marked in progress like any preview; an error answer (`RATE_LIMITED` included), a request the host rejects, or a host without `serverTools` SHALL leave the skeleton (or the last successful server preview) on screen and end preview requests for that render, and an answer arriving after the tool result SHALL be discarded. Every preview, client-built or server, SHALL use only a SETTLED widget name: in the complete `tool-input` always, and in a partial snapshot once another argument follows it (snapshots keep the streamed key order); the same rule SHALL apply to each `group` item's `kind`. Until the name settles the frame SHALL show an in-progress placeholder that names no kind, a server request for a `group` SHALL carry only the items whose kind has settled, and a name still arriving SHALL never select a built-in preview, since `card` may be becoming `card-deluxe`; previews use the built-ins' `wg-*` classes and content but skip image inlining, diagnostics, and validation (the tool result stays the only authority), and the preview state SHALL be replaced by the `tool-result` render (or restored to the placeholder on `tool-cancelled`) — and a `ui/notifications/tool-result` listener that renders `structuredContent` (`css` via style text; the widget mounted natively from `structuredContent.tree` when present — DOM built with `createElement`/`createTextNode`, tag and attribute names held to the serializer's allowlists, `on*` attributes skipped — with subsequent tool-results patching the mounted DOM in place, preserving node identity where shape matches and pairing sibling elements by `key` under exactly the rules of the reactive-rendering patcher — keyed when every child of both lists is a uniquely keyed element, by position otherwise — so a reordering result moves DOM nodes instead of re-pairing them; `html` injected into the root only as the fallback when `tree` is absent), with ResizeObserver-driven `ui/notifications/size-changed` reporting. Anchor clicks SHALL NEVER navigate the frame — the frame is the widget, and an in-frame navigation to an external origin is sandbox-blocked, replacing the widget with an error page: the template SHALL intercept every anchor click, prevent the default, and ask the host to open http(s)/mailto/tel URLs via a `ui/open-link` request, staying intact when the host denies or does not support it. The template SHALL integrate host context (from the initialize result and `host-context-changed`): theme applied as `data-theme`/`color-scheme`, host style variables set on the document root and flowing into the `--wg-*` tokens with widgentic's light literals as final fallback, and safe-area insets applied as body padding. For registry tokens the host bridge does NOT map, the template SHALL flip to the dark preset's values when the host theme is dark (keyed on the applied `data-theme`), so custom widget styles stay coherent in both modes — host-bridged tokens keep their host-derived values, and an explicit widgentic `theme` SHALL still override in both modes. The template SHALL reference no external resources and declare no CSP domains (strictest sandbox).
@@ -421,7 +453,7 @@ The served app template SHALL stay within explicit size budgets — 44 KiB of UT
 - **THEN** the size test SHALL fail, naming the measured size and the budget
 
 ### Requirement: Server-side image inlining for iframe surfaces
-Because Apps-host sandboxes block external `img-src` while permitting `data:`, the runnable server SHALL, when inlining is enabled (the default; `WIDGENTIC_INLINE_IMAGES=0` disables), rewrite `img` sources on the iframe-facing surfaces of a `render_widget` result — the `structuredContent` HTML fragment, the `structuredContent.tree` render tree (element nodes with `tag: "img"`), and the `ui://widgentic/page/<kind>` embedded resource — replacing each `http(s)` source whose fetch succeeds with a `data:<content-type>;base64,` URI; the tree and HTML projections SHALL be rewritten from the same fetch results and never disagree. The model-facing HTML text block and `format: "page"` output SHALL keep original URLs. Each unique URL SHALL be fetched at most once per render. The fetch SHALL be guarded: `https` scheme only; hostnames resolving to loopback, private (RFC1918), link-local (including 169.254.169.254), carrier-grade NAT, or IPv6 unique-local/link-local addresses SHALL be rejected, re-validated on every redirect hop (at most 3); the connection SHALL be made to the exact address that passed validation — the fetch SHALL NOT perform its own name resolution, so a DNS answer that changes between validation and connection has no effect — while TLS server-name and the `Host` header keep the original hostname; the response `Content-Type` MUST be `image/*`; per-image size SHALL be capped (1 MiB) and the fetch SHALL time out (~4 s); at most 24 unique sources SHALL be fetched per render, chosen in PRIORITY order: sources used by a `wg-img-hero` image first; then sources used by a `wg-img-thumb` or `wg-img-avatar` image or by an image carrying no `wg-img-*` shape class; then sources used only by `wg-img-icon` images — each source ranked by its highest-priority occurrence, ties broken by its first occurrence in document order. Fetched sources SHALL then be admitted in that same order while the bytes they SUBSTITUTE stay within a per-render budget of 3 MiB, where a source costs the length of its `data:` URI times the number of `img` occurrences it has in the render tree (in the fragment when no tree is present); a source that would exceed the remaining budget SHALL keep its original URL, while later sources that still fit SHALL be admitted. A render that leaves fetchable sources external, under either bound, SHALL write one note to stderr carrying counts only (no URLs); nothing about it SHALL reach the model-facing output. URLs whose hostname is among the deployment's declared resource domains SHALL be left un-inlined — the frame is allowed to load them natively. Any failure SHALL leave the original URL in place (alt-text fallback) without failing the render.
+Because Apps-host sandboxes block external `img-src` while permitting `data:`, the runnable server SHALL, when inlining is enabled (the default; `WIDGENTIC_INLINE_IMAGES=0` disables), rewrite `img` sources on the iframe-facing surfaces of a `render_widget` result — the `structuredContent` HTML fragment, the `structuredContent.tree` render tree (element nodes with `tag: "img"`), and the `ui://widgentic/page/<kind>` embedded resource — replacing each `http(s)` source whose fetch succeeds with a `data:<content-type>;base64,` URI; the tree and HTML projections SHALL be rewritten from the same fetch results and never disagree. The model-facing HTML text block and `format: "page"` output SHALL keep original URLs. Each unique URL SHALL be fetched at most once per render. The fetch SHALL be guarded: `https` scheme only; hostnames resolving to loopback, private (RFC1918), link-local (including 169.254.169.254), carrier-grade NAT, or IPv6 unique-local/link-local addresses SHALL be rejected, re-validated on every redirect hop (at most 3); the connection SHALL be made to the exact address that passed validation — the fetch SHALL NOT perform its own name resolution, so a DNS answer that changes between validation and connection has no effect — while TLS server-name and the `Host` header keep the original hostname; the response `Content-Type` MUST be `image/*`; per-image size SHALL be capped (1 MiB) and the fetch SHALL time out (~4 s); at most 24 unique sources SHALL be fetched per render, chosen in PRIORITY order: every source on an undeclared host before any source on a declared resource domain, and within each of those two groups, sources used by a `wg-img-hero` image first; then sources used by a `wg-img-thumb` or `wg-img-avatar` image or by an image carrying no `wg-img-*` shape class; then sources used only by `wg-img-icon` images — each source ranked by its highest-priority occurrence, ties broken by its first occurrence in document order. Fetched sources SHALL then be admitted in that same order while the bytes they SUBSTITUTE stay within a per-render budget of 3 MiB, where a source costs the length of its `data:` URI times the number of `img` occurrences it has in the render tree (in the fragment when no tree is present); a source that would exceed the remaining budget SHALL keep its original URL, while later sources that still fit SHALL be admitted. A render that leaves fetchable sources external, under either bound, SHALL write one note to stderr carrying counts only (no URLs), with the sources on declared domains counted apart from the rest; nothing about it SHALL reach the model-facing output. A source is on a declared resource domain when its hostname equals a declared host, or lies under a wildcard entry: `https://*.example.com` covers `a.example.com` and `a.b.example.com`, not `example.com`. Such a source has a second route, since a host honoring the declaration loads it directly, so it is inlined only with the cap and budget the undeclared sources leave, and when left external it keeps its URL. Any failure SHALL leave the original URL in place (alt-text fallback) without failing the render.
 
 #### Scenario: External image becomes a data URI in iframe surfaces only
 - **WHEN** `render_widget` renders a table whose cell is a fetchable `https` image URL and inlining is enabled
@@ -446,9 +478,9 @@ Because Apps-host sandboxes block external `img-src` while permitting `data:`, t
 - **THEN** the original URL SHALL remain and the render SHALL still succeed
 
 #### Scenario: Declared resource domains are not inlined
-- **WHEN** the deployment declares `cdn.example.com` as a resource domain and a widget image source is `https://cdn.example.com/a.png`
-- **THEN** the URL SHALL remain in all surfaces (no fetch, no data URI)
-- **AND** an image on an undeclared host in the same render SHALL still be inlined
+- **WHEN** `cdn.example.com` is a declared resource domain and a render carries 30 distinct fetchable thumbnail sources of a few kilobytes each, the first 10 in document order on `https://cdn.example.com/` and the other 20 on undeclared hosts
+- **THEN** all 20 undeclared sources SHALL be fetched and inlined, and so SHALL the first 4 declared sources in document order
+- **AND** the other 6 declared sources SHALL keep their URLs in all surfaces, with no fetch made for them
 
 #### Scenario: Inlining can be disabled
 - **WHEN** `WIDGENTIC_INLINE_IMAGES=0` is set
@@ -472,6 +504,18 @@ Because Apps-host sandboxes block external `img-src` while permitting `data:`, t
 - **WHEN** a render leaves fetchable sources external under either bound
 - **THEN** stderr SHALL carry one note with the counts and no URL
 - **AND** the model-facing text and `structuredContent.diagnostics` SHALL be unchanged by it
+
+#### Scenario: Declared sources are inlined when room remains
+- **WHEN** `cdn.example.com` is a declared resource domain and a render carries one fetchable image on it among 5 sources in all
+- **THEN** that image SHALL be inlined as a `data:` URI, exactly as an undeclared one is
+
+#### Scenario: A wildcard declaration covers subdomains only
+- **WHEN** `https://*.example.com` is declared and a render carries more sources than the cap, including ones on `a.example.com`, `a.b.example.com` and `example.com`
+- **THEN** the sources on `a.example.com` and `a.b.example.com` SHALL rank as declared, and the one on `example.com` SHALL rank as undeclared
+
+#### Scenario: Declared leftovers are counted apart
+- **WHEN** a render leaves 6 declared sources and 2 undeclared sources external
+- **THEN** the stderr note SHALL report the 6 apart from the 2, with no URL
 
 ### Requirement: Capability-aware default output
 `handleRenderWidget` SHALL accept `options.slim: boolean` (default false). In slim mode, the default-format result's `content` SHALL be a one-line text block — naming the rendered kind, stating that the visual is already displayed to the user, and instructing that the data not be restated as text — followed by the widgentic payload block; the full-HTML text block SHALL be omitted. Explicit `format` values (`html`, `widget`, `page`, `app`) SHALL keep their exact non-slim contracts regardless of `options.slim`, and `structuredContent` SHALL be identical between slim and full modes. The server assembly SHALL resolve the slim signal per call. It checks three sources in order:
@@ -555,7 +599,7 @@ Each request SHALL compose fresh catalog and theme-registry instances; the serve
 - **THEN** each response SHALL reflect only its own principal's catalog
 
 ### Requirement: Authoring guide tool
-The server SHALL expose a read-only `get_authoring_guide` tool whose result is a structured JSON guide containing everything an external agent needs to draft valid widget and theme JSON for its user: the `CustomWidget` shape (`{ kind, template, descriptor }` with the descriptor's fields, including `dataSchemaRef` — a saved shared schema referenced by name IN PLACE of an inline `dataSchema`, never both), the theme entry shape (`{ name, label?, description?, tokens }`), the shared-schema entry shape (`{ name, label?, description?, schema }` — what the user imports in the Data schemas section), the shared-ACTION entry shape (`{ name, label?, description?, definition }` — what the user imports in the Actions section, with both definition kinds and the action name pattern, which is stricter than the identifier charset used for widgets, themes and schemas), the template DSL's node forms (text, `bind`, `each`/`empty`, `when`/`else`, elements with attrs including `{ bind }` values and the attr transforms `{ bind, map, default? }` / `{ bind, prefix }` and the value transform `{ bind, format }` with its closed number/currency/date vocabulary, each taught with its motivating recipe — a status value selecting a `wg-status-*` class, `mailto:`/`tel:` links from bound addresses, and a numeric-string price formatted as a currency) and safety rules (no `on*` attributes, URL scheme allowlist, base64 `data:image/*` on `img src` only, depth and node bounds), the identifier charset and the reserved built-in kinds, the styles rules (`.wg-` selectors, banned constructs), the `dataSchema` subset including its `pattern` bounds, a data-modeling preference (bind only schema-declared properties; `$meta.*` is outside `dataSchema` validation and SHALL be discouraged rather than promoted), a shared-schema rule — when the user names a saved schema, reference it with `dataSchemaRef` and discover its shape with `list_schemas`; do NOT reconstruct it inline, since the copy forks the moment the user edits the shared one —, a shared-ACTION rule — an element binds one with `action: { "ref": "<name>", input?, output? }` and a widget loads one at first render with a `load` binding (http `GET` only); discover what exists with `list_actions` and reference it by name, and when nothing fits DESCRIBE the action the user should author and test in the designer rather than drafting an inline definition with a URL or credentials the agent cannot know —, the token registry with each token's type and use, the per-principal limits — including the caps on shared schemas and shared actions, so an agent can see the ceiling it drafts against —, and a `workflow` section stating that agents draft JSON while users import, validate, and save it in the authenticated designer — registration over MCP does not exist by design. Facts with a live source of truth SHALL be derived from it at call time — including the custom-variable name pattern, the banned style substrings, the style property allowlist, the schema `pattern` length cap, and the action name pattern, each read from its owning constant (reserved kinds from the catalog, limits from the store defaults, tokens from the token registry), never duplicated as prose.
+The server SHALL expose a read-only `get_authoring_guide` tool whose result is a structured JSON guide containing everything an external agent needs to draft valid widget and theme JSON for its user: the `CustomWidget` shape (`{ kind, template, descriptor }` with the descriptor's fields, including `dataSchemaRef` — a saved shared schema referenced by name IN PLACE of an inline `dataSchema`, never both), the theme entry shape (`{ name, label?, description?, tokens, styles? }` — `styles` defining shared `.wg-` classes under the same rules as a widget's styles, which widgets rendered under the theme can use; which theme is a default is a principal setting the person chooses in the designer's Settings, not part of the entry), the shared-schema entry shape (`{ name, label?, description?, schema }` — what the user imports in the Data schemas section), the shared-ACTION entry shape (`{ name, label?, description?, definition }` — what the user imports in the Actions section, with both definition kinds and the action name pattern, which is stricter than the identifier charset used for widgets, themes and schemas), a label-style rule, taken from the core package's exported rule, for the labels a template writes as literals and the `labels` hint of the built-in `card` and `table` (Title Case unless the user asks for another style or language), the template DSL's node forms (text, `bind`, `each`/`empty`, `when`/`else`, elements with attrs including `{ bind }` values and the attr transforms `{ bind, map, default? }` / `{ bind, prefix }` and the value transform `{ bind, format }` with its closed number/currency/date vocabulary, each taught with its motivating recipe — a status value selecting a `wg-status-*` class, `mailto:`/`tel:` links from bound addresses, and a numeric-string price formatted as a currency) and safety rules (no `on*` attributes, URL scheme allowlist, base64 `data:image/*` on `img src` only, depth and node bounds), the identifier charset and the reserved built-in kinds, the styles rules (`.wg-` selectors, banned constructs), the `dataSchema` subset including its `pattern` bounds, a data-modeling preference (bind only schema-declared properties; `$meta.*` is outside `dataSchema` validation and SHALL be discouraged rather than promoted), a shared-schema rule — when the user names a saved schema, reference it with `dataSchemaRef` and discover its shape with `list_schemas`; do NOT reconstruct it inline, since the copy forks the moment the user edits the shared one —, a shared-ACTION rule — an element binds one with `action: { "ref": "<name>", input?, output? }` and a widget loads one at first render with a `load` binding (http `GET` only); discover what exists with `list_actions` and reference it by name, and when nothing fits DESCRIBE the action the user should author and test in the designer rather than drafting an inline definition with a URL or credentials the agent cannot know —, the token registry with each token's type and use, the per-principal limits — including the caps on shared schemas and shared actions, so an agent can see the ceiling it drafts against —, and a `workflow` section stating that agents draft JSON while users import, validate, and save it in the authenticated designer — registration over MCP does not exist by design. Facts with a live source of truth SHALL be derived from it at call time — including the custom-variable name pattern, the banned style substrings, the style property allowlist, the schema `pattern` length cap, and the action name pattern, each read from its owning constant (reserved kinds from the catalog, limits from the store defaults, tokens from the token registry), never duplicated as prose.
 
 #### Scenario: The guide is discoverable and structured
 - **WHEN** an SDK client lists tools and calls `get_authoring_guide`
@@ -580,7 +624,7 @@ The server SHALL expose a read-only `get_authoring_guide` tool whose result is a
 
 #### Scenario: Theme-building tools point at the save path
 - **WHEN** `list_theme_tokens` or `list_themes` rules are read
-- **THEN** they SHALL tell agents that a theme the user wants to keep is delivered as the importable entry (`{ name, label?, description?, tokens }`) for the designer at widgentic.dev, referencing `get_authoring_guide` — the inline token map styles only one render
+- **THEN** they SHALL tell agents that a theme the user wants to keep is delivered as the importable entry (`{ name, label?, description?, tokens, styles? }`) for the designer at widgentic.dev, referencing `get_authoring_guide` — the inline token map styles only one render
 
 #### Scenario: Every stated rule is read from its constant
 - **WHEN** the guide's custom-variable pattern, style ban list, style property rule, and pattern length cap are compared with the constants that enforce them
@@ -616,6 +660,15 @@ The server SHALL expose a read-only `get_authoring_guide` tool whose result is a
 #### Scenario: The published limits cover every entry an agent drafts
 - **WHEN** the `limits` section is read
 - **THEN** it SHALL carry the caps on shared schemas and shared actions beside the widget and theme caps, each equal to the store's documented default
+
+#### Scenario: The guide teaches theme styles
+- **WHEN** the guide's theme section is read
+- **THEN** it SHALL document `styles` with the selector, banned-construct and property-name rules read from the same constants as the widget styles rules, and SHALL state that a theme's classes serve every widget rendered under it
+- **AND** a theme drafted from the guide with a `.wg-btn` rule SHALL pass the store's write validation and the designer's import unchanged
+
+#### Scenario: The guide carries the label style
+- **WHEN** `get_authoring_guide` is called
+- **THEN** its result SHALL contain the core package's exported label-style rule verbatim
 
 ### Requirement: Schema listing tool
 The server SHALL expose a read-only `list_schemas` tool returning the presented key's stored shared schemas — each entry's `name`, optional `label` and `description`, and the `schema` object itself, so an agent asked to build a widget "using schema xyz" can bind the schema's actual properties and draft a `dataExample` that validates. The listing SHALL serve the principal resolved from the request's key, exactly like `list_widgets`: an anonymous or unknown key sees an empty list, never an error. The tool's wire-visible description SHALL steer agents to reference a listed schema by name (`descriptor.dataSchemaRef`) rather than copying its body inline. The schemas listed are the STORED entries — unlike `list_widgets`, whose descriptors carry references already resolved. Reading the schemas SHALL cost nothing on renders: the store is consulted when the tool is called, not when the server is constructed.
@@ -693,6 +746,7 @@ The server SHALL expose an app-only tool, `execute_action`, registered with `_me
 #### Scenario: Empty ids and stray locations are refused
 - **WHEN** `execute_action` is called with `action: ""`, or with `at: "meta.x"`
 - **THEN** the result SHALL be `MISSING_FIELD` / `INVALID_TYPE` and nothing SHALL be fetched
+- **AND** an `args` that is present but not an object, or an `at` or `item` that is present but not a string, SHALL be refused with `INVALID_TYPE` on that path, never ignored, and nothing SHALL be fetched
 
 #### Scenario: Backend errors are not echoed
 - **WHEN** secret resolution throws a vault error carrying a key identifier
@@ -886,14 +940,21 @@ tool result renders.
 ### Requirement: Runtime-neutral host bundle
 The package SHALL export from a `./host` entry `createWidgenticHost(config: string)`. Its default import condition SHALL resolve to ONE self-contained ES module with no `import` statements. Evaluating it SHALL require nothing beyond ECMAScript 2022 and ECMA-402 (`Intl`): no `node:` module, no `process`, no `Buffer`, no `require`, and no web API, so any embedded JavaScript engine with `Intl` can host widgentic.
 
-`config` is a JSON string carrying optional `widgets` (designer-exported widget definitions `{ kind, template, descriptor, load? }`), `themes` (theme entries `{ name, label?, description?, extends?, tokens }`) and `schemas` (shared schema entries `{ name, label?, description?, schema }`). Every entry SHALL be validated with the same checks and structured codes the store applies on write, and built-in kinds and the `light`/`dark` theme names stay reserved. An invalid entry SHALL be skipped and reported, never served and never thrown.
+`config` is a JSON string carrying optional `widgets` (designer-exported widget definitions `{ kind, template, descriptor, load? }`), `themes` (theme entries `{ name, label?, description?, tokens, styles? }`) `schemas` (shared schema entries `{ name, label?, description?, schema }`) and `resourceDomains` (the embedding server's own list of domains the app frame may load assets from, as `createWidgenticServer` takes it). Every entry SHALL be validated with the same checks and structured codes the store applies on write, and built-in kinds and the `light`/`dark` theme names stay reserved. An invalid entry SHALL be skipped and reported, never served and never thrown. A `resourceDomains` entry SHALL be read by the store's resource-domain rule, and one it refuses SHALL be reported under the section `resourceDomains` with code `INVALID_DOMAIN` and skipped.
+
+`config` MAY also carry `settings`, a principal settings record in the store's shape (`{ defaultThemes?: { light?, dark? }, resourceDomains?: string[] }`), so a host can choose its default themes and declare its resource domains. An absent or `null` record means no settings. Any other value SHALL be checked with the store's write rules for settings:
+- An unknown section, an unknown mode, or a name that is not a string SHALL be reported as `INVALID_SHAPE`.
+- A default naming a theme the host does not serve SHALL be reported as `UNKNOWN_THEME`. That covers a built-in name, a theme the config does not carry, and a configured theme that was refused.
+- A `resourceDomains` value that is not an array of strings, or that holds more than the limit, SHALL be reported as `INVALID_SHAPE`, and an entry the resource-domain rule refuses as `INVALID_DOMAIN`, naming it.
+
+A reported setting SHALL be skipped, and SHALL be listed by `problems()` under the section `settings`, never thrown. A skipped default leaves its mode on the built-in, and a skipped domain is not declared. The defaults a valid record sets SHALL apply exactly as the Node assembly applies a principal's stored defaults: to `render_widget` and `preview_widget` output, to `widgetPage(kind)`, and to `list_themes`' `defaults`. Without `settings`, every output SHALL be byte-identical to a host created before settings existed.
 
 The returned host SHALL take and return strings only, apart from the boolean `slim` flag of `call`:
 - `version()`: the `@widgentic/mcp` version the bundle was built from, taken from its manifest at build time.
-- `problems()`: a JSON array of `{ section, index, code, message }`, one per refused entry.
+- `problems()`: a JSON array of `{ section, index, name, code, message }`, one per refused entry or setting.
 - `definitions()`: the JSON of the tool definitions this host serves, taken from the same exported definitions as the Node assembly, with name, description and JSON-Schema `inputSchema`. The tools are `list_widgets`, `render_widget`, `list_theme_tokens`, `list_themes`, `list_schemas` and `get_authoring_guide`, plus the template's own `preview_widget`, which is marked `visibility: ["app"]` as the Node assembly registers it.
 - `call(name, argsJson, slim)`: the MCP tool result JSON of that tool's handler, with the slim flag passed through to `render_widget`. `preview_widget` SHALL be answered by the same handler as in the Node assembly, through the host's composed catalog and themes, with no rate gate: rate-limiting previews belongs to the embedding server's transport. An unknown tool name SHALL return an `isError` result, never throw.
-- `resources()`: the JSON of the served documents (the app template and the preview-page template) with name, URI or URI template, MIME type and description, taken from the same constants the Node assembly registers them with.
+- `resources()`: the JSON of the served documents (the app template and the preview-page template) with name, URI or URI template, MIME type and description, taken from the same constants the Node assembly registers them with. For the app template it also gives `prefersBorder` and `resourceDomains`. `resourceDomains` lists the accepted entries of `config.resourceDomains` followed by those of `settings.resourceDomains`, in canonical `https://` origin form and deduplicated in first-seen order: the list the Node assembly declares for the same operator list and settings. The key SHALL be absent when no entry is accepted.
 - `appTemplate()`: exactly `buildAppTemplate()`.
 - `widgetPage(kind)`: the preview page the Node assembly serves for `ui://widgentic/page/{kind}`.
 
@@ -901,7 +962,7 @@ The host SHALL be render-only. Templates SHALL be compiled with http actions dis
 
 Inside the bundle, `URL` SHALL resolve to the platform's implementation when the global exists, and otherwise to a bundled, spec-compliant WHATWG URL implementation. Evaluating the bundle SHALL NOT create or modify any global binding, and the host SHALL keep no data from one call to the next.
 
-The repository SHALL keep a generated conformance corpus: render inputs paired with the exact Node-path outputs. It SHALL cover every served tool, `preview_widget` included, plus the built-in kinds, a group, named and inline themes, contract errors, hint diagnostics, number and currency formats including non-English locales, URL edge cases, and the example template widgets (with and without actions). The default gate SHALL fail when the committed corpus differs from the current Node output, or when the bundle evaluated in a bare realm (no globals beyond ECMAScript and `Intl`) produces any output that differs from the corpus.
+The repository SHALL keep a generated conformance corpus: render inputs paired with the exact Node-path outputs. It SHALL cover every served tool, `preview_widget` included, plus the built-in kinds, a group, named and inline themes (a named theme with styles included, as a render, a page and a preview), default themes from `settings` (a light default only, a dark default only, two defaults with styles, and one theme for both modes, each as a render, a page, a preview and `list_themes`), resource domains (operator entries, a settings section, and the two combined, each as `resources()`; a refused entry is covered by each runtime's host tests instead, because an embedding host may refuse such a configuration at startup), contract errors, hint diagnostics, number and currency formats including non-English locales, field labels (a card and a table with `hints.labels`), URL edge cases, and the example template widgets (with and without actions). The default gate SHALL fail when the committed corpus differs from the current Node output, or when the bundle evaluated in a bare realm (no globals beyond ECMAScript and `Intl`) produces any output that differs from the corpus.
 
 #### Scenario: The bundle evaluates in a bare realm
 - **WHEN** the built `./host` bundle is evaluated in a JavaScript context that exposes only ECMAScript built-ins and `Intl` (no `URL`, `process`, `Buffer` or `require`)
@@ -946,3 +1007,117 @@ The repository SHALL keep a generated conformance corpus: render inputs paired w
 #### Scenario: Calls carry no state
 - **WHEN** a host renders payload A and then payload B
 - **THEN** B's output SHALL be byte-identical to B rendered by a freshly created host, and SHALL contain no string that appears only in A
+
+#### Scenario: Settings choose the host's default themes
+- **WHEN** a host is created with a configured theme `brand` and `settings: { defaultThemes: { light: "brand" } }`, and `render_widget` runs with no `theme`
+- **THEN** the output SHALL equal the Node assembly's for a principal whose stored settings choose `brand` as the light default
+- **AND** `list_themes` SHALL report `defaults: { "light": "brand", "dark": "dark" }`
+
+#### Scenario: A default naming no served theme is reported
+- **WHEN** `settings` names `ghost` as the dark default and the config carries no theme `ghost`
+- **THEN** `problems()` SHALL list one entry with section `settings` and code `UNKNOWN_THEME`, the host SHALL be created, and the dark default SHALL stay the built-in
+
+#### Scenario: Malformed settings are reported, not thrown
+- **WHEN** `settings` carries an unknown section, or a mode other than `light` and `dark`
+- **THEN** `problems()` SHALL list `INVALID_SHAPE` under section `settings`, and the host SHALL be created with the built-in defaults
+
+#### Scenario: Declared domains are reported canonical
+- **WHEN** a host is created with `resourceDomains: ["assets.example.org"]` and `settings: { resourceDomains: ["CDN.example.com", "https://*.example.net/", "https://assets.example.org"] }`
+- **THEN** `resources()` SHALL give the app template `resourceDomains: ["https://assets.example.org", "https://cdn.example.com", "https://*.example.net"]`, and `problems()` SHALL be `[]`
+- **AND** a host created with neither SHALL give no `resourceDomains` key, with `resources()` byte-identical to a host created before resource domains existed
+
+#### Scenario: Refused domains are reported, not declared
+- **WHEN** a host is created with `resourceDomains: ["http://old.example.com"]` and `settings: { resourceDomains: ["cdn.example.com", "localhost"] }`
+- **THEN** `problems()` SHALL list `INVALID_DOMAIN` under section `resourceDomains` naming `http://old.example.com` and `INVALID_DOMAIN` under section `settings` naming `localhost`, the host SHALL be created, and `resources()` SHALL declare only `https://cdn.example.com`
+
+### Requirement: Theme styles reach every styled output
+When a render resolves a theme that carries `styles` — a registered theme named by the `theme` input, or a default theme from the caller's settings — every output that carries the theme's tokens SHALL carry its styles too, generated under the theme-style guards: the template channel's `structuredContent.css`, the `format: "page"` and `format: "app"` documents, the `ui://widgentic/page/{kind}` page, `preview_widget`'s `css`, and every `execute_action` re-render of the widget — a named theme carrying styles SHALL also ride the payload by name (`themeName`), so a re-render resolves the same entry from the caller's registry, falling back to the held token map when the name no longer resolves. Theme styles SHALL come before the rendered kinds' registered styles, so a widget's own rule wins a tie, and the theme's token declarations SHALL follow both. An inline token map carries no styles. A theme without styles SHALL produce exactly today's output.
+
+#### Scenario: A named theme's styles reach the template channel
+- **WHEN** `render_widget` runs with `theme: "brand"`, whose styles define `.wg-btn`, for a kind whose registered styles define `.wg-invoice`
+- **THEN** `structuredContent.css` SHALL contain the `.wg-btn` rule, then the `.wg-invoice` rule, then the theme's `--wg-*` declarations
+
+#### Scenario: Documents carry theme styles
+- **WHEN** the same render runs with `format: "page"`
+- **THEN** the document's style element SHALL contain the `.wg-btn` rule before the `.wg-invoice` rule
+
+#### Scenario: Action re-renders keep the theme's styles
+- **WHEN** a widget rendered with `theme: "brand"` (styles `.wg-btn`) runs an http action through `execute_action`
+- **THEN** the re-render's `css` SHALL equal the first render's, `.wg-btn` rule included
+- **AND** a render under a theme without styles SHALL carry no `themeName`
+
+#### Scenario: Previews match the result
+- **WHEN** `preview_widget` runs with `theme: "brand"`
+- **THEN** its `css` SHALL contain the `.wg-btn` rule exactly as the render's does
+
+#### Scenario: Unsafe theme style entries never reach any output
+- **WHEN** a stored theme's styles hold a `body` rule beside a safe `.wg-btn` rule
+- **THEN** no output SHALL contain the `body` rule and every styled output SHALL contain the `.wg-btn` rule
+
+### Requirement: Default themes from settings stand in for the built-ins
+When a `render_widget` or `preview_widget` input names no `theme`, the output SHALL use the caller's registry defaults. For the template channel's `structuredContent.css`: a light default other than the built-in `light` SHALL contribute its token declarations under `:root:not([data-theme="dark"])`, and a dark default other than the built-in `dark` its declarations under `:root[data-theme="dark"]`; when both defaults carry styles each one's styles SHALL be scoped to its mode, and otherwise the styles of the one default that carries them SHALL apply in both modes, since they are layout a widget relies on and read the active mode's tokens; one theme that is the default for both modes SHALL be emitted as an explicitly named theme is, applying in both modes. A mode whose default is the built-in SHALL contribute no token declarations, keeping today's token behavior for that mode — the host's bridged values and, on dark hosts, the template's dark overrides. The `format: "page"` and `format: "app"` documents and the `ui://widgentic/page/{kind}` page, which carry no host theme, SHALL use the light default's tokens and styles unscoped and SHALL ignore the dark default. A `preview_widget` input whose `theme` does not resolve (a name still streaming) SHALL preview with no theme at all, not with the defaults. An explicit `theme` input SHALL replace the defaults in every mode. With both defaults built-in, every output SHALL be byte-identical to a render made before default themes existed.
+
+#### Scenario: The light default dresses light hosts only
+- **WHEN** a caller's light default is `brand` (`accent: "#ff5a1f"`) and its dark default is the built-in, and `render_widget` runs with no `theme`
+- **THEN** `structuredContent.css` SHALL declare `--wg-accent: #ff5a1f` under `:root:not([data-theme="dark"])` and nothing under `:root[data-theme="dark"]`
+- **AND** in the app template on a host whose theme is dark, the widget's computed accent SHALL equal the built-in dark behavior's (a render with no defaults), and on a light host it SHALL be `#ff5a1f`
+
+#### Scenario: The dark default dresses dark hosts only
+- **WHEN** a caller's dark default is `brand-dark` with styles defining `.wg-btn`, its light default the built-in, and `render_widget` runs with no `theme`
+- **THEN** `structuredContent.css` SHALL declare `brand-dark`'s tokens under `:root[data-theme="dark"]` only, and its `.wg-btn` rule unscoped
+
+#### Scenario: A default's styles serve both modes when the other default has none
+- **WHEN** the light default is `brand` (styles defining `.wg-btn`) and the dark default is `night`, a theme without styles, or the built-in
+- **THEN** `brand`'s `.wg-btn` rule SHALL be unscoped, so dark hosts keep the layout
+
+#### Scenario: Two different defaults each scope their styles
+- **WHEN** the light default is `brand` and the dark default `brand-dark`, both defining `.wg-btn`
+- **THEN** `brand`'s rule SHALL be under `:where(:root:not([data-theme="dark"])) .wg-btn` and `brand-dark`'s under `:where(:root[data-theme="dark"]) .wg-btn`, and in the app template a `.wg-btn` SHALL take each theme's padding on hosts of its mode
+
+#### Scenario: A theme still streaming previews with none
+- **WHEN** `preview_widget` runs with `theme: "bra"` for a caller whose light default is `brand`
+- **THEN** its `css` SHALL carry none of `brand`'s declarations
+
+#### Scenario: An explicit theme replaces the defaults
+- **WHEN** a caller with both defaults set renders with `theme: "dark"`
+- **THEN** the output SHALL carry the built-in dark theme as an explicit render does today and none of the default themes' declarations or styles
+
+#### Scenario: Documents use the light default
+- **WHEN** a caller with both defaults set renders with `format: "page"` and no `theme`
+- **THEN** the document SHALL carry the light default's tokens under `:root` and its styles unscoped, and none of the dark default's
+
+#### Scenario: No defaults, no change
+- **WHEN** a caller whose settings choose no default themes renders the same payload before and after this change, in every format
+- **THEN** the outputs SHALL be byte-identical
+
+#### Scenario: Previews follow the defaults
+- **WHEN** `preview_widget` runs with no `theme` for a caller whose light default is `brand`
+- **THEN** its `css` SHALL carry `brand`'s light-scoped declarations exactly as the render's does
+
+### Requirement: Previews show field labels
+The app template's client-built previews of `card` and `table` SHALL apply `hints.labels` as the renderers do. A labelled field or column SHALL preview with its label as soon as the streamed `hints` carry it, and a key without a label SHALL preview with the key. A preview therefore matches the result's labels, and the tool result's render stays the authority.
+
+#### Scenario: A streamed table previews its labels
+- **WHEN** partial input for `table` carries `hints: { labels: { first_name: "First Name" } }` before `data` rows of `{ first_name: "Ada" }`
+- **THEN** the preview's header SHALL read `First Name` from the first previewed row
+
+#### Scenario: A card previews its labels
+- **WHEN** partial input for `card` carries `data: { fields: { order_total: 42 } }` and `hints: { labels: { order_total: "Order Total" } }`
+- **THEN** the preview's field key SHALL read `Order Total`, as the tool result's render does
+
+### Requirement: Previews of built-in kinds take the result's theme
+While a built-in kind's input streams (`card`, `table`, `tree`, or a `group` whose settled items are all built-ins) and the host advertises `serverTools`, the template SHALL request the app-only `preview_widget` once the widget name settles. The request SHALL carry the widget (a `group` with no items) and the `theme` input once that has settled, and no theme otherwise. The template SHALL apply the answer's `css` to the preview, so the preview wears what the result will: the caller's default themes, or the named or inline theme. The preview's tree SHALL still be built client-side from the streamed input. A later settled `theme` that differs from the one requested SHALL trigger one more request, and no other request SHALL be made for the run; at most one SHALL be in flight. An error answer, a rejected request, or a host without `serverTools` SHALL end these requests for the run and leave the preview's styling as it is. An answer arriving after the tool result SHALL be discarded, so the result's `css` always wins.
+
+#### Scenario: A streamed card wears the caller's default theme
+- **WHEN** a host advertising `serverTools` streams `{ widget: "card", data: { title: "T" } }` and the `preview_widget` answer carries `css` declaring `--wg-accent: #ff5a1f`
+- **THEN** the frame SHALL have requested `preview_widget` with `{ widget: "card" }` only, SHALL apply that `css`, and SHALL keep the client-built card on screen
+
+#### Scenario: One request per run unless the theme changes
+- **WHEN** the same run streams more data, and then a settled `theme: "dark"`
+- **THEN** the further data SHALL request nothing, and the theme SHALL request `preview_widget` once more with `{ widget: "card", theme: "dark" }`
+
+#### Scenario: No server, no request; a late answer never wins
+- **WHEN** a host without `serverTools` streams a built-in kind
+- **THEN** no `preview_widget` request SHALL be made
+- **AND WHEN** a host with `serverTools` delivers the tool result before the CSS answer arrives
+- **THEN** the result's `css` SHALL stay applied and the late answer SHALL be discarded

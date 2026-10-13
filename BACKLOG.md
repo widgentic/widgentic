@@ -45,12 +45,14 @@ appears. Size: **S** one small change, **M** one change with spec deltas,
 | DSL-3 | A contract version marker | P3 | S | AG-UI comparison |
 | AGT-2 | Lossless auto-fix, reported | P3 | M | json-render comparison |
 | AGT-3 | Payload inspector in the designer | P3 | M | json-render comparison |
-| AGT-4 | Wire input schemas from the exported definitions | P3 | M | `mcp-sdk-v2` design |
 | STO-1 | DEK unwrap cache | P3 | M | Backlog |
 | STO-2 | Merge two populated accounts | P3 | L | Backlog |
 | NET-1 | Actions and image inlining for the .NET host | P2 | L | `dotnet-host` design |
 | NET-2 | .NET patches against an older pin | P3 | M | `mcp-sdk-v2` release review |
 | RND-5 | More image sources per render | P3 | M | Owner finding, v82 |
+| THM-2 | A dark mode for page and app documents | P3 | S | `theme-styles-and-defaults` design |
+| THM-3 | Keep style rules inside the widget: sibling combinators | P3 | S | PR #29 review |
+| AGT-5 | Load-time warnings agents can act on: dropped link schemes, unreachable action hosts | P3 | S | Browser agent, staging 2026-10-12 |
 
 **Part 2 · Pairing with other technologies**
 
@@ -196,33 +198,6 @@ are reachable by direct URL.
 - **Touches.** `widget-designer`.
 - **Origin.** json-render comparison, idea 6 (`@json-render/devtools`).
 
-#### AGT-4 · Wire input schemas from the exported definitions — P3, M
-
-- **Problem.** The SDK assembly declares `render_widget`, `execute_action` and
-  `preview_widget` inputs as zod objects that mirror the JSON Schemas in
-  `definitions.ts` by hand. Only the field descriptions are derived. A new
-  field or constraint has to be written twice, and the `./host` bundle already
-  serves the definitions' own schemas.
-- **Direction.** SDK 2.x accepts any Standard JSON Schema, and its
-  `fromJsonSchema` turns a JSON Schema into one. Register the exported
-  definitions directly, and drop zod from the assembly (and perhaps from the
-  peers, if ext-apps no longer needs it). Argument validation then moves from
-  zod to the SDK's JSON Schema validator, so the error texts agents see for
-  malformed arguments change. Check them against the handler's own
-  structured errors.
-- **A finding that belongs here.** On the `mcp-sdk-v2` staging retest,
-  Copilot's first `render_widget` call passed `kind` (the payload contract's
-  field) instead of `widget`. It got the SDK's generic `widget: Invalid input:
-  expected string, received undefined` and corrected itself. 0.9.0 answers the
-  same call the same way, so it is not a regression. Once validation is ours,
-  that error can name the mix-up in the tool's own vocabulary
-  (`render_widget` takes `widget`; `kind` is the payload's field).
-- **Touches.** `mcp-server` (the assembly), `package-distribution` (the zod
-  peer), and the "derived, never restated" convention in `CLAUDE.md`.
-- **Origin.** 2026-10-09 `mcp-sdk-v2` design, Non-Goals.
-
-### Store, secrets and accounts
-
 #### STO-1 · DEK unwrap cache — P3, M (investigate)
 
 - **Problem.** Every secret resolution performs one vault unwrap.
@@ -264,6 +239,14 @@ are reachable by direct URL.
   deadline after which the rest stay external.
 - **Touches.** `packages/mcp/src/server/inline-images.ts` (`resolveSources`),
   the `mcp-server` inlining requirement, the budget tests.
+- **Since `principal-resource-domains`.** A person can declare the domains their
+  images live on (Settings → Resource domains), and the inliner ranks those
+  sources after undeclared ones. A smoke test on staging (2026-10-12) found
+  claude.ai web, ChatGPT and VS Code Copilot all load declared images directly
+  and block undeclared ones, so a render past the cap shows every declared image
+  there. This item is left with sources on hosts nobody declared, such as
+  arbitrary URLs an agent supplies, and stays P3 until that case shows up in
+  use.
 - **Origin.** Owner finding after the streaming-preview release (v82).
 
 ### Language hosts
@@ -313,6 +296,42 @@ are reachable by direct URL.
 - **Origin.** 2026-10-09, reviewing what the 0.10.0 npm release means for
   `Widgentic.Mcp`. The workflow's pin check also blocked runs that publish
   nothing, which is fixed separately.
+
+### Theming
+
+#### THM-2 · A dark mode for page and app documents — P3, S
+
+- **Problem.** `format: "page"` and `"app"` documents carry no host colour scheme, so
+  they use the light default only. Someone opening one on a dark OS sees the light
+  look even when they have chosen a dark default theme.
+- **Direction.** Emit the dark default under `@media (prefers-color-scheme: dark)` in
+  documents (the template keeps following the host's `data-theme`). Decide whether
+  the built-in dark preset applies there too when no dark default is chosen.
+- **Touches.** `mcp-server` (document composition), the conformance corpus.
+- **Origin.** 2026-10-11, `theme-styles-and-defaults` design (non-goal, D8).
+
+#### THM-3 · Keep style rules inside the widget: sibling combinators — P3, S
+
+- **Problem.** The style guard requires each selector part to be held to a `.wg-`
+  class, but `.wg-a ~ *` and `.wg-a + div` match siblings outside the widget. In an
+  MCP Apps frame the widget is the whole document, so nothing else is there to
+  restyle; in a host page embedding a rendered widget, siblings are the host's.
+- **Direction.** Require the subject compound (the last one) to be held to `.wg-`, or
+  refuse `~`/`+` unless the compound after them is.
+- **Touches.** `widget-catalog` (the guard), `STYLE_RULES`, the guides.
+- **Origin.** 2026-10-12, PR #29 review; this behavior predates that change.
+
+#### AGT-5 · Load-time warnings agents can act on — P3, S
+
+- **Problem.** Some definitions load cleanly and fail later, with no warning at load:
+  - A `javascript:` link passes the widget check. The renderer drops the `href`, so it
+    is safe, but the agent never learns why the link is dead.
+  - `action_load` accepts `https://localhost`, private addresses and an empty prompt.
+    The guarded fetch refuses those hosts at the test call and at execution.
+- **Direction.** Warnings (never refusals) in the widget diagnostics and in the action
+  tools' results, derived from `ALLOWED_SCHEMES` and the guarded fetch's host rules.
+- **Touches.** `widget-designer`, `designer-webmcp`, actions.
+- **Origin.** 2026-10-12, the browser agent on staging; predates `theme-styles-and-defaults`.
 
 ### Untriaged
 

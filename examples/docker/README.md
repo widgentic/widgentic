@@ -35,7 +35,7 @@ is opt-in per key and is what lets your http actions run.
 
 ## Co-author with a browser agent (WebMCP)
 
-The authoring page registers its four designers as [WebMCP](https://github.com/webmachinelearning/webmcp)
+The authoring page registers its widget, theme, schema and action designers as [WebMCP](https://github.com/webmachinelearning/webmcp)
 tools through `@widgentic/webmcp` (beta). Open it in **ChatGPT Desktop's
 browser**, or in Chrome 149+ / Edge 150 with `chrome://flags/#enable-webmcp-testing`
 (or with an origin-trial token for your origin — see below), and the header
@@ -150,17 +150,21 @@ your own widgets in it.
 ## Sample content at first run
 
 Set `WIDGENTIC_SEED_FILE` on the `web` service to a JSON file of the shape
-`{ "schemas": [...], "themes": [...], "actions": [...], "widgets": [...] }`
-(each array optional, entries as the app imports and exports them), and the
-single principal gets those entries at boot. They go through the same
-validation as an import, schemas and actions before the widgets that use
-them. An entry you already hold is never overwritten, so a restart keeps
-your edits. A refused entry is logged with its code, and a missing or broken
+`{ "schemas": [...], "themes": [...], "actions": [...], "widgets": [...], "settings": {...} }`
+(each part optional, entries as the app imports and exports them, settings
+sections as the Settings page saves them), and the single principal gets
+them at boot. They go through the same validation as an import, schemas and
+actions before the widgets that use them, settings after the themes they
+name. An entry or settings section you already hold is never overwritten, so
+a restart keeps your edits — but a section you clear entirely comes back on
+the next restart, so unset `WIDGENTIC_SEED_FILE` once the content is yours. A refused entry is logged with its code, and a missing or broken
 file is logged too; the service starts either way. Keys and secrets are never
 seeded, and multi-user mode ignores the seed.
 
 `seed/demo.json` ships in the image as a starting point: two shared schemas,
-two themes and an agenda and an inbox widget built on them.
+two themes (set as the default light and dark themes), an agenda and an
+inbox widget built on them, and two resource domains (`api.dicebear.com` and
+`*.pravatar.cc`, avatar services) that hosts may load images from directly.
 
 ```sh
 WIDGENTIC_SEED_FILE=/srv/docker/seed/demo.json

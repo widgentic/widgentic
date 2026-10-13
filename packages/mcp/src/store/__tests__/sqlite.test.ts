@@ -16,6 +16,7 @@ import { createSqliteStore } from "../sqlite.js";
 import { DEFAULT_LIMITS, StoreRejectionError } from "../types.js";
 import type { StoredWidget } from "../types.js";
 import { describeStoreContract } from "./contract.js";
+import { composeThemes } from "../compose.js";
 
 const KEK = generateLocalKek();
 const LIMITS = { ...DEFAULT_LIMITS, maxWidgets: 5 };
@@ -151,6 +152,28 @@ describe("sqlite adapter", () => {
     await expect(store.putWidget(p.id, widget("after-close"))).rejects.toMatchObject({ code: "STORE_ERROR" });
   });
 
+  it("a theme stored under looser token rules keeps its other tokens and still serves as a default", async () => {
+    const path = freshPath();
+    const store = open(path);
+    const p = await store.ensurePrincipal("sqlite:legacy-theme");
+    store.close();
+    const raw = new DatabaseSync(path);
+    raw
+      .prepare("INSERT INTO entries (principal_id, kind, name, json) VALUES (?, 'theme', 'legacy', ?)")
+      .run(p.id, JSON.stringify({ name: "legacy", tokens: { accent: "#0b5fff /* brand */", bg: "#fafafa" } }));
+    raw.close();
+    const diagnostics: string[] = [];
+    const reopened = createSqliteStore(path, { limits: LIMITS, cipher: createLocalCipher(KEK), onDiagnostic: (m) => diagnostics.push(m) });
+    expect(await reopened.themes(p.id)).toEqual([{ name: "legacy", tokens: { bg: "#fafafa" } }]);
+    expect(diagnostics.join("\n")).toContain("theme 'legacy': token 'accent' dropped on read");
+    await reopened.putSettings(p.id, { defaultThemes: { light: "legacy" } });
+    const composed = await composeThemes(reopened, p.id);
+    expect(composed.value.defaults().light).toBe("legacy");
+    // Writes still refuse the value.
+    await expect(reopened.putTheme(p.id, { name: "legacy", tokens: { accent: "#0b5fff /* brand */", bg: "#fafafa" } })).rejects.toMatchObject({ code: "INVALID_THEME" });
+    reopened.close();
+  });
+
   it("a null secret record is skipped on list and reads as a miss, not a failure", async () => {
     const path = freshPath();
     const store = open(path);
@@ -272,6 +295,102 @@ describe("sqlite adapter", () => {
       onDiagnostic: () => {}
     });
     expect((await reopened.actions(p.id)).map((a) => a.name)).toEqual(["weather"]);
+    reopened.close();
+  });
+});
+
+describe("sqlite settings written out of band", () => {
+  it("ignores a later version's section, keeps it on write, and drops a dangling default", async () => {
+    const path = freshPath();
+    const store = open(path);
+    const p = await store.ensurePrincipal("sqlite:settings-oob");
+    await store.putTheme(p.id, { name: "a", tokens: {} });
+    store.close();
+    const raw = new DatabaseSync(path);
+    // A theme row in the pre-styles shape and a settings row from a later version.
+    raw
+      .prepare("INSERT INTO entries (principal_id, kind, name, json) VALUES (?, 'theme', 'legacy', ?)")
+      .run(p.id, JSON.stringify({ name: "legacy", label: "Legacy", tokens: { accent: "#123456" } }));
+    raw
+      .prepare("INSERT INTO entries (principal_id, kind, name, json) VALUES (?, 'settings', 'principal', ?)")
+      .run(p.id, JSON.stringify({ defaultThemes: { light: "a", dark: "ghost" }, fonts: { body: "Inter" } }));
+    raw.close();
+
+    const diagnostics: string[] = [];
+    const reopened = createSqliteStore(path, { limits: LIMITS, cipher: createLocalCipher(KEK), onDiagnostic: (m) => diagnostics.push(m) });
+    expect(await reopened.settings(p.id)).toEqual({ defaultThemes: { light: "a", dark: "ghost" } });
+    const composed = await composeThemes(reopened, p.id);
+    expect(composed.value.defaults()).toEqual({ light: "a", dark: "dark" });
+    expect(composed.diagnostics.join("\n")).toContain("'ghost'");
+    expect(composed.value.get("legacy")).toEqual({ name: "legacy", label: "Legacy", tokens: { accent: "#123456" } });
+    expect(diagnostics).toEqual([]);
+
+    await reopened.putSettings(p.id, { defaultThemes: { light: "legacy" } });
+    reopened.close();
+    const check = new DatabaseSync(path);
+    const row = check
+      .prepare("SELECT json FROM entries WHERE principal_id = ? AND kind = 'settings'")
+      .get(p.id) as { json: string };
+    check.close();
+    expect(JSON.parse(row.json)).toEqual({ defaultThemes: { light: "legacy" }, fonts: { body: "Inter" } });
+  });
+});
+
+describe("sqlite themes with malformed styles written out of band", () => {
+  it("skips the entry with a diagnostic and serves the rest", async () => {
+    const path = freshPath();
+    const store = open(path);
+    const p = await store.ensurePrincipal("sqlite:bad-styles");
+    await store.putTheme(p.id, { name: "good", tokens: {}, styles: { ".wg-btn": { padding: "4px" } } });
+    store.close();
+    const raw = new DatabaseSync(path);
+    raw
+      .prepare("INSERT INTO entries (principal_id, kind, name, json) VALUES (?, 'theme', 'broken', ?)")
+      .run(p.id, JSON.stringify({ name: "broken", tokens: {}, styles: { ".wg-btn": "padding: 4px" } }));
+    raw.close();
+    const diagnostics: string[] = [];
+    const reopened = createSqliteStore(path, { limits: LIMITS, cipher: createLocalCipher(KEK), onDiagnostic: (m) => diagnostics.push(m) });
+    const composed = await composeThemes(reopened, p.id);
+    expect(composed.value.get("broken")).toBeUndefined();
+    expect(composed.value.get("good")?.styles).toEqual({ ".wg-btn": { padding: "4px" } });
+    expect(diagnostics.join("\n")).toContain("skipped theme 'broken'");
+    expect(diagnostics.join("\n")).toContain("INVALID_THEME");
+    reopened.close();
+  });
+});
+
+describe("sqlite settings values that are not names", () => {
+  it("are dropped with a diagnostic", async () => {
+    const path = freshPath();
+    const store = open(path);
+    const p = await store.ensurePrincipal("sqlite:settings-malformed");
+    store.close();
+    const raw = new DatabaseSync(path);
+    raw
+      .prepare("INSERT INTO entries (principal_id, kind, name, json) VALUES (?, 'settings', 'principal', ?)")
+      .run(p.id, JSON.stringify({ defaultThemes: { light: 7 } }));
+    raw.close();
+    const diagnostics: string[] = [];
+    const reopened = createSqliteStore(path, { limits: LIMITS, cipher: createLocalCipher(KEK), onDiagnostic: (m) => diagnostics.push(m) });
+    expect(await reopened.settings(p.id)).toEqual({});
+    expect(diagnostics.join("\n")).toContain("light default theme that is not a name");
+    reopened.close();
+  });
+
+  it("drop a refused resource domain with a diagnostic naming it and keep the rest", async () => {
+    const path = freshPath();
+    const store = open(path);
+    const p = await store.ensurePrincipal("sqlite:settings-domains");
+    store.close();
+    const raw = new DatabaseSync(path);
+    raw
+      .prepare("INSERT INTO entries (principal_id, kind, name, json) VALUES (?, 'settings', 'principal', ?)")
+      .run(p.id, JSON.stringify({ resourceDomains: ["https://cdn.example.com", "http://old.example.com"] }));
+    raw.close();
+    const diagnostics: string[] = [];
+    const reopened = createSqliteStore(path, { limits: LIMITS, cipher: createLocalCipher(KEK), onDiagnostic: (m) => diagnostics.push(m) });
+    expect(await reopened.settings(p.id)).toEqual({ resourceDomains: ["https://cdn.example.com"] });
+    expect(diagnostics.join("\n")).toContain("http://old.example.com");
     reopened.close();
   });
 });

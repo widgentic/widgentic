@@ -4,7 +4,7 @@ import { composeCatalog, createMemoryStore } from "../../store/index.js";
 import type { StoredAction, StoredWidget } from "../../store/index.js";
 import { handleExecuteAction, handleRenderWidget } from "../index.js";
 import type { GuardedFetchDeps, PinnedFetch } from "../index.js";
-import { renderToHtml } from "@widgentic/core";
+import { createThemeRegistry, renderToHtml } from "@widgentic/core";
 import type { WidgetNode } from "@widgentic/core";
 
 const refresh: StoredAction = {
@@ -257,6 +257,11 @@ describe("hardening: execute_action input and error hygiene", () => {
     const { run, calls } = await rig();
     expect(errorOf(await run({ widget: "weather", action: "", payload }, () => jsonResponse(200, {}))).code).toBe("MISSING_FIELD");
     expect(errorOf(await run({ widget: "weather", action: "children.1", at: "meta.x", item: "weather", args: { city: "Oslo" }, payload }, () => jsonResponse(200, {})))).toMatchObject({ code: "INVALID_TYPE", path: "at" });
+    // Present but mistyped optional arguments are refused, never ignored.
+    for (const [field, value] of [["args", "city=Oslo"], ["args", ["Oslo"]], ["args", null], ["at", 1], ["item", 2]] as const) {
+      const call = { widget: "weather", action: "children.1", args: { city: "Oslo" }, payload, [field]: value };
+      expect(errorOf(await run(call, () => jsonResponse(200, {}))), field).toMatchObject({ code: "INVALID_TYPE", path: field });
+    }
     expect(calls).toHaveLength(0);
   });
 
@@ -458,5 +463,40 @@ describe("a list-shaped action response folds per item", () => {
     expect(errorOf(result as { content: { type: string; text?: string }[] }).code).toBe(
       "INVALID_ACTION_OUTPUT"
     );
+  });
+});
+
+describe("theme styles survive an action re-render", () => {
+  async function themed() {
+    const { composed, run } = await rig();
+    const themes = createThemeRegistry();
+    themes.register({ name: "brand", tokens: { accent: "#ff5a1f" }, styles: { ".wg-btn": { padding: "4px 8px" } } });
+    themes.register({ name: "plain", tokens: { accent: "#123456" } });
+    return { composed, run, themes };
+  }
+  const cssOf = (result: { structuredContent?: unknown }) => String((result.structuredContent as { css: string }).css);
+
+  it("a named theme with styles rides by name and re-renders with its styles", async () => {
+    const { composed, run, themes } = await themed();
+    const first = handleRenderWidget(composed.value, { widget: "weather", data: payload.data, theme: "brand" }, { themes });
+    const held = (first.structuredContent as { payload: Record<string, unknown> }).payload;
+    expect(held.themeName).toBe("brand");
+    const result = await run({ widget: "weather", action: "children.1", args: { city: "Oslo" }, payload: held }, () => jsonResponse(200, { temp: 18 }), { themes });
+    expect(cssOf(result)).toContain(".wg-btn {\n  padding: 4px 8px;\n}");
+    expect(cssOf(result)).toBe(cssOf(first));
+  });
+
+  it("a styleless theme keeps the payload as before", async () => {
+    const { composed, themes } = await themed();
+    const first = handleRenderWidget(composed.value, { widget: "weather", data: payload.data, theme: "plain" }, { themes });
+    expect((first.structuredContent as { payload: Record<string, unknown> }).payload).not.toHaveProperty("themeName");
+  });
+
+  it("a name that no longer resolves falls back to the held tokens", async () => {
+    const { run, themes } = await themed();
+    const held = { ...payload, theme: { accent: "#ff5a1f" }, themeName: "gone" };
+    const result = await run({ widget: "weather", action: "children.1", args: { city: "Oslo" }, payload: held }, () => jsonResponse(200, { temp: 18 }), { themes });
+    expect(result.isError).toBeUndefined();
+    expect(cssOf(result)).toContain("--wg-accent: #ff5a1f;");
   });
 });

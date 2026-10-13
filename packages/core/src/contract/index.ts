@@ -13,3 +13,10 @@ export {
   isSafeImageSrc,
   looksLikeImageUrl
 } from "./urls.js";
+export type { ResourceDomain, ResourceDomainResult } from "./domains.js";
+export {
+  RESOURCE_DOMAIN_LIMIT,
+  matchesResourceDomain,
+  parseResourceDomain,
+  parseResourceDomains
+} from "./domains.js";

@@ -1,0 +1,233 @@
+{
+  "kind": "email-inbox-widget",
+  "template": {
+    "tag": "section",
+    "attrs": {
+      "class": "wg-panel wg-inbox"
+    },
+    "children": [
+      {
+        "tag": "header",
+        "attrs": {
+          "class": "wg-panel-head"
+        },
+        "children": [
+          {
+            "tag": "h2",
+            "attrs": {
+              "class": "wg-title"
+            },
+            "children": [
+              "Merge demo inbox"
+            ]
+          },
+          {
+            "when": "unreadCount",
+            "template": {
+              "tag": "span",
+              "attrs": {
+                "class": "wg-status wg-status-accent"
+              },
+              "children": [
+                {
+                  "bind": "unreadCount"
+                },
+                " unread"
+              ]
+            }
+          },
+          {
+            "when": "account",
+            "template": {
+              "tag": "p",
+              "attrs": {
+                "class": "wg-muted wg-inbox-account"
+              },
+              "children": [
+                {
+                  "bind": "account"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "each": "messages",
+        "key": "id",
+        "empty": {
+          "tag": "p",
+          "attrs": {
+            "class": "wg-muted"
+          },
+          "children": [
+            "No messages."
+          ]
+        },
+        "template": {
+          "tag": "article",
+          "attrs": {
+            "class": {
+              "bind": "isRead",
+              "map": {
+                "false": "wg-item wg-unread"
+              },
+              "default": "wg-item"
+            }
+          },
+          "children": [
+            {
+              "tag": "div",
+              "attrs": {
+                "class": "wg-inbox-meta"
+              },
+              "children": [
+                {
+                  "tag": "a",
+                  "attrs": {
+                    "class": "wg-link",
+                    "href": {
+                      "bind": "from",
+                      "prefix": "mailto:"
+                    }
+                  },
+                  "children": [
+                    {
+                      "bind": "from"
+                    }
+                  ]
+                },
+                {
+                  "tag": "small",
+                  "attrs": {
+                    "class": "wg-date"
+                  },
+                  "children": [
+                    {
+                      "bind": "receivedAt",
+                      "format": {
+                        "type": "date",
+                        "pattern": "yyyy-MM-dd HH:mm"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tag": "h3",
+              "attrs": {
+                "class": "wg-subtitle"
+              },
+              "children": [
+                {
+                  "when": "isStarred",
+                  "template": {
+                    "tag": "span",
+                    "attrs": {
+                      "class": "wg-inbox-star"
+                    },
+                    "children": [
+                      "★"
+                    ]
+                  }
+                },
+                {
+                  "bind": "subject"
+                }
+              ]
+            },
+            {
+              "when": "preview",
+              "template": {
+                "tag": "p",
+                "attrs": {
+                  "class": "wg-muted"
+                },
+                "children": [
+                  {
+                    "bind": "preview"
+                  }
+                ]
+              }
+            },
+            {
+              "when": "labels",
+              "template": {
+                "tag": "ul",
+                "attrs": {
+                  "class": "wg-list"
+                },
+                "children": [
+                  {
+                    "each": "labels",
+                    "template": {
+                      "tag": "li",
+                      "attrs": {
+                        "class": "wg-chip"
+                      },
+                      "children": [
+                        {
+                          "bind": "."
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "descriptor": {
+    "description": "Displays the merge-demo principal's inbox as a readable list, with each sender address as an email link. It replaces the seed's email-inbox-widget for this principal only.",
+    "dataShape": "{ account?, unreadCount?, messages: [{ id, from, subject, preview?, receivedAt, isRead, isStarred?, labels? }] }",
+    "dataSchemaRef": "email-inbox",
+    "dataExample": {
+      "account": "alex@example.com",
+      "messages": [
+        {
+          "from": "nora@example.com",
+          "id": "m-101",
+          "isRead": false,
+          "isStarred": true,
+          "labels": [
+            "Work"
+          ],
+          "preview": "The latest draft is ready for review.",
+          "receivedAt": "2026-09-03T09:15:30",
+          "subject": "Project update"
+        },
+        {
+          "from": "team@example.com",
+          "id": "m-102",
+          "isRead": false,
+          "isStarred": false,
+          "labels": [
+            "Planning"
+          ],
+          "preview": "Here are the topics for our weekly planning session.",
+          "receivedAt": "2026-09-03T08:30:00",
+          "subject": "Friday agenda"
+        }
+      ],
+      "unreadCount": 2
+    },
+    "styles": {
+      ".wg-inbox-meta": {
+        "display": "flex",
+        "justify-content": "space-between",
+        "align-items": "baseline",
+        "gap": "var(--wg-spacing)"
+      },
+      ".wg-inbox-account": {
+        "flex-basis": "100%"
+      },
+      ".wg-inbox-star": {
+        "color": "var(--wg-warning)"
+      }
+    }
+  }
+}

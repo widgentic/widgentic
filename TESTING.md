@@ -284,10 +284,18 @@ The suite covers:
 - **Configuration refusals.**
 - **The engine pool.** Concurrency, a runaway call, nothing leaking between
   callers, and the bundle's identity.
+- **Per-principal catalogs.** Merge and Replace and the per-catalog override,
+  refusals logged without contents, a failing source, the global surfaces, two
+  principals concurrently on one pool, and nothing kept between calls.
+- **Default themes from settings.** Startup defaults, a refused startup setting,
+  a caller's section replacing the startup one in Merge, Replace, refused caller
+  settings logged, and previews and pages following the caller. The corpus's
+  named settings configurations run on V8 too.
 - **Render-only.** No HTTP request, and prompt actions live while http actions
   render disabled.
 - **The `.nupkg` shape.**
-- **The stdio sample**, launched as a process.
+- **The sample**, launched as a process over stdio and HTTP, including its two
+  demo principals keyed by header and by URL.
 
 The same corpus runs in a bare V8 realm on the Node side
 (`packages/mcp/src/host/__tests__/bare-realm.test.ts`). A change that alters a
@@ -346,7 +354,18 @@ claude mcp add widgentic -- npx tsx /path/to/widgentic/examples/mcp-server/main.
 public HTTPS URL, so tunnel the loopback port, for example
 `devtunnel host -p 3002 --allow-anonymous` or `cloudflared tunnel --url http://localhost:3002`.
 Then add `https://<tunnel-host>/mcp` under Settings → Connectors → Add custom connector. The
-sample has no authentication, so keep the tunnel up only while testing.
+sample's keys select a catalog and gate nothing, so keep the tunnel up only while testing.
+
+**The .NET sample's demo principals.** Start the sample with both keys configured (see
+`dotnet/README.md`), then add one connection per principal, the key in the URL:
+
+```
+http://localhost:3002/mcp?key=<merge-demo-key>        # VS Code; the seed with its own inbox and theme
+https://<tunnel-host>/mcp?key=<replace-demo-key>      # a connector; the built-ins and release-notes-widget
+```
+
+A connection without a key gets the seed. Hosts cache `ui://` per chat, so test each principal
+in a fresh conversation.
 
 **Claude Desktop, the .NET sample over stdio** (`claude_desktop_config.json`; build the npm
 workspace and the sample first, then point at the built DLL):
@@ -363,6 +382,176 @@ workspace and the sample first, then point at the built DLL):
 
 ## Verification log
 
+- **Field labels (2026-10-13, change `field-labels`, on `feature/field-labels`, core/mcp minor and webmcp patch pending release)**
+  - **Rendering.** `hints.labels` relabels card field keys and table headers, and image `alt` takes the label, in 9 core tests.
+    - **Column order.** `hints.columns` order is honoured, with the cells following.
+    - **Fallbacks.** An unlabelled or blank-labelled key shows the key. A render without `labels`, or with `{}` or a non-object, is byte-identical to one without hints, and the 521 existing core tests passed unchanged.
+    - **Escaping and other hints.** `<b>Total</b>` is escaped, and `fieldFormat` still addresses the key.
+  - **Diagnostics.** `labels.last_name` on a card without that field gave `NO_MATCH`. `""`, whitespace, `1` and `null` labels gave `INVALID_VALUE`, and so did a non-object `labels`. Table labels are checked against columns, and coherent labels are silent.
+  - **Steering.** `LABEL_STYLE_RULE` (Title Case unless the user asks otherwise, keys kept) is in the card and table descriptors' `labels` hint, the MCP authoring guide and the WebMCP guide, verbatim. `render_widget` asks for `widget` first and `hints` before `data`.
+  - **Previews.** In the `bootTemplate()` harness, a streamed table with hints before data previewed `First Name` from its first row. A card first previewed `order_total`, then `Order Total` once the hints arrived, matching the result's tree.
+  - **Themed built-in previews (design D8, an owner finding from the default-themes testing).**
+    - **One CSS request per run.** With `serverTools`, a streamed `card` requested `preview_widget` once with `{ widget: "card" }` only, applied the answer's `css` (the caller's default theme) and kept the client-built card. More data asked nothing.
+    - **A changed theme.** A theme still arriving asked nothing; a settled `theme: "dark"` asked once more.
+    - **Groups and failures.** A group of built-ins asked with `{ items: [] }`. No request was made without `serverTools`, and none after a rejected one.
+    - **The result wins.** A CSS answer arriving after the result was discarded.
+    - **The server answers each kind.** `preview_widget` returns the default theme's CSS for `card`, `table` and `tree` with no data.
+  - **The corpus.** A labelled card and table, each as a render, a page and a preview: 6 new cases. Existing cases changed only for `list_widgets`, `get_authoring_guide` and the app template, from the new texts. The bare realm and V8 in .NET reproduce all of them.
+  - **Gates.** Typecheck, `npm test` (1762 passed, 1 skipped), build, `pack:check`, `openspec validate --strict` and `--specs` (19), and `dotnet test` (195).
+  - **Staging (`field-labels-b4119c0`, revision `widgentic-selfhost--0000022`).**
+    - **Steering.** `render_widget` asks for hints before data, and `list_widgets` carries the rule in the card and table `labels` hints.
+    - **Labels.** A labelled card renders `First Name` and `Order Total`, and a table `First Name` and `Last Name`.
+    - **The theme.** `preview_widget` with `{ widget: "card" }` answers 12,493 bytes of CSS carrying the light default's `#1a73e8`.
+    - **The template.** The served template carries `requestThemeCss` and `labelOf`.
+  - **The owner's host check on claude.ai (task 6.2).** The prompt asked for a customer card and an orders table and named no label style.
+    - **Title Case by default.** The card showed Account Manager, First Name, Last Name, Last Order Date and Lifetime Value on the default theme. The table's call carried Title Case `hints.labels` (the Google theme uppercases headers, so the call data was the check).
+    - **Streaming.** Built-in previews streamed in the default theme. The first chunk may show the base theme for the round trip of the CSS request, then switch, which the owner accepted.
+    - **The user's style wins.** Asked again for the base light theme and lower-case labels, the table showed `order id`, `order date`, `order total` and `payment status`. Those are labels with spaces, not the keys, on the base light theme.
+
+- **Per-principal resource domains (2026-10-13, change `principal-resource-domains`, on `feature/principal-resource-domains`, core/designer/mcp minor and `Widgentic.Mcp` 0.11.0 pending release)**
+  - **Smoke test before implementation (2026-10-12).** Staging ran a local probe image (`principal-resource-domains-probe-c07d459`, revision `--0000020`). It declared `https://api.dicebear.com` and `https://*.pravatar.cc` for every caller, skipped inlining for them, and left `picsum.photos` undeclared as the inlined control.
+    - **Every host honors declarations.** claude.ai web, ChatGPT desktop and VS Code Copilot loaded images from both the exact and the wildcard origin, including all 30 faces of a 30-row table, past the 24-source cap.
+    - **Every host enforces `img-src`.** In 30 undeclared photos, rows 25–30 stayed blank on all three, so the declared images loaded because of the declaration.
+    - **claude.ai caches the policy for the page session.** Its frame header copied our entries verbatim into `img-src`, `script-src`, `style-src`, `font-src`, `media-src` and `worker-src`. After the deploy changed the declaration, a new conversation in the same tab still enforced the old policy; a reload picked up the new one.
+  - **The rule.** The core parser accepts `host`, `*.host` and either behind `https://`, and refuses every form the widget-store requirement lists, in 14 unit tests. The store, the designer, the Node assembly and the host bundle all use it.
+  - **The store.** The contract suite runs the domain scenarios against memory, SQLite and the Cosmos fake: canonical storage, `INVALID_DOMAIN` naming the entry, `INVALID_SHAPE` at 21 entries, an empty list removing the section, independence from `defaultThemes`, and one shared read for themes and domains. Out-of-band records with a refused entry are read without it, and the file, SQLite and Cosmos diagnostics name it. A record without the section reads as no domains.
+  - **The Node assembly.** Over the SDK, the declaration and the read content carry canonical origins, refused entries are dropped, and a list of only refused entries declares nothing.
+    - **Inline-last.** In 10 declared and 20 undeclared thumbnails, all 20 undeclared and the first 4 declared were fetched, and the other 6 kept their URLs, unfetched.
+    - **The note.** For 26 undeclared and 6 declared sources it reads "2 image source(s) left external (fetch cap: 2, byte budget: 0), and 6 on declared resource domains (fetch cap: 6, byte budget: 0)".
+    - **Wildcards.** A wildcard ranked `a.b.example.com` as declared and the apex as undeclared.
+    - **No domains, no change.** With no domains configured, the corpus is unchanged.
+  - **The host bundle.** `resources()` reports the declared list, operator entries first. For one operator list and one settings record it equals the Node assembly's declaration, compared over a real SDK client. Refusals are listed under `resourceDomains` (with an index) and `settings` (`resourceDomains.<entry>`).
+  - **The corpus.** Three domain configurations (operator, settings, both) each add a `resources` case; no existing case changed. The bare realm and V8 in .NET reproduce them.
+  - **.NET.** 189 of 189.
+    - **Startup.** `ResourceDomains` are declared canonical on list and read, followed by the startup settings section. A refused operator domain stops startup naming `ResourceDomains[0]`, and a refused setting naming the settings source.
+    - **Per caller.** In Merge a principal's section replaced the startup one, and Replace kept only the operator list. A refused principal domain was logged as the caller's `INVALID_DOMAIN` and never blamed on the startup record. 32 concurrent reads on a pool of 4 never crossed principals.
+    - **Failure and listing.** A throwing source still served the template, with the startup declaration and a log line. The list filter rewrote only the app entry and left the registered declaration untouched.
+    - **The sample.** Over HTTP, keyless callers declare the seed's `https://api.dicebear.com` and `https://*.pravatar.cc`, `merge-demo` adds `https://ui-avatars.com` (its section lists all three, since a caller's section replaces the startup one), and `replace-demo` declares nothing.
+  - **The designer and the example.** The settings designer records canonical entries, keeps invalid ones as typed with the rule's reason, clears an emptied list, stops adding at the limit, refuses a malformed list on load, and goes inert in read-only mode, in 35 tests. The self-host endpoint's composition, now in `principal-server.ts`, declares each principal's own domains and none for anonymous callers. It reads settings once per request, applies a saved change on the next request, and logs an unreadable record without failing.
+  - **Gates.** Typecheck, `npm test` (1735 passed, 1 skipped), build, `pack:check`, `openspec validate --strict` and `--specs` (19), and `dotnet test` (189).
+  - **Staging (`principal-resource-domains-41aabd3`, revision `widgentic-selfhost--0000021`).**
+    - **The seed.** It wrote 8 entries, settings sections included.
+    - **The declaration.** Keyed, the listing and the read both declare `https://api.dicebear.com` and `https://*.pravatar.cc`; keyless, neither declares any domain.
+    - **Inline-last, from the served bytes.** A 3-source render inlined all 3. 30 declared faces gave 24 `data:` sources and 6 URLs, and so did 30 undeclared photos.
+    - **claude.ai web.** In a new conversation, row 24 of the 30 faces was a `data:` URI and row 25 kept its pravatar URL, and all 30 faces showed. Of the 30 undeclared photos, rows 25–30 were blank.
+    - **The Settings round trip on claude.ai web.** The owner removed both domains in the demo's Settings and saved, then reloaded the client and opened a new conversation. Rows 1–24 of the 30 faces were still inlined and rows 25–30 were blank, so the saved change reached the frame and fell back to inlining. With the domains restored in Settings, after another reload, all 30 showed again, rows 25–30 loaded from the declared domain.
+    - **ChatGPT and Copilot** were not rerun on this path; the smoke test covered both on the same two domains.
+  - **The .NET sample in VS Code Copilot (owner, local HTTP).**
+    - **No key.** pravatar faces and DiceBear avatars showed, from the seed's two domains. ui-avatars initials (declared only by `merge-demo`) and picsum photos (never declared, and .NET does not inline) were blank. The 30-face table loaded straight from the declared domain.
+    - **The `merge-demo` key, in a new conversation.** The ui-avatars initials showed as well. The principal's section listed the seed's two domains plus `ui-avatars.com` and replaced the startup section. Picsum stayed blank, and the faces loaded directly.
+
+- **Default themes from settings, in the host bundle and .NET (2026-10-12, change `dotnet-principal-catalogs`, on `feature/dotnet-principal-catalogs`, `@widgentic/mcp` minor and `Widgentic.Mcp` 0.11.0 pending release)**
+  - **The bundle.** `createWidgenticHost` takes a `settings` record.
+    - **Same as the Node path.** For `{ light }`, `{ dark }`, two defaults and one theme for both modes, the host's `render_widget` (slim and as a page), `preview_widget` and `list_themes` output equals the Node path for a principal whose stored settings choose the same defaults (memory store and `composeThemes`).
+    - **Refusals.** A default naming `ghost`, `light` or `dark`, or a configured `dark` that was refused, is reported as `UNKNOWN_THEME` under section `settings` and keeps the built-in. A malformed record is reported as `INVALID_SHAPE`. `null`, `{}` and no record leave every output unchanged.
+    - **Node-free.** The rules moved to `store/settings-rules.ts`. The boundary test keeps the bundle's graph free of `node:`, and the store's refusals are unchanged.
+  - **The corpus.** Five named settings configurations (light only, dark only, two defaults with styles, two defaults with one styled, one theme for both), each with a render, a page, a preview, an explicit theme, the listing and a widget page: 30 cases.
+    - **The rules hold.** A lone styled default's styles are unscoped. Two styled defaults scope with `:where()`. One theme for both is emitted as explicit. An explicit theme drops the defaults. Pages take the light default only.
+    - **Every runtime agrees.** The bare realm and V8 in .NET reproduce all 30 byte for byte. No existing case changed.
+  - **.NET.** 177 of 177 on Windows 11, .NET SDK 10.0.401.
+    - **Startup.** The seed's `google-light`/`google-dark` settings put each token block under its mode selector. `ghost` stops startup with `UNKNOWN_THEME` naming `settings JSON`, and an unreadable file stops it with `INVALID_JSON` naming the file.
+    - **Merge and Replace.** A principal's `{ dark: "night" }` gave `light`/`night` while another principal kept the seed's defaults. Replace gave the built-ins.
+    - **Refused settings.** A principal's `dark: "ghost"` was logged as `the caller's setting 'defaultThemes.dark'`, and an unreadable record as `INVALID_JSON`; neither log line carried the name. A principal's refused `google-dark` left the startup dark default unresolved, which was logged as a startup setting skipped for that caller.
+    - **Previews and pages** carried the caller's light default and not another caller's.
+  - **The sample** loads the seed's settings. Over stdio and HTTP it reports `google-light`/`google-dark`; `merge-demo` reports `google-light`/`merge-demo-dark` and `replace-demo` the built-ins.
+  - **The owner's local retest (task 6.4).** The sample ran over HTTP on `localhost:3002` with demo keys, and each principal was connected as its own server, each in a fresh conversation. No staging deploy, by the owner's decision.
+    - **No key:** the seed's two widgets and the `google-light`/`google-dark` defaults.
+    - **`merge-demo`:** its own inbox, headed "Merge demo inbox", in place of the seed's, and `merge-demo-dark`'s green accent as the default on a dark host.
+    - **`replace-demo`:** only the built-in kinds and `release-notes-widget`, under the built-in dark theme.
+
+- **Theme styles, settings and default themes (2026-10-11, change `theme-styles-and-defaults`; core, designer and mcp minor, webmcp patch pending release)**
+  - **Core.** The registry merges `extends` styles per selector, then per property; refuses a malformed `styles` map with `INVALID_THEME`; and holds one default per mode (built-ins until set, unregistered names refused). `themeStylesToCss` matches the widget generator unscoped and prefixes every selector part with `:where(<scope>) ` when scoped. A computed-value check in happy-dom (fresh document per case) shows a scoped rule applying only inside its scope and losing a tie to a later widget rule.
+  - **Store.** The contract suite runs on memory, SQLite and Cosmos. It covers: settings round-trip; section-level replace, where `null` and an empty section remove; refusals that change nothing (`UNKNOWN_THEME`, `INVALID_SHAPE`, `UNKNOWN_PRINCIPAL`); `THEME_IN_USE` naming both modes; no crossing between principals; and the settings record leaking into no entry listing. Out-of-band tests on SQLite, Cosmos and the file store cover a later version's section (ignored on read, kept on write), a dangling default (diagnostic, built-in kept) and a pre-styles theme row loading unchanged. A malformed out-of-band `styles` is skipped with a diagnostic.
+  - **Authoring.** `styles` round-trips through `PUT /themes/<name>`. `/settings` is read and replaced; a smuggled `principalId` is ignored; `THEME_IN_USE` maps to 409; and the core handler answers as the Node adapter does.
+  - **Output.**
+    - **Theme styles.** They come before kind styles, then the theme's declarations, in the template channel, `page`/`app` documents and `preview_widget`; unsafe entries reach no output.
+    - **Defaults.** Light-only, dark-only and both-modes defaults; an explicit theme replaces the defaults (deep-equal to a registry without them); documents use the light default only.
+    - **No change without defaults.** With no defaults set, output is deep-equal across all five formats.
+    - **App template.** Booted with its static stylesheet, a light default reaches `--wg-accent` on a light host and not on a dark host.
+    - **Conformance corpus.** It gains a styled theme (`corpus-styled`: two renders and a preview). Its diff touches only `list_themes`, `list_theme_tokens`, `get_authoring_guide`, the `theme unknown` message (which lists the themes) and the three new cases; no existing render changed. `dotnet test` passes 123 of 123 on the regenerated corpus.
+  - **Designer.**
+    - **Theme designer.** Edits styles in the shared Styles panel, which sits right under the preview as in the widget designer and goes inert in read-only mode; the Tree and JSON views keep each other in step. Export omits an emptied `styles`, and a malformed import is refused. The preview shows a theme rule's computed colour and flags a `body` rule while keeping it out of the CSS.
+    - **Widget designer.** The selected theme's class colours the draft, and the draft's own rule wins. Choosing "none" removes the rule and the draft's `themeStyles`. `previewTheme` opens with the named entry selected and applied from the first render (computed colour), applies a tokens-only entry, ignores an unknown name, and survives `loadWidget` with its styles. The selector keeps a chosen name even when another entry has the same content (a stored theme with empty tokens beside the built-in `light`).
+    - **Settings designer.** Mounts alone; registers its element only on the explicit call; edits and notifies; lets one theme serve both modes; shows a missing theme as unavailable; passes unknown sections through; refuses a malformed record; is inert when read-only.
+    - **WebMCP.** `theme_load`/`theme_get` round-trip `styles`, and a token merge keeps them.
+  - **Self-host example.** The seed writes `settings` after the themes, never over a held section; refusals are logged per section, and the demo seed sets `google-light`/`google-dark` (7 written). An in-browser app test boots `main.ts` in happy-dom against the real authoring handler and checks: the widget designer opens on the light default; the Themes list marks the default; picking a default in Settings and saving moves the mark; deleting the default shows `THEME_IN_USE`; a newly saved theme becomes a choice.
+  - **Review fixes (two reviews of PR #29, deduplicated).**
+    - **Action re-renders:** a named theme with styles survives an `execute_action` re-render (same `css`), a styleless theme adds no `themeName`, and a vanished name falls back to the held tokens.
+    - **Guards:** they drop comment tricks, `:not(.wg-x)`, `:is(.wg-a, body)`, attribute-hidden `.wg-`, combinator-led parts, and `image-set(`/`src(`, in styles and token values. They keep `:has(…, …)`, `:not(:last-child)` and root-anchored rules; a root-anchored rule scopes on its root compound and computes only in its scope.
+    - **Two defaults:** each theme's padding applies on hosts of its mode, in the template (computed). The dark-host value equals a no-defaults render's.
+    - **Cosmos races:** a theme removed mid-`putSettings` gives `UNKNOWN_THEME`, a default set mid-`removeTheme` gives `THEME_IN_USE`, and a section added meanwhile survives. These are checked through the fake's transactional batch with etags.
+    - **Composition:** it survives a missing or throwing `settings` and an invalid-but-stored default, with diagnostics.
+    - **Designers:** `loadTheme` drops stale styles; the JSON tab refuses a malformed map and maps `{}` to none; the settings element takes `themes` before and after connecting.
+    - **Example:** `previewThemes` merges `extends` in any order; unread settings open read-only without Save.
+    - **Corpus:** it changes only in the styled-theme cases (`themeName`) and the guide text; `dotnet test` passes.
+  - **WebMCP agent findings (2026-10-12, an agent driving the designers' tools).**
+    - **Load tools refuse what saving would:** `draft_load` and `definition_check` refuse a built-in kind (`table`, `RESERVED_KIND`) and a kind with a space (`INVALID_IDENTIFIER`) with `REJECTED`, leaving the draft as it was; `theme_load` refuses `light` (`RESERVED_THEME`) and `my theme` (`INVALID_IDENTIFIER`). Both used to load and fail only at Save.
+    - **Data shape:** a definition without `dataShape` checks `ok` and carries a `dataShape` diagnostic, shown under the field in the widget designer. Both guides now call it strongly recommended rather than required.
+    - **Preview theme:** `widget_theme_set` with empty tokens leaves the selector on "none" (it switched to "Light", whose token map is also empty).
+    - **Theme designer:** typing `dark` into Name shows `RESERVED_THEME` inline, and typing `ocean` clears it.
+    - **Corpus:** only `get_authoring_guide` changed (the `dataShape` text).
+  - **WebMCP agent retest on staging `6c7eace` (2026-10-12).** Four findings fixed. Two remained:
+    - **`widget_theme_set` dropped the person's theme:** it now layers over the chosen preview theme. A test chooses `google-light`, sets `accent`, and checks the selector and `previewTheme` still name it with the other tokens kept; `{}` returns its tokens exactly. In the designer the same holds for a theme with styles; with nothing chosen, a map is the whole theme.
+    - **`schema_load` accepted `type: "banana"`:** it still loads (the store accepts it on purpose) but returns `warnings` naming `schema.properties.kind.type`, the schema designer shows the warning until the type is fixed, and an inline `dataSchema` warns in the widget designer and in `definition_check`. Core tests cover unknown names (and that validation still lets anything through), unrunnable patterns, misshapen keywords through `items`, and silence on every supported type and on unknown keywords.
+  - **Second review round at `6c7eace` (2026-10-12, two re-reviews, deduplicated).**
+    - **Guards (core):** dropped now: `.wg-a[title="("], body`, `body:not([title=")"] .wg-x)`, `body:not([x="]].wg-"])`, unclosed `:is(` and `[title`, an unclosed string, and the values `calc(1px + (2px`, `foo(`, `1px)` and `"open`. Kept again: `:is(.wg-btn, .wg-link):hover`, `:where(.wg-card) h3`, and a quoted `"("` in an attribute test or a value. `.wg-a[title="("], .wg-b` scoped to dark scopes both parts, and a computed check shows `.wg-b` unstyled on a light root. Token values refuse `u\72 l(…)`, unclosed brackets and unclosed strings.
+    - **Stored themes:** an old-shape theme with `accent: "#0b5fff /* brand */"` reads without `accent` and with a diagnostic, in SQLite, Cosmos and the file store. It still serves as the light default, a write of the same entry is refused, and the Cosmos document is left as it is.
+    - **Cosmos:** the fake now throws batch failures the way `@azure/cosmos` 4.10 does, as a plain `Error` wrapping the message. `putSettings` and `removeTheme` then give `FORBIDDEN` for a permission refusal and `STORE_ERROR` for a 503. A stored dangling dark default no longer blocks an update that leaves it alone.
+    - **Scoping:** a light default's styles are unscoped when the dark default has none (a styleless theme or the built-in), and the same holds the other way round.
+    - **Designers and WebMCP:** `widget_example_data_set` on a draft the person kinded `my widget` succeeds, with `INVALID_IDENTIFIER` in its diagnostics, and `theme_tokens_set` on a theme named `dark` succeeds; loading `table` or `light` is still refused. The Styles JSON tab's parse error clears after a load, and the widget designer's JSON tab is gated on the styles shape.
+    - **Settings element (headless Chrome):** a page sets `themes` on `<widgentic-settings-designer>` before the bundle loads. Before the upgrade it is an own property; afterwards it is not, and the light choices are `["", "ocean", "night"]`. happy-dom does not upgrade, so the unit test exercises `upgradeProperty` directly.
+    - **Example apps:** after a failed read, a later Settings visit opens the stored `google-light` and saving keeps it. The demo restores an autosaved draft as the person left it.
+  - **Third review round at `5969a8b` (2026-10-12), triaged for the normal flow (D17).**
+    - **Guards:** a newline inside a quoted string, in a selector, a value or a token value, is dropped, including `:where(.wg-a[x="⏎], body, [y="⏎])`. A rule after such an entry in the same sheet still applies (computed check). A selector list split across lines is still kept. `:is(` nested 2,000 deep is refused without throwing, and three levels still render.
+    - **Cosmos:** a 429 whose diagnostics carry `LSN: 403` stays `STORE_ERROR`, and the batch failure is logged with the service's first line.
+    - **Self-host example:** a new draft given the kind `my widget` keeps that kind across a trip to the Themes tab, flagged `INVALID_IDENTIFIER`, with no "load failed".
+    - **Old-shape tests:** the Cosmos test now also refuses the write, and the file-store test serves the trimmed theme as the light default.
+  - **Browser agent: false "unknown schema" (2026-10-12, staging `5969a8b`).** The agent found that `definition_check`, and `draft_get` on a widget opened with Edit, called the saved `email-inbox` reference unknown. Its report traced this to WebMCP deriving diagnostics without the host's schemas. Regression tests:
+    - A designer mounted with `email-inbox` and opened on a referencing widget gives no `schemaRef` from `draft_get` or `definition_check`.
+    - A bad example gets `INVALID_TYPE` against the resolved schema.
+    - The typo `email-inbx` is still reported.
+    - Both schema forms together are `REJECTED`.
+    - With no designer mounted, the reference is unverified (`diagnosticsDerived: true`) rather than unknown.
+    - In the designer, `getDiagnostics()` and `checkWidget` give the same answers, without touching the draft.
+  - **Fourth review round at `8841d0a` (2026-10-12, D19).**
+    - **WebMCP:** `definition_check` with a `widget` source that counts its calls and a `widgetIfMounted` source resolves `email-inbox` and calls `widget` zero times. A numeric, spaced or empty `dataSchemaRef` and a `null` `dataSchema` are `REJECTED` by `draft_load` and `definition_check`, and `draft_get` still works afterwards.
+    - **Designer:** with no `schemas`, a reference is not unknown; with `schemas: []`, it is. A malformed initial kind shows the empty state with `INVALID_IDENTIFIER` in the banner.
+    - **Self-host app:** after picking `ocean`, showing Widgets again keeps the same designer root and the pick, and a trip to Themes and back remounts with `ocean` still picked.
+    - **Cosmos:** a batch refused with an explicit `StatusCode: 403` or a firewall message gives `FORBIDDEN`. A request-level `StatusCode: 404` gives `STORE_ERROR` for `removeTheme` and `putSettings`, and the theme is still stored.
+    - **Unit tests:** `list_theme_tokens` carries `TOKEN_VALUE_RULE`, and an adapter without `settings` composes with no diagnostics.
+  - **Re-review at `b0f0e74` (2026-10-12).** The shared example sources return the widget designer from `widgetIfMounted` while its section is shown and nothing once another section is shown. Without that source, the check leaves a reference unverified rather than unknown (existing test). A malformed `dataSchemaRef` is refused with `INVALID_SHAPE`, as the store refuses it.
+  - **Reviewer 1 at `1fbce0e`: ready to merge.** Its two non-blocking notes are addressed:
+    - An app-level test (`app-webmcp.test.ts`) boots the self-host page on a stand-in model context. On Widgets, the check resolves `inbox` through the designer. On Data schemas, a schema `orders` saved meanwhile is not reported unknown (`diagnosticsDerived: true`), and the view stays on Data schemas.
+    - The spec no longer says "never" for View and Edit mode.
+  - **Browser agent on staging `1fbce0e` (2026-10-12).** `theme_load` with a `div` selector, a `red /*` value and a `9x` property, beside a safe rule, returns `ok` with three `diagnostics.styles` entries: a skipped selector, value and property. The value's message no longer quotes the property-name rule. `theme_tokens_set` and `theme_get` report the same audit. Queued, because it predates this change: link and host warnings at load (AGT-5). `extends` was removed instead (see below).
+  - **Theme `extends` removed (2026-10-12, D20).**
+    - An entry registered with `extends: "dark"` is held as registered: no dark tokens and no `extends`.
+    - Derived themes in the tests merge `darkTheme` themselves.
+    - `previewThemes` offers saved entries after the built-ins, and leaves out an entry the registry refuses.
+    - The conformance corpus is unchanged, since no case used `extends`.
+  - **Reviewer 1 at `b889ac5` (2026-10-12).** `theme_load` with `extends: "dark"` returns, and `theme_get` holds, an entry without `extends`, as does a designer created with such an `initialTheme`. The changesets mark the removal as breaking.
+  - **MCP Apps border preference (2026-10-12, D21).** Over the SDK, both with and without `resourceDomains`, the app resource's declaration carries `_meta.ui.prefersBorder: false`, and its read content carries the same `_meta.ui`. The .NET protocol test (`AsksTheHostForNoBorder`) sees the same on `resources/list` and `resources/read`, with no `csp` when no domains are configured; `dotnet test` passes 124 of 124. The corpus changes only in the bundle's `resources()` descriptor.
+  - **Preview containment (2026-10-12, D22, browser agent).**
+    - **Designer:** a draft style coloring `.wg-title` colors the previewed title, and a `.wg-title` element outside the designer keeps its own color (computed).
+    - **Example pages:** a structural guard checks that every element-led rule in the three example pages carries `:where(:not(.wgd-preview *))`. happy-dom matches that selector on descendants too, so it cannot compute it.
+    - **Headless Chrome** (`tools/probe-computed.mjs`), on pages built from both stylesheets: the page header has 12px bottom padding and the widget header 0px, and the page button has `cursor: pointer` and the widget button the default.
+  - **Demo seed restyled (2026-10-12, from the browser agent).** The two Google-inspired themes now carry shared classes: `.wg-panel`, `.wg-title`, `.wg-item`, `.wg-chip`, card and table refinements. The agenda and inbox widgets use them. A later pass from the agent added cancelled and declined states (`.wg-item-cancelled`, `.wg-chip-no`), card and table layout fixes, and `yyyy-MM-dd` dates throughout. Under `auditStyles` every theme and widget style entry passes, and the theme tokens validate; the largest entry is 4,814 bytes. The .NET sample's seed is regenerated from it (`conformance:generate`), and `dotnet test` passes 124 of 124. The corpus is unchanged.
+  - **Hosts (2026-10-12):** staged as `7373de2` on `demo.widgentic.dev`; the owner reported that the checks in fresh conversations went well. widgentic.dev's Settings section follows in the apps change `adopt-theme-settings`.
+- **Per-principal catalogs in .NET (2026-10-11, change `dotnet-principal-catalogs`, on `feature/dotnet-principal-catalogs`, `Widgentic.Mcp` 0.11.0 unreleased)**
+  - **The suite.** Windows 11, .NET SDK 10.0.401: 136 of 136.
+  - **Composition, through the resolver with real principals.** Two principals over 32 concurrent calls on a pool of 4 never saw each other's kinds. In Merge a principal's `email-inbox-widget` was listed once, with its own description, and a principal theme extending `google-dark` inherited its tokens. Replace listed the built-ins and the principal's widget only, and a catalog's own `Replace` overrode the default for its principal alone. On a pool of one, B did not see A's entries, and an entry added to A's catalog appeared on A's next call.
+  - **Refusals.** A repeated `kind` served the first entry and logged `widgets[1]`. A principal's `<script>` widget, posing as `email-inbox-widget`, was refused (`INVALID_TEMPLATE`) and still removed the seed's inbox. Unreadable JSON was logged as `INVALID_JSON`. No log line contained the entry's contents.
+  - **A failing source** answered `CATALOG_UNAVAILABLE` without the exception text, which held a fake address, and logged the failure at Error; the other principal kept working.
+  - **Global surfaces.** `list_theme_tokens`, `get_authoring_guide`, `tools/list` and the app template never called the source. Over the in-process protocol, `list_widgets` did, and a host tool rendering a principal-only kind through the `RequestContext` overload equaled `render_widget`.
+  - **The sample over HTTP**, launched as a process with two random keys from environment variables. The keyless client listed the seed. `merge-demo`, keyed by `x-api-key`, listed its inbox once with its own description plus `merge-demo-dark`. `replace-demo`, keyed by `?key=`, listed `card` and `release-notes-widget` without the seed's kinds and rendered its widget. The server's output, Information logs included, never contained either key.
+  - **NOT yet done.** Staging (6.4), and the owner's per-principal host retest.
+
+- **Wire schemas from the exported definitions (2026-10-11, change `derived-input-schemas`, `@widgentic/mcp` minor pending release)**
+  - **The wire.** `server-wiring` lists the tools of `createWidgenticServer()` and finds every `inputSchema` and description equal to the exported definition's, for all nine tools: nothing added (no `$schema`), nothing missing.
+  - **One validation path.** Over the protocol, `{ kind: "card", data: 1 }` comes back as the handler's `MISSING_FIELD` on `widget`, naming the mix-up, and `format: "pdf"` as `INVALID_TYPE` on `format`. Neither is the SDK's "Input validation error".
+  - **The corpus** gains the mix-up cases for `render_widget` and `preview_widget`, so `.NET` is held to the same message.
+  - **`execute_action`** refuses a string, array or null `args`, a numeric `at` and a numeric `item` with `INVALID_TYPE` on that path, with nothing fetched.
+  - **Staged (2026-10-12).** `demo.widgentic.dev` at `theme-styles-and-defaults-7373de2` carries this change. Keyless `tools/list` serves 9 tools whose input schemas equal the exported definitions, and a raw `render_widget` call with `{ kind: "card", data }` answers `MISSING_FIELD` on `widget`, naming the mix-up. The owner reported the host retest went well.
 - **The Node assembly on SDK 2.x, both protocol eras (2026-10-09, change `mcp-sdk-v2`, `@widgentic/mcp` minor pending release)** — Windows 11, Node 24.
   - **Wire schemas.** The published 0.9.0 (SDK 1.31) and this assembly list the same nine tools, with identical names, descriptions, `_meta` and input properties. The one difference is `$schema` on the three zod-backed inputs: JSON Schema 2020-12 instead of draft-07.
   - **In process** (`server-wiring`), through `createMcpHandler`:

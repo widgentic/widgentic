@@ -2,22 +2,22 @@ using System.Text.Json;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
-using Widgentic.Mcp.Engine;
 
 namespace Widgentic.Mcp.Mcp;
 
 /// <summary>
 /// One widgentic tool, defined by the bundle (name, description, input schema) and answered by
-/// the bundle's handler; the raw arguments are forwarded unchanged.
+/// the bundle's handler, on the caller's catalog when one resolves; the raw arguments are
+/// forwarded unchanged.
 /// </summary>
 internal sealed class WidgenticTool : McpServerTool
 {
-    private readonly WidgenticEngine _engine;
+    private readonly CallerCatalogs _catalogs;
     private readonly bool _assumeUi;
 
-    public WidgenticTool(WidgenticEngine engine, JsonElement definition, bool assumeUi)
+    public WidgenticTool(CallerCatalogs catalogs, JsonElement definition, bool assumeUi)
     {
-        _engine = engine;
+        _catalogs = catalogs;
         _assumeUi = assumeUi;
         ProtocolTool = new Tool
         {
@@ -35,10 +35,12 @@ internal sealed class WidgenticTool : McpServerTool
         RequestContext<CallToolRequestParams> request,
         CancellationToken cancellationToken = default)
     {
-        var json = await _engine.Pool.CallToolAsync(
+        var json = await _catalogs.CallToolAsync(
             ProtocolTool.Name,
             ArgumentsJson(request.Params?.Arguments),
             Slimming.For(request.Server, request.Params?.Meta, _assumeUi),
+            request.User,
+            request.Services,
             cancellationToken).ConfigureAwait(false);
         return ToolResults.Parse(json);
     }

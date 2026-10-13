@@ -47,7 +47,7 @@ async function aliceCatalog() {
 }
 
 const errorOf = (result: { content: { type: string; text?: string }[] }) =>
-  JSON.parse(String(result.content[0]?.text)) as { code: string; path?: string };
+  JSON.parse(String(result.content[0]?.text)) as { code: string; path?: string; message?: string };
 
 const scOf = (result: { structuredContent?: Record<string, unknown> }) =>
   result.structuredContent as { tree: WidgetNode; css: string };
@@ -106,6 +106,12 @@ describe("preview_widget", () => {
 
   it("refuses a missing widget id", () => {
     expect(errorOf(handlePreviewWidget(createCatalog(), { data: {} })).code).toBe("MISSING_FIELD");
+  });
+
+  it("names the payload's field when 'kind' stands in for 'widget'", () => {
+    const error = errorOf(handlePreviewWidget(createCatalog(), { kind: "card", data: {} }));
+    expect(error).toMatchObject({ code: "MISSING_FIELD", path: "widget" });
+    expect(error.message).toContain("'kind' is the payload's field");
   });
 
   it("resolves a theme name and ignores a theme that does not resolve", async () => {

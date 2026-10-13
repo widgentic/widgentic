@@ -8,7 +8,8 @@ Everything needed to host the widgentic engine over MCP:
   limiter, body cap). Framework-agnostic: no MCP SDK is imported here.
 - `@widgentic/mcp/sdk` — `createWidgenticServer()`, the full assembly on the
   official MCP TypeScript SDK 2.x: optional peers `@modelcontextprotocol/server`
-  2.3+, `@modelcontextprotocol/ext-apps` 2 and `zod` 4.2+. Served through the
+  2.3+ and `@modelcontextprotocol/ext-apps` 2 (which needs `zod` 4.2+). Every tool
+  advertises its exported definition's input schema. Served through the
   SDK's entries, it speaks protocol revision 2026-07-28 and the 2025-era
   revisions alike.
 - `@widgentic/mcp/authoring` — the write side as a hostable HTTP surface:
@@ -17,7 +18,10 @@ Everything needed to host the widgentic engine over MCP:
   `node:http` adapter. The host resolves the principal; a presented API key
   never authorizes authoring.
 - `@widgentic/mcp/store` — the per-principal store port with memory and file
-  implementations, composition and validation; `@widgentic/mcp/store/sqlite`
+  implementations, composition and validation, including each principal's
+  settings record (default themes, and the `resourceDomains` a principal's
+  frames may load images from: `composeResourceDomains`, refusals as
+  `INVALID_DOMAIN`); `@widgentic/mcp/store/sqlite`
   adds the single-node durable adapter on the Node runtime's built-in SQLite
   (no dependency at all); `@widgentic/mcp/store/cosmos` adds the Azure Cosmos
   DB adapter (optional peers `@azure/cosmos`, `@azure/identity`).
@@ -80,6 +84,7 @@ The host is **render-only**: http actions render disabled, no `load` runs, and
 `execute_action`/`list_actions` are not served (prompt actions work — the
 template proposes them to the host's composer). Nothing is fetched, so images
 are not inlined: in Apps hosts whose sandbox blocks external images, declare
-the image host as a CSP resource domain or pass `data:` URIs.
+the image host as a CSP resource domain (the config's `resourceDomains`, or the
+settings' section; `resources()` reports the declared list) or pass `data:` URIs.
 
 MIT © Diego Hoyos

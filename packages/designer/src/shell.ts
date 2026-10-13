@@ -30,6 +30,12 @@ export interface DesignerOptions {
    */
   themes?: ThemeEntry[];
   /**
+   * The name of one of `themes` to open with as the preview theme — its
+   * tokens and styles applied — e.g. the person's light default. A name
+   * that matches no supplied entry is ignored. Wins over `initialTheme`.
+   */
+  previewTheme?: string;
+  /**
    * Shared data schemas the draft may reference by name (the Data schema
    * section's "use shared" mode). Schema authoring belongs to the
    * standalone schema designer; the widget designer only selects.
@@ -65,10 +71,22 @@ export interface DesignerOptions {
 }
 
 export type LoadResult = { ok: true } | { ok: false; errors: string[] };
+export type WidgetCheckResult = { ok: true; diagnostics: DesignerDiagnostics } | { ok: false; errors: string[] };
 
 export interface DesignerHandle {
   getDraft(): WidgetDraft;
+  /**
+   * The current draft's diagnostics, resolved against the shared schemas and
+   * actions the host supplied — what subscribers receive on every change.
+   */
+  getDiagnostics(): DesignerDiagnostics;
   loadWidget(definition: unknown): LoadResult;
+  /**
+   * Check a definition exactly as `loadWidget` would — the same refusals —
+   * and return its diagnostics against the host's shared entries, without
+   * touching the draft.
+   */
+  checkWidget(definition: unknown): WidgetCheckResult;
   loadTheme(theme: unknown): LoadResult;
   /** Disable/enable editing; the preview and theme selector stay live. */
   setReadOnly(readOnly: boolean): void;
@@ -87,8 +105,18 @@ export function createDesigner(
   const base: WidgetDraft = options.initialWidget
     ? cloneDraft({ ...options.initialWidget })
     : starterDraft();
+  const preselected = options.themes?.find((entry) => entry.name === options.previewTheme);
   const initial: WidgetDraft =
-    options.initialTheme !== undefined ? { ...base, theme: options.initialTheme } : base;
+    preselected !== undefined
+      ? {
+          ...base,
+          theme: preselected.tokens,
+          previewTheme: preselected.name,
+          ...(preselected.styles === undefined ? {} : { themeStyles: preselected.styles })
+        }
+      : options.initialTheme !== undefined
+        ? { ...base, theme: options.initialTheme }
+        : base;
   const store = createDraftStore(initial);
 
   const listeners = new Set<
@@ -119,11 +147,16 @@ export function createDesigner(
     actionContext
   );
 
-  function refresh(draft: WidgetDraft): void {
-    const diagnostics = deriveDiagnostics(draft, {
-      schemas: options.schemas ?? [],
+  // Every diagnostic resolves against the shared entries the host supplied;
+  // with no schemas supplied a reference is unverifiable, never "unknown".
+  const diagnose = (draft: WidgetDraft): DesignerDiagnostics =>
+    deriveDiagnostics(draft, {
+      ...(options.schemas === undefined ? {} : { schemas: options.schemas }),
       actions: options.actions ?? []
     });
+
+  function refresh(draft: WidgetDraft): void {
+    const diagnostics = diagnose(draft);
     preview.update(draft, diagnostics);
     for (const listener of [...listeners]) listener(draft, diagnostics);
   }
@@ -156,19 +189,37 @@ export function createDesigner(
 
   return {
     getDraft: () => cloneDraft(store.get()),
+    getDiagnostics: () => diagnose(store.get()),
     setReadOnly,
     loadWidget(definition) {
-      const errors = checkDefinition(definition);
+      const errors = checkDefinition(definition, store.get().kind);
       if (errors.length > 0) return { ok: false, errors };
       applyDefinition(store, definition as unknown as WidgetDefinition);
       return { ok: true };
+    },
+    checkWidget(definition) {
+      const errors = checkDefinition(definition, store.get().kind);
+      if (errors.length > 0) return { ok: false, errors };
+      const { kind, template, descriptor, load } = definition as unknown as WidgetDefinition;
+      return { ok: true, diagnostics: diagnose({ kind, template, descriptor, ...(load === undefined ? {} : { load }) }) };
     },
     loadTheme(theme) {
       const validated = validateTheme(theme);
       if (!validated.ok) {
         return { ok: false, errors: [validated.error.message] };
       }
-      store.update((draft) => ({ ...draft, theme: validated.theme }));
+      // Tokens layer over the person's chosen preview theme, which stays
+      // chosen with its shared styles, so `{}` returns to it exactly. With
+      // nothing chosen they are the whole preview theme.
+      store.update((draft) => {
+        const { themeStyles: _previous, ...rest } = draft;
+        const chosen = options.themes?.find((entry) => entry.name === draft.previewTheme);
+        return {
+          ...rest,
+          theme: { ...(chosen?.tokens ?? {}), ...validated.theme },
+          ...(chosen?.styles === undefined ? {} : { themeStyles: chosen.styles })
+        };
+      });
       return { ok: true };
     },
     subscribe(listener) {

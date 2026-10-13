@@ -32,6 +32,26 @@ async function connect() {
 }
 
 describe("SDK interoperability (in-memory transport, library assembly)", () => {
+  it("delivers malformed arguments to the handler, whose structured errors come back", async () => {
+    const { client } = await connect();
+    const kindForWidget = (await client.callTool({
+      name: "render_widget",
+      arguments: { kind: "card", data: 1 }
+    })) as DeliveredResult;
+    expect(kindForWidget.isError).toBe(true);
+    const named = JSON.parse(textOf(kindForWidget));
+    expect(named).toMatchObject({ code: "MISSING_FIELD", path: "widget" });
+    expect(named.message).toContain("'kind' is the payload's field");
+
+    const badFormat = (await client.callTool({
+      name: "render_widget",
+      arguments: { widget: "card", data: 1, format: "pdf" }
+    })) as DeliveredResult;
+    expect(badFormat.isError).toBe(true);
+    expect(JSON.parse(textOf(badFormat))).toMatchObject({ code: "INVALID_TYPE", path: "format" });
+    expect(textOf(badFormat)).not.toContain("Input validation error");
+  });
+
   it("list_widgets round-trips the descriptor list", async () => {
     const { client } = await connect();
     const result = (await client.callTool({
@@ -207,7 +227,8 @@ describe("SDK interoperability (in-memory transport, library assembly)", () => {
     const props = (render?.inputSchema as {
       properties?: Record<string, { description?: string }>;
     })?.properties;
-    expect(render?.description).toContain("Write 'widget' before 'data'");
+    // Widget first and hints before data, so a streamed preview has its labels from the first row.
+    expect(render?.description).toContain("Write 'widget' first and any 'hints' before 'data'");
     expect(props?.theme?.description).toContain("pass the NAME");
     expect(props?.theme?.description).toContain("do NOT reconstruct");
     expect(props?.widget?.description).toBeTruthy();
@@ -331,13 +352,31 @@ describe("resourceDomains declaration", () => {
     return client;
   }
 
-  it("declared domains reach the app resource's csp metadata", async () => {
-    const client = await connectWithDomains(["CDN.Example.com ", "media.example.org"]);
-    const listed = await client.listResources();
-    const app = listed.resources.find((r) => r.uri.startsWith("ui://"));
-    expect(app?._meta?.ui).toMatchObject({
-      csp: { resourceDomains: ["cdn.example.com", "media.example.org"] }
+  it("declared domains reach the app resource's csp metadata as canonical origins", async () => {
+    const client = await connectWithDomains(["cdn.example.com"]);
+    const app = (await client.listResources()).resources.find((r) => r.uri.startsWith("ui://"));
+    expect(app?._meta?.ui).toMatchObject({ csp: { resourceDomains: ["https://cdn.example.com"] } });
+    const read = await client.readResource({ uri: app?.uri ?? "" });
+    expect(read.contents[0]?._meta?.ui).toMatchObject({ csp: { resourceDomains: ["https://cdn.example.com"] } });
+  });
+
+  it("refused domains are not declared; the rest are deduplicated in first-seen order", async () => {
+    const client = await connectWithDomains([
+      "cdn.example.com",
+      "http://old.example.com",
+      "https://*.example.org",
+      "CDN.example.com"
+    ]);
+    const app = (await client.listResources()).resources.find((r) => r.uri.startsWith("ui://"));
+    expect((app?._meta?.ui as { csp?: unknown } | undefined)?.csp).toEqual({
+      resourceDomains: ["https://cdn.example.com", "https://*.example.org"]
     });
+  });
+
+  it("a list of only refused domains declares nothing", async () => {
+    const client = await connectWithDomains(["localhost", "http://old.example.com"]);
+    const app = (await client.listResources()).resources.find((r) => r.uri.startsWith("ui://"));
+    expect((app?._meta?.ui as { csp?: unknown } | undefined)?.csp).toBeUndefined();
   });
 
   it("no configured domains means no csp declaration", async () => {
@@ -346,6 +385,16 @@ describe("resourceDomains declaration", () => {
     const app = listed.resources.find((r) => r.uri.startsWith("ui://"));
     const ui = app?._meta?.ui as { csp?: unknown } | undefined;
     expect(ui?.csp).toBeUndefined();
+  });
+
+  it("asks the host for no border, on the declaration and on the read content", async () => {
+    for (const domains of [undefined, ["cdn.example.com"]]) {
+      const client = await connectWithDomains(domains);
+      const app = (await client.listResources()).resources.find((r) => r.uri.startsWith("ui://"));
+      expect(app?._meta?.ui).toMatchObject({ prefersBorder: false });
+      const read = await client.readResource({ uri: app?.uri ?? "" });
+      expect(read.contents[0]?._meta?.ui).toEqual(app?._meta?.ui);
+    }
   });
 });
 

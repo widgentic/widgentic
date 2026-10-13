@@ -21,18 +21,21 @@ import {
   FORMAT_DECIMALS_MAX,
   FORMAT_DECIMALS_MIN,
   FORMAT_TYPES,
+  LABEL_STYLE_RULE,
   MAX_TEMPLATE_DEPTH,
+  DATA_SCHEMA_TYPES,
   PATTERN_MAX_LENGTH,
-  PROPERTY_NAME,
+  STYLE_RULES,
   TOKEN_SPECS,
-  UNSAFE,
+  TOKEN_VALUE_RULE,
   URL_ATTRS,
   createCatalog,
-  formatBoundValue
+  formatBoundValue,
+  SAFE_IDENTIFIER
 } from "@widgentic/core";
 
-/** Copied from @widgentic/mcp's store (SAFE_IDENTIFIER, DEFAULT_LIMITS): keep in step when they move. */
-export const SAFE_IDENTIFIER = /^[a-zA-Z0-9._-]+$/;
+/** The identifier rule, from core; the limits are copied from @widgentic/mcp's store — keep in step when they move. */
+export { SAFE_IDENTIFIER };
 export const STORE_LIMITS = {
   maxWidgets: 100,
   maxThemes: 50,
@@ -87,7 +90,7 @@ export function buildDesignerGuide(prefix: string): Record<string, unknown> {
         template: "A template DSL node (see rules.template).",
         descriptor: {
           description: "REQUIRED string — what the widget shows, for agents.",
-          dataShape: "REQUIRED string — a compact sketch of the expected data, e.g. '{ title, lines: [{ item, amount }] }'.",
+          dataShape: "Strongly recommended string — a compact sketch of the expected data, e.g. '{ title, lines: [{ item, amount }] }'. Agents listing the widget read it; without it they see a generic placeholder, and the designer warns.",
           dataExample: "RECOMMENDED — an example the widget renders well; shown to agents and used as the designer's preview data.",
           dataSchemaRef:
             "OPTIONAL string — the NAME of one of the person's saved shared schemas, used IN PLACE of an inline dataSchema: carrying both is refused. " +
@@ -128,18 +131,26 @@ export function buildDesignerGuide(prefix: string): Record<string, unknown> {
     },
     theme: {
       shape: {
-        description: "A theme entry is one JSON object: { name, label?, description?, tokens }.",
+        description: "A theme entry is one JSON object: { name, label?, description?, tokens, styles? }.",
         name: `String identifier matching ${SAFE_IDENTIFIER.source}; light and dark are reserved.`,
         label: "OPTIONAL human-readable display name.",
-        tokens: "Record of registry token names (bare, no --wg- prefix) and/or custom variables to string values."
+        tokens: "Record of registry token names (bare, no --wg- prefix) and/or custom variables to string values.",
+        styles: "OPTIONAL shared classes, in the same shape as a widget's descriptor.styles: { \"<selector>\": { \"<cssProperty>\": \"<value>\" } }."
       },
+      styles: {
+        purpose:
+          "A theme's styles define classes every widget rendered under the theme can use (e.g. .wg-btn for buttons), so a look is written once instead of copied into each widget. They are emitted before the widget's own styles, so a widget's rule wins a tie.",
+        // The same guard as widget styles: one rule object for both.
+        ...STYLE_RULES
+      },
+      defaults:
+        "Which theme dresses renders that name no theme — one for light hosts, one for dark — is a setting the person chooses in Settings, not part of the theme entry.",
       tokens: Object.entries(TOKEN_SPECS).map(([name, spec]) => ({ name, type: spec.type, use: spec.use, default: spec.default })),
       customVariables: {
         namePattern: CUSTOM_VARIABLE.source,
         appliedAs: "A custom variable x-foo becomes --wg-x-foo on the themed scope; reference it from widget styles as var(--wg-x-foo)."
       },
-      valueSafety:
-        "Token values are plain CSS values. Rejected: ';', '{', '}', '<', '>', 'url(' and 'expression(' (case-insensitive, whitespace-tolerant). Keep values to colors, lengths, and font stacks."
+      valueSafety: TOKEN_VALUE_RULE
     },
     rules: {
       template: {
@@ -180,6 +191,11 @@ export function buildDesignerGuide(prefix: string): Record<string, unknown> {
           maxInterpretedNodes: DEFAULT_MAX_NODES,
           note: "Validation rejects deeper nesting; interpretation stops at the node budget and marks the render truncated."
         },
+        labels:
+          LABEL_STYLE_RULE +
+          " It applies to the labels a template writes as literals, and to the " +
+          "built-in card's and table's hints.labels (a field's or column's label " +
+          "in place of its key).",
         dataModeling:
           "PREFER binding only properties declared in descriptor.dataSchema — schema-declared data is validated with dotted paths, so you get correctable errors instead of silently blank output. " +
           "'$meta.x' exists (reads the payload's meta) but meta is NOT covered by dataSchema validation: avoid it. If the widget needs a title, declare `title` as an optional schema property. " +
@@ -188,16 +204,14 @@ export function buildDesignerGuide(prefix: string): Record<string, unknown> {
       styles: {
         shape:
           "descriptor.styles is { \"<selector>\": { \"<cssProperty>\": \"<value>\" } } — each declaration is a separate key/value pair, e.g. { \".wg-roster-row\": { \"display\": \"flex\", \"gap\": \"var(--wg-spacing)\" } }.",
-        selectors:
-          "Every selector (and every comma-separated part) must target a .wg- class, e.g. '.wg-card .wg-xcard-head'. The base stylesheet also ships a wg-code monospace block utility any template element can opt into via class.",
-        banned: `Selectors, properties, or values matching ${UNSAFE.source} — or containing 'url(' or 'expression(' — are dropped.`,
-        propertyNames: `Property names must match ${PROPERTY_NAME.source} (letters and hyphens, optionally leading '-'); anything else is dropped.`,
+        ...STYLE_RULES,
+        utilities: "The base stylesheet also ships a wg-code monospace block utility any template element can opt into via class.",
         tokens:
           "Reference theme tokens with var(--wg-<token>) and custom variables with var(--wg-x-<name>); prefer tokens over literals so themes restyle the widget. " +
           "Every registry token is always DEFINED at render time, so bare var(--wg-<token>) is safe. Custom x-* variables are defined only by themes that set them, so give those a fallback: var(--wg-x-foo, <value>)."
       },
       dataSchema: {
-        keywords: "Supported subset: type (object/array/string/number/integer/boolean/null, or an array of those), properties, required, items, enum, pattern. Unknown keywords are ignored.",
+        keywords: `Supported subset: type (${DATA_SCHEMA_TYPES.join("/")}, or an array of those), properties, required, items, enum, pattern. Unknown keywords are ignored.`,
         pattern: `pattern is a bounded regex: max ${PATTERN_MAX_LENGTH} chars, no nested quantifiers, applied only to strings and capped input length; unsafe or invalid patterns are ignored rather than enforced.`,
         effect: "Kinds with a dataSchema fail fast with dotted paths (e.g. data.lines.0.amount); schema-less kinds render leniently."
       }

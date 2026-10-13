@@ -4,7 +4,19 @@ import { Client, InMemoryTransport, StreamableHTTPClientTransport } from "@model
 import { createMcpHandler } from "@modelcontextprotocol/server";
 import { EXTENSION_ID, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { createWidgenticServer } from "../server.js";
-import { buildAppTemplate, WIDGENTIC_APP_TEMPLATE_URI } from "../index.js";
+import {
+  buildAppTemplate,
+  EXECUTE_ACTION_TOOL,
+  GET_AUTHORING_GUIDE_TOOL,
+  LIST_ACTIONS_TOOL,
+  LIST_SCHEMAS_TOOL,
+  LIST_THEME_TOKENS_TOOL,
+  LIST_THEMES_TOOL,
+  LIST_WIDGETS_TOOL,
+  PREVIEW_WIDGET_TOOL,
+  RENDER_WIDGET_TOOL,
+  WIDGENTIC_APP_TEMPLATE_URI
+} from "../index.js";
 
 interface DeliveredResult {
   isError?: boolean;
@@ -144,6 +156,30 @@ describe("the session log line", () => {
     await renderDefault(await overHttp("legacy", APPS_UI));
     expect(sessionLines(spy)).toEqual([]);
     spy.mockRestore();
+  });
+});
+
+describe("wire schemas", () => {
+  it("advertises every tool's exported inputSchema exactly as exported", async () => {
+    const exported = [
+      LIST_WIDGETS_TOOL,
+      RENDER_WIDGET_TOOL,
+      LIST_THEME_TOKENS_TOOL,
+      LIST_THEMES_TOOL,
+      LIST_SCHEMAS_TOOL,
+      LIST_ACTIONS_TOOL,
+      GET_AUTHORING_GUIDE_TOOL,
+      EXECUTE_ACTION_TOOL,
+      PREVIEW_WIDGET_TOOL
+    ];
+    const { client } = await session();
+    const { tools } = await client.listTools();
+    expect(tools.map((tool) => tool.name).sort()).toEqual(exported.map((tool) => tool.name).sort());
+    for (const tool of tools) {
+      const definition = exported.find((candidate) => candidate.name === tool.name);
+      expect(tool.inputSchema, tool.name).toEqual(definition?.inputSchema);
+      expect(tool.description, tool.name).toBe(definition?.description);
+    }
   });
 });
 

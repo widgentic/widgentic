@@ -12,7 +12,7 @@ Any MCP client can discover the widgets a widgentic server knows and ask it to v
 | `list_widgets` | none | JSON array of descriptors: `kind`, `description`, `dataShape`, a `dataExample` to imitate, supported `hints`, `dataSchema` when declared |
 | `list_schemas` | none | `{ schemas, rules }` — the caller's saved shared schemas as `{ name, label?, description?, schema }`; anonymous or unknown keys see an empty list, never an error |
 | `list_actions` | none | `{ actions, rules }` — the caller's saved shared actions as their CONTRACT: `{ name, label?, description?, kind, method?, input?, output? }`. The `url`, `headers` and `query` stay on the server; anonymous or unknown keys see an empty list |
-| `list_themes` | none | `{ themes, rules }` — every registered theme as `{ name, label?, description?, extends?, tokens }` |
+| `list_themes` | none | `{ themes, rules }` — every registered theme as `{ name, label?, description?, tokens, styles? }` |
 | `list_theme_tokens` | none | `{ tokens, presets, rules }` — each token's `name`, light `default`, value `type` and `use`; the `dark` preset; the value rules, including `x-*` custom variables |
 | `get_authoring_guide` | none | a JSON guide: `workflow`, `widget`, `sharedSchema`, `sharedAction`, `theme`, `rules` (template, styles, dataSchema, actions) and `limits`, derived from the live validators |
 
