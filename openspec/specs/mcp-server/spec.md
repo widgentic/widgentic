@@ -952,7 +952,7 @@ A reported setting SHALL be skipped, and SHALL be listed by `problems()` under t
 The returned host SHALL take and return strings only, apart from the boolean `slim` flag of `call`:
 - `version()`: the `@widgentic/mcp` version the bundle was built from, taken from its manifest at build time.
 - `problems()`: a JSON array of `{ section, index, name, code, message }`, one per refused entry or setting.
-- `definitions()`: the JSON of the tool definitions this host serves, taken from the same exported definitions as the Node assembly, with name, description and JSON-Schema `inputSchema`. The tools are `list_widgets`, `render_widget`, `list_theme_tokens`, `list_themes`, `list_schemas` and `get_authoring_guide`, plus the template's own `preview_widget`, which is marked `visibility: ["app"]` as the Node assembly registers it.
+- `definitions()`: the JSON of the tool definitions this host serves, taken from the same exported definitions as the Node assembly, with name, description, JSON-Schema `inputSchema` and `annotations`. The tools are `list_widgets`, `render_widget`, `list_theme_tokens`, `list_themes`, `list_schemas` and `get_authoring_guide`, plus the template's own `preview_widget`, which is marked `visibility: ["app"]` as the Node assembly registers it.
 - `call(name, argsJson, slim)`: the MCP tool result JSON of that tool's handler, with the slim flag passed through to `render_widget`. `preview_widget` SHALL be answered by the same handler as in the Node assembly, through the host's composed catalog and themes, with no rate gate: rate-limiting previews belongs to the embedding server's transport. An unknown tool name SHALL return an `isError` result, never throw.
 - `resources()`: the JSON of the served documents (the app template and the preview-page template) with name, URI or URI template, MIME type and description, taken from the same constants the Node assembly registers them with. For the app template it also gives `prefersBorder` and `resourceDomains`. `resourceDomains` lists the accepted entries of `config.resourceDomains` followed by those of `settings.resourceDomains`, in canonical `https://` origin form and deduplicated in first-seen order: the list the Node assembly declares for the same operator list and settings. The key SHALL be absent when no entry is accepted.
 - `appTemplate()`: exactly `buildAppTemplate()`.
@@ -1121,3 +1121,27 @@ While a built-in kind's input streams (`card`, `table`, `tree`, or a `group` who
 - **THEN** no `preview_widget` request SHALL be made
 - **AND WHEN** a host with `serverTools` delivers the tool result before the CSS answer arrives
 - **THEN** the result's `css` SHALL stay applied and the late answer SHALL be discarded
+
+### Requirement: Tools declare their behavior annotations
+Every exported tool definition SHALL carry `annotations: { readOnlyHint, destructiveHint, idempotentHint, openWorldHint }` as plain data, and every surface SHALL derive them:
+- the server assembly SHALL register each tool with its definition's annotations, so `tools/list` carries exactly those values;
+- the host bundle's `definitions()` SHALL return them.
+
+The values SHALL be:
+- `list_widgets`, `list_theme_tokens`, `list_themes`, `list_schemas`, `list_actions`, `get_authoring_guide` and `preview_widget`: `readOnlyHint: true`, `destructiveHint: false`, `idempotentHint: true`, `openWorldHint: false`.
+- `render_widget`: `readOnlyHint: true`, `destructiveHint: false`, `idempotentHint: true` and `openWorldHint: true`, since the assembly fetches agent-supplied image sources to inline them.
+- `execute_action`: `readOnlyHint: false`, `destructiveHint: true`, `idempotentHint: false` and `openWorldHint: true`, since an http action may `POST` to the author's API.
+
+No tool other than `execute_action` SHALL declare a write.
+
+#### Scenario: The definitions carry the annotations
+- **WHEN** every exported tool definition is inspected
+- **THEN** each SHALL carry all four hints, `list_widgets` SHALL declare `{ readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }`, and `execute_action` alone SHALL declare `readOnlyHint: false`
+
+#### Scenario: tools/list carries the definitions' annotations
+- **WHEN** an SDK client lists the tools of `createWidgenticServer()`
+- **THEN** every tool's `annotations` SHALL deep-equal its exported definition's
+
+#### Scenario: The host bundle returns the annotations
+- **WHEN** a host's `definitions()` is parsed
+- **THEN** each tool's `annotations` SHALL deep-equal its exported definition's

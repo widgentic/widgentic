@@ -3,7 +3,7 @@
 Versions share their major.minor with the `@widgentic/mcp` release whose host bundle they embed:
 `Widgentic.Mcp` X.Y.* runs `@widgentic/mcp` X.Y.*. The patch moves on its own for .NET-only fixes.
 
-## Unreleased (0.11.1)
+## 0.11.1
 
 Embeds the `@widgentic/mcp` 0.11.1 host bundle.
 
