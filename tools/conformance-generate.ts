@@ -2,7 +2,8 @@
  * The conformance corpus of the runtime-neutral host (`@widgentic/mcp/host`).
  *
  * Inputs cover every served tool (the template's preview tool included), every built-in kind, groups, themes,
- * contract errors, hint diagnostics, value formats in several locales, URL
+ * contract errors, hint diagnostics, value formats in several locales, the
+ * text formats (plural rules in two locales) and a Markdown bind, URL
  * edge cases, the example template widgets (an http and a prompt action
  * among them) and the documents the host serves, plus default themes chosen
  * by a settings record, each under its own named configuration (`configs`;
@@ -82,6 +83,54 @@ const formatsWidget = {
   }
 };
 
+/** The text formats and a Markdown bind: plural rules and code points, where engines could diverge. */
+const textWidget = {
+  kind: "corpus-text",
+  template: {
+    tag: "div",
+    attrs: { class: "wg-corpus-text" },
+    children: [
+      { tag: "p", children: [{ bind: "items", format: { type: "count" } }] },
+      {
+        tag: "p",
+        attrs: { title: { bind: "tags", format: { type: "join", separator: " · " } } },
+        children: [{ bind: "people", format: { type: "join", field: "name", last: " and " } }]
+      },
+      { tag: "p", children: [{ bind: "title", format: { type: "truncate", length: 12 } }] },
+      {
+        tag: "p",
+        children: [{ bind: "n", format: { type: "pluralize", forms: { zero: "No items", one: "{count} item", other: "{count} items" } } }]
+      },
+      {
+        tag: "p",
+        children: [
+          {
+            bind: "n",
+            format: {
+              type: "pluralize",
+              locale: "pl",
+              forms: { one: "{count} plik", few: "{count} pliki", many: "{count} plików", other: "{count} pliku" }
+            }
+          }
+        ]
+      },
+      { tag: "div", children: [{ bind: "notes", markdown: true }] }
+    ]
+  },
+  descriptor: {
+    description: "Corpus: text formats and Markdown.",
+    dataExample: {
+      items: [1, 2, 3],
+      tags: ["red", "", "green"],
+      people: [{ name: "Ada" }, { name: "Lin" }, { name: "Grace" }],
+      title: "Quarterly revenue summary 👍👍",
+      n: 3,
+      notes:
+        "Intro with **bold**, *em*, _under_ and `code`.\nsnake_case stays.\n\n- one\n- two\n\n3. third\n4. fourth\n\nSee [docs](https://example.com/a_(b)) and \\*stars\\*."
+    }
+  }
+};
+
 /** Attribute URLs through the scheme allowlist: links, prefixes, images. */
 const linksWidget = {
   kind: "corpus-links",
@@ -112,7 +161,7 @@ const schemaWidget = {
 };
 
 const config = {
-  widgets: [...customWidgets.map(exportShape), formatsWidget, linksWidget, schemaWidget],
+  widgets: [...customWidgets.map(exportShape), formatsWidget, textWidget, linksWidget, schemaWidget],
   themes: [
     { name: "corpus-brand", label: "Corpus brand", tokens: { accent: "#0b6e4f" } },
     {
@@ -275,6 +324,23 @@ export function buildCorpus(): Corpus {
     });
   }
   render("formats unzoned date", { widget: "corpus-formats", data: { amount: 1, when: "2026-10-08T23:59:00" } });
+
+  // Text formats and Markdown: plural rules in two locales; the example and the hostile value also as a page and a preview.
+  const text = textWidget.descriptor.dataExample;
+  for (const [label, data] of [
+    ["example", text],
+    ["zero", { ...text, items: [], n: 0, people: [], title: "Short" }],
+    ["one", { ...text, items: [1], n: 1, people: [{ name: "Ada" }] }],
+    ["many", { ...text, n: 22, items: "n/a", people: "solo" }],
+    ["polish five", { ...text, n: 5 }],
+    ["hostile markdown", { ...text, notes: "<img src=x onerror=alert(1)> [x](javascript:alert(1)) **open *half # not a heading\n\n> not a quote" }]
+  ] as const) {
+    render(`text ${label}`, { widget: "corpus-text", data });
+    if (label === "example" || label === "hostile markdown") {
+      render(`text ${label} as a page`, { widget: "corpus-text", data, format: "page" });
+      call(`text ${label} preview`, "preview_widget", { widget: "corpus-text", data });
+    }
+  }
 
   const examples: [string, unknown][] = [
     ...customWidgets.map((widget): [string, unknown] => [widget.kind, widget.descriptor.dataExample ?? null]),

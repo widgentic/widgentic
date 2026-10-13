@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from "vitest";
 import { createDesigner } from "../index.js";
-import { validateTemplate } from "@widgentic/core";
+import { FORMAT_TYPES, validateTemplate } from "@widgentic/core";
 import { createJsonTreeEditor } from "../json-tree-editor.js";
 import { createSchemaBuilder } from "../schema-builder.js";
 import { createSchemaForm } from "../schema-form.js";
@@ -856,7 +856,7 @@ describe("bind format editor", () => {
     // The bind row starts raw.
     const type = container.querySelector(".wgd-format-type") as HTMLSelectElement;
     expect(type.value).toBe("none");
-    expect([...type.options].map((o) => o.value)).toEqual(["none", "number", "currency", "date"]);
+    expect([...type.options].map((o) => o.value)).toEqual(["none", ...FORMAT_TYPES]);
 
     type.value = "currency";
     type.dispatchEvent(new Event("change"));
@@ -1251,5 +1251,103 @@ describe("keyed each rows", () => {
     expect(draftTemplate(designer)).toMatchObject({ key: "id" });
     change(container.querySelector("input.wgd-each-key") as HTMLInputElement, "");
     expect("key" in draftTemplate(designer)).toBe(false);
+  });
+});
+
+describe("text formats and the Markdown toggle in bind rows", () => {
+  function notesDesigner(template: unknown) {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const designer = createDesigner(container);
+    designer.loadWidget({
+      kind: "notes",
+      template,
+      descriptor: {
+        description: "d",
+        dataShape: "s",
+        dataSchema: {
+          type: "object",
+          properties: { notes: { type: "string" }, tags: { type: "array", items: { type: "string" } } }
+        },
+        dataExample: { notes: "Hello **world**\n\n- one\n- two", tags: ["red", "green", "blue"] }
+      }
+    });
+    return { container, designer };
+  }
+  const child = (designer: ReturnType<typeof createDesigner>) =>
+    (designer.getDraft().template as unknown as { children: Record<string, unknown>[] }).children[0];
+  const iconButton = (container: Element, label: string) =>
+    [...container.querySelectorAll(".wgd-icon")].find((b) => b.textContent === label) as HTMLButtonElement | undefined;
+
+  it("a text bind row toggles Markdown, hiding format and map while it is on", () => {
+    const { container, designer } = notesDesigner({ tag: "div", children: [{ bind: "notes" }] });
+    const on = iconButton(container, "md");
+    expect(on).toBeDefined();
+    on?.click();
+    expect(child(designer)).toEqual({ bind: "notes", markdown: true });
+    expect(container.querySelectorAll(".wgd-format-type")).toHaveLength(0);
+    expect(iconButton(container, "map")).toBeUndefined();
+    // The preview renders the Markdown.
+    expect(container.querySelector(".wg-md strong")?.textContent).toBe("world");
+    expect(container.querySelectorAll(".wg-md li")).toHaveLength(2);
+
+    (container.querySelector(".wgd-md-toggle") as HTMLButtonElement).click();
+    expect(child(designer)).toEqual({ bind: "notes" });
+    expect(container.querySelectorAll(".wgd-format-type")).toHaveLength(1);
+    expect(iconButton(container, "map")).toBeDefined();
+    designer.dispose();
+  });
+
+  it("an attribute row offers no Markdown toggle", () => {
+    const { container, designer } = notesDesigner({ tag: "div", attrs: { title: { bind: "notes" } } });
+    const row = container.querySelector(".wgd-attr-row") as HTMLElement;
+    expect(iconButton(row, "md")).toBeUndefined();
+    designer.dispose();
+  });
+
+  it("every format type is offered, and each commits a valid spec with its fields", () => {
+    const { container, designer } = notesDesigner({ tag: "div", children: [{ bind: "tags" }] });
+    const pick = (value: string) => {
+      const type = container.querySelector(".wgd-format-type") as HTMLSelectElement;
+      type.value = value;
+      type.dispatchEvent(new Event("change"));
+      expect(validateTemplate(designer.getDraft().template).ok, value).toBe(true);
+    };
+    pick("truncate");
+    expect(child(designer)).toEqual({ bind: "tags", format: { type: "truncate", length: 80 } });
+    expect(container.querySelector(".wgd-format-length")).not.toBeNull();
+    expect(container.querySelector(".wgd-format-ellipsis")).not.toBeNull();
+
+    pick("join");
+    change(container.querySelector(".wgd-format-last") as HTMLElement, " and ");
+    expect(child(designer)).toEqual({ bind: "tags", format: { type: "join", separator: ", ", last: " and " } });
+    expect(container.textContent).toContain("red, green and blue");
+
+    pick("count");
+    expect(container.textContent).toContain("3");
+
+    pick("pluralize");
+    for (const category of ["zero", "one", "other"]) {
+      expect(container.querySelector(`.wgd-format-form-${category}`), category).not.toBeNull();
+    }
+    expect(container.textContent).toContain("3 items");
+    designer.dispose();
+  });
+
+  it("editing plural forms keeps the categories and locale the row does not show", () => {
+    const format = {
+      type: "pluralize",
+      locale: "pl",
+      forms: { one: "{count} plik", few: "{count} pliki", many: "{count} plików", other: "{count} pliku" }
+    };
+    const { container, designer } = notesDesigner({ tag: "div", children: [{ bind: "tags", format }] });
+    change(container.querySelector(".wgd-format-form-one") as HTMLElement, "{count} plik!");
+    expect(child(designer)).toEqual({
+      bind: "tags",
+      format: { ...format, forms: { ...format.forms, one: "{count} plik!" } }
+    });
+    // Polish reads 3 as "few".
+    expect(container.textContent).toContain("3 pliki");
+    designer.dispose();
   });
 });

@@ -21,8 +21,19 @@ import {
   FORMAT_DECIMALS_MAX,
   FORMAT_DECIMALS_MIN,
   FORMAT_TYPES,
+  JOIN_DEFAULT_SEPARATOR,
+  JOIN_SEPARATOR_MAX,
   LABEL_STYLE_RULE,
+  MARKDOWN_SOURCE_MAX,
+  MARKDOWN_TAGS,
   MAX_TEMPLATE_DEPTH,
+  PLURAL_CATEGORIES,
+  PLURAL_COUNT_PLACEHOLDER,
+  PLURAL_FORM_MAX,
+  TRUNCATE_DEFAULT_ELLIPSIS,
+  TRUNCATE_ELLIPSIS_MAX,
+  TRUNCATE_LENGTH_MAX,
+  TRUNCATE_LENGTH_MIN,
   DATA_SCHEMA_TYPES,
   PATTERN_MAX_LENGTH,
   STYLE_RULES,
@@ -47,7 +58,16 @@ export const STORE_LIMITS = {
 
 const FORMAT_EXAMPLES = {
   currency: formatBoundValue("3206.9905920000", { type: "currency", currency: "COP", decimals: 0 }),
-  date: formatBoundValue("2026-09-01T02:04:47", { type: "date", pattern: "dd-MM-yyyy HH:mm" })
+  date: formatBoundValue("2026-09-01T02:04:47", { type: "date", pattern: "dd-MM-yyyy HH:mm" }),
+  count: formatBoundValue(Array.from({ length: 1234 }, () => 0), { type: "count" }),
+  join: formatBoundValue(["red", "green", "blue"], { type: "join", last: " and " }),
+  truncate: formatBoundValue("Quarterly revenue summary", { type: "truncate", length: 10 }),
+  pluralize: [0, 1, 1200].map((n) =>
+    formatBoundValue(n, {
+      type: "pluralize",
+      forms: { zero: "No items", one: `${PLURAL_COUNT_PLACEHOLDER} item`, other: `${PLURAL_COUNT_PLACEHOLDER} items` }
+    })
+  )
 };
 
 /**
@@ -59,7 +79,8 @@ export function dslCheatSheet(prefix: string): string {
     `TEMPLATE DSL (data, not code): nodes are a STRING, { bind } (text of a dot path; '.' = the scope; $root.x, $parent.x, $index, $meta.x), ` +
     `{ each: "path", template, empty? }, { when: "path", template, else? }, or { tag, attrs?, children? }. ` +
     `Value transforms, ONE per value and always with bind: map { "<value>": "<your literal>", default? } (the value SELECTS a literal you wrote — semantic classes, status wording), ` +
-    `prefix "mailto:" (attribute values only), format { type: ${FORMAT_TYPES.join("|")}, decimals?, locale?, currency?, currencyDisplay?, pattern? } (render-time presentation, payload keeps the typed value). ` +
+    `prefix "mailto:" (attribute values only), format { type: ${FORMAT_TYPES.join("|")}, decimals?, locale?, currency?, currencyDisplay?, pattern?, separator?, last?, field?, length?, ellipsis?, forms? } (render-time presentation, payload keeps the typed value; count/join/truncate/pluralize present lists and text, e.g. pluralize forms { one: "${PLURAL_COUNT_PLACEHOLDER} item", other: "${PLURAL_COUNT_PLACEHOLDER} items" }). ` +
+    `A text bind may instead carry markdown: true (paragraphs, lists, emphasis, code, links — the parser chooses the tags, raw HTML stays text; never with map or format). ` +
     `Forbidden: script/iframe/object/embed/style/link/meta/base/template/noscript tags, on*/srcdoc attributes, non-https URLs (mailto:/tel: allowed on href), expressions of any kind. ` +
     `descriptor.description is REQUIRED; give dataShape and dataExample; dataSchema (type/properties/required/items/enum/pattern) makes bad data fail with a path instead of rendering blank. ` +
     `styles: { ".wg-<class>": { "css-property": "value" } } — .wg- selectors only, var(--wg-<token>) for colours and spacing. ` +
@@ -156,7 +177,7 @@ export function buildDesignerGuide(prefix: string): Record<string, unknown> {
       template: {
         forms: [
           "STRING — a text node: \"Hello\"",
-          "BIND — { \"bind\": \"path.to.value\" } renders the value as text; '.' binds the scope itself. A text bind may carry \"map\": { \"<value>\": \"<authored label>\" } with an optional \"default\" — the value SELECTS a label (status → wording) — or a \"format\" (below), never both; \"prefix\" is an attribute-value transform and is ignored in a text position",
+          "BIND — { \"bind\": \"path.to.value\" } renders the value as text; '.' binds the scope itself. A text bind may carry ONE of \"map\": { \"<value>\": \"<authored label>\" } with an optional \"default\" — the value SELECTS a label (status → wording) — a \"format\" (below) or \"markdown\": true (below); \"prefix\" is an attribute-value transform and is ignored in a text position",
           "PATHS — dot paths against the current scope (each item inside EACH). Escapes: '$meta.x' reads payload.meta; '$root.x' reads the top-level data from any depth; '$parent.x' steps out of one enclosing EACH per token ('$parent.$parent.x'); '$index' is the zero-based position in the innermost EACH",
           "EACH — { \"each\": \"path.to.array\", \"key\"?: \"path\", \"template\": <node>, \"empty\"?: <node> } repeats template with each item as scope; \"key\" names the item path that identifies it (e.g. \"id\"), so a list an action reorders keeps each item's element and state",
           "WHEN — { \"when\": \"path\", \"template\": <node>, \"else\"?: <node> } renders template when the value is truthy",
@@ -164,7 +185,9 @@ export function buildDesignerGuide(prefix: string): Record<string, unknown> {
           "ATTR MAP — { \"bind\": \"status\", \"map\": { \"do-not-contact\": \"wg-status wg-status-danger\", \"active\": \"wg-status wg-status-success\" }, \"default\": \"wg-status\" } — the bound value SELECTS one of your literals (semantic classes from data values); a miss emits default, or empty without one",
           "ATTR PREFIX — { \"bind\": \"email\", \"prefix\": \"mailto:\" } — emits prefix+value only when the value is non-empty (mailto:/tel: links; both schemes are allowed on href)",
           `FORMAT — { "bind": "ask", "format": { "type": "currency", "currency": "COP", "decimals": 0 } } presents the value at render time while the payload keeps its typed value: a numeric STRING like "3206.9905920000" renders as ${FORMAT_EXAMPLES.currency}. Types: ${FORMAT_TYPES.join(" | ")}. number/currency take decimals (integer ${FORMAT_DECIMALS_MIN}-${FORMAT_DECIMALS_MAX}) and an optional locale (default ${DEFAULT_FORMAT_LOCALE}); currency takes a three-letter uppercase ISO-4217 code and an optional currencyDisplay (${CURRENCY_DISPLAYS.join(" | ")}, default ${CURRENCY_DISPLAYS[0]}). date takes a pattern of the tokens ${DATE_TOKENS.join(" ")} plus separators, at most ${DATE_PATTERN_MAX} characters — { "bind": "date", "format": { "type": "date", "pattern": "dd-MM-yyyy HH:mm" } } turns "2026-09-01T02:04:47" into ${FORMAT_EXAMPLES.date} (an unzoned value is read as UTC and formatted in UTC, so every surface agrees). A value the format cannot parse renders raw — a format never hides data. Works on a text bind and on an attr value alike`,
-          "ONE TRANSFORM PER VALUE — map, prefix and format are mutually exclusive on a single attr value; none of them may appear without bind",
+          `TEXT FORMATS — count, join, truncate and pluralize present lists and text, under the same rules. { "bind": "items", "format": { "type": "count" } } renders a list's length (1234 items → ${FORMAT_EXAMPLES.count}). { "type": "join", "separator"?, "last"?, "field"? } joins a list's items (separator default "${JOIN_DEFAULT_SEPARATOR}"; "last" goes before the final item, so ["red", "green", "blue"] with last " and " renders ${FORMAT_EXAMPLES.join}; separators at most ${JOIN_SEPARATOR_MAX} characters; "field" is a plain dotted path read in each item, for lists of objects; null and empty items are skipped). { "type": "truncate", "length": 10 } keeps that many characters (${TRUNCATE_LENGTH_MIN}-${TRUNCATE_LENGTH_MAX}) and appends "ellipsis" (default ${TRUNCATE_DEFAULT_ELLIPSIS}, at most ${TRUNCATE_ELLIPSIS_MAX} characters) when it cuts: "Quarterly revenue summary" → ${FORMAT_EXAMPLES.truncate}. { "type": "pluralize", "forms": { "zero": "No items", "one": "${PLURAL_COUNT_PLACEHOLDER} item", "other": "${PLURAL_COUNT_PLACEHOLDER} items" }, "locale"? } picks the form by the locale's plural rules — categories ${PLURAL_CATEGORIES.join(", ")}, "other" required, each form at most ${PLURAL_FORM_MAX} characters, ${PLURAL_COUNT_PLACEHOLDER} becomes the number, and a "zero" form is used for exactly 0 — so 0, 1 and 1200 render ${FORMAT_EXAMPLES.pluralize.join(", ")}. count and pluralize read a list as its length`,
+          `MARKDOWN — { "bind": "notes", "markdown": true } renders long text as Markdown in one div.wg-md: paragraphs (blank lines), line breaks, **strong**, *em*, \`code\`, [text](https://…) links and flat "- " or "1. " lists — the only tags it emits are ${MARKDOWN_TAGS.join(", ")}. The parser, not the value, chooses tags: raw HTML and any other syntax (headings, code fences, images, tables) render as literal text, and a link URL faces the same scheme guard as href (a refused link renders as its text). A text bind only, never with map or format; a value over ${MARKDOWN_SOURCE_MAX} characters renders as one plain paragraph. Place it in a block container (a div, not a span) and restyle it with .wg-md selectors, e.g. ".wg-md p"`,
+          "ONE TRANSFORM PER VALUE — map, prefix and format are mutually exclusive on a single attr value; a text bind carries at most one of map, format and markdown; none of them may appear without bind",
           "ACTION — an element may carry \"action\": { \"ref\": \"<shared action name>\" } or an inline { \"definition\": { \"kind\": \"prompt\", \"text\": [\"Show the forecast for \", { \"bind\": \"city\" }] } } / { \"definition\": { \"kind\": \"http\", \"method\": \"GET\", \"url\": \"https://…\", \"input\": <schema>, \"output\": <schema> } }, plus \"input\": { \"<field>\": \"<path>\" | { \"const\": <value> } } and \"output\": { \"mode\"?: \"replace\"|\"merge\"|\"patch\", \"path\"?, \"map\"? }. An output map projects the response before the mode applies; when the response is an ARRAY the map entries resolve against EACH ITEM and the projection is the array of per-item results — pair a per-item projection with mode replace or patch (merge needs an object). A \".\" target SELECTS first: alone it is the whole projection (e.g. { \".\": \"0\" }); beside other entries it names the value they map ({ \".\": \"data\", \"ask\": \"ask\" }). Any source that starts with an index (\"0.ask\") addresses the list itself. Bindings resolve at render time; buttons and links (never both href and action) become activatable in Apps hosts. A widget-level \"load\" (http GET only) runs once when the widget first renders"
         ],
         actions: {

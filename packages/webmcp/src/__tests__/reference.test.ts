@@ -26,7 +26,7 @@ describe("the authoring guide tool", () => {
     expect((guide.rules.template as unknown as { labels: string }).labels).toContain(LABEL_STYLE_RULE);
     expect(guide.theme.tokens.map((t) => t.name).sort()).toEqual(Object.keys(TOKEN_SPECS).sort());
     const forms = guide.rules.template.forms.join("\n");
-    for (const term of ["BIND", "EACH", "WHEN", "ELEMENT", "ATTR MAP", "ATTR PREFIX", "FORMAT", "ONE TRANSFORM PER VALUE", "ACTION", "$3,207", "01-09-2026 02:04"]) {
+    for (const term of ["BIND", "EACH", "WHEN", "ELEMENT", "ATTR MAP", "ATTR PREFIX", "FORMAT", "TEXT FORMATS", "MARKDOWN", "ONE TRANSFORM PER VALUE", "ACTION", "$3,207", "01-09-2026 02:04", "red, green and blue", "No items, 1 item, 1,200 items", "parser, not the value, chooses tags"]) {
       expect(forms, term).toContain(term);
     }
     expect(guide.rules.template.safety.tags).toContain("script");

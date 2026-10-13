@@ -40,8 +40,6 @@ appears. Size: **S** one small change, **M** one change with spec deltas,
 | AGT-1 | Measure and publish the token footprint | P1 | S | json-render comparison |
 | ACT-1 | Bounded input for actions | P1 | L | Backlog; A2UI, AG-UI, json-render comparisons |
 | ACT-3 | Transport-free `execute_action` failure texts | P2 | S | `agent-visible-actions` review |
-| DSL-1 | Presentational `format` types | P2 | S | json-render comparison |
-| DSL-2 | Markdown bind mode | P3 | M | A2UI comparison |
 | DSL-3 | A contract version marker | P3 | S | AG-UI comparison |
 | AGT-2 | Lossless auto-fix, reported | P3 | M | json-render comparison |
 | AGT-3 | Payload inspector in the designer | P3 | M | json-render comparison |
@@ -121,32 +119,6 @@ are reachable by direct URL.
 - **Origin.** 2026-09-01 `agent-visible-actions` review (task 7.6).
 
 ### Template DSL and the authoring contract
-
-#### DSL-1 · Presentational `format` types — P2, S
-
-- **Problem.** Authors want an item count, a list joined into a sentence, a
-  truncated description or a pluralized label, and the DSL has none of these.
-- **Direction.** Add `count`, `join` (author separator), `truncate` (author
-  length and ellipsis) and `pluralize` (author forms such as `{ one, other }`)
-  to the closed `format` vocabulary. Each presents a bound value at render
-  time; the author supplies every literal; nothing evaluates.
-- **Touches.** `template-widgets`, and `widget-catalog` if `fieldFormat` gets
-  them too. The guide and the Reference pages regenerate from the validators.
-- **Origin.** json-render comparison, idea 1 (its `$count`, `$join`,
-  `$truncate` and `$pluralize` directives); landscape step 8.
-
-#### DSL-2 · Markdown bind mode — P3, M
-
-- **Problem.** Long-form text renders as one text node. Markdown in A2UI's
-  `Text` component is a large part of its expressiveness.
-- **Direction.** `{ "bind": "notes", "markdown": true }` parses a small safe
-  subset (paragraphs, emphasis, lists, inline code, links) into `WidgetNode`s
-  with an in-house parser. Never `innerHTML`. Links pass the URL-scheme
-  guard; parsed nodes count against the node budget.
-- **Touches.** `template-widgets`, `widget-catalog`. The documented rule
-  "bindings only ever produce text and attribute strings" must be restated as
-  "the parser, not the value, chooses tags": a spec change.
-- **Origin.** A2UI comparison, idea 4; landscape step 6.
 
 #### DSL-3 · A contract version marker — P3, S (investigate)
 
@@ -488,7 +460,8 @@ reason.
   construction and the small wire format. `group` covers composition.
 - **Expressions in templates**: json-render's `$computed`, `$math`,
   `$concat`, `$cond`; A2UI's `and`, `or`, `not` and `formatString`
-  interpolation. Templates are data; DSL-1 takes the presentational part.
+  interpolation. Templates are data; the closed `format` vocabulary (count,
+  join, truncate, pluralize) takes the presentational part.
 - **Agent-supplied styles or classes**: json-render's free `className` and
   raw `style` props. A2UI removed agent theming in v1.0 for lack of uptake;
   widgentic never allowed it.

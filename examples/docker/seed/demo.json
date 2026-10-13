@@ -1079,6 +1079,178 @@
           }
         }
       }
+    },
+    {
+      "kind": "project-status-widget",
+      "template": {
+        "tag": "section",
+        "attrs": {
+          "class": "wg-panel wg-project"
+        },
+        "children": [
+          {
+            "tag": "header",
+            "attrs": {
+              "class": "wg-panel-head"
+            },
+            "children": [
+              {
+                "tag": "h2",
+                "attrs": {
+                  "class": "wg-title"
+                },
+                "children": [
+                  {
+                    "bind": "name"
+                  }
+                ]
+              },
+              {
+                "tag": "span",
+                "attrs": {
+                  "class": "wg-status wg-status-accent"
+                },
+                "children": [
+                  {
+                    "bind": "tasks",
+                    "format": {
+                      "type": "pluralize",
+                      "forms": {
+                        "zero": "No open tasks",
+                        "one": "{count} open task",
+                        "other": "{count} open tasks"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "tag": "p",
+            "attrs": {
+              "class": "wg-muted"
+            },
+            "children": [
+              "Owners: ",
+              {
+                "bind": "owners",
+                "format": {
+                  "type": "join",
+                  "field": "name",
+                  "last": " and "
+                }
+              }
+            ]
+          },
+          {
+            "tag": "p",
+            "attrs": {
+              "title": {
+                "bind": "summary"
+              }
+            },
+            "children": [
+              {
+                "bind": "summary",
+                "format": {
+                  "type": "truncate",
+                  "length": 90
+                }
+              }
+            ]
+          },
+          {
+            "tag": "div",
+            "attrs": {
+              "class": "wg-project-notes"
+            },
+            "children": [
+              {
+                "bind": "notes",
+                "markdown": true
+              }
+            ]
+          }
+        ]
+      },
+      "descriptor": {
+        "description": "Shows a project's status: its open-task count, owners, a one-line summary and Markdown notes.",
+        "dataShape": "{ name, tasks: [{ title }], owners: [{ name }], summary?, notes? }",
+        "dataSchema": {
+          "type": "object",
+          "required": [
+            "name",
+            "tasks",
+            "owners"
+          ],
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "tasks": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "owners": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "summary": {
+              "type": "string"
+            },
+            "notes": {
+              "type": "string"
+            }
+          }
+        },
+        "dataExample": {
+          "name": "Website relaunch",
+          "tasks": [
+            {
+              "title": "Final copy review"
+            },
+            {
+              "title": "Accessibility pass"
+            },
+            {
+              "title": "DNS cutover"
+            }
+          ],
+          "owners": [
+            {
+              "name": "Ada"
+            },
+            {
+              "name": "Lin"
+            },
+            {
+              "name": "Grace"
+            }
+          ],
+          "summary": "The relaunch is on track for Friday: design is signed off, the content migration is complete and only the launch checklist remains.",
+          "notes": "Launch is **Friday**; the freeze starts *Thursday at noon*.\n\n- Final copy review\n- Accessibility pass\n- DNS cutover with `ttl=300`\n\nSee the [runbook](https://example.com/runbook) for the rollback steps."
+        },
+        "styles": {
+          ".wg-project-notes": {
+            "margin-top": "var(--wg-spacing)"
+          }
+        }
+      }
     }
   ],
   "settings": {

@@ -375,6 +375,11 @@ ${chromeCss(CHROME_DEFAULTS, {
 .wgd-format-decimals { flex: 0 0 auto; width: 4ch; min-width: 4ch; text-align: right; font-family: var(--wgd-font-mono); }
 .wgd-format-currency { flex: 0 0 auto; width: 5ch; min-width: 5ch; text-transform: uppercase; font-family: var(--wgd-font-mono); }
 .wgd-format-pattern { flex: 0 1 auto; min-width: 8ch; max-width: 16ch; font-family: var(--wgd-font-mono); color: var(--wgd-hl-str); }
+.wgd-format-separator, .wgd-format-last, .wgd-format-ellipsis { flex: 0 0 auto; width: 6ch; min-width: 6ch; font-family: var(--wgd-font-mono); color: var(--wgd-hl-str); }
+.wgd-format-length { flex: 0 0 auto; width: 5ch; min-width: 5ch; text-align: right; font-family: var(--wgd-font-mono); }
+.wgd-format-field { flex: 0 1 auto; min-width: 6ch; max-width: 12ch; font-family: var(--wgd-font-mono); }
+.wgd-format-form { flex: 0 1 auto; min-width: 7ch; max-width: 14ch; color: var(--wgd-hl-str); }
+.wgd-md-toggle { flex: 0 0 auto; font-size: var(--wgd-font-size-xs); color: var(--wgd-accent); background: none; border: 1px solid currentColor; border-radius: var(--wgd-radius); padding: 0 6px; cursor: pointer; }
 .wgd-children { margin-left: 14px; padding-left: 8px; border-left: 2px solid var(--wgd-accent-line); gap: 1px; }
 .wgd-slot { display: flex; flex-direction: column; gap: 1px; }
 .wgd-slot-label { color: var(--wgd-muted); font-size: var(--wgd-font-size-xs); font-style: italic; padding-left: 4px; }

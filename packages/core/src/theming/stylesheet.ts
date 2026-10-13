@@ -215,6 +215,23 @@ ${tokenDefaultsBlock}
   color: ${v("accent")};
   text-decoration: underline;
 }
+.wg-md p, .wg-md ul, .wg-md ol {
+  margin: 0 0 ${v("spacing")};
+}
+.wg-md > :last-child {
+  margin-bottom: 0;
+}
+.wg-md ul, .wg-md ol {
+  padding-left: 1.5em;
+}
+.wg-md code {
+  font-family: ${v("font-mono")};
+  font-size: 0.9em;
+}
+.wg-md a {
+  color: ${v("accent")};
+  text-decoration: underline;
+}
 .wg-group {
   display: flex;
   flex-direction: column;
