@@ -4,11 +4,12 @@
  * lenient read, and checks that report each refused part instead of
  * throwing. One record per principal, made of named sections; this version
  * defines `defaultThemes`, the theme each host mode uses when a render names
- * none. The store's write path (`./settings.ts`) turns the first problem
- * into its refusal; the host bundle keeps the parts that pass and reports
- * the rest.
+ * none, and `resourceDomains`, the domains an MCP Apps frame may load assets
+ * from directly (read by the core resource-domain rule). The store's write
+ * path (`./settings.ts`) turns the first problem into its refusal; the host
+ * bundle keeps the parts that pass and reports the rest.
  */
-import { isPlainObject } from "@widgentic/core";
+import { RESOURCE_DOMAIN_LIMIT, isPlainObject, parseResourceDomains } from "@widgentic/core";
 import type { ThemeMode } from "@widgentic/core";
 
 // A type literal, not an interface: it stays assignable to records with an
@@ -16,6 +17,8 @@ import type { ThemeMode } from "@widgentic/core";
 export type PrincipalSettings = {
   /** The theme each host mode uses when a render names none. */
   defaultThemes?: Partial<Record<ThemeMode, string>>;
+  /** Canonical `https://` origins the app frame may load assets from directly. */
+  resourceDomains?: string[];
 };
 
 /** A write: each named section replaces, `null` removes, absent keeps. */
@@ -25,13 +28,13 @@ export type PrincipalSettingsUpdate = {
 
 /** One refused part of a settings record. */
 export interface SettingsProblem {
-  code: "INVALID_SHAPE" | "UNKNOWN_THEME";
-  /** What was refused: the record (`settings`), a section, or `defaultThemes.<mode>`. */
+  code: "INVALID_SHAPE" | "UNKNOWN_THEME" | "INVALID_DOMAIN";
+  /** What was refused: the record (`settings`), a section, `defaultThemes.<mode>`, or `resourceDomains.<entry>`. */
   name: string;
   message: string;
 }
 
-export const SETTINGS_SECTIONS: readonly (keyof PrincipalSettings)[] = ["defaultThemes"];
+export const SETTINGS_SECTIONS: readonly (keyof PrincipalSettings)[] = ["defaultThemes", "resourceDomains"];
 
 /** The host colour schemes a default theme is chosen for, in reporting order. */
 export const THEME_MODES: readonly ThemeMode[] = ["light", "dark"];
@@ -51,11 +54,22 @@ export function readSettings(raw: unknown, report?: (message: string) => void): 
     report?.("ignored a settings record that is not an object.");
     return {};
   }
-  const themes = raw.defaultThemes;
-  if (themes === undefined) return {};
+  const defaultThemes = readDefaultThemes(raw.defaultThemes, report);
+  const resourceDomains = readResourceDomains(raw.resourceDomains, report);
+  return {
+    ...(defaultThemes === undefined ? {} : { defaultThemes }),
+    ...(resourceDomains === undefined ? {} : { resourceDomains })
+  };
+}
+
+function readDefaultThemes(
+  themes: unknown,
+  report: ((message: string) => void) | undefined
+): Partial<Record<ThemeMode, string>> | undefined {
+  if (themes === undefined) return undefined;
   if (!isPlainObject(themes)) {
     report?.("ignored a 'defaultThemes' setting that is not an object.");
-    return {};
+    return undefined;
   }
   // Malformed values of known modes are reported; a mode this version does
   // not know is a later version's, ignored silently like an unknown section.
@@ -65,7 +79,27 @@ export function readSettings(raw: unknown, report?: (message: string) => void): 
     if (typeof name === "string") picked[mode] = name;
     else if (name !== undefined) report?.(`ignored a ${mode} default theme that is not a name.`);
   }
-  return Object.keys(picked).length > 0 ? { defaultThemes: picked } : {};
+  return Object.keys(picked).length > 0 ? picked : undefined;
+}
+
+/** The stored entries that pass today's rule, canonical; each other one reported by name. */
+function readResourceDomains(
+  value: unknown,
+  report: ((message: string) => void) | undefined
+): string[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) {
+    report?.("ignored a 'resourceDomains' setting that is not a list.");
+    return undefined;
+  }
+  const entries: string[] = [];
+  for (const entry of value) {
+    if (typeof entry === "string") entries.push(entry);
+    else report?.("ignored a resource domain that is not a string.");
+  }
+  const { domains, refused } = parseResourceDomains(entries);
+  for (const { entry, error } of refused) report?.(`ignored the resource domain '${entry}': ${error}.`);
+  return domains.length > 0 ? domains.map((domain) => domain.origin) : undefined;
 }
 
 /**
@@ -111,10 +145,49 @@ export function checkDefaultThemes(
 }
 
 /**
- * A whole settings record checked against today's rules, keeping what
- * passes: the record itself when it is not an object, an unknown section,
- * and each default naming a theme outside `themes` are reported and
- * skipped. An absent or `null` section is no section.
+ * A `resourceDomains` value checked entry by entry: the canonical entries
+ * that pass, deduplicated in first-seen order, and one problem per entry
+ * the rule refuses. A value that is not a list of strings, or that holds
+ * more than the limit, is one shape problem and keeps nothing.
+ */
+export function checkResourceDomains(value: unknown): { resourceDomains: string[]; problems: SettingsProblem[] } {
+  if (!Array.isArray(value) || !value.every((entry): entry is string => typeof entry === "string")) {
+    return {
+      resourceDomains: [],
+      problems: [
+        { code: "INVALID_SHAPE", name: "resourceDomains", message: "'resourceDomains' must be a list of domain strings." }
+      ]
+    };
+  }
+  if (value.length > RESOURCE_DOMAIN_LIMIT) {
+    return {
+      resourceDomains: [],
+      problems: [
+        {
+          code: "INVALID_SHAPE",
+          name: "resourceDomains",
+          message: `'resourceDomains' holds ${value.length} entries; at most ${RESOURCE_DOMAIN_LIMIT} are allowed.`
+        }
+      ]
+    };
+  }
+  const { domains, refused } = parseResourceDomains(value);
+  return {
+    resourceDomains: domains.map((domain) => domain.origin),
+    problems: refused.map(({ entry, error }) => ({
+      code: "INVALID_DOMAIN",
+      name: `resourceDomains.${entry}`,
+      message: `'${entry}' is not a resource domain: ${error}.`
+    }))
+  };
+}
+
+/**
+ * A whole settings record checked against today's rules, each section by
+ * its own rule, keeping what passes: the record itself when it is not an
+ * object, an unknown section, each default naming a theme outside
+ * `themes`, and each refused domain are reported and skipped. An absent or
+ * `null` section is no section.
  */
 export function checkSettings(
   record: unknown,
@@ -127,16 +200,20 @@ export function checkSettings(
     };
   }
   const problems: SettingsProblem[] = [];
-  let settings: PrincipalSettings = {};
+  const settings: PrincipalSettings = {};
   for (const [section, value] of Object.entries(record)) {
     if (value === undefined || value === null) continue;
-    if (!isSettingsSection(section)) {
+    if (section === "defaultThemes") {
+      const checked = checkDefaultThemes(value, themes);
+      problems.push(...checked.problems);
+      if (Object.keys(checked.defaultThemes).length > 0) settings.defaultThemes = checked.defaultThemes;
+    } else if (section === "resourceDomains") {
+      const checked = checkResourceDomains(value);
+      problems.push(...checked.problems);
+      if (checked.resourceDomains.length > 0) settings.resourceDomains = checked.resourceDomains;
+    } else {
       problems.push({ code: "INVALID_SHAPE", name: section, message: `'${section}' is not a settings section.` });
-      continue;
     }
-    const checked = checkDefaultThemes(value, themes);
-    problems.push(...checked.problems);
-    if (Object.keys(checked.defaultThemes).length > 0) settings = { defaultThemes: checked.defaultThemes };
   }
   return { settings, problems };
 }

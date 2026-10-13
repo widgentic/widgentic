@@ -1,20 +1,25 @@
 /**
  * Settings designer: edits a principal's settings record — account-wide
  * preferences, one titled subsection per section. This version edits
- * `defaultThemes`: the theme light hosts and dark hosts get when a render
- * names none. One choice per mode, so choosing a theme replaces the mode's
- * previous one. Sections it does not edit pass through untouched, and the
- * host saves (the designer writes nothing).
+ * `defaultThemes` (the theme light hosts and dark hosts get when a render
+ * names none; one choice per mode, so choosing a theme replaces the mode's
+ * previous one) and `resourceDomains` (the domains MCP Apps frames may load
+ * images from directly), each entry checked live by the core rule the store
+ * applies: a valid one is recorded canonical, an invalid one as typed, so
+ * the save's refusal names what the person sees. Sections it does not edit
+ * pass through untouched, and the host saves (the designer writes nothing).
  */
-import { isPlainObject } from "@widgentic/core";
+import { RESOURCE_DOMAIN_LIMIT, isPlainObject, parseResourceDomain } from "@widgentic/core";
 import type { ThemeEntry, ThemeMode } from "@widgentic/core";
-import { applyChrome, h, injectDesignerStyles, section } from "./dom.js";
+import { applyChrome, diagnosticLine, h, injectDesignerStyles, section } from "./dom.js";
 import type { ChromeOptions } from "./dom.js";
 import { clone } from "./internal.js";
 
 /** The settings record as the designer sees it: known sections plus any it passes through. */
 export interface SettingsRecord {
   defaultThemes?: Partial<Record<ThemeMode, string>>;
+  /** Canonical origins, plus any entry the person typed that the rule refuses. */
+  resourceDomains?: string[];
   [section: string]: unknown;
 }
 
@@ -50,10 +55,14 @@ const MODES: readonly { mode: ThemeMode; label: string; builtIn: string }[] = [
 /** Shape check for an untrusted record; errors instead of throwing. */
 function checkSettings(settings: unknown): string[] {
   if (!isPlainObject(settings)) return ["Settings must be an object of named sections."];
-  const themes = settings.defaultThemes;
-  if (themes === undefined) return [];
-  if (!isPlainObject(themes)) return ["defaultThemes: must be an object of { light?, dark? }."];
   const errors: string[] = [];
+  const domains = settings.resourceDomains;
+  if (domains !== undefined && (!Array.isArray(domains) || !domains.every((entry) => typeof entry === "string"))) {
+    errors.push("resourceDomains: must be a list of domain strings.");
+  }
+  const themes = settings.defaultThemes;
+  if (themes === undefined) return errors;
+  if (!isPlainObject(themes)) return [...errors, "defaultThemes: must be an object of { light?, dark? }."];
   for (const [mode, name] of Object.entries(themes)) {
     if (!MODES.some((known) => known.mode === mode)) errors.push(`defaultThemes: '${mode}' is not a theme mode.`);
     else if (typeof name !== "string") errors.push(`defaultThemes: the ${mode} default must be a theme name.`);
@@ -128,6 +137,89 @@ export function createSettingsDesigner(
   ]);
   panels.append(defaultsPanel);
 
+  // --- Resource domains --------------------------------------------------
+  // The section is in the record once supplied or edited (possibly empty),
+  // so a save clears a list the person emptied and never adds one unasked.
+  const domainRows = h("div", { class: "wgd-domains" });
+  const addInput = h("input", {
+    type: "text",
+    class: "wgd-input wgd-domain-add",
+    placeholder: "cdn.example.com",
+    spellcheck: "false",
+    "aria-label": "Add a resource domain"
+  });
+  const addButton = h("button", { class: "wgd-icon", type: "button", title: "Add domain" }, ["+"]);
+
+  /** A typed entry as the record keeps it: canonical when the rule accepts it, else as typed. */
+  function recorded(typed: string): { value: string; mark: string; error: boolean } {
+    const parsed = parseResourceDomain(typed);
+    return "error" in parsed
+      ? { value: typed.trim(), mark: `Not a resource domain: ${parsed.error}.`, error: true }
+      : { value: parsed.origin, mark: parsed.origin, error: false };
+  }
+
+  function setDomains(next: string[]): void {
+    record = { ...record, resourceDomains: next };
+    renderDomains();
+    notify();
+  }
+
+  function renderDomains(): void {
+    const domains = record.resourceDomains ?? [];
+    domainRows.replaceChildren(
+      ...domains.map((entry, index) => {
+        const input = h("input", { type: "text", class: "wgd-input wgd-domain", spellcheck: "false", "aria-label": `Resource domain ${index + 1}` });
+        input.value = entry;
+        input.addEventListener("change", () => {
+          const next = [...domains];
+          next[index] = recorded(input.value).value;
+          setDomains(next);
+        });
+        const remove = h("button", { class: "wgd-icon", type: "button", title: "Remove domain" }, ["✕"]);
+        remove.addEventListener("click", () => setDomains(domains.filter((_entry, at) => at !== index)));
+        const { mark, error } = recorded(entry);
+        return h("div", { class: "wgd-domain-entry" }, [
+          h("div", { class: "wgd-row" }, [input, remove]),
+          error ? diagnosticLine(mark) : h("span", { class: "wgd-field-label wgd-domain-origin" }, [mark])
+        ]);
+      })
+    );
+    const full = domains.length >= RESOURCE_DOMAIN_LIMIT;
+    addInput.disabled = full;
+    addButton.disabled = full;
+  }
+
+  function addDomain(): void {
+    if (addInput.value.trim() === "" || (record.resourceDomains ?? []).length >= RESOURCE_DOMAIN_LIMIT) return;
+    const entry = recorded(addInput.value).value;
+    addInput.value = "";
+    setDomains([...(record.resourceDomains ?? []), entry]);
+  }
+  addButton.addEventListener("click", addDomain);
+  addInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      addDomain();
+    }
+  });
+
+  const domainsPanel = section("Resource domains", [
+    h("span", { class: "wgd-field-label" }, [
+      "Domains your widgets' images may load from directly in chat hosts that honor them, " +
+        "when the server does not copy an image inline. Enter cdn.example.com or *.example.com, " +
+        `optionally with https:// (no ports, paths or IP addresses), at most ${RESOURCE_DOMAIN_LIMIT}.`
+    ]),
+    h("span", { class: "wgd-field-label" }, [
+      "Any render, including image addresses an agent supplies, may load from these domains in the " +
+        "viewer's browser, so list only domains you control. A domain that redirects needs its target " +
+        "listed too, and a chat client keeps the list it read until it reloads."
+    ]),
+    domainRows,
+    h("div", { class: "wgd-row" }, [addInput, addButton])
+  ]);
+  panels.append(domainsPanel);
+  renderDomains();
+
   function loadSettings(settings: unknown): SettingsLoadResult {
     const errors = checkSettings(settings);
     if (errors.length > 0) return { ok: false, errors };
@@ -136,6 +228,7 @@ export function createSettingsDesigner(
       const select = selects.get(mode);
       if (select !== undefined) fillSelect(select, mode, builtIn);
     }
+    renderDomains();
     notify();
     return { ok: true };
   }

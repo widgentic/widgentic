@@ -60,6 +60,10 @@ internal sealed record Corpus(string Config, IReadOnlyDictionary<string, string>
         if (root.TryGetProperty("themes", out var themes)) options.AddTheme(themes.GetRawText(), "corpus themes");
         if (root.TryGetProperty("schemas", out var schemas)) options.AddSchema(schemas.GetRawText(), "corpus schemas");
         if (root.TryGetProperty("settings", out var settings)) options.UseSettings(settings.GetRawText(), "corpus settings");
+        if (root.TryGetProperty("resourceDomains", out var domains))
+        {
+            foreach (var domain in domains.EnumerateArray()) options.ResourceDomains.Add(domain.GetString()!);
+        }
         return options;
     }
 

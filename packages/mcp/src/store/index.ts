@@ -49,5 +49,12 @@ export { referencesToSecret, widgetsLoadingAction, widgetsReferencingAction } fr
 export type { MemoryStore, MemorySeedPrincipal, MemoryStoreOptions } from "./memory.js";
 export { createFileStore } from "./file.js";
 export type { FileStoreOptions } from "./file.js";
-export { composeCatalog, composeThemes } from "./compose.js";
-export type { ActionSource, CatalogComposeResult, ComposeOptions, ComposeResult } from "./compose.js";
+export { composeCatalog, composeResourceDomains, composeThemes, readPrincipalSettings } from "./compose.js";
+export type {
+  ActionSource,
+  CatalogComposeResult,
+  ComposeOptions,
+  ComposeResult,
+  SettingsComposeOptions,
+  SettingsRead
+} from "./compose.js";

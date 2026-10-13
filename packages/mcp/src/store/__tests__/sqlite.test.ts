@@ -376,4 +376,21 @@ describe("sqlite settings values that are not names", () => {
     expect(diagnostics.join("\n")).toContain("light default theme that is not a name");
     reopened.close();
   });
+
+  it("drop a refused resource domain with a diagnostic naming it and keep the rest", async () => {
+    const path = freshPath();
+    const store = open(path);
+    const p = await store.ensurePrincipal("sqlite:settings-domains");
+    store.close();
+    const raw = new DatabaseSync(path);
+    raw
+      .prepare("INSERT INTO entries (principal_id, kind, name, json) VALUES (?, 'settings', 'principal', ?)")
+      .run(p.id, JSON.stringify({ resourceDomains: ["https://cdn.example.com", "http://old.example.com"] }));
+    raw.close();
+    const diagnostics: string[] = [];
+    const reopened = createSqliteStore(path, { limits: LIMITS, cipher: createLocalCipher(KEK), onDiagnostic: (m) => diagnostics.push(m) });
+    expect(await reopened.settings(p.id)).toEqual({ resourceDomains: ["https://cdn.example.com"] });
+    expect(diagnostics.join("\n")).toContain("http://old.example.com");
+    reopened.close();
+  });
 });

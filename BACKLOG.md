@@ -239,6 +239,14 @@ are reachable by direct URL.
   deadline after which the rest stay external.
 - **Touches.** `packages/mcp/src/server/inline-images.ts` (`resolveSources`),
   the `mcp-server` inlining requirement, the budget tests.
+- **Since `principal-resource-domains`.** A person can declare the domains their
+  images live on (Settings → Resource domains), and the inliner ranks those
+  sources after undeclared ones. A smoke test on staging (2026-10-12) found
+  claude.ai web, ChatGPT and VS Code Copilot all load declared images directly
+  and block undeclared ones, so a render past the cap shows every declared image
+  there. This item is left with sources on hosts nobody declared, such as
+  arbitrary URLs an agent supplies, and stays P3 until that case shows up in
+  use.
 - **Origin.** Owner finding after the streaming-preview release (v82).
 
 ### Language hosts

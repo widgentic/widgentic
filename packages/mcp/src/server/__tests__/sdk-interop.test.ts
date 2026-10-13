@@ -351,13 +351,31 @@ describe("resourceDomains declaration", () => {
     return client;
   }
 
-  it("declared domains reach the app resource's csp metadata", async () => {
-    const client = await connectWithDomains(["CDN.Example.com ", "media.example.org"]);
-    const listed = await client.listResources();
-    const app = listed.resources.find((r) => r.uri.startsWith("ui://"));
-    expect(app?._meta?.ui).toMatchObject({
-      csp: { resourceDomains: ["cdn.example.com", "media.example.org"] }
+  it("declared domains reach the app resource's csp metadata as canonical origins", async () => {
+    const client = await connectWithDomains(["cdn.example.com"]);
+    const app = (await client.listResources()).resources.find((r) => r.uri.startsWith("ui://"));
+    expect(app?._meta?.ui).toMatchObject({ csp: { resourceDomains: ["https://cdn.example.com"] } });
+    const read = await client.readResource({ uri: app?.uri ?? "" });
+    expect(read.contents[0]?._meta?.ui).toMatchObject({ csp: { resourceDomains: ["https://cdn.example.com"] } });
+  });
+
+  it("refused domains are not declared; the rest are deduplicated in first-seen order", async () => {
+    const client = await connectWithDomains([
+      "cdn.example.com",
+      "http://old.example.com",
+      "https://*.example.org",
+      "CDN.example.com"
+    ]);
+    const app = (await client.listResources()).resources.find((r) => r.uri.startsWith("ui://"));
+    expect((app?._meta?.ui as { csp?: unknown } | undefined)?.csp).toEqual({
+      resourceDomains: ["https://cdn.example.com", "https://*.example.org"]
     });
+  });
+
+  it("a list of only refused domains declares nothing", async () => {
+    const client = await connectWithDomains(["localhost", "http://old.example.com"]);
+    const app = (await client.listResources()).resources.find((r) => r.uri.startsWith("ui://"));
+    expect((app?._meta?.ui as { csp?: unknown } | undefined)?.csp).toBeUndefined();
   });
 
   it("no configured domains means no csp declaration", async () => {

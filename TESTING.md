@@ -382,6 +382,29 @@ workspace and the sample first, then point at the built DLL):
 
 ## Verification log
 
+- **Per-principal resource domains (2026-10-13, change `principal-resource-domains`, on `feature/principal-resource-domains`, core/designer/mcp minor and `Widgentic.Mcp` 0.11.0 pending release)**
+  - **Smoke test before implementation (2026-10-12).** Staging ran a local probe image (`principal-resource-domains-probe-c07d459`, revision `--0000020`). It declared `https://api.dicebear.com` and `https://*.pravatar.cc` for every caller, skipped inlining for them, and left `picsum.photos` undeclared as the inlined control.
+    - **Every host honors declarations.** claude.ai web, ChatGPT desktop and VS Code Copilot loaded images from both the exact and the wildcard origin, including all 30 faces of a 30-row table, past the 24-source cap.
+    - **Every host enforces `img-src`.** In 30 undeclared photos, rows 25–30 stayed blank on all three, so the declared images loaded because of the declaration.
+    - **claude.ai caches the policy for the page session.** Its frame header copied our entries verbatim into `img-src`, `script-src`, `style-src`, `font-src`, `media-src` and `worker-src`. After the deploy changed the declaration, a new conversation in the same tab still enforced the old policy; a reload picked up the new one.
+  - **The rule.** The core parser accepts `host`, `*.host` and either behind `https://`, and refuses every form the widget-store requirement lists, in 14 unit tests. The store, the designer, the Node assembly and the host bundle all use it.
+  - **The store.** The contract suite runs the domain scenarios against memory, SQLite and the Cosmos fake: canonical storage, `INVALID_DOMAIN` naming the entry, `INVALID_SHAPE` at 21 entries, an empty list removing the section, independence from `defaultThemes`, and one shared read for themes and domains. Out-of-band records with a refused entry are read without it, and the file, SQLite and Cosmos diagnostics name it. A record without the section reads as no domains.
+  - **The Node assembly.** Over the SDK, the declaration and the read content carry canonical origins, refused entries are dropped, and a list of only refused entries declares nothing.
+    - **Inline-last.** In 10 declared and 20 undeclared thumbnails, all 20 undeclared and the first 4 declared were fetched, and the other 6 kept their URLs, unfetched.
+    - **The note.** For 26 undeclared and 6 declared sources it reads "2 image source(s) left external (fetch cap: 2, byte budget: 0), and 6 on declared resource domains (fetch cap: 6, byte budget: 0)".
+    - **Wildcards.** A wildcard ranked `a.b.example.com` as declared and the apex as undeclared.
+    - **No domains, no change.** With no domains configured, the corpus is unchanged.
+  - **The host bundle.** `resources()` reports the declared list, operator entries first. For one operator list and one settings record it equals the Node assembly's declaration, compared over a real SDK client. Refusals are listed under `resourceDomains` (with an index) and `settings` (`resourceDomains.<entry>`).
+  - **The corpus.** Three domain configurations (operator, settings, both) each add a `resources` case; no existing case changed. The bare realm and V8 in .NET reproduce them.
+  - **.NET.** 189 of 189.
+    - **Startup.** `ResourceDomains` are declared canonical on list and read, followed by the startup settings section. A refused operator domain stops startup naming `ResourceDomains[0]`, and a refused setting naming the settings source.
+    - **Per caller.** In Merge a principal's section replaced the startup one, and Replace kept only the operator list. A refused principal domain was logged as the caller's `INVALID_DOMAIN` and never blamed on the startup record. 32 concurrent reads on a pool of 4 never crossed principals.
+    - **Failure and listing.** A throwing source still served the template, with the startup declaration and a log line. The list filter rewrote only the app entry and left the registered declaration untouched.
+    - **The sample.** Over HTTP, keyless callers declare the seed's `https://api.dicebear.com` and `https://*.pravatar.cc`, `merge-demo` adds `https://ui-avatars.com` (its section lists all three, since a caller's section replaces the startup one), and `replace-demo` declares nothing.
+  - **The designer and the example.** The settings designer records canonical entries, keeps invalid ones as typed with the rule's reason, clears an emptied list, stops adding at the limit, refuses a malformed list on load, and goes inert in read-only mode, in 35 tests. The self-host endpoint's composition, now in `principal-server.ts`, declares each principal's own domains and none for anonymous callers. It reads settings once per request, applies a saved change on the next request, and logs an unreadable record without failing.
+  - **Gates.** Typecheck, `npm test` (1735 passed, 1 skipped), build, `pack:check`, `openspec validate --strict` and `--specs` (19), and `dotnet test` (189).
+  - **Not yet done.** The staging deploy and the per-principal host check (tasks 11.1–11.3).
+
 - **Default themes from settings, in the host bundle and .NET (2026-10-12, change `dotnet-principal-catalogs`, on `feature/dotnet-principal-catalogs`, `@widgentic/mcp` minor and `Widgentic.Mcp` 0.11.0 pending release)**
   - **The bundle.** `createWidgenticHost` takes a `settings` record.
     - **Same as the Node path.** For `{ light }`, `{ dark }`, two defaults and one theme for both modes, the host's `render_widget` (slim and as a page), `preview_widget` and `list_themes` output equals the Node path for a principal whose stored settings choose the same defaults (memory store and `composeThemes`).

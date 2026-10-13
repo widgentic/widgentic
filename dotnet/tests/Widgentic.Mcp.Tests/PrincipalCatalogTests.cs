@@ -202,15 +202,21 @@ public sealed class PrincipalCatalogTests
             options => options.AddSampleSeed(),
             extra: mcp => mcp.Services.AddSingleton<IWidgenticCatalogSource>(source));
         var tools = await server.Client.ListToolsAsync(cancellationToken: Cancel);
-        var template = await server.Client.ReadResourceAsync(WidgenticResources.AppTemplateUri, cancellationToken: Cancel);
         Assert.NotEmpty(tools);
-        Assert.NotEmpty(template.Contents);
         Assert.Equal(0, source.Calls);
 
+        // The template's content is global; only its declared domains consult the source, and
+        // with no domains configured anywhere the declaration is the startup one.
+        var engine = server.Services.GetRequiredService<WidgenticEngine>();
+        var template = Assert.Single((await server.Client.ReadResourceAsync(WidgenticResources.AppTemplateUri, cancellationToken: Cancel)).Contents);
+        Assert.Equal(await engine.Pool.InvokeAsync("appTemplate", Cancel), Assert.IsType<TextResourceContents>(template).Text);
+        Assert.Empty(await ProtocolTests.DeclaredAsync(server));
+
         // The per-caller tools go through the source on the real protocol path.
+        var before = source.Calls;
         var listed = await server.Client.CallToolAsync("list_widgets", cancellationToken: Cancel);
         Assert.Contains("alpha-card", ((TextContentBlock)listed.Content[0]).Text, StringComparison.Ordinal);
-        Assert.Equal(1, source.Calls);
+        Assert.Equal(before + 1, source.Calls);
     }
 
     [Fact]
@@ -328,6 +334,103 @@ public sealed class PrincipalCatalogTests
 
     private const string Card = """{"widget":"card","data":{"title":"T"}}""";
 
+    // Resource domains from options and settings, at startup and per principal.
+
+    private static void OperatorAndStartupDomains(WidgenticOptions options)
+    {
+        options.ResourceDomains.Add("assets.example.org");
+        options.UseSettings("""{"resourceDomains":["cdn.example.com"]}""", "startup settings");
+    }
+
+    [Fact]
+    public async Task StartupSettingsDeclareTheirDomains()
+    {
+        using var rig = Rig.Start(source: null, configure: OperatorAndStartupDomains);
+        Assert.Equal(["https://assets.example.org", "https://cdn.example.com"], await rig.DomainsAsync(Alpha));
+        Assert.Equal(["https://assets.example.org", "https://cdn.example.com"], rig.Engine.Resources.AppTemplateResourceDomains);
+    }
+
+    [Fact]
+    public async Task InMergeAPrincipalsDomainSectionReplacesTheStartupOne()
+    {
+        using var rig = Rig.Start(
+            new FakeSource(user => Name(user) == "alpha"
+                ? new WidgenticCatalog().UseSettings("""{"resourceDomains":["img.tenant.example"]}""")
+                : new WidgenticCatalog()),
+            configure: OperatorAndStartupDomains);
+        Assert.Equal(["https://assets.example.org", "https://img.tenant.example"], await rig.DomainsAsync(Alpha));
+        Assert.Equal(["https://assets.example.org", "https://cdn.example.com"], await rig.DomainsAsync(Beta));
+    }
+
+    [Fact]
+    public async Task InReplaceTheStartupDomainSectionNeverApplies()
+    {
+        using var rig = Rig.Start(new FakeSource(_ => new WidgenticCatalog()), WidgenticComposition.Replace, configure: OperatorAndStartupDomains);
+        Assert.Equal(["https://assets.example.org"], await rig.DomainsAsync(Alpha));
+    }
+
+    [Fact]
+    public async Task APrincipalsRefusedDomainIsSkippedAndLogged()
+    {
+        using var rig = Rig.Start(
+            new FakeSource(_ => new WidgenticCatalog().UseSettings("""{"resourceDomains":["http://old.example.com","img.tenant.example"]}""")),
+            configure: OperatorAndStartupDomains);
+        Assert.Equal(["https://assets.example.org", "https://img.tenant.example"], await rig.DomainsAsync(Alpha));
+        Assert.Contains(rig.Logs.Messages, message =>
+            message.Contains("setting", StringComparison.Ordinal) && message.Contains("INVALID_DOMAIN", StringComparison.Ordinal));
+        // The startup record is never blamed for the caller's entry.
+        Assert.DoesNotContain(rig.Logs.Messages, message => message.Contains("startup setting", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task PrincipalsSeeOnlyTheirOwnDomains()
+    {
+        using var rig = Rig.Start(new FakeSource(user => new WidgenticCatalog()
+            .UseSettings($$"""{"resourceDomains":["{{Name(user)}}.tenant.example"]}""")), poolSize: 4);
+        var reads = Enumerable.Range(0, 32).Select(async index =>
+        {
+            var (user, own, other) = index % 2 == 0 ? (Alpha, "alpha", "beta") : (Beta, "beta", "alpha");
+            var declared = await rig.DomainsAsync(user);
+            Assert.Equal([$"https://{own}.tenant.example"], declared);
+            Assert.DoesNotContain($"https://{other}.tenant.example", declared);
+        });
+        await Task.WhenAll(reads);
+    }
+
+    [Fact]
+    public async Task AFailingSourceKeepsTheTemplate()
+    {
+        var logs = new ListLoggerProvider();
+        var source = new FakeSource(_ => throw new InvalidOperationException("tenant store offline"));
+        await using var server = await TestServer.StartAsync(
+            options => options.AddSampleSeed().ResourceDomains.Add("assets.example.org"),
+            extra: mcp => mcp.Services.AddSingleton<IWidgenticCatalogSource>(source),
+            logs: logs);
+        var engine = server.Services.GetRequiredService<WidgenticEngine>();
+        var template = Assert.Single((await server.Client.ReadResourceAsync(WidgenticResources.AppTemplateUri, cancellationToken: Cancel)).Contents);
+        Assert.Equal(await engine.Pool.InvokeAsync("appTemplate", Cancel), Assert.IsType<TextResourceContents>(template).Text);
+        Assert.Equal(["https://assets.example.org"], await ProtocolTests.DeclaredAsync(server));
+        Assert.Contains(logs.Messages, message => message.Contains("startup resource domains", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task TheProtocolDeclaresTheCallersDomainsOnListAndRead()
+    {
+        var source = new FakeSource(_ => new WidgenticCatalog().UseSettings("""{"resourceDomains":["img.tenant.example"]}"""));
+        await using var server = await TestServer.StartAsync(
+            options => options.AddSampleSeed().ResourceDomains.Add("assets.example.org"),
+            extra: mcp => mcp
+                .WithResources([McpServerResource.Create(() => "first", new McpServerResourceCreateOptions { UriTemplate = "test://first", Name = "first" })])
+                .Services.AddSingleton<IWidgenticCatalogSource>(source));
+        Assert.Equal(["https://assets.example.org", "https://img.tenant.example"], await ProtocolTests.DeclaredAsync(server));
+        // Other listed resources are left as registered.
+        var listed = await server.Client.ListResourcesAsync(cancellationToken: Cancel);
+        Assert.Null(Assert.Single(listed, r => r.Uri == "test://first").ProtocolResource.Meta);
+        // The registered declaration itself is never changed by a caller's listing.
+        var registered = server.Services.GetServices<McpServerResource>().Single(r => r.ProtocolResource?.Uri == WidgenticResources.AppTemplateUri);
+        Assert.Equal("https://assets.example.org", Assert.Single(registered.ProtocolResource!.Meta!["ui"]!["csp"]!["resourceDomains"]!.AsArray())!.GetValue<string>());
+    }
+
     private static JsonNode SeedTheme(string name) =>
         JsonNode.Parse(File.ReadAllText(Path.Combine(Repo.SampleSeed, "themes", $"{name}.json")))!;
 
@@ -408,10 +511,16 @@ public sealed class PrincipalCatalogTests
 
         public ListLoggerProvider Logs { get; }
 
-        public static Rig Start(FakeSource? source, WidgenticComposition composition = WidgenticComposition.Merge, int poolSize = 1, string? settingsFile = null)
+        public static Rig Start(
+            FakeSource? source,
+            WidgenticComposition composition = WidgenticComposition.Merge,
+            int poolSize = 1,
+            string? settingsFile = null,
+            Action<WidgenticOptions>? configure = null)
         {
             var options = new WidgenticOptions { EnginePoolSize = poolSize }.AddSampleSeed();
             if (settingsFile is not null) options.UseSettingsFromFile(settingsFile);
+            configure?.Invoke(options);
             var engine = WidgenticEngine.Create(options);
             var logs = new ListLoggerProvider();
             var services = new ServiceCollection().AddLogging(logging => logging.AddProvider(logs));
@@ -421,6 +530,9 @@ public sealed class PrincipalCatalogTests
 
         public async Task<string> CallAsync(string tool, ClaimsPrincipal? user, string argsJson = "{}") =>
             await Catalogs.CallToolAsync(tool, argsJson, false, user, Services, Cancel);
+
+        public async Task<IReadOnlyList<string>> DomainsAsync(ClaimsPrincipal? user) =>
+            await Catalogs.ResourceDomainsAsync(user, Services, Cancel);
 
         public void Dispose()
         {

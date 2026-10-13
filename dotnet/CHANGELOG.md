@@ -24,6 +24,15 @@ Embeds the `@widgentic/mcp` 0.11.0 host bundle.
   - A caller's catalog may carry its own record (`WidgenticCatalog.Settings`). In `Merge`, each
     section it defines replaces the startup one. In `Replace`, it is the only record.
   - A caller's refused setting is skipped and logged, keeping that mode's built-in.
+- **Resource domains from options and settings.** The app resource declares
+  `ResourceDomains` followed by the settings record's `resourceDomains` section, as canonical
+  `https://` origins read by the bundle's rule.
+  - `cdn.example.com` and `*.example.com` are accepted, with or without `https://`. A refused
+    entry (another scheme, a port, a path, an IP address, a single-label host) stops startup.
+    `ResourceDomains` entries used to be declared as given and are now canonical origins.
+  - With a catalog source, the declaration follows the caller on `resources/list` and
+    `resources/read` alike: the caller's section replaces the startup one in `Merge`. A refused
+    caller domain is skipped and logged, and a failing source leaves the startup declaration.
 - **The sample** serves two demo principals over HTTP (`merge-demo`, `replace-demo`), keyed by
   `x-api-key` or `?key=` from configuration. It also loads the demo seed's default themes,
   and `merge-demo` chooses a dark default of its own.

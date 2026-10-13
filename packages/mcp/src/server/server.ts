@@ -26,7 +26,7 @@ import {
   getUiCapability,
   RESOURCE_MIME_TYPE
 } from "@modelcontextprotocol/ext-apps/server";
-import { createCatalog, isPlainObject } from "@widgentic/core";
+import { createCatalog, isPlainObject, parseResourceDomains } from "@widgentic/core";
 import type { StoredAction, WidgetCatalog } from "@widgentic/core";
 import {
   LIST_WIDGETS_TOOL,
@@ -88,11 +88,15 @@ export interface WidgenticServerOptions {
    */
   sharedActions?: () => Promise<StoredAction[]>;
   /**
-   * Hostnames the OPERATOR trusts the app frame to load assets from:
-   * declared as `_meta.ui.resourceDomains` on the app resource, and image
-   * sources on these hosts skip server-side inlining. Deployment
-   * configuration only — stored widgets and render inputs can never
-   * extend it. Empty/absent keeps the inline-everything default.
+   * Domains the app frame may load assets from directly: the operator's
+   * configuration and the caller's `resourceDomains` setting, which the
+   * transport edge unions. Read by the core resource-domain rule — refused
+   * entries are dropped — and declared as canonical `https://` origins in
+   * `_meta.ui.csp.resourceDomains` on the app resource. Image sources on
+   * them are inlined only with the room undeclared sources leave; one left
+   * external keeps its URL, which a host honoring the declaration loads.
+   * Stored widgets and render inputs can never extend it. Empty/absent
+   * declares nothing.
    */
   resourceDomains?: string[];
   /**
@@ -134,10 +138,10 @@ export function createWidgenticServer(
   const inlineImages = !["0", "false"].includes(
     (process.env.WIDGENTIC_INLINE_IMAGES ?? "").toLowerCase()
   );
-  const resourceDomains = (options.resourceDomains ?? [])
-    .map((domain) => domain.trim().toLowerCase())
-    .filter((domain) => domain.length > 0);
-  const skipHosts = new Set(resourceDomains);
+  // One rule for every door: refused entries are neither declared nor
+  // ranked as declared, and the rest are declared in canonical form.
+  const declaredDomains = parseResourceDomains(options.resourceDomains ?? []).domains;
+  const resourceDomains = declaredDomains.map((domain) => domain.origin);
   const executeAllowed = (options.scopes ?? []).includes("execute");
   const renderActions: RenderActionOptions | undefined =
     options.actions === undefined
@@ -221,7 +225,7 @@ export function createWidgenticServer(
       // iframe-facing surfaces get image bytes inlined as data URIs
       // (SSRF-guarded; see src/mcp-server/inline-images.ts). Disable with
       // WIDGENTIC_INLINE_IMAGES=0.
-      if (inlineImages) await inlineRenderResultImages(result, { skipHosts });
+      if (inlineImages) await inlineRenderResultImages(result, { declaredDomains });
       return result;
     }
   );
@@ -249,7 +253,7 @@ export function createWidgenticServer(
         themes,
         fetchDeps: options.fetchDeps
       })) as CallToolResult;
-      if (inlineImages) await inlineRenderResultImages(result, { skipHosts });
+      if (inlineImages) await inlineRenderResultImages(result, { declaredDomains });
       return result;
     }
   );
@@ -278,9 +282,8 @@ export function createWidgenticServer(
   // sandboxed iframe; every render_widget result then streams into it via
   // ui/notifications/tool-result (structuredContent: { html, css, payload }).
   // Its `_meta.ui` rides on the declaration and on the read content alike:
-  // the border preference, and the operator-declared CSP domains — hosts the
-  // frame may load assets from directly (images on them skip inlining),
-  // absent when none are configured.
+  // the border preference, and the declared CSP domains — origins the frame
+  // may load assets from directly — absent when none are declared.
   const appUi = {
     prefersBorder: APP_TEMPLATE_RESOURCE.prefersBorder,
     ...(resourceDomains.length > 0 ? { csp: { resourceDomains } } : {})

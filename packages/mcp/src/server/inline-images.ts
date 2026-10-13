@@ -10,15 +10,19 @@
  *
  * The fetch is SSRF-guarded: https only, private/reserved addresses
  * rejected on every redirect hop, `image/*` content type required, byte
- * and time caps. Per render, sources are fetched in shape priority (hero,
- * then thumbs/avatars/template images, then icons) up to a count cap, and
- * admitted while the bytes they substitute — charged per occurrence — fit
- * a budget. DNS is resolved once and
+ * and time caps. Per render, sources are fetched in priority order up to a
+ * count cap, and admitted while the bytes they substitute — charged per
+ * occurrence — fit a budget. Sources on undeclared hosts come first, since
+ * inlining is their only route; sources on the deployment's declared
+ * resource domains follow, since a host honoring the declaration loads
+ * them directly when they stay external. Within each group the shape
+ * decides: heroes, then thumbs/avatars/template images, then icons. DNS is
+ * resolved once and
  * the connection pinned to the checked address (guarded-fetch), so a
  * rebinding resolver cannot swap in a private target between check and use.
  */
-import { isPlainObject } from "@widgentic/core";
-import type { WidgetElementNode, WidgetNode } from "@widgentic/core";
+import { isPlainObject, matchesResourceDomain } from "@widgentic/core";
+import type { ResourceDomain, WidgetElementNode, WidgetNode } from "@widgentic/core";
 import { WIDGENTIC_APP_MIME_TYPE } from "./definitions.js";
 import {
   defaultLookup,
@@ -50,18 +54,20 @@ export interface InlineImageDeps {
   /** Resolve a hostname to its addresses (defaults to node:dns lookup). */
   lookupImpl?: Lookup;
   /**
-   * Deployment-declared resource domains (lowercased hostnames): sources
-   * on these hosts are left un-inlined — the frame is allowed to load
-   * them natively per the Apps declaration. Deployment config only.
+   * The declared resource domains (the operator's and the caller's, parsed
+   * by the core rule). Sources on them rank after every undeclared source;
+   * one left external keeps its URL, which a host honoring the Apps
+   * declaration loads directly.
    */
-  skipHosts?: ReadonlySet<string>;
+  declaredDomains?: readonly ResourceDomain[];
 }
 
-/** True when a raw http(s) URL's hostname is a declared resource domain. */
-function isDeclaredHost(rawUrl: string, skipHosts: ReadonlySet<string> | undefined): boolean {
-  if (skipHosts === undefined || skipHosts.size === 0) return false;
+/** True when a raw http(s) URL's hostname falls under a declared resource domain. */
+function isDeclared(rawUrl: string, domains: readonly ResourceDomain[] | undefined): boolean {
+  if (domains === undefined || domains.length === 0) return false;
   try {
-    return skipHosts.has(new URL(rawUrl).hostname.toLowerCase());
+    const host = new URL(rawUrl).hostname;
+    return domains.some((domain) => matchesResourceDomain(host, domain));
   } catch {
     return false;
   }
@@ -223,48 +229,55 @@ function htmlOccurrences(html: string): Occurrence[] {
 }
 
 /**
- * Decide what to inline: unique sources ranked by their best occurrence
- * (ties in document order), the first {@link MAX_IMAGES_PER_RENDER}
- * fetched, then admitted in that order while their substituted bytes fit
- * {@link MAX_INLINE_BYTES_PER_RENDER} — a source that does not fit keeps
- * its URL and a smaller later one may still be admitted. Sources left
- * external by either bound are counted on stderr, never by URL.
+ * Decide what to inline: unique sources ranked undeclared before declared,
+ * then by their best occurrence's shape (ties in document order), the
+ * first {@link MAX_IMAGES_PER_RENDER} fetched, then admitted in that order
+ * while their substituted bytes fit {@link MAX_INLINE_BYTES_PER_RENDER} —
+ * a source that does not fit keeps its URL and a smaller later one may
+ * still be admitted. Sources left external by either bound are counted on
+ * stderr, those on declared domains apart, never by URL.
  */
 async function resolveSources(
   occurrences: Occurrence[],
   deps: InlineImageDeps
 ): Promise<Map<string, string>> {
-  const byUrl = new Map<string, { url: string; rank: number; first: number; count: number }>();
+  const byUrl = new Map<string, { url: string; rank: number; first: number; count: number; declared: boolean }>();
   occurrences.forEach(({ url, rank }, index) => {
-    if (isDeclaredHost(url, deps.skipHosts)) return;
     const seen = byUrl.get(url);
-    if (seen === undefined) byUrl.set(url, { url, rank, first: index, count: 1 });
+    if (seen === undefined) byUrl.set(url, { url, rank, first: index, count: 1, declared: isDeclared(url, deps.declaredDomains) });
     else {
       seen.count++;
       seen.rank = Math.max(seen.rank, rank);
     }
   });
-  const ranked = [...byUrl.values()].sort((a, b) => b.rank - a.rank || a.first - b.first);
+  const ranked = [...byUrl.values()].sort(
+    (a, b) => Number(a.declared) - Number(b.declared) || b.rank - a.rank || a.first - b.first
+  );
   const fetched = ranked.slice(0, MAX_IMAGES_PER_RENDER);
   const uris = await Promise.all(fetched.map((source) => fetchImageAsDataUri(source.url, deps)));
   const admitted = new Map<string, string>();
   let used = 0;
-  let overBudget = 0;
+  const left = { undeclared: { cap: 0, budget: 0 }, declared: { cap: 0, budget: 0 } };
   fetched.forEach((source, i) => {
     const uri = uris[i];
     if (uri === null || uri === undefined) return;
     const cost = uri.length * source.count;
     if (used + cost > MAX_INLINE_BYTES_PER_RENDER) {
-      overBudget++;
+      left[source.declared ? "declared" : "undeclared"].budget++;
       return;
     }
     used += cost;
     admitted.set(source.url, uri);
   });
-  const overCap = ranked.length - fetched.length;
-  if (overCap + overBudget > 0) {
+  for (const source of ranked.slice(MAX_IMAGES_PER_RENDER)) left[source.declared ? "declared" : "undeclared"].cap++;
+  const undeclared = left.undeclared.cap + left.undeclared.budget;
+  const declared = left.declared.cap + left.declared.budget;
+  if (undeclared + declared > 0) {
+    const note = `widgentic: ${undeclared} image source(s) left external (fetch cap: ${left.undeclared.cap}, byte budget: ${left.undeclared.budget})`;
     console.error(
-      `widgentic: ${overCap + overBudget} image source(s) left external (fetch cap: ${overCap}, byte budget: ${overBudget})`
+      declared === 0
+        ? note
+        : `${note}, and ${declared} on declared resource domains (fetch cap: ${left.declared.cap}, byte budget: ${left.declared.budget})`
     );
   }
   return admitted;

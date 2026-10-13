@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from "vitest";
+import { RESOURCE_DOMAIN_LIMIT } from "@widgentic/core";
 import type { ThemeEntry } from "@widgentic/core";
 import {
   createDesigner,
@@ -439,10 +440,92 @@ describe("settings designer", () => {
 
   it("is visible but inert when read-only", () => {
     const root = host();
-    const designer = createSettingsDesigner(root, { themes, readOnly: true, initialSettings: { defaultThemes: { light: "night" } } });
+    const designer = createSettingsDesigner(root, {
+      themes,
+      readOnly: true,
+      initialSettings: { defaultThemes: { light: "night" }, resourceDomains: ["https://cdn.example.com"] }
+    });
     expect(select(root, "light").value).toBe("night");
     expect(select(root, "light").closest("[inert]")).not.toBeNull();
+    const domain = root.querySelector<HTMLInputElement>("input.wgd-domain");
+    expect(domain?.value).toBe("https://cdn.example.com");
+    expect(domain?.closest("[inert]")).not.toBeNull();
+    expect(root.querySelector("input.wgd-domain-add")?.closest("[inert]")).not.toBeNull();
     designer.setReadOnly(false);
     expect(select(root, "light").closest("[inert]")).toBeNull();
+    expect(domain?.closest("[inert]")).toBeNull();
+  });
+
+  describe("resource domains", () => {
+    const addInput = (root: Element) => root.querySelector("input.wgd-domain-add") as HTMLInputElement;
+    const addButton = (root: Element) => root.querySelector('button[title="Add domain"]') as HTMLButtonElement;
+    const add = (root: Element, value: string) => {
+      addInput(root).value = value;
+      addButton(root).click();
+    };
+    const entries = (root: Element) => [...root.querySelectorAll<HTMLElement>(".wgd-domain-entry")];
+
+    it("records an added domain in its canonical form and shows it", () => {
+      const root = host();
+      const designer = createSettingsDesigner(root, { themes });
+      const heard: SettingsRecord[] = [];
+      designer.subscribe((settings) => heard.push(settings));
+      add(root, "CDN.example.com");
+      expect(designer.getSettings().resourceDomains).toEqual(["https://cdn.example.com"]);
+      expect(heard.at(-1)?.resourceDomains).toEqual(["https://cdn.example.com"]);
+      expect(entries(root)[0]?.querySelector("input")?.value).toBe("https://cdn.example.com");
+      expect(entries(root)[0]?.querySelector(".wgd-domain-origin")?.textContent).toBe("https://cdn.example.com");
+      expect(addInput(root).value).toBe("");
+    });
+
+    it("keeps an invalid domain as typed and marks it with the rule's reason", () => {
+      const root = host();
+      const designer = createSettingsDesigner(root, { themes });
+      add(root, "http://cdn.example.com");
+      expect(designer.getSettings().resourceDomains).toEqual(["http://cdn.example.com"]);
+      const mark = entries(root)[0]?.querySelector(".wgd-diagnostic");
+      expect(mark?.textContent).toContain("only https://");
+      // Fixing it in place records the canonical form and clears the mark.
+      change(entries(root)[0]?.querySelector("input") as HTMLInputElement, "https://cdn.example.com/");
+      expect(designer.getSettings().resourceDomains).toEqual(["https://cdn.example.com"]);
+      expect(entries(root)[0]?.querySelector(".wgd-diagnostic")).toBeNull();
+    });
+
+    it("carries an emptied list so a save clears it, and adds none unasked", () => {
+      const root = host();
+      const designer = createSettingsDesigner(root, { themes, initialSettings: { resourceDomains: ["https://cdn.example.com"] } });
+      (entries(root)[0]?.querySelector('button[title="Remove domain"]') as HTMLButtonElement).click();
+      expect(designer.getSettings().resourceDomains).toEqual([]);
+      const untouched = createSettingsDesigner(host(), { themes, initialSettings: { defaultThemes: { light: "ocean" } } });
+      expect(untouched.getSettings()).toEqual({ defaultThemes: { light: "ocean" } });
+    });
+
+    it("disables adding at the exported limit and enables it when one is removed", () => {
+      const root = host();
+      const full = Array.from({ length: RESOURCE_DOMAIN_LIMIT }, (_v, n) => `https://cdn${n}.example.com`);
+      const designer = createSettingsDesigner(root, { themes });
+      expect(designer.loadSettings({ resourceDomains: full })).toEqual({ ok: true });
+      expect(addInput(root).disabled).toBe(true);
+      expect(addButton(root).disabled).toBe(true);
+      (entries(root)[0]?.querySelector('button[title="Remove domain"]') as HTMLButtonElement).click();
+      expect(addButton(root).disabled).toBe(false);
+    });
+
+    it("refuses a malformed list on load, keeping the current record", () => {
+      const designer = createSettingsDesigner(host(), { themes, initialSettings: { resourceDomains: ["https://cdn.example.com"] } });
+      const refused = designer.loadSettings({ resourceDomains: "cdn.example.com" });
+      expect(refused.ok).toBe(false);
+      expect(refused.ok ? [] : refused.errors.join("\n")).toContain("resourceDomains");
+      expect(designer.getSettings().resourceDomains).toEqual(["https://cdn.example.com"]);
+    });
+
+    it("states its rule, its limit and the trust a declaration grants", () => {
+      const root = host();
+      createSettingsDesigner(root, { themes });
+      const text = sectionTitled(root, "Resource domains").textContent ?? "";
+      expect(text).toContain(`at most ${RESOURCE_DOMAIN_LIMIT}`);
+      expect(text).toContain("*.example.com");
+      expect(text).toContain("viewer's browser");
+    });
   });
 });

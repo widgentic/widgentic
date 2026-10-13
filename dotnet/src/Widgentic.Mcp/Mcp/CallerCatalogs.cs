@@ -11,7 +11,9 @@ namespace Widgentic.Mcp.Mcp;
 /// Answers the calls whose result depends on the caller's catalog. With an
 /// <see cref="IWidgenticCatalogSource"/> in the request's services, the caller's catalog is
 /// resolved once per call, composed inside that call and dropped with it; without one, or when the
-/// source returns null, the startup host answers exactly as before.
+/// source returns null, the startup host answers exactly as before. The app resource's declared
+/// domains follow the caller the same way, from a composition of the domains alone, and fall back
+/// to the startup declaration when the source fails, so the template always lists and reads.
 /// </summary>
 internal sealed class CallerCatalogs(WidgenticEngine engine, WidgenticComposition defaultComposition)
 {
@@ -56,14 +58,53 @@ internal sealed class CallerCatalogs(WidgenticEngine engine, WidgenticCompositio
         return await engine.Pool.InvokeAsync("widgetPage", cancellationToken, kind).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// The domains the app resource declares for this caller: the startup declaration without a
+    /// source, for a caller the source returns null for, or when the source fails (logged);
+    /// otherwise the operator's list and the caller's effective settings section, as the bundle
+    /// reads them. A refused caller domain is logged and not declared.
+    /// </summary>
+    public async ValueTask<IReadOnlyList<string>> ResourceDomainsAsync(ClaimsPrincipal? user, IServiceProvider? services, CancellationToken cancellationToken)
+    {
+        var resolved = await ResolveCatalogAsync(user, services, cancellationToken).ConfigureAwait(false);
+        if (resolved.Failure is { } failure)
+        {
+            Logger(services).LogError(failure, "The widgentic catalog source failed; the app resource declares the startup resource domains.");
+        }
+        if (resolved.Catalog is not { } catalog) return engine.Resources.AppTemplateResourceDomains;
+        var config = engine.Composer.ComposeDomains(catalog, catalog.Composition ?? defaultComposition);
+        foreach (var problem in config.Unreadable) LogCallerProblem(Logger(services), problem);
+        var result = await engine.Pool.InvokeComposedAsync(config.Json, "resources", cancellationToken).ConfigureAwait(false);
+        Report(config, result.Problems, services);
+        return HostResources.Parse(result.Value).AppTemplateResourceDomains;
+    }
+
+    /// <summary>Whether a catalog source is registered in the request's services.</summary>
+    public static bool HasSource(IServiceProvider? services) => services?.GetService<IWidgenticCatalogSource>() is not null;
+
     private async ValueTask<Resolution> ResolveAsync(ClaimsPrincipal? user, IServiceProvider? services, CancellationToken cancellationToken)
     {
+        var resolved = await ResolveCatalogAsync(user, services, cancellationToken).ConfigureAwait(false);
+        if (resolved.Failure is { } failure)
+        {
+            Logger(services).LogError(failure, "The widgentic catalog source failed; the call answers {Code}.", UnavailableCode);
+            return new Resolution(null, Unavailable: true);
+        }
+        if (resolved.Catalog is not { } catalog) return default;
+        var config = engine.Composer.Compose(catalog, catalog.Composition ?? defaultComposition);
+        foreach (var problem in config.Unreadable) LogCallerProblem(Logger(services), problem);
+        return new Resolution(config, Unavailable: false);
+    }
+
+    /// <summary>The caller's catalog from the registered source: none without a source or for a null answer, or the source's failure.</summary>
+    private static async ValueTask<(WidgenticCatalog? Catalog, Exception? Failure)> ResolveCatalogAsync(
+        ClaimsPrincipal? user, IServiceProvider? services, CancellationToken cancellationToken)
+    {
         var source = services?.GetService<IWidgenticCatalogSource>();
-        if (source is null) return default;
-        WidgenticCatalog? catalog;
+        if (source is null) return (null, null);
         try
         {
-            catalog = await source.GetCatalogAsync(new WidgenticCaller(user, services!), cancellationToken).ConfigureAwait(false);
+            return (await source.GetCatalogAsync(new WidgenticCaller(user, services!), cancellationToken).ConfigureAwait(false), null);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -71,13 +112,8 @@ internal sealed class CallerCatalogs(WidgenticEngine engine, WidgenticCompositio
         }
         catch (Exception exception)
         {
-            Logger(services).LogError(exception, "The widgentic catalog source failed; the call answers {Code}.", UnavailableCode);
-            return new Resolution(null, Unavailable: true);
+            return (null, exception);
         }
-        if (catalog is null) return default;
-        var config = engine.Composer.Compose(catalog, catalog.Composition ?? defaultComposition);
-        foreach (var problem in config.Unreadable) LogCallerProblem(Logger(services), problem);
-        return new Resolution(config, Unavailable: false);
     }
 
     /// <summary>Each refused entry, by section, index, name and code; never its contents.</summary>

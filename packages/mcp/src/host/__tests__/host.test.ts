@@ -16,7 +16,9 @@ import {
   WIDGET_PAGE_RESOURCE
 } from "../../server/definitions.js";
 import { handleListWidgets, handleListThemes, handlePreviewWidget, handleRenderWidget } from "../../server/handlers.js";
-import { composeCatalogEntries, composeThemeEntries, composeThemes } from "../../store/compose.js";
+import { composeCatalogEntries, composeResourceDomains, composeThemeEntries, composeThemes } from "../../store/compose.js";
+import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
+import { createWidgenticServer } from "../../server/server.js";
 import { createMemoryStore } from "../../store/memory.js";
 
 interface ToolResult {
@@ -269,3 +271,62 @@ describe("createWidgenticHost settings", () => {
     }
   });
 });
+
+describe("createWidgenticHost resource domains", () => {
+  type Resources = { appTemplate: { resourceDomains?: string[] } };
+  const declared = (host: ReturnType<typeof createWidgenticHost>) =>
+    (JSON.parse(host.resources()) as Resources).appTemplate.resourceDomains;
+
+  /** What the Node assembly declares for a principal storing `settings`, behind the operator's `operator`. */
+  async function nodeDeclaration(operator: string[], settings: Record<string, unknown>): Promise<unknown> {
+    const store = createMemoryStore([{ principal: { id: "p", scopes: ["read"] }, settings }]);
+    const principal = (await composeResourceDomains(store, "p")).value;
+    const server = createWidgenticServer({ resourceDomains: [...operator, ...principal] });
+    const client = new Client({ name: "t", version: "0" });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+    const app = (await client.listResources()).resources.find((r) => r.uri === "ui://widgentic/app.html");
+    await client.close();
+    return (app?._meta?.ui as { csp?: { resourceDomains?: unknown } } | undefined)?.csp?.resourceDomains;
+  }
+
+  it("reports declared domains canonical, operator first, deduplicated", async () => {
+    const operator = ["assets.example.org"];
+    const settings = { resourceDomains: ["CDN.example.com", "https://*.example.net/", "https://assets.example.org"] };
+    const host = createWidgenticHost(JSON.stringify({ resourceDomains: operator, settings }));
+    expect(host.problems()).toBe("[]");
+    expect(declared(host)).toEqual(["https://assets.example.org", "https://cdn.example.com", "https://*.example.net"]);
+    expect(declared(host)).toEqual(await nodeDeclaration(operator, settings));
+  });
+
+  it("gives no key, and the constants unchanged, when nothing is declared", () => {
+    const none = createWidgenticHost("{}");
+    expect(declared(none)).toBeUndefined();
+    for (const config of [{ resourceDomains: [] }, { settings: { resourceDomains: [] } }, { settings: null }]) {
+      expect(createWidgenticHost(JSON.stringify(config)).resources()).toBe(none.resources());
+    }
+  });
+
+  it("reports refused domains under their section and declares only the rest", () => {
+    const host = createWidgenticHost(
+      JSON.stringify({ resourceDomains: ["http://old.example.com"], settings: { resourceDomains: ["cdn.example.com", "localhost"] } })
+    );
+    expect(JSON.parse(host.problems())).toEqual([
+      expect.objectContaining({ section: "resourceDomains", index: 0, name: "http://old.example.com", code: "INVALID_DOMAIN" }),
+      expect.objectContaining({ section: "settings", index: -1, name: "resourceDomains.localhost", code: "INVALID_DOMAIN" })
+    ]);
+    expect(declared(host)).toEqual(["https://cdn.example.com"]);
+  });
+
+  it("reports a malformed operator list or settings section as shape", () => {
+    const listless = createWidgenticHost(JSON.stringify({ resourceDomains: "cdn.example.com" }));
+    expect(JSON.parse(listless.problems())).toEqual([expect.objectContaining({ section: "resourceDomains", code: "INVALID_SHAPE" })]);
+    const tooMany = Array.from({ length: 21 }, (_v, n) => `cdn${n}.example.com`);
+    for (const resourceDomains of ["cdn.example.com", [42], tooMany]) {
+      const host = createWidgenticHost(JSON.stringify({ settings: { resourceDomains } }));
+      expect(JSON.parse(host.problems())).toEqual([expect.objectContaining({ section: "settings", code: "INVALID_SHAPE" })]);
+      expect(declared(host)).toBeUndefined();
+    }
+  });
+});
+

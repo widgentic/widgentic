@@ -5,18 +5,22 @@
  * of this module on V8).
  *
  * The configuration (designer-exported widgets, theme entries, shared
- * schemas, and a settings record choosing default themes) is composed once
- * per host by the store's own composition and checks; refused entries and
+ * schemas, the embedding server's own resource domains, and a settings
+ * record choosing default themes and resource domains) is composed once per
+ * host by the store's own composition and checks; refused entries and
  * settings are skipped and listed by `problems()`, never thrown. Calls
  * dispatch to the same handlers the Node assembly wires, and nothing is
- * kept from one call to the next.
+ * kept from one call to the next. `resources()` reports the domains the app
+ * template declares — the operator's, then the settings' — in the same
+ * canonical form the Node assembly declares them, so an embedding server
+ * declares exactly what it is told.
  *
  * Render-only: http actions compile disabled (`unresolved`), no `load` is
  * emitted, and neither `execute_action` nor `list_actions` is served. The
  * template's own `preview_widget` is served, marked app-only; rate limiting
  * previews belongs to the embedding server's transport.
  */
-import { createThemeRegistry, isPlainObject } from "@widgentic/core";
+import { createThemeRegistry, isPlainObject, parseResourceDomain } from "@widgentic/core";
 import type { McpToolResult } from "../output/index.js";
 import {
   GET_AUTHORING_GUIDE_TOOL,
@@ -74,7 +78,11 @@ export interface WidgenticHost {
    * template calls.
    */
   definitions(): string;
-  /** JSON of the served resources (app template, preview-page template): name, URI, MIME type, description. */
+  /**
+   * JSON of the served resources (app template, preview-page template):
+   * name, URI, MIME type, description; the app template also carries
+   * `prefersBorder` and, when any is declared, `resourceDomains`.
+   */
   resources(): string;
   /** The MCP tool result JSON for one call; an unknown name is an `UNKNOWN_TOOL` result. */
   call(name: string, argsJson: string, slim: boolean): string;
@@ -128,6 +136,30 @@ function section(
   return [];
 }
 
+/** The embedding server's own resource domains, canonical; each refused entry reported with its index. */
+function operatorDomains(config: Record<string, unknown>, problems: HostProblem[]): string[] {
+  const accepted: string[] = [];
+  for (const [index, entry] of section(config, "resourceDomains", problems).entries()) {
+    if (typeof entry !== "string") {
+      problems.push({ section: "resourceDomains", index, name: String(entry), code: "INVALID_SHAPE", message: "a resource domain must be a string." });
+      continue;
+    }
+    const parsed = parseResourceDomain(entry);
+    if ("error" in parsed) {
+      problems.push({
+        section: "resourceDomains",
+        index,
+        name: entry,
+        code: "INVALID_DOMAIN",
+        message: `'${entry}' is not a resource domain: ${parsed.error}.`
+      });
+    } else {
+      accepted.push(parsed.origin);
+    }
+  }
+  return accepted;
+}
+
 /** Valid shared schemas, by the store's check; duplicates are refused, never shadowed. */
 function composeSchemas(entries: readonly unknown[], problems: HostProblem[]): StoredSchemaEntry[] {
   const schemas: StoredSchemaEntry[] = [];
@@ -176,10 +208,11 @@ function refusals(problems: readonly ComposeProblem[]): HostProblem[] {
 
 /**
  * Create a host from a JSON configuration:
- * `{ widgets?: WidgetDefinition[], themes?: ThemeEntry[], schemas?: StoredSchemaEntry[], settings?: PrincipalSettings }`.
+ * `{ widgets?: WidgetDefinition[], themes?: ThemeEntry[], schemas?: StoredSchemaEntry[], resourceDomains?: string[], settings?: PrincipalSettings }`.
  * `settings` is checked with the store's rules against the configured themes that composed;
  * each default that passes stands in for its mode's built-in, as a principal's stored
- * defaults do in the Node assembly.
+ * defaults do in the Node assembly. `resourceDomains` (the embedding server's own) and the
+ * settings' section are read by the core resource-domain rule and declared operator first.
  */
 export function createWidgenticHost(configJson: string): WidgenticHost {
   const problems: HostProblem[] = [];
@@ -193,7 +226,8 @@ export function createWidgenticHost(configJson: string): WidgenticHost {
       index: -1,
       name: "config",
       code: "INVALID_SHAPE",
-      message: "The configuration must be a JSON object with optional 'widgets', 'themes' and 'schemas' arrays and a 'settings' object."
+      message:
+        "The configuration must be a JSON object with optional 'widgets', 'themes', 'schemas' and 'resourceDomains' arrays and a 'settings' object."
     });
   }
 
@@ -210,6 +244,7 @@ export function createWidgenticHost(configJson: string): WidgenticHost {
 
   const catalog = composed.catalog;
   const registry = themes.registry;
+  const domains = operatorDomains(config, problems);
   // An absent or null record is no settings; anything else is checked.
   if (config.settings !== undefined && config.settings !== null) {
     // Defaults may name only configured themes that composed, never a built-in.
@@ -222,7 +257,15 @@ export function createWidgenticHost(configJson: string): WidgenticHost {
       const name = checked.settings.defaultThemes?.[mode];
       if (name !== undefined) registry.setDefault(mode, name);
     }
+    domains.push(...(checked.settings.resourceDomains ?? []));
   }
+  const declared = [...new Set(domains)];
+  // Without a declared domain the documents are exactly the Node assembly's constants.
+  const resources = JSON.stringify(
+    declared.length === 0
+      ? SERVED_RESOURCES
+      : { ...SERVED_RESOURCES, appTemplate: { ...SERVED_RESOURCES.appTemplate, resourceDomains: declared } }
+  );
   const handlers = new Map<string, (args: unknown, slim: boolean) => McpToolResult>([
     [LIST_WIDGETS_TOOL.name, () => handleListWidgets(catalog)],
     [LIST_THEME_TOKENS_TOOL.name, () => handleListThemeTokens()],
@@ -237,7 +280,7 @@ export function createWidgenticHost(configJson: string): WidgenticHost {
     version: () => (typeof WIDGENTIC_HOST_VERSION === "string" ? WIDGENTIC_HOST_VERSION : "source"),
     problems: () => JSON.stringify(problems),
     definitions: () => JSON.stringify(SERVED_TOOLS),
-    resources: () => JSON.stringify(SERVED_RESOURCES),
+    resources: () => resources,
     call(name, argsJson, slim) {
       const handler = handlers.get(name);
       if (handler === undefined) {

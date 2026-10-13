@@ -85,7 +85,7 @@ The settings section `resourceDomains` SHALL list the domains a principal's MCP 
 
 #### Scenario: Invalid stored entries are dropped on read
 - **WHEN** a store edited out of band holds `resourceDomains: ["https://cdn.example.com", "http://old.example.com"]` for P
-- **THEN** `settings(P)` and `composeResourceDomains` SHALL yield `["https://cdn.example.com"]`, and composition SHALL report a diagnostic naming `http://old.example.com`
+- **THEN** `settings(P)` and `composeResourceDomains` SHALL yield `["https://cdn.example.com"]`, and the adapter's read diagnostics (file, SQLite, Cosmos) SHALL name `http://old.example.com`, as they report a malformed default theme
 
 #### Scenario: Composition yields only the caller's domains
 - **WHEN** principal A stores `["cdn.a.example"]` and principal B stores nothing

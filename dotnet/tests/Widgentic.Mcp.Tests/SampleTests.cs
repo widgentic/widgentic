@@ -107,6 +107,8 @@ public sealed class SampleTests
             Assert.Contains(widgets, w => w.Kind == "appointment-agenda-widget");
             Assert.DoesNotContain(widgets, w => w.Kind == "release-notes-widget");
             Assert.Equal(("google-light", "google-dark"), await Defaults(keyless));
+            // The seed's settings declare its two image domains.
+            Assert.Equal(["https://api.dicebear.com", "https://*.pravatar.cc"], await Declared(keyless));
         }
         // Merge, keyed by header: the seed, with the principal's inbox in place of the seed's, and its theme.
         await using (var merge = await McpClient.CreateAsync(sample.Transport(headers: new() { ["x-api-key"] = mergeKey }), cancellationToken: Cancel))
@@ -120,6 +122,8 @@ public sealed class SampleTests
             Assert.Contains("merge-demo-dark", themeText);
             Assert.Contains("google-dark", themeText);
             Assert.Equal(("google-light", "merge-demo-dark"), await Defaults(merge));
+            // Its section replaces the seed's whole: the seed's two domains and a third of its own.
+            Assert.Equal(["https://api.dicebear.com", "https://*.pravatar.cc", "https://ui-avatars.com"], await Declared(merge));
         }
         // Replace, keyed in the URL as hosts that only take a URL send it: the built-ins and its own widget.
         await using (var replace = await McpClient.CreateAsync(sample.Transport(query: $"?key={replaceKey}"), cancellationToken: Cancel))
@@ -130,6 +134,8 @@ public sealed class SampleTests
             Assert.DoesNotContain(widgets, w => w.Kind is "email-inbox-widget" or "appointment-agenda-widget");
             // Replace composes no startup entries, so the seed's defaults never apply.
             Assert.Equal(("light", "dark"), await Defaults(replace));
+            // Replace composes no startup settings, so it declares nothing.
+            Assert.Empty(await Declared(replace));
             var data = new Dictionary<string, object?>
             {
                 ["product"] = "Sample",
@@ -146,6 +152,17 @@ public sealed class SampleTests
         // The server's Information logs are collected, and none of them carries a key.
         Assert.Contains(sample.Output, line => line.Contains("Now listening on", StringComparison.Ordinal));
         Assert.DoesNotContain(sample.Output, line => line.Contains(mergeKey, StringComparison.Ordinal) || line.Contains(replaceKey, StringComparison.Ordinal));
+    }
+
+    /// <summary>The app resource's declared domains this client lists, asserted equal to those it reads.</summary>
+    private static async Task<string[]> Declared(McpClient client)
+    {
+        var listed = Assert.Single(await client.ListResourcesAsync(cancellationToken: Cancel), r => r.Uri == WidgenticResources.AppTemplateUri);
+        var read = Assert.Single((await client.ReadResourceAsync(WidgenticResources.AppTemplateUri, cancellationToken: Cancel)).Contents);
+        static string[] Domains(System.Text.Json.Nodes.JsonObject? meta) =>
+            [.. meta?["ui"]?["csp"]?["resourceDomains"]?.AsArray().Select(d => d!.GetValue<string>()) ?? []];
+        Assert.Equal(Domains(listed.ProtocolResource.Meta), Domains(read.Meta));
+        return Domains(read.Meta);
     }
 
     private static async Task<(string Kind, string? Description)[]> ListWidgets(McpClient client)

@@ -14,7 +14,6 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { createMcpHandler } from "@modelcontextprotocol/server";
 import { toNodeHandler } from "@modelcontextprotocol/node";
 import type { NodeIncomingMessageLike } from "@modelcontextprotocol/node";
-import { createWidgenticServer } from "@widgentic/mcp/sdk";
 import {
   BodyTooLargeError,
   createExecutionLimiter,
@@ -24,10 +23,11 @@ import {
   positiveIntFromEnv,
   readBodyText
 } from "@widgentic/mcp";
-import { ANONYMOUS_PRINCIPAL, composeCatalog, composeThemes } from "@widgentic/mcp/store";
+import { ANONYMOUS_PRINCIPAL } from "@widgentic/mcp/store";
 import type { Principal, WidgetStore } from "@widgentic/mcp/store";
 import { loadDeploymentKey } from "./deployment-key.js";
 import { openDeployment } from "./store.js";
+import { serverForPrincipal } from "./principal-server.js";
 
 const PORT = positiveIntFromEnv(process.env.WIDGENTIC_MCP_PORT, 8081);
 const MAX_BODY_BYTES = positiveIntFromEnv(process.env.WIDGENTIC_MAX_BODY_BYTES, DEFAULT_MAX_BODY_BYTES);
@@ -68,29 +68,7 @@ const handler = createMcpHandler(
       }
     }
 
-    // Per-request composition, no caches: one principal's widgets can never
-    // reach another's session.
-    const executeAllowed = principal.scopes.includes("execute");
-    const [catalogResult, themeResult] = await Promise.all([
-      composeCatalog(store, principal.id, { executeAllowed }),
-      composeThemes(store, principal.id)
-    ]);
-    for (const diagnostic of [...catalogResult.diagnostics, ...themeResult.diagnostics]) {
-      console.error(`widgentic store [${principal.id}]: ${diagnostic}`);
-    }
-
-    const principalRef = principal;
-    return createWidgenticServer({
-      catalog: catalogResult.value,
-      themes: themeResult.value,
-      ...(catalogResult.actions === undefined ? {} : { actions: catalogResult.actions }),
-      schemas: () => store.schemas(principalRef.id),
-      sharedActions: () => store.actions(principalRef.id),
-      secrets: (name: string) => store.secretValue(principalRef.id, name),
-      scopes: principal.scopes,
-      rateLimit: () => limiter.take(principalRef.id),
-      previewRateLimit: () => previewLimiter.take(principalRef.id)
-    });
+    return serverForPrincipal(store, principal, { execute: limiter, preview: previewLimiter });
   },
   { onerror: (error) => console.error("request failed:", error) }
 );
