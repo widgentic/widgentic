@@ -41,5 +41,5 @@
 
 ## 6. Staging
 
-- [ ] 6.1 Build and deploy the branch image to staging. Verify from the served bytes that a labelled card and table render their labels and that `list_widgets` carries the rule.
-- [ ] 6.2 Owner check in a new conversation on claude.ai and one more host: ask for a card and a table with multi-word fields without naming a style, and expect Title Case labels with snake_case keys in the payload. Then ask for lower-case labels, and expect the agent to follow the request.
+- [x] 6.1 Build and deploy the branch image to staging. Verify from the served bytes that a labelled card and table render their labels and that `list_widgets` carries the rule.
+- [x] 6.2 Owner check in a new conversation on claude.ai and one more host: ask for a card and a table with multi-word fields without naming a style, and expect Title Case labels with snake_case keys in the payload. Then ask for lower-case labels, and expect the agent to follow the request.
