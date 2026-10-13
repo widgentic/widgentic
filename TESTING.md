@@ -390,8 +390,14 @@ workspace and the sample first, then point at the built DLL):
   - **Diagnostics.** `labels.last_name` on a card without that field gave `NO_MATCH`. `""`, whitespace, `1` and `null` labels gave `INVALID_VALUE`, and so did a non-object `labels`. Table labels are checked against columns, and coherent labels are silent.
   - **Steering.** `LABEL_STYLE_RULE` (Title Case unless the user asks otherwise, keys kept) is in the card and table descriptors' `labels` hint, the MCP authoring guide and the WebMCP guide, verbatim. `render_widget` asks for `widget` first and `hints` before `data`.
   - **Previews.** In the `bootTemplate()` harness, a streamed table with hints before data previewed `First Name` from its first row. A card first previewed `order_total`, then `Order Total` once the hints arrived, matching the result's tree.
+  - **Themed built-in previews (design D8, an owner finding from the default-themes testing).**
+    - **One CSS request per run.** With `serverTools`, a streamed `card` requested `preview_widget` once with `{ widget: "card" }` only, applied the answer's `css` (the caller's default theme) and kept the client-built card. More data asked nothing.
+    - **A changed theme.** A theme still arriving asked nothing; a settled `theme: "dark"` asked once more.
+    - **Groups and failures.** A group of built-ins asked with `{ items: [] }`. No request was made without `serverTools`, and none after a rejected one.
+    - **The result wins.** A CSS answer arriving after the result was discarded.
+    - **The server answers each kind.** `preview_widget` returns the default theme's CSS for `card`, `table` and `tree` with no data.
   - **The corpus.** A labelled card and table, each as a render, a page and a preview: 6 new cases. Existing cases changed only for `list_widgets`, `get_authoring_guide` and the app template, from the new texts. The bare realm and V8 in .NET reproduce all of them.
-  - **Gates.** Typecheck, `npm test` (1758 passed, 1 skipped), build, `pack:check`, `openspec validate --strict` and `--specs` (19), and `dotnet test` (195).
+  - **Gates.** Typecheck, `npm test` (1762 passed, 1 skipped), build, `pack:check`, `openspec validate --strict` and `--specs` (19), and `dotnet test` (195).
   - **Not yet done.** The staging deploy and the owner's host check (tasks 6.1–6.2).
 
 - **Per-principal resource domains (2026-10-13, change `principal-resource-domains`, on `feature/principal-resource-domains`, core/designer/mcp minor and `Widgentic.Mcp` 0.11.0 pending release)**

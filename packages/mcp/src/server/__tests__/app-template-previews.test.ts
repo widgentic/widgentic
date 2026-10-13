@@ -139,14 +139,17 @@ describe("server previews for custom kinds", () => {
     expect(t.root().querySelector(".wg-person")?.textContent).toBe("Ada");
   });
 
-  it("previews built-in kinds client-side without calling the server", async () => {
+  it("previews built-in kinds client-side, asking the server only for the theme's CSS", async () => {
     const t = serverHost();
     await tick();
     t.dispatch(toolInputPartial({ widget: "table", data: [{ name: "Ada" }] }));
     await settle();
-    t.dispatch(toolInputPartial({ widget: "group", data: { items: [{ kind: "card", data: { title: "A" } }] } }));
+    t.dispatch(toolInputPartial({ widget: "table", data: [{ name: "Ada" }, { name: "Lin" }] }));
     await settle();
-    expect(t.requests("tools/call")).toHaveLength(0);
+    expect(t.root().querySelectorAll(".wg-table-row")).toHaveLength(2);
+    const calls = t.requests("tools/call");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.params).toEqual({ name: "preview_widget", arguments: { widget: "table" } });
   });
 
   it("starts a fresh run for a new call on a reused frame", async () => {
@@ -258,3 +261,79 @@ describe("keyed results through the template's patcher", () => {
     for (const row of after) expect(before.get(row.textContent)).toBe(row);
   });
 });
+
+describe("built-in previews take the result's theme", () => {
+  const cssAnswer = (css: string) => ({ result: { content: [{ type: "text", text: "Preview of 'card'." }], structuredContent: { tree: { tag: "div", children: [] }, css } } });
+
+  it("a streamed card wears the caller's default theme and keeps its client-built tree", async () => {
+    const t = serverHost();
+    await tick();
+    t.dispatch(toolInputPartial({ widget: "card", data: { title: "T" } }));
+    await settle();
+    const [call] = t.requests("tools/call");
+    expect(call?.params).toEqual({ name: "preview_widget", arguments: { widget: "card" } });
+    t.answer(call?.id ?? -1, cssAnswer(":root:not([data-theme=\"dark\"]) { --wg-accent: #ff5a1f; }"));
+    await tick();
+    expect(t.css()).toContain("--wg-accent: #ff5a1f");
+    expect(t.root().querySelector(".wg-card-title")?.textContent).toBe("T");
+    expect(t.root().getAttribute("data-wgd-preview")).toBe("true");
+  });
+
+  it("asks once per run, and again only when a different theme settles", async () => {
+    const t = serverHost();
+    await tick();
+    t.dispatch(toolInputPartial({ widget: "card", data: { title: "T" } }));
+    await settle();
+    t.answer(t.requests("tools/call")[0]?.id ?? -1, cssAnswer(".a {}"));
+    await tick();
+    t.dispatch(toolInputPartial({ widget: "card", data: { title: "Te" } }));
+    await settle();
+    // A theme still arriving (the last key of a partial) asks nothing yet.
+    t.dispatch(toolInputPartial({ widget: "card", data: { title: "Te" }, theme: "da" }));
+    await settle();
+    expect(t.requests("tools/call")).toHaveLength(1);
+    t.dispatch(toolInputPartial({ widget: "card", data: { title: "Te" }, theme: "dark", meta: { title: "M" } }));
+    await settle();
+    const calls = t.requests("tools/call");
+    expect(calls).toHaveLength(2);
+    expect(calls[1]?.params.arguments).toEqual({ widget: "card", theme: "dark" });
+  });
+
+  it("a group of built-ins asks with no items", async () => {
+    const t = serverHost();
+    await tick();
+    t.dispatch(toolInputPartial({ widget: "group", data: { items: [{ kind: "card", data: { title: "A" } }] } }));
+    await settle();
+    expect(t.requests("tools/call")[0]?.params.arguments).toEqual({ widget: "group", data: { items: [] } });
+  });
+
+  it("asks nothing without serverTools, stops after a failure, and never lets a late answer win", async () => {
+    const plain = bootTemplate();
+    plain.initialize({});
+    await tick();
+    plain.dispatch(toolInputPartial({ widget: "card", data: { title: "T" } }));
+    await settle();
+    expect(plain.requests("tools/call")).toHaveLength(0);
+
+    const failing = serverHost();
+    await tick();
+    failing.dispatch(toolInputPartial({ widget: "card", data: { title: "T" } }));
+    await settle();
+    failing.answer(failing.requests("tools/call")[0]?.id ?? -1, { error: { code: -32601, message: "Method not found" } });
+    await tick();
+    failing.dispatch(toolInputPartial({ widget: "card", data: { title: "T" }, theme: "dark", meta: {} }));
+    await settle();
+    expect(failing.requests("tools/call")).toHaveLength(1);
+
+    const late = serverHost();
+    await tick();
+    late.dispatch(toolInputPartial({ widget: "card", data: { title: "T" } }));
+    await settle();
+    late.dispatch(toolResult({ tree: { tag: "div", attrs: { class: "wg-card" }, children: ["R"] }, css: ".from-result {}", payload: { kind: "card", data: {} } }));
+    late.answer(late.requests("tools/call")[0]?.id ?? -1, cssAnswer(".from-preview {}"));
+    await tick();
+    expect(late.css()).toContain(".from-result");
+    expect(late.css()).not.toContain(".from-preview");
+  });
+});
+

@@ -11,6 +11,23 @@ The app template's client-built previews of `card` and `table` SHALL apply `hint
 - **WHEN** partial input for `card` carries `data: { fields: { order_total: 42 } }` and `hints: { labels: { order_total: "Order Total" } }`
 - **THEN** the preview's field key SHALL read `Order Total`, as the tool result's render does
 
+### Requirement: Previews of built-in kinds take the result's theme
+While a built-in kind's input streams (`card`, `table`, `tree`, or a `group` whose settled items are all built-ins) and the host advertises `serverTools`, the template SHALL request the app-only `preview_widget` once the widget name settles. The request SHALL carry the widget (a `group` with no items) and the `theme` input once that has settled, and no theme otherwise. The template SHALL apply the answer's `css` to the preview, so the preview wears what the result will: the caller's default themes, or the named or inline theme. The preview's tree SHALL still be built client-side from the streamed input. A later settled `theme` that differs from the one requested SHALL trigger one more request, and no other request SHALL be made for the run; at most one SHALL be in flight. An error answer, a rejected request, or a host without `serverTools` SHALL end these requests for the run and leave the preview's styling as it is. An answer arriving after the tool result SHALL be discarded, so the result's `css` always wins.
+
+#### Scenario: A streamed card wears the caller's default theme
+- **WHEN** a host advertising `serverTools` streams `{ widget: "card", data: { title: "T" } }` and the `preview_widget` answer carries `css` declaring `--wg-accent: #ff5a1f`
+- **THEN** the frame SHALL have requested `preview_widget` with `{ widget: "card" }` only, SHALL apply that `css`, and SHALL keep the client-built card on screen
+
+#### Scenario: One request per run unless the theme changes
+- **WHEN** the same run streams more data, and then a settled `theme: "dark"`
+- **THEN** the further data SHALL request nothing, and the theme SHALL request `preview_widget` once more with `{ widget: "card", theme: "dark" }`
+
+#### Scenario: No server, no request; a late answer never wins
+- **WHEN** a host without `serverTools` streams a built-in kind
+- **THEN** no `preview_widget` request SHALL be made
+- **AND WHEN** a host with `serverTools` delivers the tool result before the CSS answer arrives
+- **THEN** the result's `css` SHALL stay applied and the late answer SHALL be discarded
+
 ## MODIFIED Requirements
 
 ### Requirement: Widget rendering tool

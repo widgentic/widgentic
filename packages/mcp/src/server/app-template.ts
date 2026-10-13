@@ -425,7 +425,8 @@ function runLoads(list) {
 // --- Streaming input preview ----------------------------------------------
 // Hosts stream partial tool arguments (host-healed snapshots) while the
 // model generates them; built-in kinds preview client-side through the SAME
-// tree mounter so the widget draws itself as the agent types. Preview trees
+// tree mounter so the widget draws itself as the agent types, wearing the
+// theme CSS the server answers for the caller (requestThemeCss). Preview trees
 // mirror the catalog renderers' shapes (drift is pinned by tests comparing
 // against the real renderers); custom kinds get a labeled skeleton — never
 // a guessed render. The tool result stays the only authority.
@@ -813,6 +814,50 @@ function requestServerPreview(args) {
     if (next !== undefined && live()) requestServerPreview(next);
   });
 }
+// Built-in previews build their trees here, but the caller's default themes
+// live on the server, so the frame asks preview_widget for the CSS alone:
+// once per run, and again only when a different theme settles. Its state is
+// apart from the custom-kind queue above, so neither waits on the other.
+function newThemePreview() {
+  return { sent: undefined, inFlight: false, next: undefined, stopped: false };
+}
+let themePreview = newThemePreview();
+// The theme input as a request key: "" for none, its JSON once settled,
+// undefined while it is still arriving.
+function themeKey(args) {
+  if (args.theme === undefined) return "";
+  const keys = Object.keys(args);
+  if (keys.indexOf("theme") === keys.length - 1 && !previewComplete) return undefined;
+  try { return JSON.stringify(args.theme); } catch (e) { return undefined; }
+}
+function requestThemeCss(widget, args) {
+  const state = themePreview;
+  if (state.stopped || resultRendered) return;
+  if (!serverToolsAvailable()) { state.stopped = true; return; }
+  const key = themeKey(args);
+  if (key === undefined || key === state.sent) return;
+  if (state.inFlight) { state.next = { widget: widget, args: args }; return; }
+  state.inFlight = true;
+  state.sent = key;
+  const input = { widget: widget };
+  if (widget === "group") input.data = { items: [] };
+  if (args.theme !== undefined) input.theme = args.theme;
+  const live = function () { return state === themePreview && !resultRendered; };
+  request("tools/call", { name: "preview_widget", arguments: input }, ACTION_TIMEOUT_MS).then(
+    function (result) {
+      if (!live()) return;
+      const sc = result && result.structuredContent;
+      if (!result || result.isError || !isObj(sc)) { state.stopped = true; return; }
+      if (typeof sc.css === "string") dynamicCss.textContent = sc.css;
+    },
+    function () { state.stopped = true; }
+  ).then(function () {
+    state.inFlight = false;
+    const next = state.next;
+    state.next = undefined;
+    if (next !== undefined && live()) requestThemeCss(next.widget, next.args);
+  });
+}
 function applyPreview() {
   previewQueued = false;
   if (resultRendered || previewArgs === undefined) return;
@@ -833,11 +878,15 @@ function applyPreview() {
   }
   const tree = previewFor(widget, coerceData(args.data), args.hints, args.meta);
   mountPreviewTree(tree !== undefined ? tree : skeletonTree(widget));
+  if (BUILT_INS.indexOf(widget) !== -1 && !needsServer(args)) requestThemeCss(widget, args);
 }
 function onToolInput(params, complete) {
   // Input after a result (or a cancel) is a NEW call on a reused frame
   // (basic-host reuses frames; claude.ai mounts per render).
-  if (resultRendered || previewArgs === undefined) serverPreview = newServerPreview();
+  if (resultRendered || previewArgs === undefined) {
+    serverPreview = newServerPreview();
+    themePreview = newThemePreview();
+  }
   resultRendered = false;
   heldPayload = undefined;
   loadFired = false;

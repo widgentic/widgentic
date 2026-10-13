@@ -113,6 +113,30 @@ key; the diagnostic is how the agent finds out.
 - The new `render_widget` description changes `definitions()` in the corpus, so the corpus
   is regenerated.
 
+### D8. Built-in previews ask the server for the theme's CSS (added during apply)
+
+This is an owner finding from the default-themes testing on claude.ai. A streaming `card`,
+`table` or `tree` previewed with the base styling, then switched to the person's default
+theme when the result arrived.
+- **Why:** the frame builds built-in previews itself, and the default themes live only on
+  the server, per principal. The app template is global, so it cannot carry them. Custom
+  kinds already preview through `preview_widget`, whose `css` carries the defaults.
+- **Fix:** once a built-in widget name settles, the frame calls `preview_widget` with only the
+  widget (a `group` with `{ items: [] }`) and the settled `theme`, if any. It applies the
+  answer's `css` and keeps building the tree itself. It asks again only when a different
+  `theme` settles.
+- **State:** the CSS request keeps its own per-run state, apart from the custom-kind preview
+  queue, so neither delays the other.
+- **Cost:** one extra call per streamed render, within the per-principal preview limit.
+- **Hosts:** those that send only the complete input right before the result (Copilot,
+  ChatGPT) see no difference. The late answer is discarded, so the result's `css` wins.
+
+**Alternatives:**
+- A dedicated theme-CSS tool: rejected, as more surface (a tool, a spec, .NET) for the same
+  answer.
+- Building theme CSS in the template: rejected, because it would duplicate core's theme
+  validation in the inline script.
+
 ## Risks / Trade-offs
 
 - **[Agents skip the labels]** → Output stays as today: no regression. The rule sits in the

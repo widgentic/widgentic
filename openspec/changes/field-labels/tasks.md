@@ -17,6 +17,11 @@
   - the guide carries the rule verbatim.
 - [x] 2.5 Add a labelled card and table to `tools/conformance-generate.ts` (render, page, preview), and regenerate the corpus. Existing cases change only where the new texts appear: `list_widgets` (the descriptors' `labels` hint), `get_authoring_guide` (the rule) and the app template (the previews' label lookup).
 
+## 2b. Themed previews of built-in kinds (design D8)
+
+- [x] 2b.1 App template: once a built-in widget name settles and the host advertises `serverTools`, request `preview_widget` with the widget only (a `group` as `{ items: [] }`) and the settled `theme`, apply the answer's `css`, and keep the client-built tree. Request again only for a different settled `theme`, keep one in flight, stop on an error or rejection, and discard a late answer. The per-run state stays separate from the custom-kind preview queue.
+- [x] 2b.2 Tests in `app-template-previews.test.ts` for the three new scenarios. Update the test that asserted built-in previews never call the server, which now expects exactly one CSS request.
+
 ## 3. WebMCP
 
 - [x] 3.1 `packages/webmcp/src/guide.ts` carries `LABEL_STYLE_RULE`, mirroring the server guide, with a test that it appears verbatim.
