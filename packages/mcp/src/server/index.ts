@@ -12,7 +12,7 @@ export {
   WIDGENTIC_APP_MIME_TYPE,
   WIDGENTIC_APP_TEMPLATE_URI
 } from "./definitions.js";
-export type { McpToolDefinition } from "./definitions.js";
+export type { McpToolAnnotations, McpToolDefinition } from "./definitions.js";
 export {
   handleListWidgets,
   handleRenderWidget,

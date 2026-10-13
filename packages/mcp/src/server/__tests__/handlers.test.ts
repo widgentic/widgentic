@@ -10,7 +10,9 @@ import {
   LIST_THEMES_TOOL,
   LIST_WIDGETS_TOOL,
   RENDER_WIDGET_TOOL,
-  LIST_THEME_TOKENS_TOOL
+  LIST_THEME_TOKENS_TOOL,
+  EXECUTE_ACTION_TOOL,
+  PREVIEW_WIDGET_TOOL
 } from "../index.js";
 import {
   THEME_TOKENS, TOKEN_VALUE_RULE,
@@ -74,6 +76,21 @@ describe("tool definitions", () => {
     expect(LIST_WIDGETS_TOOL.name).toBe("list_widgets");
     expect(RENDER_WIDGET_TOOL.name).toBe("render_widget");
     expect(RENDER_WIDGET_TOOL.inputSchema.required).toEqual(["widget", "data"]);
+  });
+
+  it("carry all four annotations, and only execute_action declares a write", () => {
+    const readOnly = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
+    for (const tool of [LIST_WIDGETS_TOOL, LIST_THEME_TOKENS_TOOL, LIST_THEMES_TOOL, LIST_SCHEMAS_TOOL, LIST_ACTIONS_TOOL, GET_AUTHORING_GUIDE_TOOL, PREVIEW_WIDGET_TOOL]) {
+      expect(tool.annotations, tool.name).toEqual(readOnly);
+    }
+    // Open world: the Node assembly fetches agent-supplied images to inline them.
+    expect(RENDER_WIDGET_TOOL.annotations).toEqual({ ...readOnly, openWorldHint: true });
+    expect(EXECUTE_ACTION_TOOL.annotations).toEqual({
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: true
+    });
   });
 
   it("theme input steers agents to names for saved themes", () => {
