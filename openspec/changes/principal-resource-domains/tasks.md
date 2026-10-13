@@ -113,8 +113,8 @@
 
 ## 11. Staging and the host probe
 
-- [ ] 11.1 Build and deploy the branch image to staging (demo.widgentic.dev). Verify the served bundle and the keyed `resources/read` from the downloaded bytes: the principal's origin is declared when keyed, and absent on an anonymous read.
-- [ ] 11.2 Re-check, through the per-principal path, the hosts already covered by D9's smoke test (claude.ai web, ChatGPT, VS Code Copilot):
+- [x] 11.1 Build and deploy the branch image to staging (demo.widgentic.dev). Verify the served bundle and the keyed `resources/read` from the downloaded bytes: the principal's origin is declared when keyed, and absent on an anonymous read.
+- [x] 11.2 Re-check, through the per-principal path, the hosts already covered by D9's smoke test (claude.ai web, ChatGPT, VS Code Copilot):
   - a domain saved in Settings loads directly in a new conversation after the client reloads;
   - removing it falls back to inlining, rows 25–30 of a 30-source render go blank again, and small renders still show every image.
-- [ ] 11.3 Record the per-host results in `docs/how-it-works/host-matrix.mdx` and `TESTING.md`, covering the smoke test and 9.2: honored hosts, enforced `img-src`, claude.ai's effective header and its caching for the page session. RND-5 stays P3 (D7).
+- [x] 11.3 Record the per-host results in `docs/how-it-works/host-matrix.mdx` and `TESTING.md`, covering the smoke test and 9.2: honored hosts, enforced `img-src`, claude.ai's effective header and its caching for the page session. RND-5 stays P3 (D7).

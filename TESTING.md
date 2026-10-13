@@ -403,7 +403,16 @@ workspace and the sample first, then point at the built DLL):
     - **The sample.** Over HTTP, keyless callers declare the seed's `https://api.dicebear.com` and `https://*.pravatar.cc`, `merge-demo` adds `https://ui-avatars.com` (its section lists all three, since a caller's section replaces the startup one), and `replace-demo` declares nothing.
   - **The designer and the example.** The settings designer records canonical entries, keeps invalid ones as typed with the rule's reason, clears an emptied list, stops adding at the limit, refuses a malformed list on load, and goes inert in read-only mode, in 35 tests. The self-host endpoint's composition, now in `principal-server.ts`, declares each principal's own domains and none for anonymous callers. It reads settings once per request, applies a saved change on the next request, and logs an unreadable record without failing.
   - **Gates.** Typecheck, `npm test` (1735 passed, 1 skipped), build, `pack:check`, `openspec validate --strict` and `--specs` (19), and `dotnet test` (189).
-  - **Not yet done.** The staging deploy and the per-principal host check (tasks 11.1–11.3).
+  - **Staging (`principal-resource-domains-41aabd3`, revision `widgentic-selfhost--0000021`).**
+    - **The seed.** It wrote 8 entries, settings sections included.
+    - **The declaration.** Keyed, the listing and the read both declare `https://api.dicebear.com` and `https://*.pravatar.cc`; keyless, neither declares any domain.
+    - **Inline-last, from the served bytes.** A 3-source render inlined all 3. 30 declared faces gave 24 `data:` sources and 6 URLs, and so did 30 undeclared photos.
+    - **claude.ai web.** In a new conversation, row 24 of the 30 faces was a `data:` URI and row 25 kept its pravatar URL, and all 30 faces showed. Of the 30 undeclared photos, rows 25–30 were blank.
+    - **The Settings round trip on claude.ai web.** The owner removed both domains in the demo's Settings and saved, then reloaded the client and opened a new conversation. Rows 1–24 of the 30 faces were still inlined and rows 25–30 were blank, so the saved change reached the frame and fell back to inlining. With the domains restored in Settings, after another reload, all 30 showed again, rows 25–30 loaded from the declared domain.
+    - **ChatGPT and Copilot** were not rerun on this path; the smoke test covered both on the same two domains.
+  - **The .NET sample in VS Code Copilot (owner, local HTTP).**
+    - **No key.** pravatar faces and DiceBear avatars showed, from the seed's two domains. ui-avatars initials (declared only by `merge-demo`) and picsum photos (never declared, and .NET does not inline) were blank. The 30-face table loaded straight from the declared domain.
+    - **The `merge-demo` key, in a new conversation.** The ui-avatars initials showed as well. The principal's section listed the seed's two domains plus `ui-avatars.com` and replaced the startup section. Picsum stayed blank, and the faces loaded directly.
 
 - **Default themes from settings, in the host bundle and .NET (2026-10-12, change `dotnet-principal-catalogs`, on `feature/dotnet-principal-catalogs`, `@widgentic/mcp` minor and `Widgentic.Mcp` 0.11.0 pending release)**
   - **The bundle.** `createWidgenticHost` takes a `settings` record.
