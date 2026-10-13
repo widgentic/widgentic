@@ -167,7 +167,7 @@ export function createWidgenticServer(
 
   server.registerTool(
     LIST_WIDGETS_TOOL.name,
-    { description: LIST_WIDGETS_TOOL.description, inputSchema: fromDefinition(LIST_WIDGETS_TOOL) },
+    toolConfig(LIST_WIDGETS_TOOL),
     // Handler results use widgentic's structural MCP types; they are shaped
     // as CallToolResult content, asserted at this wiring boundary.
     () => handleListWidgets(catalog) as CallToolResult
@@ -175,31 +175,31 @@ export function createWidgenticServer(
 
   server.registerTool(
     LIST_THEME_TOKENS_TOOL.name,
-    { description: LIST_THEME_TOKENS_TOOL.description, inputSchema: fromDefinition(LIST_THEME_TOKENS_TOOL) },
+    toolConfig(LIST_THEME_TOKENS_TOOL),
     () => handleListThemeTokens() as CallToolResult
   );
 
   server.registerTool(
     LIST_THEMES_TOOL.name,
-    { description: LIST_THEMES_TOOL.description, inputSchema: fromDefinition(LIST_THEMES_TOOL) },
+    toolConfig(LIST_THEMES_TOOL),
     () => handleListThemes(themes) as CallToolResult
   );
 
   server.registerTool(
     LIST_SCHEMAS_TOOL.name,
-    { description: LIST_SCHEMAS_TOOL.description, inputSchema: fromDefinition(LIST_SCHEMAS_TOOL) },
+    toolConfig(LIST_SCHEMAS_TOOL),
     async () => (await handleListSchemas(options.schemas)) as CallToolResult
   );
 
   server.registerTool(
     LIST_ACTIONS_TOOL.name,
-    { description: LIST_ACTIONS_TOOL.description, inputSchema: fromDefinition(LIST_ACTIONS_TOOL) },
+    toolConfig(LIST_ACTIONS_TOOL),
     async () => (await handleListActions(options.sharedActions)) as CallToolResult
   );
 
   server.registerTool(
     GET_AUTHORING_GUIDE_TOOL.name,
-    { description: GET_AUTHORING_GUIDE_TOOL.description, inputSchema: fromDefinition(GET_AUTHORING_GUIDE_TOOL) },
+    toolConfig(GET_AUTHORING_GUIDE_TOOL),
     () => handleGetAuthoringGuide() as CallToolResult
   );
 
@@ -211,9 +211,8 @@ export function createWidgenticServer(
     server,
     RENDER_WIDGET_TOOL.name,
     {
-      description: RENDER_WIDGET_TOOL.description,
-      _meta: { ui: { resourceUri: WIDGENTIC_APP_TEMPLATE_URI } },
-      inputSchema: fromDefinition(RENDER_WIDGET_TOOL)
+      ...toolConfig(RENDER_WIDGET_TOOL),
+      _meta: { ui: { resourceUri: WIDGENTIC_APP_TEMPLATE_URI } }
     },
     async (args, ctx) => {
       const result = handleRenderWidget(catalog, args, {
@@ -238,11 +237,10 @@ export function createWidgenticServer(
     server,
     EXECUTE_ACTION_TOOL.name,
     {
-      description: EXECUTE_ACTION_TOOL.description,
+      ...toolConfig(EXECUTE_ACTION_TOOL),
       _meta: {
         ui: { resourceUri: WIDGENTIC_APP_TEMPLATE_URI, visibility: [...APP_ONLY_VISIBILITY] }
-      },
-      inputSchema: fromDefinition(EXECUTE_ACTION_TOOL)
+      }
     },
     async (args) => {
       const result = (await handleExecuteAction(catalog, args, {
@@ -265,11 +263,10 @@ export function createWidgenticServer(
     server,
     PREVIEW_WIDGET_TOOL.name,
     {
-      description: PREVIEW_WIDGET_TOOL.description,
+      ...toolConfig(PREVIEW_WIDGET_TOOL),
       _meta: {
         ui: { resourceUri: WIDGENTIC_APP_TEMPLATE_URI, visibility: [...APP_ONLY_VISIBILITY] }
-      },
-      inputSchema: fromDefinition(PREVIEW_WIDGET_TOOL)
+      }
     },
     (args) =>
       handlePreviewWidget(catalog, args, {
@@ -362,4 +359,11 @@ const fromDefinition = (tool: McpToolDefinition): StandardSchemaWithJSON => ({
     jsonSchema: { input: () => tool.inputSchema, output: () => tool.inputSchema },
     validate: (value) => ({ value })
   }
+});
+
+/** A tool's registration config, from its exported definition: description, schema and annotations. */
+const toolConfig = (tool: McpToolDefinition) => ({
+  description: tool.description,
+  inputSchema: fromDefinition(tool),
+  ...(tool.annotations === undefined ? {} : { annotations: tool.annotations })
 });

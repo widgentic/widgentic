@@ -3,6 +3,17 @@
 Versions share their major.minor with the `@widgentic/mcp` release whose host bundle they embed:
 `Widgentic.Mcp` X.Y.* runs `@widgentic/mcp` X.Y.*. The patch moves on its own for .NET-only fixes.
 
+## Unreleased (0.11.1)
+
+Embeds the `@widgentic/mcp` 0.11.1 host bundle.
+
+- **Tool annotations.** Every widgentic tool lists `readOnlyHint`, `destructiveHint`,
+  `idempotentHint` and `openWorldHint`, copied from the bundle's definitions. The discovery tools
+  and `preview_widget` are read-only, non-destructive, idempotent and closed-world, so hosts can
+  group them as read-only and skip write prompts. `render_widget` is the same but open-world,
+  because the Node assembly inlines agent-supplied images; this package does not inline, so here
+  the hint overstates on the safe side.
+
 ## 0.11.0
 
 Embeds the `@widgentic/mcp` 0.11.0 host bundle.

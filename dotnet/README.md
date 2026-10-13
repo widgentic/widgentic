@@ -49,7 +49,9 @@ builder.Services
   come from the bundle unchanged. `RenderWidget` also brings the app-only `preview_widget`,
   which the template calls while a `render_widget` call is still streaming, so the widget
   fills in as its data arrives. If you serve over HTTP, rate-limit it at your edge (ASP.NET
-  Core rate limiting), as the Node server does.
+  Core rate limiting), as the Node server does. Every tool carries the bundle's annotations:
+  all are read-only, non-destructive and idempotent, and only `render_widget` is open-world
+  (the Node server fetches images to inline them).
 - **The MCP Apps template** (`ui://widgentic/app.html`), always, because your own tools render
   through it.
 - **The preview pages** (`ui://widgentic/page/{kind}`), unless `IncludeWidgetPages = false`.

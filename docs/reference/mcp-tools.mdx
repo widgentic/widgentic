@@ -1,6 +1,6 @@
 ---
 title: "MCP tools"
-description: "The 9 tools of a widgentic MCP server — name, description as the model sees it, and the JSON Schema of each input — derived from the tool definitions."
+description: "The 9 tools of a widgentic MCP server — name, description as the model sees it, behavior annotations, and the JSON Schema of each input — derived from the tool definitions."
 ---
 
 
@@ -9,9 +9,13 @@ description: "The 9 tools of a widgentic MCP server — name, description as the
 
 Descriptions are the exact text advertised to agents over `tools/list`; they carry the steering, so they are longer than a reference usually is.
 
+Annotations are the MCP hints listed with each tool. Hosts read them for permission prompts and read-only grouping, never as enforcement.
+
 ## list_widgets
 
 List the available widget kinds with their purpose, expected data shape, an example data value, and supported hints. Call this first to decide which widget fits your data, then call render\_widget. ALWAYS call it again when the user asks what widgets are available or says they saved/imported something in the designer — catalogs are served per API key and change between calls; never answer from an earlier listing.
+
+Annotations: `readOnlyHint: true`, `destructiveHint: false`, `idempotentHint: true`, `openWorldHint: false`
 
 ```json
 {
@@ -25,6 +29,8 @@ List the available widget kinds with their purpose, expected data shape, an exam
 
 List the user's saved shared data schemas — name, label, description, and the schema object itself. Call this when the user asks for a widget built on one of their schemas ('use my person schema'): bind the schema's actual properties and set the widget's descriptor.dataSchemaRef to the schema's NAME instead of copying the schema inline — an inline copy forks the moment the user edits the shared one. Served per API key, like list\_widgets; anonymous keys see an empty list.
 
+Annotations: `readOnlyHint: true`, `destructiveHint: false`, `idempotentHint: true`, `openWorldHint: false`
+
 ```json
 {
   "type": "object",
@@ -36,6 +42,8 @@ List the user's saved shared data schemas — name, label, description, and the 
 ## list_actions
 
 List the user's saved shared actions — name, label, description, kind, and for http actions the method and the input/output schemas. Call this when the user wants a widget to DO something ('add a refresh button using my weather action'): bind a listed action by name with "action": \{ "ref": "\<name\>" \}, mapping an http action's input from the widget's data (a prompt action takes no input mapping — its binds list the data paths its text needs). The listing is the action's contract, not its transport — the URL, headers and query stay on the server. If nothing listed fits, DESCRIBE the action the user should create in the designer; never draft an inline definition with a URL or credentials you cannot know. Served per API key, like list\_widgets; anonymous keys see an empty list.
+
+Annotations: `readOnlyHint: true`, `destructiveHint: false`, `idempotentHint: true`, `openWorldHint: false`
 
 ```json
 {
@@ -49,6 +57,8 @@ List the user's saved shared actions — name, label, description, kind, and for
 
 List the themes registered on this server — name, label, description, token map and shared styles for each — and 'defaults', the theme the user chose for light and for dark hosts. Leave render\_widget's 'theme' out to use those defaults; pass a listed name only when the user asks for a different theme. A theme's 'styles' define .wg- classes (a .wg-btn, say) that widgets rendered under it can use in their templates.
 
+Annotations: `readOnlyHint: true`, `destructiveHint: false`, `idempotentHint: true`, `openWorldHint: false`
+
 ```json
 {
   "type": "object",
@@ -60,6 +70,8 @@ List the themes registered on this server — name, label, description, token ma
 ## list_theme_tokens
 
 List the theming vocabulary for render\_widget's 'theme' input: every token name with its light-mode default, ready-made presets (e.g. dark), and the value rules. Call this before building a theme.
+
+Annotations: `readOnlyHint: true`, `destructiveHint: false`, `idempotentHint: true`, `openWorldHint: false`
 
 ```json
 {
@@ -73,6 +85,8 @@ List the theming vocabulary for render\_widget's 'theme' input: every token name
 
 Get the complete guide for AUTHORING widget and theme JSON: entry shapes, the template DSL's node forms and safety rules, identifier rules and reserved kinds, style and schema constraints, theme tokens, and per-user limits. Call this before drafting a custom widget or theme for your user — you draft the JSON, your user imports and saves it in the designer at widgentic.dev (there is no registration tool).
 
+Annotations: `readOnlyHint: true`, `destructiveHint: false`, `idempotentHint: true`, `openWorldHint: false`
+
 ```json
 {
   "type": "object",
@@ -84,6 +98,8 @@ Get the complete guide for AUTHORING widget and theme JSON: entry shapes, the te
 ## render_widget
 
 Validate and render a widget. Returns the rendered HTML plus an embedded widgentic payload block that widgentic-aware hosts can mount natively. On invalid input, returns a structured error describing what to correct. To show several widgets at once, render ONE 'group' (items of mixed kinds, layout hints) instead of calling repeatedly. Write 'widget' first and any 'hints' before 'data' in the arguments: hosts that stream the call can then show the widget, with its labels, columns and image places, while its data arrives.
+
+Annotations: `readOnlyHint: true`, `destructiveHint: false`, `idempotentHint: true`, `openWorldHint: true`
 
 ```json
 {
@@ -143,6 +159,8 @@ Validate and render a widget. Returns the rendered HTML plus an embedded widgent
 
 Called by widgentic widgets, not by agents: runs a widget's bound http action (a stored, author-declared request) server-side and returns the re-rendered widget. Requires a key with the 'execute' scope. Agents should call render\_widget instead.
 
+Annotations: `readOnlyHint: false`, `destructiveHint: true`, `idempotentHint: false`, `openWorldHint: true`
+
 ```json
 {
   "type": "object",
@@ -186,6 +204,8 @@ Called by widgentic widgets, not by agents: runs a widget's bound http action (a
 ## preview_widget
 
 Called by the widgentic app template while a render's input is still streaming, not by agents: renders the partial payload of a stored widget so the frame can show it as it arrives. Agents should call render\_widget instead.
+
+Annotations: `readOnlyHint: true`, `destructiveHint: false`, `idempotentHint: true`, `openWorldHint: false`
 
 ```json
 {

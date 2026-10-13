@@ -330,12 +330,16 @@ function mcpToolsPage(): string {
   const sections = TOOLS.flatMap((tool) => [
     `## ${tool.name}`,
     md(tool.description),
+    ...(tool.annotations === undefined
+      ? []
+      : [`Annotations: ${Object.entries(tool.annotations).map(([hint, value]) => code(`${hint}: ${String(value)}`)).join(", ")}`]),
     "```json\n" + JSON.stringify(tool.inputSchema, null, 2) + "\n```"
   ]);
   return [
-    frontmatter("MCP tools", `The ${TOOLS.length} tools of a widgentic MCP server — name, description as the model sees it, and the JSON Schema of each input — derived from the tool definitions.`),
+    frontmatter("MCP tools", `The ${TOOLS.length} tools of a widgentic MCP server — name, description as the model sees it, behavior annotations, and the JSON Schema of each input — derived from the tool definitions.`),
     generatedNote("the `*_TOOL` definitions in `packages/mcp/src/server/definitions.ts` (`@widgentic/mcp`)"),
     "Descriptions are the exact text advertised to agents over `tools/list`; they carry the steering, so they are longer than a reference usually is.",
+    "Annotations are the MCP hints listed with each tool. Hosts read them for permission prompts and read-only grouping, never as enforcement.",
     ...sections
   ].join("\n\n") + "\n";
 }

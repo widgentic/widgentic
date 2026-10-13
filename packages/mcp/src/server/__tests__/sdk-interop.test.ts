@@ -9,6 +9,17 @@ import { describe, it, expect } from "vitest";
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { extractWidgetPayload } from "../../output/index.js";
 import { createWidgenticServer } from "../server.js";
+import {
+  EXECUTE_ACTION_TOOL,
+  GET_AUTHORING_GUIDE_TOOL,
+  LIST_ACTIONS_TOOL,
+  LIST_SCHEMAS_TOOL,
+  LIST_THEMES_TOOL,
+  LIST_THEME_TOKENS_TOOL,
+  LIST_WIDGETS_TOOL,
+  PREVIEW_WIDGET_TOOL,
+  RENDER_WIDGET_TOOL
+} from "../definitions.js";
 import type { StoredAction } from "@widgentic/core";
 
 interface DeliveredResult {
@@ -203,6 +214,25 @@ describe("SDK interoperability (in-memory transport, library assembly)", () => {
     expect(preview?._meta).toMatchObject({
       ui: { resourceUri: "ui://widgentic/app.html", visibility: ["app"] }
     });
+  });
+
+  it("tools/list carries each definition's annotations", async () => {
+    const { client } = await connect();
+    const tools = await client.listTools();
+    for (const definition of [
+      LIST_WIDGETS_TOOL,
+      LIST_THEME_TOKENS_TOOL,
+      LIST_THEMES_TOOL,
+      LIST_SCHEMAS_TOOL,
+      LIST_ACTIONS_TOOL,
+      GET_AUTHORING_GUIDE_TOOL,
+      RENDER_WIDGET_TOOL,
+      EXECUTE_ACTION_TOOL,
+      PREVIEW_WIDGET_TOOL
+    ]) {
+      const listed = tools.tools.find((tool) => tool.name === definition.name);
+      expect(listed?.annotations, definition.name).toEqual(definition.annotations);
+    }
   });
 
   it("preview_widget round-trips a partial render's tree through the protocol", async () => {
