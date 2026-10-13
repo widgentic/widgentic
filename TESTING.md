@@ -401,6 +401,12 @@ workspace and the sample first, then point at the built DLL):
   - **The corpus.** A `corpus-text` widget with 6 data sets (example, zero, one, many, Polish five, hostile Markdown) gives 10 cases; the example and the hostile value also run as a page and a preview. The bare realm and V8 in .NET reproduce them. Existing cases changed only for `list_widgets`, `get_authoring_guide` and the page stylesheet (the `.wg-md` block).
   - **The seed** gains `project-status-widget` (design D9), and the seed tests count 9 entries.
   - **Gates.** Typecheck, `npm test` (1817 passed, 1 skipped), build, `pack:check`, docs check, `openspec validate --strict` and `--specs` (19), and `dotnet test` (206).
+  - **Staging (`template-text-formats-1c4899d`, revision `widgentic-selfhost--0000024`).** Each response was saved to a file and then read.
+    - **The guide.** A keyless 2026-07-28 `get_authoring_guide` carries the TEXT FORMATS and MARKDOWN forms, the rendered examples (`red, green and blue`; `No items, 1 item, 1,200 items`), `MARKDOWN_TAGS` and the 20000 bound.
+    - **A keyed render.** Through the deployment key, `render_widget` of the seeded `project-status-widget` (`format: "html"`) renders:
+      - `3 open tasks` and `Owners: Ada, Lin and Grace`;
+      - the summary cut with `…`;
+      - the notes as `div.wg-md` with `strong`, `em`, a `ul` holding `<code>ttl=300</code>`, and a guarded runbook `a` with `rel="noopener noreferrer"`.
 
 - **Tool annotations (2026-10-13, change `tool-annotations`, on `feature/tool-annotations`, `@widgentic/mcp` patch and `Widgentic.Mcp` 0.11.1 pending release)** — raised while integrating `Widgentic.Mcp` 0.11.0 into a .NET MCP server: no tool carried annotations, so hosts assumed the riskiest hints.
   - **The values.** Each definition carries all four hints. The discovery tools and `preview_widget` are read-only, non-destructive, idempotent and closed-world, and `render_widget` is the same but open-world (image inlining). `execute_action` alone declares a write. A `handlers.test.ts` case pins all nine.

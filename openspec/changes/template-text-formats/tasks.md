@@ -36,4 +36,4 @@
 ## 5. Gates and staging
 
 - [x] 5.1 Run the gates: typecheck, `npm test`, build, `pack:check`, docs check, `openspec validate --strict template-text-formats` and `--specs`, and `dotnet test`.
-- [ ] 5.2 Deploy the branch to staging. Check from the served bytes that `get_authoring_guide` teaches the new forms and that a stored widget with a pluralized count, a joined list and a Markdown notes field renders them. Hand the owner a host probe prompt.
+- [x] 5.2 Deploy the branch to staging. Check from the served bytes that `get_authoring_guide` teaches the new forms and that a stored widget with a pluralized count, a joined list and a Markdown notes field renders them. Hand the owner a host probe prompt.
