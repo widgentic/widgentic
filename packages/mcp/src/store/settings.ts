@@ -13,7 +13,7 @@
 import { isPlainObject } from "@widgentic/core";
 import type { ThemeMode } from "@widgentic/core";
 import { StoreRejectionError } from "./types.js";
-import { THEME_MODES, checkDefaultThemes, isSettingsSection, readSettings } from "./settings-rules.js";
+import { THEME_MODES, checkDefaultThemes, checkResourceDomains, isSettingsSection, readSettings } from "./settings-rules.js";
 
 export type { PrincipalSettings, PrincipalSettingsUpdate } from "./settings-rules.js";
 export { readSettings } from "./settings-rules.js";
@@ -43,6 +43,15 @@ export function applySettingsUpdate(
     }
     if (value === null) {
       delete next[section];
+      continue;
+    }
+    if (section === "resourceDomains") {
+      const checked = checkResourceDomains(value);
+      const [problem] = checked.problems;
+      if (problem !== undefined) throw new StoreRejectionError(problem.code, problem.message);
+      // An empty list is no section: "no domains declared".
+      if (checked.resourceDomains.length > 0) next.resourceDomains = checked.resourceDomains;
+      else delete next.resourceDomains;
       continue;
     }
     const checked = checkDefaultThemes(value, storedThemes);

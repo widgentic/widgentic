@@ -259,6 +259,25 @@ describe("theme styles and settings", () => {
     expect(await store.settings(dave.id)).toEqual({});
   });
 
+  it("a refused domain names the entry; an accepted one is stored canonical beside the other sections", async () => {
+    const before = await settings();
+    const refused = await put("/settings", { resourceDomains: ["cdn.example.com", "http://old.example.com"] });
+    expect(refused.status).toBe(422);
+    const body = (await refused.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe("INVALID_DOMAIN");
+    expect(body.error.message).toContain("http://old.example.com");
+    expect(await settings()).toEqual(before);
+    expect((await put("/settings", { resourceDomains: ["CDN.example.com"] })).status).toBe(200);
+    expect(await settings()).toEqual({ ...(before as object), resourceDomains: ["https://cdn.example.com"] });
+    const handled = await handleAuthoringRequest(
+      { method: "PUT", path: "settings", body: { resourceDomains: ["localhost"] }, context: { principalId: (await store.ensurePrincipal("carol")).id } },
+      { store }
+    );
+    expect(handled.status).toBe(422);
+    expect((handled.body as { error: { code: string } }).error.code).toBe("INVALID_DOMAIN");
+    await put("/settings", { resourceDomains: null });
+  });
+
   it("the core handler answers exactly as the Node adapter does", async () => {
     const erin = await store.ensurePrincipal("erin");
     await store.putTheme(erin.id, { name: "a", tokens: {} });

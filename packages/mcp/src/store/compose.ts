@@ -334,22 +334,46 @@ export function composeThemeEntries(
   return { registry, problems };
 }
 
+/** A principal's settings, read once for a request, or why they could not be read. */
+export type SettingsRead = { settings: PrincipalSettings } | { failure: string };
+
 /**
- * The principal's default themes, or why there are none. Defaults are
- * cosmetic: an adapter written before settings existed (no `settings`
- * method) or a failing read leaves the built-ins, never a failed render.
+ * Read the principal's settings once, for every composition of a request
+ * to share. Never throws: an adapter written before settings existed (no
+ * `settings` method) reads as no settings, and a failing read is returned
+ * as its failure, which each consumer reports in its own words.
  */
-async function readDefaults(
-  store: WidgetStore,
-  principalId: string
-): Promise<{ defaultThemes?: PrincipalSettings["defaultThemes"] } | { failure: string }> {
-  if (typeof store.settings !== "function") return {};
+export async function readPrincipalSettings(store: WidgetStore | undefined, principalId: string): Promise<SettingsRead> {
+  if (store === undefined || typeof store.settings !== "function") return { settings: {} };
   try {
-    const settings = await store.settings(principalId);
-    return settings.defaultThemes === undefined ? {} : { defaultThemes: settings.defaultThemes };
+    return { settings: await store.settings(principalId) };
   } catch (error) {
-    return { failure: `default themes not read (${errorMessage(error)}); the built-in themes stay the defaults.` };
+    return { failure: errorMessage(error) };
   }
+}
+
+/** Options for the compositions that read the principal's settings. */
+export interface SettingsComposeOptions {
+  /** A read already started for this request, so the settings are read once. */
+  settings?: Promise<SettingsRead>;
+}
+
+/**
+ * The principal's resource domains: the canonical origins their settings
+ * declare, for the app resource's CSP. Cosmetic like default themes: an
+ * unreadable record declares none, with a diagnostic, and never fails the
+ * request.
+ */
+export async function composeResourceDomains(
+  store: WidgetStore | undefined,
+  principalId: string,
+  options: SettingsComposeOptions = {}
+): Promise<ComposeResult<string[]>> {
+  const read = await (options.settings ?? readPrincipalSettings(store, principalId));
+  if ("failure" in read) {
+    return { value: [], diagnostics: [`resource domains not read (${read.failure}); none are declared.`] };
+  }
+  return { value: [...(read.settings.resourceDomains ?? [])], diagnostics: [] };
 }
 
 /**
@@ -361,18 +385,22 @@ async function readDefaults(
 export async function composeThemes(
   store: WidgetStore | undefined,
   principalId: string,
-  options: ComposeOptions = {}
+  options: ComposeOptions & SettingsComposeOptions = {}
 ): Promise<ComposeResult<ThemeRegistry>> {
   // Both reads at once: every request composes, so latency adds up.
   const [stored, settings] =
-    store === undefined ? [[], undefined] : await Promise.all([store.themes(principalId), readDefaults(store, principalId)]);
+    store === undefined
+      ? [[], undefined]
+      : await Promise.all([store.themes(principalId), options.settings ?? readPrincipalSettings(store, principalId)]);
   const composed = composeThemeEntries(
     stored,
     options.limits === undefined ? {} : { limits: options.limits }
   );
   const diagnostics = composed.problems.map(diagnosticLine);
-  if (settings !== undefined && "failure" in settings) diagnostics.push(settings.failure);
-  const defaults = settings !== undefined && "defaultThemes" in settings ? settings.defaultThemes : undefined;
+  if (settings !== undefined && "failure" in settings) {
+    diagnostics.push(`default themes not read (${settings.failure}); the built-in themes stay the defaults.`);
+  }
+  const defaults = settings !== undefined && "settings" in settings ? settings.settings.defaultThemes : undefined;
   for (const mode of THEME_MODES) {
     const name = defaults?.[mode];
     if (name === undefined) continue;

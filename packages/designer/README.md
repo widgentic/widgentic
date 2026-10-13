@@ -3,7 +3,7 @@
 Hostable designers for widgentic: the widget designer (template tree, data
 schema, sample data, styles, action bindings, live preview), plus standalone
 theme (tokens and shared styles), schema, action and settings (default themes
-per host mode) designers. Each is a function taking a container, and
+per host mode, resource domains) designers. Each is a function taking a container, and
 each is also a custom element. Runs in the browser; depends only on
 `@widgentic/core`.
 

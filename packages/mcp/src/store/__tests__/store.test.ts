@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   ANONYMOUS_PRINCIPAL,
   composeCatalog,
+  composeResourceDomains,
   composeThemes,
   createFileStore,
   createMemoryStore,
@@ -230,11 +231,25 @@ describe("file store", () => {
     expect((await composeThemes(store, "alice")).value.defaults().light).toBe("legacy");
   });
 
+  it("reads stored resource domains, dropping a refused entry with a diagnostic naming it", async () => {
+    const dir = await seeded();
+    await writeFile(
+      join(dir, "alice", "settings.json"),
+      JSON.stringify({ resourceDomains: ["https://cdn.example.com", "http://old.example.com"] })
+    );
+    const lines: string[] = [];
+    const store = createFileStore(dir, { onDiagnostic: (line) => lines.push(line) });
+    expect(await store.settings("alice")).toEqual({ resourceDomains: ["https://cdn.example.com"] });
+    expect((await composeResourceDomains(store, "alice")).value).toEqual(["https://cdn.example.com"]);
+    expect(lines.join("\n")).toContain("http://old.example.com");
+  });
+
   it("reads no settings for a principal with entries but no settings.json", async () => {
     const dir = await seeded();
     const store = createFileStore(dir);
     expect(await store.settings("alice")).toEqual({});
     expect((await composeThemes(store, "alice")).value.defaults()).toEqual({ light: "light", dark: "dark" });
+    expect((await composeResourceDomains(store, "alice")).value).toEqual([]);
   });
 
   it("treats missing paths as empty, not as errors", async () => {
@@ -834,6 +849,14 @@ describe("composition without readable settings", () => {
     const composed = await composeThemes(themesOnly(async () => { throw new Error("unreachable"); }), "p");
     expect(composed.value.defaults()).toEqual({ light: "light", dark: "dark" });
     expect(composed.diagnostics.join("\n")).toContain("default themes not read");
+  });
+
+  it("unreadable settings declare no resource domains, reporting only a throwing read", async () => {
+    expect(await composeResourceDomains(themesOnly(), "p")).toEqual({ value: [], diagnostics: [] });
+    const failing = await composeResourceDomains(themesOnly(async () => { throw new Error("unreachable"); }), "p");
+    expect(failing.value).toEqual([]);
+    expect(failing.diagnostics.join("\n")).toContain("resource domains not read (unreachable)");
+    expect(await composeResourceDomains(undefined, "p")).toEqual({ value: [], diagnostics: [] });
   });
 
   it("a default naming a stored theme that fails validation is dropped with a diagnostic", async () => {

@@ -10,12 +10,15 @@ namespace Widgentic.Mcp.Engine;
 /// startup record's. Only identifiers and section names are read here (a widget's <c>kind</c>, a
 /// theme's or schema's <c>name</c>); every check runs in the bundle. Each composed entry and
 /// section remembers where it came from, so the bundle's problems are reported against the
-/// caller's own catalog or the startup configuration.
+/// caller's own catalog or the startup configuration. The app resource's resource domains compose
+/// apart (<see cref="ComposeDomains"/>): the operator's list and the effective settings section
+/// alone, so declaring them composes no widget or theme.
 /// </summary>
 internal sealed class CatalogComposer
 {
     private readonly Section[] _sections;
     private readonly JsonNode? _startupSettings;
+    private readonly string[] _operatorDomains;
 
     public CatalogComposer(WidgenticOptions options)
     {
@@ -26,6 +29,28 @@ internal sealed class CatalogComposer
             new Section("schemas", "name", options.Schemas),
         ];
         _startupSettings = options.SettingsEntry?.Value?.DeepClone();
+        _operatorDomains = [.. options.ResourceDomains];
+    }
+
+    /// <summary>
+    /// The configuration declaring a caller's resource domains: the operator's list, then the
+    /// <c>resourceDomains</c> section of the settings record the caller composes with (Merge or
+    /// Replace, as for every other call).
+    /// </summary>
+    public ComposedConfig ComposeDomains(WidgenticCatalog catalog, WidgenticComposition mode)
+    {
+        var unreadable = new List<CallerProblem>();
+        var (settings, settingsOrigin) = ComposeSettings(catalog.Settings, mode, unreadable);
+        var config = new JsonObject();
+        if (_operatorDomains.Length > 0)
+        {
+            config["resourceDomains"] = new JsonArray([.. _operatorDomains.Select(domain => (JsonNode?)JsonValue.Create(domain))]);
+        }
+        if (settings is JsonObject record && record["resourceDomains"] is { } section)
+        {
+            config["settings"] = new JsonObject { ["resourceDomains"] = section.DeepClone() };
+        }
+        return new ComposedConfig(config.ToJsonString(), new Dictionary<string, IReadOnlyList<EntryOrigin>>(StringComparer.Ordinal), unreadable, settingsOrigin);
     }
 
     public ComposedConfig Compose(WidgenticCatalog catalog, WidgenticComposition mode)

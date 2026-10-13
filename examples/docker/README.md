@@ -162,8 +162,9 @@ file is logged too; the service starts either way. Keys and secrets are never
 seeded, and multi-user mode ignores the seed.
 
 `seed/demo.json` ships in the image as a starting point: two shared schemas,
-two themes (set as the default light and dark themes) and an agenda and an
-inbox widget built on them.
+two themes (set as the default light and dark themes), an agenda and an
+inbox widget built on them, and two resource domains (`api.dicebear.com` and
+`*.pravatar.cc`, avatar services) that hosts may load images from directly.
 
 ```sh
 WIDGENTIC_SEED_FILE=/srv/docker/seed/demo.json

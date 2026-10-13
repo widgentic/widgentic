@@ -119,6 +119,28 @@ a configured theme, and a refused setting stops startup like a refused entry.
 - **An explicit `theme` input** replaces both defaults.
 - **`list_themes`** reports the effective `defaults`.
 
+## Resource domains
+
+The app resource declares the domains its frame may load assets from directly, as the MCP
+Apps CSP block `_meta.ui.csp.resourceDomains`. Since this package does not inline images, a
+declared domain is how an external image displays in hosts that enforce `img-src` (claude.ai,
+ChatGPT and VS Code all do). The declaration lists `ResourceDomains`, then the settings record's
+`resourceDomains` section:
+
+```csharp
+options.ResourceDomains.Add("assets.example.org");
+options.UseSettings(""" { "resourceDomains": ["cdn.example.com", "*.example.net"] } """);
+```
+
+- **Forms.** `cdn.example.com`, `*.example.com`, or either behind `https://`, at most 20 in the
+  settings section. They are declared as canonical origins (`https://cdn.example.com`).
+  Ports, paths, IP addresses, single-label hosts and other schemes are refused, and a refused
+  entry stops startup.
+- **Trust.** Any render, including image addresses an agent supplies, may load from a declared
+  domain in the viewer's browser. Hosts put the domains into their script, style and font
+  sources too. List only domains you control.
+- **Caching.** Hosts keep the declaration they read: claude.ai keeps it until the page reloads.
+
 ## A catalog per caller
 
 One server can serve each caller (a tenant, a user) its own widgets, themes and schemas.
@@ -158,6 +180,10 @@ A catalog may also carry the caller's settings record (`Settings`, or `UseSettin
 - **In `Replace`,** only the caller's record applies.
 - **Resolution.** Defaults name themes of the caller's composed catalog. A default that names
   none is skipped and logged, and that mode keeps its built-in.
+- **Resource domains** combine the same way. The app resource then declares `ResourceDomains`
+  followed by the caller's effective section, on `resources/list` and `resources/read` alike.
+  The template's content stays global. A caller's refused domain is skipped and logged, and a
+  source that throws leaves the startup declaration.
 
 `list_widgets`, `render_widget`, `preview_widget`, `list_themes`, `list_schemas`, the preview
 pages and the renderer's `RequestContext` overload answer from the caller's catalog. `tools/list`,
@@ -190,8 +216,8 @@ and never call the source.
 - `execute_action`, `list_actions` and widget `load` bindings are not available. A `load` is
   accepted and logged once as inactive.
 - The package makes **no outbound requests**. Images are therefore not inlined: in MCP Apps
-  hosts whose sandbox blocks external images, serve them from a host listed in
-  `ResourceDomains` (declared to the host as CSP) or pass `data:` URIs.
+  hosts whose sandbox blocks external images, serve them from a declared resource domain
+  (`ResourceDomains` or a settings record's `resourceDomains`) or pass `data:` URIs.
 
 ## Engine and deployment
 
@@ -213,7 +239,7 @@ and never call the source.
 
 [`samples/Widgentic.Sample.Stdio`](samples/Widgentic.Sample.Stdio) serves the docker example's demo
 seed (an appointment agenda and an email inbox, two Google-style themes as the light and dark
-defaults, and the shared schemas the widgets reference) plus one host tool, over stdio by default or over Streamable HTTP with
+defaults, two resource domains, and the shared schemas the widgets reference) plus one host tool, over stdio by default or over Streamable HTTP with
 `--http`. The seed files under `seed/` are generated from `examples/docker/seed/demo.json` by
 `npm run conformance:generate`:
 
@@ -241,7 +267,8 @@ dotnet run --project dotnet/samples/Widgentic.Sample.Stdio -- --http \
 
 - **`merge-demo`** gets the seed, with its own `email-inbox-widget` in place of the seed's and a
   `merge-demo-dark` theme, a copy of `google-dark` with a green accent. Its settings make
-  `merge-demo-dark` its dark default.
+  `merge-demo-dark` its dark default, and its `resourceDomains` section lists the seed's two
+  domains plus `ui-avatars.com` (a caller's section replaces the startup one whole).
 - **`replace-demo`** gets the built-ins and its own `release-notes-widget` only, with the
   built-in defaults.
 - **Callers without a known key** get the seed.

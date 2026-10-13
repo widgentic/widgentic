@@ -42,7 +42,7 @@ export type ConformanceCase = { config?: string } & (
 export interface Corpus {
   generatedBy: string;
   config: string;
-  /** Further configurations by name: default themes from settings, one record each. */
+  /** Further configurations by name: default themes from settings, and resource domains, one each. */
   configs: Record<string, string>;
   cases: ConformanceCase[];
 }
@@ -142,6 +142,16 @@ const SETTINGS_THEMES = [
     styles: { ".wg-card": { "border-style": "dashed" } }
   }
 ];
+
+/** One configuration per source of declared resource domains, in the forms a person may type them. */
+const DOMAIN_CONFIGS: Record<string, { resourceDomains?: string[]; settings?: { resourceDomains: string[] } }> = {
+  "domains from the operator": { resourceDomains: ["assets.example.org", "https://*.cdn.example.net/"] },
+  "domains from settings": { settings: { resourceDomains: ["CDN.example.com", "https://*.example.net/", "cdn.example.com"] } },
+  "domains from both": {
+    resourceDomains: ["assets.example.org"],
+    settings: { resourceDomains: ["cdn.example.com", "https://assets.example.org"] }
+  }
+};
 
 /** One configuration per way a settings record chooses default themes. */
 const SETTINGS_CONFIGS: Record<string, Record<string, string>> = {
@@ -297,6 +307,17 @@ export function buildCorpus(): Corpus {
     run("explicit theme wins", "render_widget", { widget: "card", data: card, theme: "corpus-brand" });
     run("listing", "list_themes", {});
     cases.push({ config: label, name: `${label}: widget page`, op: "widgetPage", kind: "card", output: settingsHost.widgetPage("card") });
+  }
+
+  // Resource domains: the embedding server's own, a settings section, and both, as `resources()` declares them.
+  for (const [label, domains] of Object.entries(DOMAIN_CONFIGS)) {
+    const json = JSON.stringify(domains);
+    const domainHost = createWidgenticHost(json);
+    if (domainHost.problems() !== "[]") {
+      throw new Error(`the '${label}' configuration must compose cleanly: ${domainHost.problems()}`);
+    }
+    configs[label] = json;
+    cases.push({ config: label, name: `${label}: resources`, op: "resources", output: domainHost.resources() });
   }
 
   cases.push({ name: "app template", op: "appTemplate", output: host.appTemplate() });

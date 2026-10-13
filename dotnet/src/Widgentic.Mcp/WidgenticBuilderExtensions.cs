@@ -36,10 +36,6 @@ public static class WidgenticBuilderExtensions
 
         var engine = WidgenticEngine.Create(options);
         var catalogs = new CallerCatalogs(engine, options.PrincipalComposition);
-        var domains = options.ResourceDomains
-            .Select(domain => domain.Trim().ToLowerInvariant())
-            .Where(domain => domain.Length > 0)
-            .ToArray();
 
         var tools = new List<McpServerTool>();
         foreach (var definition in SelectDefinitions(engine.Definitions, options.Tools))
@@ -59,14 +55,18 @@ public static class WidgenticBuilderExtensions
             tools.Add(tool);
         }
 
-        var resources = new List<McpServerResource> { WidgenticResourceFactory.AppTemplate(engine, domains) };
+        var resources = new List<McpServerResource> { WidgenticResourceFactory.AppTemplate(engine, catalogs) };
         if (options.IncludeWidgetPages) resources.Add(WidgenticResourceFactory.WidgetPage(engine, catalogs));
 
         builder.Services.AddSingleton(engine);
         builder.Services.AddSingleton(engine.Info);
         builder.Services.AddSingleton<IWidgenticRenderer>(new WidgenticRenderer(catalogs, options.AssumeUi));
         builder.Services.AddHostedService<WidgenticStartupLog>();
-        return builder.WithMcpApps().WithTools(tools).WithResources(resources);
+        return builder
+            .WithMcpApps()
+            .WithTools(tools)
+            .WithResources(resources)
+            .WithRequestFilters(filters => filters.AddListResourcesFilter(next => WidgenticResourceFactory.DeclareForCaller(next, engine, catalogs)));
     }
 
     /// <summary>The bundle's definitions the selection keeps, in the bundle's order.</summary>

@@ -18,9 +18,13 @@ public sealed class WidgenticOptions
     public WidgenticTools Tools { get; set; } = WidgenticTools.Default;
 
     /// <summary>
-    /// Hosts the MCP Apps frame may load assets from directly, declared as the app resource's
-    /// <c>_meta.ui.csp.resourceDomains</c>. Deployment configuration only: no widget, theme or
-    /// render input can extend it. Empty by default.
+    /// Domains the MCP Apps frame may load assets from directly (<c>cdn.example.com</c>,
+    /// <c>*.example.com</c>, either with <c>https://</c>), declared on the app resource's
+    /// <c>_meta.ui.csp.resourceDomains</c> as canonical origins, followed by the settings record's
+    /// <c>resourceDomains</c> section (the caller's, with a catalog source). Read by the bundle's
+    /// resource-domain rule: a refused entry stops startup. No widget, theme or render input can
+    /// extend the list. Empty by default. This package does not inline images, so in hosts that
+    /// enforce <c>img-src</c> a declared domain is the only way an external image displays.
     /// </summary>
     public IList<string> ResourceDomains { get; } = new List<string>();
 

@@ -26,7 +26,7 @@ All capabilities are specified under `openspec/specs/` and implemented with zero
 | `widget-theming` | `@widgentic/core/theming` | `--wg-*` token registry (colors, status, scale steps), author-defined `x-*` custom variables, named-theme registry, shared theme `styles` (`.wg-` classes every widget under the theme can use), a default theme per host mode (light/dark), a generated base stylesheet that **defines every registry token at `:root`** so custom widget styles can use bare `var(--wg-*)` safely, themes as validated JSON |
 | `mcp-server` | `@widgentic/mcp` | The Widgentic MCP server: nine tools — `list_widgets`, `list_schemas`, `list_actions`, `list_themes`, `list_theme_tokens` and `get_authoring_guide` (discovery) + `render_widget` (validate → render → HTML + payload), and the app-only `execute_action` and `preview_widget` — as SDK-free definitions/handlers, plus the full server assembly behind `@widgentic/mcp/sdk` (MCP SDK as optional peers) |
 | `widget-store` | `@widgentic/mcp/store` | Per-principal widgets, themes, and shared data schemas: a persistence-agnostic port (`resolvePrincipal`/`widgets`/`themes`/`schemas`), memory + file reference implementations, hashed constant-time keys, structural limits, and request-scoped `composeCatalog`/`composeThemes` — widgets may reference a shared schema by name (`dataSchemaRef`), resolved at composition so one `person` schema serves every person widget |
-| `widget-designer` | `@widgentic/designer` | Five embeddable designers (factories + opt-in custom elements, zero deps): the **widget** designer (template tree/JSON, full descriptor, styles and hints as tree-or-JSON, dataSchema, theme selection — tokens and shared styles — with a token reference), the standalone **theme** designer (tokens, custom variables, shared styles, named entries, previewing host-supplied widgets), the **schema** designer (shared data-schema entries), the **action** designer and the **settings** designer (default themes per host mode) — all with live validation and an optional read-only mode |
+| `widget-designer` | `@widgentic/designer` | Five embeddable designers (factories + opt-in custom elements, zero deps): the **widget** designer (template tree/JSON, full descriptor, styles and hints as tree-or-JSON, dataSchema, theme selection — tokens and shared styles — with a token reference), the standalone **theme** designer (tokens, custom variables, shared styles, named entries, previewing host-supplied widgets), the **schema** designer (shared data-schema entries), the **action** designer and the **settings** designer (default themes per host mode, resource domains) — all with live validation and an optional read-only mode |
 | `designer-webmcp` | `@widgentic/webmcp` (beta) | The mounted designers as **WebMCP** tools (`document.modelContext`): fourteen `widgentic_*` tools a browser-side agent (ChatGPT Desktop's browser, Chrome/Edge in the origin trial) uses to read and edit the drafts the person is looking at, plus the authoring guide and a dry-run definition check so it drafts by the designer's rules — agents edit, people save (a host agent that can operate the page may click Save; the draft is visible first); feature-detected, a reported no-op without an agent-capable browser |
 | `dotnet-host` | `Widgentic.Mcp` (NuGet, beta) | widgentic for **.NET** MCP servers: runs the `@widgentic/mcp/host` bundle (one self-contained module, ECMAScript + `Intl` only) on ClearScript V8 — output byte-identical to the Node server, checked against a shared conformance corpus — and wires it onto the C# MCP SDK with `WithWidgentic(...)`: selectable tools, the MCP Apps template, preview pages, and `IWidgenticRenderer` so a server's own tools render widgets. Render-only for now |
 
@@ -145,7 +145,7 @@ implementation:
 <dir>/<principalId>/themes/<name>.json    { name, label?, tokens, styles? }
 <dir>/<principalId>/schemas/<name>.json   { name, label?, description?, schema }
 <dir>/<principalId>/actions/<name>.json   { name, label?, description?, definition }
-<dir>/<principalId>/settings.json         { defaultThemes?: { light?, dark? } }
+<dir>/<principalId>/settings.json         { defaultThemes?: { light?, dark? }, resourceDomains?: string[] }
 ```
 
 Guarantees worth knowing: entries are validated on write **and** on read (a
@@ -250,7 +250,8 @@ actually dress (invalid definitions are skipped, never fatal).
 
 The package also ships the schema, action and settings designers (the
 settings designer's Default themes subsection picks the theme light and dark
-hosts get when a render names none); the self-hosted example
+hosts get when a render names none, and its Resource domains subsection lists
+the domains a person's frames may load images from directly); the self-hosted example
 ([examples/docker/](examples/docker/)) mounts all five.
 
 ```ts

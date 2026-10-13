@@ -440,6 +440,18 @@ describe.skipIf(!EMULATOR)("cosmos adapter against a live emulator", () => {
 });
 
 describe("cosmos settings written out of band", () => {
+  it("drops a refused resource domain with a log line naming it, and reads an old record as no domains", async () => {
+    const { client, data } = fakeCosmos();
+    const lines: string[] = [];
+    const store = createCosmosStore({ client, log: (line) => lines.push(line) });
+    const p = await store.ensurePrincipal("cosmos:settings-domains");
+    data.seed({ id: "settings", principalId: p.id, settings: { defaultThemes: {} } });
+    expect(await store.settings(p.id)).toEqual({});
+    data.seed({ id: "settings", principalId: p.id, settings: { resourceDomains: ["https://cdn.example.com", "http://old.example.com"] } });
+    expect(await store.settings(p.id)).toEqual({ resourceDomains: ["https://cdn.example.com"] });
+    expect(lines.join("\n")).toContain("http://old.example.com");
+  });
+
   it("ignores a later version's section, keeps it on write, and drops a dangling default", async () => {
     const { client, data } = fakeCosmos();
     const store = createCosmosStore({ client, log: () => {} });
