@@ -163,8 +163,9 @@ export const RENDER_WIDGET_TOOL: McpToolDefinition = {
     "natively. On invalid input, returns a structured error describing what " +
     "to correct. To show several widgets at once, render ONE 'group' " +
     "(items of mixed kinds, layout hints) instead of calling repeatedly. " +
-    "Write 'widget' before 'data' in the arguments: hosts that stream the " +
-    "call can then show the widget while its data arrives.",
+    "Write 'widget' first and any 'hints' before 'data' in the arguments: " +
+    "hosts that stream the call can then show the widget, with its labels, " +
+    "columns and image places, while its data arrives.",
   inputSchema: {
     type: "object",
     properties: {

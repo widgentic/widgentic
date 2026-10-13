@@ -545,6 +545,12 @@ function withoutGrowingUrl(value) {
   }
   return copy;
 }
+// A field's or column's label, as the core renderers choose it.
+function labelOf(key, hints) {
+  const labels = isObj(hints) && isObj(hints.labels) ? hints.labels : undefined;
+  const label = labels !== undefined ? labels[key] : undefined;
+  return typeof label === "string" && label.trim() !== "" ? label : key;
+}
 function previewCard(data, hints, meta) {
   let title, subtitle, entries = [], value;
   if (isObj(data)) {
@@ -579,7 +585,7 @@ function previewCard(data, hints, meta) {
           ? [imagePlace("wg-img wg-img-" + shape)]
           : cellNode(entry[0], entry[1], hints, "x").children;
         return { tag: "div", attrs: { class: "wg-card-field" }, children: [
-          { tag: "dt", attrs: { class: "wg-card-field-key" }, children: [entry[0]] },
+          { tag: "dt", attrs: { class: "wg-card-field-key" }, children: [labelOf(entry[0], hints)] },
           { tag: "dd", attrs: { class: "wg-card-field-value" }, children: display }
         ] };
       }) });
@@ -616,7 +622,7 @@ function previewTable(data, hints, meta) {
   }
   children.push({ tag: "thead", attrs: { class: "wg-table-head" }, children: [
     { tag: "tr", children: columns.map(function (column) {
-      return { tag: "th", attrs: { class: "wg-table-header" }, children: [column] };
+      return { tag: "th", attrs: { class: "wg-table-header" }, children: [labelOf(column, hints)] };
     }) }
   ] });
   children.push({ tag: "tbody", attrs: { class: "wg-table-body" },

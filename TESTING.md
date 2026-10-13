@@ -382,6 +382,18 @@ workspace and the sample first, then point at the built DLL):
 
 ## Verification log
 
+- **Field labels (2026-10-13, change `field-labels`, on `feature/field-labels`, core/mcp minor and webmcp patch pending release)**
+  - **Rendering.** `hints.labels` relabels card field keys and table headers, and image `alt` takes the label, in 9 core tests.
+    - **Column order.** `hints.columns` order is honoured, with the cells following.
+    - **Fallbacks.** An unlabelled or blank-labelled key shows the key. A render without `labels`, or with `{}` or a non-object, is byte-identical to one without hints, and the 521 existing core tests passed unchanged.
+    - **Escaping and other hints.** `<b>Total</b>` is escaped, and `fieldFormat` still addresses the key.
+  - **Diagnostics.** `labels.last_name` on a card without that field gave `NO_MATCH`. `""`, whitespace, `1` and `null` labels gave `INVALID_VALUE`, and so did a non-object `labels`. Table labels are checked against columns, and coherent labels are silent.
+  - **Steering.** `LABEL_STYLE_RULE` (Title Case unless the user asks otherwise, keys kept) is in the card and table descriptors' `labels` hint, the MCP authoring guide and the WebMCP guide, verbatim. `render_widget` asks for `widget` first and `hints` before `data`.
+  - **Previews.** In the `bootTemplate()` harness, a streamed table with hints before data previewed `First Name` from its first row. A card first previewed `order_total`, then `Order Total` once the hints arrived, matching the result's tree.
+  - **The corpus.** A labelled card and table, each as a render, a page and a preview: 6 new cases. Existing cases changed only for `list_widgets`, `get_authoring_guide` and the app template, from the new texts. The bare realm and V8 in .NET reproduce all of them.
+  - **Gates.** Typecheck, `npm test` (1758 passed, 1 skipped), build, `pack:check`, `openspec validate --strict` and `--specs` (19), and `dotnet test` (195).
+  - **Not yet done.** The staging deploy and the owner's host check (tasks 6.1–6.2).
+
 - **Per-principal resource domains (2026-10-13, change `principal-resource-domains`, on `feature/principal-resource-domains`, core/designer/mcp minor and `Widgentic.Mcp` 0.11.0 pending release)**
   - **Smoke test before implementation (2026-10-12).** Staging ran a local probe image (`principal-resource-domains-probe-c07d459`, revision `--0000020`). It declared `https://api.dicebear.com` and `https://*.pravatar.cc` for every caller, skipped inlining for them, and left `picsum.photos` undeclared as the inlined control.
     - **Every host honors declarations.** claude.ai web, ChatGPT desktop and VS Code Copilot loaded images from both the exact and the wildcard origin, including all 30 faces of a 30-row table, past the 24-source cap.
