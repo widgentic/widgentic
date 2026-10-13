@@ -121,6 +121,8 @@ describe("createWidgenticHost", () => {
       RENDER_WIDGET_TOOL,
       { ...PREVIEW_WIDGET_TOOL, visibility: [...APP_ONLY_VISIBILITY] }
     ]);
+    // The annotations ride along, so an embedding host restates none.
+    for (const definition of definitions) expect(definition).toHaveProperty("annotations.readOnlyHint", true);
     const names = definitions.map((definition) => (definition as { name: string }).name);
     expect(names).not.toContain(EXECUTE_ACTION_TOOL.name);
     expect(names).not.toContain(LIST_ACTIONS_TOOL.name);

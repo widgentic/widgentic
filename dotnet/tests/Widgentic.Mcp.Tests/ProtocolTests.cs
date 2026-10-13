@@ -39,6 +39,28 @@ public sealed class ProtocolTests
     }
 
     [Fact]
+    public async Task ListedToolsCarryTheBundlesAnnotations()
+    {
+        await using var server = await TestServer.StartAsync();
+        var engine = server.Services.GetRequiredService<WidgenticEngine>();
+        var tools = await server.Client.ListToolsAsync(cancellationToken: Cancel);
+        foreach (var definition in engine.Definitions)
+        {
+            var tool = Assert.Single(tools, t => t.Name == definition.GetProperty("name").GetString());
+            Assert.True(JsonNode.DeepEquals(
+                JsonNode.Parse(definition.GetProperty("annotations").GetRawText()),
+                JsonSerializer.SerializeToNode(tool.ProtocolTool.Annotations, McpJsonUtilities.DefaultOptions)), tool.Name);
+        }
+
+        var listWidgets = Assert.Single(tools, t => t.Name == "list_widgets").ProtocolTool.Annotations;
+        Assert.NotNull(listWidgets);
+        Assert.True(listWidgets.ReadOnlyHint);
+        Assert.False(listWidgets.DestructiveHint);
+        Assert.True(listWidgets.IdempotentHint);
+        Assert.False(listWidgets.OpenWorldHint);
+    }
+
+    [Fact]
     public async Task RenderWidgetDeclaresTheAppTemplate()
     {
         await using var server = await TestServer.StartAsync();

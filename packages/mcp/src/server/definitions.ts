@@ -8,7 +8,29 @@ export interface McpToolDefinition {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
+  annotations?: McpToolAnnotations;
 }
+
+/**
+ * MCP tool annotations. Hosts read them for permission prompts,
+ * auto-approval and read-only grouping, never as enforcement. All four
+ * are set on every shipped tool, since an absent hint means the riskiest
+ * value.
+ */
+export interface McpToolAnnotations {
+  readOnlyHint: boolean;
+  destructiveHint: boolean;
+  idempotentHint: boolean;
+  openWorldHint: boolean;
+}
+
+/** Reads the caller's catalog and composes output; nothing outside the server is touched. */
+const READ_ONLY: McpToolAnnotations = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: false
+};
 
 export const LIST_WIDGETS_TOOL: McpToolDefinition = {
   name: "list_widgets",
@@ -24,7 +46,8 @@ export const LIST_WIDGETS_TOOL: McpToolDefinition = {
     type: "object",
     properties: {},
     additionalProperties: false
-  }
+  },
+  annotations: READ_ONLY
 };
 
 /**
@@ -83,7 +106,8 @@ export const GET_AUTHORING_GUIDE_TOOL: McpToolDefinition = {
     type: "object",
     properties: {},
     additionalProperties: false
-  }
+  },
+  annotations: READ_ONLY
 };
 
 export const LIST_SCHEMAS_TOOL: McpToolDefinition = {
@@ -101,7 +125,8 @@ export const LIST_SCHEMAS_TOOL: McpToolDefinition = {
     type: "object",
     properties: {},
     additionalProperties: false
-  }
+  },
+  annotations: READ_ONLY
 };
 
 export const LIST_ACTIONS_TOOL: McpToolDefinition = {
@@ -123,7 +148,8 @@ export const LIST_ACTIONS_TOOL: McpToolDefinition = {
     type: "object",
     properties: {},
     additionalProperties: false
-  }
+  },
+  annotations: READ_ONLY
 };
 
 export const LIST_THEMES_TOOL: McpToolDefinition = {
@@ -139,7 +165,8 @@ export const LIST_THEMES_TOOL: McpToolDefinition = {
     type: "object",
     properties: {},
     additionalProperties: false
-  }
+  },
+  annotations: READ_ONLY
 };
 
 export const LIST_THEME_TOKENS_TOOL: McpToolDefinition = {
@@ -152,7 +179,8 @@ export const LIST_THEME_TOKENS_TOOL: McpToolDefinition = {
     type: "object",
     properties: {},
     additionalProperties: false
-  }
+  },
+  annotations: READ_ONLY
 };
 
 export const RENDER_WIDGET_TOOL: McpToolDefinition = {
@@ -221,7 +249,10 @@ export const RENDER_WIDGET_TOOL: McpToolDefinition = {
     },
     required: ["widget", "data"],
     additionalProperties: false
-  }
+  },
+  // Open world: the Node assembly fetches agent-supplied image sources
+  // from the public web to inline them.
+  annotations: { ...READ_ONLY, openWorldHint: true }
 };
 
 /**
@@ -262,7 +293,10 @@ export const EXECUTE_ACTION_TOOL: McpToolDefinition = {
     },
     required: ["widget", "action", "payload"],
     additionalProperties: false
-  }
+  },
+  // An author's http action may POST to their system, so the worst case
+  // of any binding is declared.
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true }
 };
 
 /**
@@ -294,6 +328,7 @@ export const PREVIEW_WIDGET_TOOL: McpToolDefinition = {
     },
     required: ["widget"],
     additionalProperties: false
-  }
+  },
+  annotations: READ_ONLY
 };
 

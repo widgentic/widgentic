@@ -6,7 +6,7 @@ using ModelContextProtocol.Server;
 namespace Widgentic.Mcp.Mcp;
 
 /// <summary>
-/// One widgentic tool, defined by the bundle (name, description, input schema) and answered by
+/// One widgentic tool, defined by the bundle (name, description, input schema, annotations) and answered by
 /// the bundle's handler, on the caller's catalog when one resolves; the raw arguments are
 /// forwarded unchanged.
 /// </summary>
@@ -24,6 +24,9 @@ internal sealed class WidgenticTool : McpServerTool
             Name = definition.GetProperty("name").GetString() ?? "",
             Description = definition.GetProperty("description").GetString(),
             InputSchema = definition.GetProperty("inputSchema").Clone(),
+            Annotations = definition.TryGetProperty("annotations", out var annotations)
+                ? annotations.Deserialize<ToolAnnotations>(McpJsonUtilities.DefaultOptions)
+                : null,
         };
     }
 
