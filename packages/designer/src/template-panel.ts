@@ -15,6 +15,7 @@ import {
   FORMAT_DECIMALS_MIN,
   FORMAT_TYPES,
   JOIN_DEFAULT_SEPARATOR,
+  LIST_FORMAT_TYPES,
   JOIN_SEPARATOR_MAX,
   PLURAL_COUNT_PLACEHOLDER,
   TRUNCATE_DEFAULT_ELLIPSIS,
@@ -41,7 +42,12 @@ import type { DesignerDiagnostics } from "./validate.js";
 type Path = (string | number)[];
 
 /** What a data path is being used for — decides which paths are offered. */
-type PathUse = "bind" | "each" | "when";
+/** `listBind`: a bind whose format reads a list, so array paths are offered too. */
+type PathUse = "bind" | "listBind" | "each" | "when";
+
+/** The path use of a bind carrying `format`. */
+const bindUse = (format: unknown): PathUse =>
+  isPlainObject(format) && LIST_FORMAT_TYPES.some((type) => type === format.type) ? "listBind" : "bind";
 
 /** Paths worth offering for a given use. */
 function pathOptions(scope: unknown, use: PathUse): string[] {
@@ -62,6 +68,7 @@ function pathOptions(scope: unknown, use: PathUse): string[] {
     const type = schemaType(schema);
     if (use === "each") return type === "array";
     if (use === "bind") return scalars.has(type);
+    if (use === "listBind") return scalars.has(type) || type === "array";
     return true; // `when` tests truthiness of anything
   });
   const paths = filtered.map((entry) => entry.path);
@@ -693,7 +700,7 @@ export function mountTemplatePanel(
       // `prefix` is attribute-only and is not offered here.
       const withBind = (extra: Record<string, unknown>): Record<string, unknown> => ({ bind, ...extra });
       const inline: (Node | string)[] = [
-        pathControl(bind, scope, "bind", (value) => commitAt(path, { ...node, bind: value }))
+        pathControl(bind, scope, bindUse(bindFormat), (value) => commitAt(path, { ...node, bind: value }))
       ];
       if (transform === undefined || transform === "format") {
         inline.push(
@@ -865,7 +872,7 @@ export function mountTemplatePanel(
           ? pathControl(
               bound.bind,
               scope,
-              "bind",
+              bindUse(bound.format),
               (next) => setAttr(rebuild({ ...bound, bind: next })),
               "wgd-input wgd-attr-value"
             )

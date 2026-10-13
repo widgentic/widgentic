@@ -20,6 +20,7 @@ export { mountNode } from "./dom.js";
 export {
   formatBoundValue,
   FORMAT_TYPES,
+  LIST_FORMAT_TYPES,
   FORMAT_DECIMALS_MIN,
   FORMAT_DECIMALS_MAX,
   CURRENCY_DISPLAYS,

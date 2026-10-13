@@ -27,6 +27,9 @@ export const FORMAT_TYPES = ["number", "currency", "date", "count", "join", "tru
 
 export type FormatType = (typeof FORMAT_TYPES)[number];
 
+/** The formats that read a list: count and join, and pluralize, which also reads a number. */
+export const LIST_FORMAT_TYPES = ["count", "join", "pluralize"] as const;
+
 export const isFormatType = (value: unknown): value is FormatType =>
   FORMAT_TYPES.some((type) => type === value);
 

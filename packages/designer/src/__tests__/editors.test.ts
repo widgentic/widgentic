@@ -1334,6 +1334,33 @@ describe("text formats and the Markdown toggle in bind rows", () => {
     designer.dispose();
   });
 
+  it("a bind whose format reads a list completes array paths; other binds do not", () => {
+    const pathSelect = (row: Element) => row.querySelector(".wgd-path") as HTMLSelectElement;
+    const labels = (select: HTMLSelectElement) => [...select.options].map((o) => o.textContent);
+    const { container, designer } = notesDesigner({
+      tag: "div",
+      attrs: { title: { bind: "tags", format: { type: "join" } } },
+      children: [
+        { bind: "tags", format: { type: "pluralize", forms: { other: "{count} tags" } } },
+        { bind: "tags", format: { type: "truncate", length: 5 } },
+        { bind: "tags" }
+      ]
+    });
+    const bindRows = [...container.querySelectorAll(".wgd-node-row")].filter(
+      (r) => r.querySelector(".wgd-node-badge")?.textContent === "bind"
+    );
+    expect(bindRows).toHaveLength(3);
+    const [pluralized, truncated, plain] = bindRows.map((row) => labels(pathSelect(row)));
+    expect(pluralized).toContain("tags");
+    expect(pluralized).toContain("notes");
+    expect(truncated).toContain("tags (off-schema)");
+    expect(plain).toContain("tags (off-schema)");
+    const attr = labels(pathSelect(container.querySelector(".wgd-attr-row") as Element));
+    expect(attr).toContain("tags");
+    expect(attr).not.toContain("tags (off-schema)");
+    designer.dispose();
+  });
+
   it("editing plural forms keeps the categories and locale the row does not show", () => {
     const format = {
       type: "pluralize",

@@ -131,6 +131,14 @@ Added during apply. Agents cannot send templates, so checking the new forms on s
 
 The generator copies it into the .NET sample's seed. The seed tests' counts move from 8 to 9 entries.
 
+### D10. List-reading formats complete array paths in the designer
+
+An owner finding on staging. The designer's bind path dropdowns offered scalar paths only, because a list bound raw renders as JSON, so the seeded widget's `tasks` and `owners` binds showed "(off-schema)" although `count`, `join` and `pluralize` read lists by design.
+- Core exports `LIST_FORMAT_TYPES` (`count`, `join`, `pluralize`).
+- A bind carrying one of those formats, in a text or attribute position, completes the scope's array paths as well as its scalars. Every other bind keeps scalar paths.
+- Switching the format re-renders the row, so the list follows the choice.
+- The requirement "Schema-driven path completion descends arrays" carries the rule and a regression scenario.
+
 ## Risks / Trade-offs
 
 - **[A template using the new forms is refused by a reader on 0.11]** → Stores re-validate on read, so an older server would skip such a widget with a diagnostic, never serve it broken. The apps repo adopts the server and the designer together, so production never mixes versions.
