@@ -67,6 +67,22 @@ describe("Markdown text binds", () => {
     expect(tags(out)).not.toContain("b");
   });
 
+  it("keeps images literal, the URL included, whatever the scheme", () => {
+    expect(html("![logo](https://example.com/logo.png) and ![x](javascript:alert(1))")).toBe(
+      '<div class="wg-md"><p>![logo](https://example.com/logo.png) and ![x](javascript:alert(1))</p></div>'
+    );
+  });
+
+  it("keeps a code fence literal, line by line, fences and info string included", () => {
+    expect(html("Before\n```js\nconst a = 1;\n\n  **b** = 2;\n```\nAfter *em*")).toBe(
+      '<div class="wg-md"><p>Before</p><p>```js<br>const a = 1;<br><br>  **b** = 2;<br>```</p><p>After <em>em</em></p></div>'
+    );
+    // An unclosed fence runs to the end of the value; a shorter closer does not close it.
+    expect(html("~~~~\nunclosed `x`\n~~~\nstill inside")).toBe(
+      '<div class="wg-md"><p>~~~~<br>unclosed `x`<br>~~~<br>still inside</p></div>'
+    );
+  });
+
   it("joins continuation lines into the item and flattens indented items", () => {
     expect(html("- first\n  more of first\n    - indented\n* other marker")).toBe(
       '<div class="wg-md"><ul><li>first<br>more of first</li><li>indented</li><li>other marker</li></ul></div>'

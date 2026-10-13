@@ -29,16 +29,37 @@ export interface MarkdownBudget {
 
 type Block =
   | { kind: "p"; lines: string[] }
+  | { kind: "literal"; lines: string[] }
   | { kind: "ul" | "ol"; start: number; items: string[][] };
 
 const BULLET = /^\s*[-*+][ \t]+(.*)$/;
 const ORDERED = /^\s*(\d{1,9})[.)][ \t]+(.*)$/;
+const FENCE = /^\s*(`{3,}|~{3,})/;
 
-/** Sort lines into paragraphs and flat lists; blank lines separate blocks. */
+/**
+ * Sort lines into paragraphs and flat lists; blank lines separate blocks.
+ * A code fence is outside the subset: its lines, the fences included, form
+ * one literal block that no inline syntax touches, through the closing
+ * fence or the end of the value.
+ */
 function blocksOf(text: string): Block[] {
   const blocks: Block[] = [];
-  let current: Block | undefined;
-  for (const line of text.split("\n")) {
+  let current: Exclude<Block, { kind: "literal" }> | undefined;
+  const lines = text.split("\n");
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index] as string;
+    const fence = FENCE.exec(line)?.[1];
+    if (fence !== undefined) {
+      const closing = new RegExp(`^\\s*${fence[0] === "`" ? "`" : "~"}{${fence.length},}\\s*$`);
+      const literal: string[] = [line];
+      while (++index < lines.length) {
+        literal.push(lines[index] as string);
+        if (closing.test(lines[index] as string)) break;
+      }
+      blocks.push({ kind: "literal", lines: literal });
+      current = undefined;
+      continue;
+    }
     if (line.trim() === "") {
       current = undefined;
       continue;
@@ -197,6 +218,15 @@ function inline(text: string, links: boolean): WidgetNode[] {
       i = close + (end - i);
       continue;
     }
+    if (char === "!" && text[i + 1] === "[" && links) {
+      // An image is outside the subset: its source stays literal text.
+      const image = linkAt(text, i + 1);
+      if (image !== undefined) {
+        pushText(text.slice(i, image.end));
+        i = image.end;
+        continue;
+      }
+    }
     if (char === "[" && links) {
       const link = linkAt(text, i);
       if (link !== undefined) {
@@ -309,6 +339,12 @@ export function parseMarkdown(source: string, budget: MarkdownBudget): WidgetNod
   } else {
     children = blocksOf(text).map((block) => {
       if (block.kind === "p") return element("p", inline(block.lines.join("\n"), true));
+      if (block.kind === "literal") {
+        return element("p", block.lines.flatMap((line, i): WidgetNode[] => [
+          ...(i === 0 ? [] : [{ tag: "br" }]),
+          ...(line === "" ? [] : [line])
+        ]));
+      }
       const items = block.items.map((lines) => element("li", inline(lines.join("\n"), true)));
       return element(block.kind, items, block.kind === "ol" && block.start !== 1 ? { start: String(block.start) } : undefined);
     });

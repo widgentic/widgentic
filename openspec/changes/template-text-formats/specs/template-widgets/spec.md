@@ -70,6 +70,10 @@ The base stylesheet SHALL style `.wg-md` paragraphs, lists, code and links from 
 - **WHEN** a Markdown bind renders ``"Line one\nsnake_case_name and `**literal**`\n\\*not em\\*"``
 - **THEN** the output SHALL be one `p` holding `Line one`, a `br`, the text `snake_case_name and `, a `code` reading `**literal**`, a `br`, and the text `*not em*`, with no `em` or `strong`
 
+#### Scenario: Images and code fences stay literal
+- **WHEN** a Markdown bind renders ``"![logo](https://example.com/logo.png)\n\n```js\nconst a = 1;\n```"``
+- **THEN** the output SHALL hold no `img`, `a` or `code` element, and its text SHALL read `![logo](https://example.com/logo.png)`, then `` ```js ``, `const a = 1;` and `` ``` `` on separate lines
+
 #### Scenario: Empty and oversized values
 - **WHEN** a Markdown bind renders `"   "`, then a 20 001-character value containing `**bold**`
 - **THEN** the first SHALL render nothing, and the second SHALL render one `div.wg-md` holding one `p` whose text is the whole value, with no `strong`

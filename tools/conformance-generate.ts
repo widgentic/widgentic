@@ -333,7 +333,7 @@ export function buildCorpus(): Corpus {
     ["one", { ...text, items: [1], n: 1, people: [{ name: "Ada" }] }],
     ["many", { ...text, n: 22, items: "n/a", people: "solo" }],
     ["polish five", { ...text, n: 5 }],
-    ["hostile markdown", { ...text, notes: "<img src=x onerror=alert(1)> [x](javascript:alert(1)) **open *half # not a heading\n\n> not a quote" }]
+    ["hostile markdown", { ...text, notes: "<img src=x onerror=alert(1)> [x](javascript:alert(1)) **open *half # not a heading\n\n> not a quote\n\n![logo](https://example.com/logo.png)\n\n```js\nconst a = 1;\n```" }]
   ] as const) {
     render(`text ${label}`, { widget: "corpus-text", data });
     if (label === "example" || label === "hostile markdown") {
