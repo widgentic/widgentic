@@ -19,26 +19,26 @@ All capabilities are specified under `openspec/specs/` and implemented with zero
 | `widget-contract` | `@widgentic/core/contract` | The normalized payload `{ kind, data, hints?, meta? }` + `validateWidgetPayload` |
 | `data-adapters` | `@widgentic/core/adapters` | `parseJson` / `parseCsv` with structured errors and opt-in type inference |
 | `widget-mapper` | `@widgentic/core/mapper` | `inferKind` / `mapToWidget`: default widget selection from data shape |
-| `widget-catalog` | `@widgentic/core/catalog` | Built-ins (`card`, `table`, `tree` — branches are native `details.wg-tree-branch` disclosures a visitor can open and close, with an optional per-node `icon` — and `group`, several widgets in one render with layout hints), registration API, pure `WidgetNode` render tree, `renderToHtml` + `mountNode`, image-aware card fields and table cells (avatars/thumbs/heroes via `hints.images`), `meta` chrome on card/table/tree, `hints.fieldFormat` display formatting (card + table, payload keeps typed values), `hints.labels` field and column labels (agents steered to Title Case), opt-in `hints.links` anchors behind the URL scheme guard, descriptor data schemas incl. ReDoS-bounded `pattern` |
+| `widget-catalog` | `@widgentic/core/catalog` | Built-ins (`card`, `table`, `tree` — branches are native `details.wg-tree-branch` disclosures a visitor can open and close, with an optional per-node `icon` — and `group`, several widgets in one render with layout hints), registration API, pure `WidgetNode` render tree, `renderToHtml` + `mountNode`, image-aware card fields and table cells (avatars/thumbs/heroes via `hints.images`), `hints.fields` card field selection and order (an array, like a table's `hints.columns`, since object key order does not survive every host), `meta` chrome on card/table/tree, `hints.fieldFormat` display formatting (card + table, payload keeps typed values), `hints.labels` field and column labels (agents steered to Title Case), opt-in `hints.links` anchors behind the URL scheme guard, descriptor data schemas incl. ReDoS-bounded `pattern` |
 | `mcp-widget-output` | `@widgentic/mcp` | The MCP convention: emit/extract widget payloads, capability negotiation — no SDK dependency |
 | `reactive-rendering` | `@widgentic/core/reactive` | `mountWidget` handles with in-place DOM patching (identity-preserving updates) |
 | `template-widgets` | `@widgentic/core/templates` | Serializable JSON template DSL (`bind`/`each`/`when`) with the value transforms `map`, `prefix` and `format` (closed vocabulary — number, currency and date, plus count, join, truncate and pluralize; render-time only) and Markdown text binds (`{ bind, markdown: true }`: a fixed subset whose parser, not the value, chooses tags) — the widget-designer runtime, safe for untrusted authors |
 | `widget-theming` | `@widgentic/core/theming` | `--wg-*` token registry (colors, status, scale steps), author-defined `x-*` custom variables, named-theme registry, shared theme `styles` (`.wg-` classes every widget under the theme can use), a default theme per host mode (light/dark), a generated base stylesheet that **defines every registry token at `:root`** so custom widget styles can use bare `var(--wg-*)` safely, themes as validated JSON |
 | `mcp-server` | `@widgentic/mcp` | The Widgentic MCP server: nine tools — `list_widgets`, `list_schemas`, `list_actions`, `list_themes`, `list_theme_tokens` and `get_authoring_guide` (discovery) + `render_widget` (validate → render → HTML + payload), and the app-only `execute_action` and `preview_widget` — as SDK-free definitions/handlers, plus the full server assembly behind `@widgentic/mcp/sdk` (MCP SDK as optional peers) |
-| `widget-store` | `@widgentic/mcp/store` | Per-principal widgets, themes, and shared data schemas: a persistence-agnostic port (`resolvePrincipal`/`widgets`/`themes`/`schemas`), memory + file reference implementations, hashed constant-time keys, structural limits, and request-scoped `composeCatalog`/`composeThemes` — widgets may reference a shared schema by name (`dataSchemaRef`), resolved at composition so one `person` schema serves every person widget |
+| `widget-store` | `@widgentic/mcp/store` | Per-principal widgets, themes, and shared data schemas: a persistence-agnostic port (`resolvePrincipal`/`widgets`/`themes`/`schemas`), memory + file reference implementations, hashed constant-time keys, structural limits, and request-scoped `composeCatalog`/`composeThemes` — widgets may reference a shared schema by name (`dataSchemaRef`), resolved at composition so one `person` schema serves every person widget — plus one settings record per principal (`settings`/`putSettings`): `defaultThemes` per host mode and the `resourceDomains` its frames may load images from, read once per request with `readPrincipalSettings` and applied by `composeThemes` and `composeResourceDomains` |
 | `widget-designer` | `@widgentic/designer` | Five embeddable designers (factories + opt-in custom elements, zero deps): the **widget** designer (template tree/JSON, full descriptor, styles and hints as tree-or-JSON, dataSchema, theme selection — tokens and shared styles — with a token reference), the standalone **theme** designer (tokens, custom variables, shared styles, named entries, previewing host-supplied widgets), the **schema** designer (shared data-schema entries), the **action** designer and the **settings** designer (default themes per host mode, resource domains) — all with live validation and an optional read-only mode |
 | `designer-webmcp` | `@widgentic/webmcp` (beta) | The mounted designers as **WebMCP** tools (`document.modelContext`): fourteen `widgentic_*` tools a browser-side agent (ChatGPT Desktop's browser, Chrome/Edge in the origin trial) uses to read and edit the drafts the person is looking at, plus the authoring guide and a dry-run definition check so it drafts by the designer's rules — agents edit, people save (a host agent that can operate the page may click Save; the draft is visible first); feature-detected, a reported no-op without an agent-capable browser |
-| `dotnet-host` | `Widgentic.Mcp` (NuGet, beta) | widgentic for **.NET** MCP servers: runs the `@widgentic/mcp/host` bundle (one self-contained module, ECMAScript + `Intl` only) on ClearScript V8 — output byte-identical to the Node server, checked against a shared conformance corpus — and wires it onto the C# MCP SDK with `WithWidgentic(...)`: selectable tools, the MCP Apps template, preview pages, and `IWidgenticRenderer` so a server's own tools render widgets. Render-only for now |
+| `dotnet-host` | `Widgentic.Mcp` (NuGet, beta) | widgentic for **.NET** MCP servers: runs the `@widgentic/mcp/host` bundle (one self-contained module, ECMAScript + `Intl` only) on ClearScript V8 — output byte-identical to the Node server, checked against a shared conformance corpus — and wires it onto the C# MCP SDK with `WithWidgentic(...)`: selectable tools carrying the bundle's tool annotations, the MCP Apps template, preview pages, and `IWidgenticRenderer` so a server's own tools render widgets; default themes through `UseSettings`, CSP `ResourceDomains` plus the settings' section, and per-caller catalogs from an `IWidgenticCatalogSource` composed with the startup entries (`Merge` or `Replace`). Render-only for now |
 
 ## Packages
 
 | package | contents | runs in |
 |---|---|---|
 | [`@widgentic/core`](packages/core) | contract, adapters, mapper, catalog, theming, templates, actions, reactive rendering | browser + Node |
-| [`@widgentic/designer`](packages/designer) | widget / theme / schema / action designers, custom elements, browser bundle | browser |
+| [`@widgentic/designer`](packages/designer) | widget / theme / schema / action / settings designers, custom elements, browser bundle | browser |
 | [`@widgentic/webmcp`](packages/webmcp) | **beta** — the designers as WebMCP tools: descriptor factory, feature-detected registration, one `dispose()`; depends on core + designer | browser |
 | [`@widgentic/mcp`](packages/mcp) | tool-output convention, handlers, app template, action execution, official-SDK assembly (`/sdk`), authoring surface (`/authoring`), store (`/store`, `/store/sqlite`, `/store/cosmos`), secrets (`/secrets`, `/secrets/keyvault`), runtime-neutral host bundle (`/host`) | Node ≥ 22 (`/host`: any engine with ECMAScript + `Intl`) |
-| [`Widgentic.Mcp`](dotnet) (NuGet) | **beta, render-only** — the `/host` bundle on ClearScript V8 + `WithWidgentic` for the C# MCP SDK, `IWidgenticRenderer`, designer-JSON widgets; a stdio sample | .NET 10 |
+| [`Widgentic.Mcp`](dotnet) (NuGet) | **beta, render-only** — the `/host` bundle on ClearScript V8 + `WithWidgentic` for the C# MCP SDK, `IWidgenticRenderer`, designer-JSON widgets, per-caller catalogs; a sample server (Streamable HTTP on `:3002` by default, with `merge-demo`/`replace-demo` principals, or stdio) | .NET 10 |
 | `widgentic/apps` (private repository) | our MCP server and the widgentic.dev app, Azure infrastructure, runbook — consumes the published packages | — |
 | `examples/*` | sample hosts: a stdio MCP server with compiled-in widgets, a designer host page, a self-hosted docker deployment (authoring app + MCP endpoint over SQLite), and the shared wiring they import | — |
 
@@ -125,8 +125,8 @@ npm run mcp        # stdio server
 - `list_actions` — the user's saved shared actions as their CONTRACT (name, label, kind, and for http the method and input/output schemas; a prompt's `binds`). The URL, headers and query stay on the server: a binding is `action: { "ref": "<name>" }` and needs none of them.
 - `list_theme_tokens` — the theming vocabulary: every token with its type, documented use and light default, plus ready-made presets and the value rules. Call it before building a theme.
 - `execute_action` — called by the WIDGET, not by agents (registered with `_meta.ui.visibility: ["app"]`, so Apps hosts hide it from the model): runs a bound http action server-side — the stored definition, the caller's `execute` scope, SSRF-guarded fetch, secrets injected by name, response validated — and returns the re-rendered widget.
-- `preview_widget` — called by the app TEMPLATE, not by agents (app-only like `execute_action`): while a render's input streams, the frame asks it to render the partial payload of a stored widget it cannot build itself — through the caller's catalog, with the data-schema check skipped because required fields may not have arrived yet — and shows the result as an in-progress preview. It never inlines images, and the server rate-limits it per principal.
-- `list_themes` — the server's registered themes (`name`, `label`, `tokens`); pass any name as `render_widget`'s `theme` instead of composing tokens.
+- `preview_widget` — called by the app TEMPLATE, not by agents (app-only like `execute_action`): while a render's input streams, the frame asks it to render the partial payload of a stored widget it cannot build itself — through the caller's catalog, with the data-schema check skipped because required fields may not have arrived yet — and shows the result as an in-progress preview. For a built-in kind the frame builds the preview itself and asks only for the themed CSS, since the caller's default themes live on the server. It never inlines images, and the server rate-limits it per principal.
+- `list_themes` — the server's registered themes (`name`, `label`, `description`, `tokens`, `styles`) plus `defaults`, the theme each host mode gets when a render names none; pass any name as `render_widget`'s `theme` instead of composing tokens.
 - `list_widgets` — returns every registered kind's descriptor: purpose, expected `data` shape, an example to imitate, and supported hints.
 - `render_widget` — input `{ widget, data, hints?, meta?, format?, theme? }`; validates the id and payload, then returns the rendered HTML **plus** an embedded widgentic payload block (aware hosts mount it natively). Invalid input comes back as a structured, correctable error (`UNKNOWN_KIND`, `MISSING_FIELD`, ...). Misaimed hints (misspelled keys, targets matching no field/column, unsafe image sources) never fail a render — they come back as a compact `Hint notes:` tail on the text output plus `structuredContent.diagnostics`, so agents can self-correct on the next call. `theme` takes either a registered theme **name** or an inline token map — when the user names a saved theme, pass the NAME: their saved themes are the server-side source of truth and a reconstructed map drifts the moment they edit it. To show several widgets in ONE response, render the built-in `group` kind — `data.items` holds sub-widgets of mixed kinds (stored customs included, groups don't nest, 20 max) and hints pick the layout (`layout: stack|row|grid`, `gap: none|sm|md|lg`, `columns` 1-4).
 - **Model-context slimming**: when the host is an MCP Apps host, the default-format result replaces the full-HTML text block with a one-line confirmation telling the model the visual is already displayed. The client's own capabilities decide: those a 2025-era session negotiated, or those a 2026-07-28 request carries in its `_meta`. `WIDGENTIC_ASSUME_UI=1` covers calls that reveal neither (stateless 2025-era HTTP). Explicit `format` requests are never slimmed.
@@ -207,9 +207,12 @@ every render streams into it as `structuredContent` (render tree + fragment +
 CSS + payload); the template mounts the tree natively — DOM built from data,
 successive results patched in place — with the HTML fragment as fallback.
 For legacy embedded-resource hosts (mcp-ui lineage), `format: "app"` also
-carries the self-contained styled page inline. Widget content stays script-free
-with zero external references; the widgentic payload block is always included
-for natively mounting hosts, and a text fallback covers everyone else.
+carries the self-contained styled page inline. Widget content stays script-free,
+and its images are inlined server-side as `data:` URIs; past the per-render
+inlining caps an image keeps its `https` URL, which a sandboxed frame shows
+only when its domain is a declared resource domain — so those images are
+inlined last. The widgentic payload block is always included for natively mounting
+hosts, and a text fallback covers everyone else.
 
 Register the server in Claude Desktop (`claude_desktop_config.json`, absolute
 paths) and ask for a widget render — Apps-capable versions mount the page in
@@ -312,13 +315,15 @@ Execution is gated three ways: the host must proxy app tool calls (`serverTools`
 
 ## Status
 
-All specified capabilities are implemented and tested: `npm test` runs 840+
-unit, type, DOM and MCP Apps interop tests across the three packages, the
+All specified capabilities are implemented and tested: `npm test` runs 1,800+
+unit, type, DOM and MCP Apps interop tests across the four npm packages, the
 boundary and export-snapshot checks, and the examples; the type suites run in
-the default gate. The packages have zero runtime dependencies — the MCP SDK
-and the Azure clients are optional peers of `@widgentic/mcp`, installed only
-by hosts importing the entries that need them — and are published to npm as
-`@widgentic/core`, `@widgentic/designer` and `@widgentic/mcp` with provenance.
+the default gate, and `dotnet test` runs 200+ tests over `Widgentic.Mcp`. The npm packages
+have zero runtime dependencies — the MCP SDK and the Azure clients are optional
+peers of `@widgentic/mcp`, installed only by hosts importing the entries that
+need them — and are published to npm as `@widgentic/core`,
+`@widgentic/designer`, `@widgentic/webmcp` and `@widgentic/mcp` with
+provenance; `Widgentic.Mcp` is published to NuGet.
 
 Development is spec-first via OpenSpec: `openspec/specs/` holds the current
 behavior of every capability and `openspec/changes/archive/` the full change

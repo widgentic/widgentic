@@ -84,10 +84,12 @@ public sealed class WidgenticOptions
     public WidgenticOptions AddSchemasFromDirectory(string path) => AddFromDirectory(path, AddSchema);
 
     /// <summary>
-    /// Set the settings record, in the store's shape (<c>{ "defaultThemes": { "light"?, "dark"? } }</c>):
-    /// its default themes stand in for the built-ins when a render names no theme. The bundle
-    /// checks it at startup against the configured themes, and a refused setting stops startup
-    /// like a refused entry. A later call replaces the record.
+    /// Set the settings record, in the store's shape
+    /// (<c>{ "defaultThemes"?: { "light"?, "dark"? }, "resourceDomains"?: [ … ] }</c>): its default
+    /// themes stand in for the built-ins when a render names no theme, and its resource domains
+    /// are declared after <see cref="ResourceDomains"/>. The bundle checks it at startup (defaults
+    /// against the configured themes), and a refused setting stops startup like a refused entry.
+    /// A later call replaces the record.
     /// </summary>
     /// <param name="json">The settings record JSON.</param>
     /// <param name="source">Where it came from, named in configuration errors.</param>

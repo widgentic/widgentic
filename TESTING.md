@@ -382,6 +382,37 @@ workspace and the sample first, then point at the built DLL):
 
 ## Verification log
 
+- **Docs accuracy review (2026-10-14, on `bug/docs-accuracy`, mcp and webmcp patch pending release)**: a review of the hand-written docs against the code for the 13 changes archived since 2026-10-07. Four read-only reviewers, split by area, found about 65 issues, and four fixers on disjoint files corrected them.
+  - **Agent-facing text.**
+    - The authoring guides' safety rule said bindings "can never inject markup". It now states the Markdown bind exception, with the tag list from `MARKDOWN_TAGS`.
+    - `truncate` reads "code points".
+    - `render_widget` names field order among what a streamed call shows first.
+    - The corpus changed only for `get_authoring_guide` and `tools/list`.
+  - **Wrong statements fixed.**
+    - The app template "declares no CSP domains".
+    - The `:is()` selector rule, stated backwards.
+    - The token-value list, and the read-side behavior for a refused stored token.
+    - The store port missing `settings`/`putSettings`.
+    - Text binds offering `prefix`.
+    - The .NET app template "never" consulting the source.
+    - The 0.12.0 CHANGELOG's nonexistent `UseWidgets`.
+    - Which seeded entries come back on restart.
+    - The README's "zero external references".
+    - The shape of `list_themes`.
+  - **Missing content added.**
+    - Text formats and a Markdown section in the DSL page, and card `hints.fields`.
+    - A person-facing Resource domains section, and themed streaming previews.
+    - Keyed patching and `partialData` in core.
+    - Tool annotations, and the `execute_action` codes.
+    - That an omitted rate limiter means no limit, with a limiter built once.
+    - The `./host`, `./authoring` and `./store/sqlite` entries.
+    - A `Widgentic.Mcp` section, a run-your-own-server pointer and a NuGet footer link (the docs site had no .NET mention).
+    - The `/settings` route and the full host config.
+    - The seed, deployment key and `Dockerfile.source` on the self-hosting page.
+    - .NET XML docs.
+  - **Generator.** `docs-generate.ts` renders the label-style rule, and the authoring-contract page's descriptor row now reads as an object with a `description` row.
+  - **Gates.** Typecheck, `npm test` (1835 passed, 1 skipped), build, `pack:check`, `npm run docs:check` (Mintlify validation, broken links, accessibility), `openspec validate --specs` (19), and `dotnet test` (209).
+
 - **Card field order (2026-10-14, change `card-field-order`, on `feature/card-field-order`, core/mcp minor pending release)**: an agent reported that card fields always appear sorted by key.
   - **Diagnosis.** The renderer and the preview keep argument order. A production `render_widget` with `role, company, email, phone, location` echoed that order in both the HTML and the payload. Hosts that re-serialize tool arguments through a map sort object keys, and the owner's v85 card (`Avatar, Company, Email, Location, Phone, Role`) shows it. Only an array keeps order.
   - **`hints.fields`** (`field-order.test.ts`, 8 tests).

@@ -132,7 +132,11 @@ cipher port accepts `createKeyVaultCipher` from `@widgentic/mcp/secrets/keyvault
 | `WIDGENTIC_TRUSTED_USER_HEADER` | unset | multi-user via a trusted proxy header; unset = single principal |
 | `WIDGENTIC_WEB_PORT` / `WIDGENTIC_MCP_PORT` | 8080 / 8081 | service ports |
 | `WIDGENTIC_EXECUTE_RATE` | 60 | per-principal action executions and test calls per minute |
-| `WIDGENTIC_PREVIEW_RATE` | 240 | per-principal streaming previews of stored widgets per minute |
+| `WIDGENTIC_PREVIEW_RATE` | 240 | per-principal `preview_widget` calls per minute: streaming previews of stored widgets, and the theme CSS a streamed built-in render asks for (one call per render, another only when its theme changes) |
+| `WIDGENTIC_MAX_BODY_BYTES` | 4194304 (4 MiB) | largest request body the `mcp` service reads; a larger one is refused with 413 |
+| `WIDGENTIC_MCP_UPSTREAM` | unset | on `web`: forward `/mcp` to this MCP service URL (one origin for both, above) |
+| `WIDGENTIC_MCP_PUBLIC_URL` | unset | on `web`: the endpoint the Keys section shows, when it is neither this origin's `/mcp` nor `http://<host>:8081/mcp` |
+| `WIDGENTIC_ORIGIN_TRIAL_TOKEN` | unset | on `web`: a Chrome origin-trial token for WebMCP on your origin |
 | `WIDGENTIC_SEED_FILE` | unset | JSON file of sample entries loaded into the single principal at boot (see below) |
 | `WIDGENTIC_DEFAULT_KEY_FILE` / `WIDGENTIC_DEFAULT_KEY` | unset | a fixed API key for the single principal, set on the `mcp` service (see below) |
 | `WIDGENTIC_DEFAULT_KEY_SCOPES` | `read` | that key's scopes; add `execute` to let widgets run http actions |
@@ -155,16 +159,20 @@ Set `WIDGENTIC_SEED_FILE` on the `web` service to a JSON file of the shape
 sections as the Settings page saves them), and the single principal gets
 them at boot. They go through the same validation as an import, schemas and
 actions before the widgets that use them, settings after the themes they
-name. An entry or settings section you already hold is never overwritten, so
-a restart keeps your edits — but a section you clear entirely comes back on
-the next restart, so unset `WIDGENTIC_SEED_FILE` once the content is yours. A refused entry is logged with its code, and a missing or broken
+name. Each boot skips only what the principal holds at that moment: an entry
+or settings section you hold is never overwritten, so a restart keeps your
+edits, but a seeded entry you delete or a settings section you clear comes
+back on the next restart. Unset `WIDGENTIC_SEED_FILE` once the content is
+yours. A refused entry is logged with its code, and a missing or broken
 file is logged too; the service starts either way. Keys and secrets are never
 seeded, and multi-user mode ignores the seed.
 
 `seed/demo.json` ships in the image as a starting point: two shared schemas,
-two themes (set as the default light and dark themes), an agenda and an
-inbox widget built on them, and two resource domains (`api.dicebear.com` and
-`*.pravatar.cc`, avatar services) that hosts may load images from directly.
+two themes (set as the default light and dark themes), three widgets (an
+appointment agenda and an email inbox built on the schemas, and a project
+status widget that needs no shared schema), and two resource domains
+(`api.dicebear.com` and `*.pravatar.cc`, avatar services) that hosts may load
+images from directly.
 
 ```sh
 WIDGENTIC_SEED_FILE=/srv/docker/seed/demo.json

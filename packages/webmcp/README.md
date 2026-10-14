@@ -56,11 +56,11 @@ the tool list drafts by the same rules as one that read the guide.
 | `widget_draft_load` | | Replace the draft with a definition, through the designer's validation |
 | `widget_example_data_set` | | Replace `descriptor.dataExample` — what the preview renders; the example-vs-schema verdict comes back in the diagnostics |
 | `widget_theme_set` | | Set the preview theme tokens of the draft |
-| `theme_get` / `theme_load` | get | The theme entry `{ name, label?, description?, tokens }` |
+| `theme_get` / `theme_load` | get | The theme entry `{ name, label?, description?, tokens, styles? }` |
 | `theme_tokens_set` | | Merge tokens into the open entry (`{ tokens, remove? }`), validated as a whole |
 | `schema_get` / `schema_load` | get | The shared data-schema entry `{ name, label?, description?, schema }` |
 | `action_get` / `action_load` | get | The action entry `{ name, label?, description?, definition }` |
-| `authoring_guide` | yes | The full authoring contract — widget shape, template DSL (`bind`/`each`/`when`, `map`/`prefix`/`format`), safety, styles, data schemas, theme tokens, limits — derived from the validators |
+| `authoring_guide` | yes | The full authoring contract — widget shape, template DSL (`bind`/`each`/`when`, `map`/`prefix`/`format`, the text formats, the Markdown text bind, the label style), safety, styles, data schemas, theme tokens, limits — derived from the validators |
 | `widget_definition_check` | yes | Validate a definition without touching the designer; the same errors and diagnostics the load would return |
 | `theme_token_specs` | yes | Every `--wg-*` token with type, default, purpose and fallback, from the exported specs |
 

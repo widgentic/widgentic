@@ -1,15 +1,15 @@
 namespace Widgentic.Mcp;
 
 /// <summary>One configuration entry widgentic refused, with the bundle's structured code.</summary>
-/// <param name="Section"><c>widgets</c>, <c>themes</c>, <c>schemas</c> or <c>options</c>.</param>
+/// <param name="Section"><c>widgets</c>, <c>themes</c>, <c>schemas</c>, <c>settings</c> or <c>resourceDomains</c>.</param>
 /// <param name="Source">The file or label the entry came from.</param>
 /// <param name="Code">The structured code (for example <c>INVALID_TEMPLATE</c>, <c>RESERVED_KIND</c>).</param>
 /// <param name="Message">What is wrong, in the bundle's words.</param>
 public sealed record WidgenticConfigurationProblem(string Section, string Source, string Code, string Message);
 
 /// <summary>
-/// Thrown at startup when any configured widget, theme or schema is refused: nothing is ever
-/// accepted and then silently missing.
+/// Thrown at startup when any configured widget, theme, schema, setting or resource domain is
+/// refused: nothing is ever accepted and then silently missing.
 /// </summary>
 public sealed class WidgenticConfigurationException : Exception
 {
