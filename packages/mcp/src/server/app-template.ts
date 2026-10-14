@@ -566,6 +566,20 @@ function previewCard(data, hints, meta) {
   } else if (data !== undefined) {
     value = fmt(data);
   }
+  // hints.fields picks and orders the fields as the renderer does; a key
+  // not streamed yet is simply absent.
+  const order = isObj(hints) ? hints.fields : undefined;
+  if (Array.isArray(order) && order.every(function (key) { return typeof key === "string"; })) {
+    const byKey = {};
+    entries.forEach(function (entry) { byKey[entry[0]] = entry; });
+    const seen = {};
+    entries = [];
+    order.forEach(function (key) {
+      if (seen[key] || !Object.prototype.hasOwnProperty.call(byKey, key)) return;
+      seen[key] = true;
+      entries.push(byKey[key]);
+    });
+  }
   if (title === undefined && isObj(meta)) title = meta.title;
   if (subtitle === undefined && isObj(meta)) subtitle = meta.subtitle;
   const children = [];

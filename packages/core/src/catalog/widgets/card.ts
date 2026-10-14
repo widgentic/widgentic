@@ -10,8 +10,11 @@ import { imageNode, resolveImage } from "./images.js";
  * Uses `data.title`/`data.subtitle`/`data.fields` when present; other
  * plain-object entries become field key/value pairs; primitives and `null`
  * render as a single value line. `meta.title`/`meta.subtitle` fill in when
- * `data` does not provide them. A field shows its `hints.labels` entry, or
- * its key; every other hint still addresses it by key. Total: never throws.
+ * `data` does not provide them. `hints.fields`, an array of keys, chooses
+ * the fields and their order (missing keys skipped, repeats rendered once);
+ * without it fields follow data order. A field shows its `hints.labels`
+ * entry, or its key; every other hint still addresses it by key. Total:
+ * never throws.
  */
 export function renderCard(payload: WidgetPayload): WidgetNode {
   const { data, meta } = payload;
@@ -37,6 +40,8 @@ export function renderCard(payload: WidgetPayload): WidgetNode {
   } else {
     value = formatValue(data);
   }
+
+  fieldEntries = orderFields(fieldEntries, payload.hints?.fields);
 
   if (title === undefined) title = meta?.title;
   if (subtitle === undefined) subtitle = meta?.subtitle;
@@ -81,4 +86,23 @@ export function renderCard(payload: WidgetPayload): WidgetNode {
     );
   }
   return el("div", { class: "wg-card" }, children);
+}
+
+/**
+ * The entries `order` lists, in its order: keys the data lacks are skipped
+ * and a repeated key renders once. Object key order does not survive every
+ * host's serializer, so an array is the only reliable order; anything else
+ * leaves the data's own order.
+ */
+function orderFields(entries: [string, unknown][], order: unknown): [string, unknown][] {
+  if (!Array.isArray(order) || !order.every((key): key is string => typeof key === "string")) return entries;
+  const byKey = new Map(entries);
+  const seen = new Set<string>();
+  const ordered: [string, unknown][] = [];
+  for (const key of order) {
+    if (seen.has(key) || !byKey.has(key)) continue;
+    seen.add(key);
+    ordered.push([key, byKey.get(key)]);
+  }
+  return ordered;
 }

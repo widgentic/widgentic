@@ -3,7 +3,8 @@
  *
  * Inputs cover every served tool (the template's preview tool included), every built-in kind, groups, themes,
  * contract errors, hint diagnostics, value formats in several locales, the
- * text formats (plural rules in two locales) and a Markdown bind, URL
+ * text formats (plural rules in two locales) and a Markdown bind, card
+ * field order, URL
  * edge cases, the example template widgets (an http and a prompt action
  * among them) and the documents the host serves, plus default themes chosen
  * by a settings record, each under its own named configuration (`configs`;
@@ -259,6 +260,16 @@ export function buildCorpus(): Corpus {
   const card = { title: "Quarterly", subtitle: "Q3", fields: { revenue: "1.2M" } };
   render("theme by name dark", { widget: "card", data: card, theme: "dark" });
   render("theme by name configured", { widget: "card", data: card, theme: "corpus-brand" });
+
+  // Card field order: hints.fields picks and orders, a missing key skipped and a repeat rendered once.
+  const ordered = {
+    widget: "card",
+    hints: { fields: ["role", "zzz", "company", "email", "role"], labels: { company: "Company" } },
+    data: { title: "Olivia", fields: { avatar: "x", company: "Northwind", email: "o@example.com", role: "Designer" } }
+  };
+  render("field order card", ordered);
+  render("field order card as a page", { ...ordered, format: "page" });
+  call("field order card preview", "preview_widget", ordered);
 
   // Field labels: the card's keys and the table's headers (columns selected), image alt text included.
   const labelledCard = {
