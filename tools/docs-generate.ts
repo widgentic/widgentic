@@ -139,11 +139,16 @@ function form(text: string): string {
   return `- **${md(text.slice(0, split))}** — ${md(text.slice(split + 3))}`;
 }
 
-function fields(entries: Dict, path: string): string {
+/**
+ * A shape's fields as a table. An entry shape's `description` is the prose
+ * above its table, so it is omitted unless `description` is itself a field
+ * of the shape, as on the widget descriptor.
+ */
+function fields(entries: Dict, path: string, describesShape = true): string {
   return table(
     ["Field", "Meaning"],
     Object.entries(entries)
-      .filter(([key]) => key !== "description")
+      .filter(([key]) => !describesShape || key !== "description")
       .map(([key, value]) => [code(key), cell(str(value, `${path}.${key}`))])
   );
 }
@@ -183,11 +188,11 @@ function authoringContractPage(guide: Dict): string {
       [
         [code("kind"), cell(str(widgetShape.kind, "widget.shape.kind"))],
         [code("template"), cell(str(widgetShape.template, "widget.shape.template"))],
-        [code("descriptor"), cell(str(descriptor.description, "widget.shape.descriptor.description"))]
+        [code("descriptor"), cell("REQUIRED object — what agents read about the widget; its fields follow.")]
       ]
     ),
     "### Descriptor fields",
-    fields(descriptor, "widget.shape.descriptor"),
+    fields(descriptor, "widget.shape.descriptor", false),
     "### Reserved kinds",
     `A custom kind must not collide with the built-in kinds: ${reserved.map(code).join(", ")}.`,
     `Identifiers match ${code(str(widget.identifierPattern, "widget.identifierPattern"))}.`,
@@ -213,6 +218,8 @@ function authoringContractPage(guide: Dict): string {
     ...["keywords", "pattern", "effect"].map((key) => md(str(schema[key], `rules.dataSchema.${key}`))),
     "## Data modeling",
     md(str(template.dataModeling, "rules.template.dataModeling")),
+    "## Labels",
+    md(str(template.labels, "rules.template.labels")),
     "The template node forms and safety rules are on [Template DSL](/reference/template-dsl); per-user limits on [Limits](/reference/limits)."
   ].join("\n\n") + "\n";
 }

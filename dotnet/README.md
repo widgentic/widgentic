@@ -189,8 +189,9 @@ A catalog may also carry the caller's settings record (`Settings`, or `UseSettin
 
 `list_widgets`, `render_widget`, `preview_widget`, `list_themes`, `list_schemas`, the preview
 pages and the renderer's `RequestContext` overload answer from the caller's catalog. `tools/list`,
-`list_theme_tokens`, `get_authoring_guide` and the app template are the same for every caller
-and never call the source.
+`list_theme_tokens` and `get_authoring_guide` are the same for every caller and never call the
+source. The app template's content is the same for every caller too, but its domain declaration
+asks the source on `resources/list` and `resources/read` (above).
 
 - **Nothing is cached.** Each call asks the source, composes inside the leased runtime (about
   0.05 ms per widget, 2.3 ms at 50) and drops the composition when the call ends. If fetching
@@ -203,9 +204,9 @@ and never call the source.
 - **A failing source is a result.** If the source throws, tools answer `isError` with
   `CATALOG_UNAVAILABLE` and a preview page read fails. The exception is logged, and its message
   never reaches the client.
-- **Limits.** The composed set counts against the limits of 100 widgets and 50 themes. In
-  `Merge` the startup entries come first, so a large startup set leaves each caller less room;
-  entries past a limit are refused with `LIMIT_REACHED`.
+- **Limits.** The composed set counts against the limits of 100 widgets, 50 themes and 50
+  schemas. In `Merge` the startup entries come first, so a large startup set leaves each caller
+  less room; entries past a limit are refused with `LIMIT_REACHED`.
 - **Themes saved under older token rules are refused whole.** If a theme has a token value
   that today's rules refuse, .NET refuses the whole theme and logs it. The widgentic store
   instead trims the value and keeps serving the theme. If your source reads a widgentic
@@ -240,8 +241,9 @@ and never call the source.
 ## Sample
 
 [`samples/Widgentic.Sample.Stdio`](samples/Widgentic.Sample.Stdio) serves the docker example's demo
-seed (an appointment agenda and an email inbox, two Google-style themes as the light and dark
-defaults, two resource domains, and the shared schemas the widgets reference) plus one host tool, over stdio by default or over Streamable HTTP with
+seed (an appointment agenda, an email inbox and a project status widget, two Google-style themes
+as the light and dark defaults, two resource domains, and the shared schemas the agenda and inbox
+reference) plus one host tool, over stdio by default or over Streamable HTTP with
 `--http`. The seed files under `seed/` are generated from `examples/docker/seed/demo.json` by
 `npm run conformance:generate`:
 

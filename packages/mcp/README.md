@@ -13,7 +13,9 @@ Everything needed to host the widgentic engine over MCP:
   SDK's entries, it speaks protocol revision 2026-07-28 and the 2025-era
   revisions alike.
 - `@widgentic/mcp/authoring` — the write side as a hostable HTTP surface:
-  widgets, themes, schemas, shared actions, the guarded action test call,
+  widgets, themes, schemas, shared actions, the principal's settings record
+  (`GET /settings`; `PUT /settings` replaces the sections it names and answers
+  `{ saved: "settings", settings }`), the guarded action test call,
   write-only secrets and API keys, as a pure request handler plus a
   `node:http` adapter. The host resolves the principal; a presented API key
   never authorizes authoring.
@@ -62,9 +64,15 @@ bundled spec-compliant one where the engine has none.
 ```ts
 import { createWidgenticHost } from "@widgentic/mcp/host";
 
-const host = createWidgenticHost(JSON.stringify({ widgets, themes, schemas }));
-host.problems();     // JSON: entries refused at the door, with codes — never thrown
-host.definitions();  // JSON: the tool definitions to register (name, description, inputSchema)
+const host = createWidgenticHost(JSON.stringify({
+  widgets, themes, schemas,          // all optional
+  resourceDomains,                   // the embedding server's own domains
+  settings                           // { defaultThemes?: { light?, dark? }, resourceDomains? }
+}));
+host.version();      // the @widgentic/mcp version the bundle was built from
+host.problems();     // JSON: entries and settings refused at the door, with codes — never thrown
+host.definitions();  // JSON: the tools to register (name, description, inputSchema, annotations; visibility when app-only)
+host.resources();    // JSON: the app template and preview-page resources, with the declared resourceDomains
 host.call("render_widget", JSON.stringify(args), slim); // JSON: the MCP tool result
 host.appTemplate();  // the MCP Apps template for ui://widgentic/app.html
 host.widgetPage("card"); // the preview page for ui://widgentic/page/{kind}
@@ -73,18 +81,22 @@ host.widgetPage("card"); // the preview page for ui://widgentic/page/{kind}
 Every argument and result is a string. `widgets` are designer exports
 (`{ kind, template, descriptor, load? }`), `themes` theme entries, `schemas`
 shared schemas; they go through the same composition and checks as the store.
+`settings` is a principal settings record checked by the store's rules: each
+default theme that names a configured theme stands in for its mode's built-in.
 The served tools are `list_widgets`, `render_widget`, `list_theme_tokens`,
 `list_themes`, `list_schemas` and `get_authoring_guide`, plus the template's
 own `preview_widget` (marked `visibility: ["app"]` in `definitions()`; rate
-limiting previews is the embedding server's job). They are answered by the same
-handlers the Node assembly wires, and the output is byte-identical to the Node
-path, checked against a conformance corpus.
+limiting previews is the embedding server's job), each with the exported tool
+annotations. They are answered by the same handlers the Node assembly wires,
+and the output is byte-identical to the Node path, checked against a
+conformance corpus.
 
 The host is **render-only**: http actions render disabled, no `load` runs, and
 `execute_action`/`list_actions` are not served (prompt actions work — the
 template proposes them to the host's composer). Nothing is fetched, so images
 are not inlined: in Apps hosts whose sandbox blocks external images, declare
-the image host as a CSP resource domain (the config's `resourceDomains`, or the
-settings' section; `resources()` reports the declared list) or pass `data:` URIs.
+the image host as a CSP resource domain (the config's `resourceDomains`, then the
+settings' `resourceDomains`; `resources()` reports the declared list) or pass
+`data:` URIs.
 
 MIT © Diego Hoyos

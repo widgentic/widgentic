@@ -20,7 +20,7 @@ Every widget is one normalized payload:
 }
 ```
 
-`kind` names the widget, `data` is the value to show, `hints` steer presentation (columns, layout, images, links, display formats) and `meta` carries chrome such as a title. Payloads are validated before anything renders, and renderers ignore fields they do not know, so the contract can grow without breaking hosts. See the [payload contract](/how-it-works/payload-contract).
+`kind` names the widget, `data` is the value to show, `hints` steer presentation (columns and field order, labels, layout, images, links, display formats) and `meta` carries chrome such as a title. Payloads are validated before anything renders, and renderers ignore fields they do not know, so the contract can grow without breaking hosts. See the [payload contract](/how-it-works/payload-contract).
 
 ### A catalog of generic widgets
 

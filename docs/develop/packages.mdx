@@ -1,16 +1,17 @@
 ---
 title: "Packages"
-description: "The three published @widgentic packages, their entries, runtimes and dependencies."
+description: "The published widgentic packages — four on npm, one on NuGet — their entries, runtimes and dependencies."
 ---
 
-widgentic ships as three npm packages under the `@widgentic` scope. All three are ES modules only, publish compiled JavaScript with TypeScript declarations and source maps under `dist`, and are released by the repository's workflow with an npm provenance attestation — never from a developer machine. They are versioned as a linked group: packages released together take the same version, so a release never leaves two of them on confusingly adjacent numbers. A package with no changes in a release keeps its version, so the three numbers can differ — install the latest of each.
+widgentic ships as four npm packages under the `@widgentic` scope, plus `Widgentic.Mcp` on NuGet for .NET servers. The npm packages are ES modules only, publish compiled JavaScript with TypeScript declarations and source maps under `dist`, and are released by the repository's workflow with an npm provenance attestation — never from a developer machine. `@widgentic/core`, `@widgentic/designer` and `@widgentic/mcp` are versioned as a linked group: packages released together take the same version, so a release never leaves two of them on confusingly adjacent numbers. A package with no changes in a release keeps its version, so the three numbers can differ — install the latest of each. `@widgentic/webmcp` (beta) versions on its own, outside the group.
 
 | Package | Contents | Runs in | Depends on |
 |---|---|---|---|
 | `@widgentic/core` | contract, adapters, mapper, catalog, theming, templates, actions, reactive rendering | browser and Node | nothing |
-| `@widgentic/designer` | widget, theme, schema and action designers, custom elements, single-file browser bundle | browser | `@widgentic/core` |
+| `@widgentic/designer` | widget, theme, schema, action and settings designers, custom elements, single-file browser bundle | browser | `@widgentic/core` |
 | `@widgentic/webmcp` (beta) | the designers as WebMCP tools: descriptor factory, feature-detected registration, one dispose | browser | `@widgentic/core`, `@widgentic/designer` |
-| `@widgentic/mcp` | tool-output convention, tool handlers, app template, action execution, official-SDK assembly, per-principal store, secrets | Node 22 or later | `@widgentic/core` plus optional peers |
+| `@widgentic/mcp` | tool-output convention, tool handlers, app template, action execution, official-SDK assembly, authoring surface, per-principal store, secrets, runtime-neutral host bundle | Node 22 or later (`./host`: any engine with ECMAScript and `Intl`) | `@widgentic/core` plus optional peers |
+| `Widgentic.Mcp` (NuGet, beta) | the `@widgentic/mcp/host` bundle on V8, wired onto the C# MCP SDK; render-only | .NET 10 | the C# MCP SDK (`ModelContextProtocol` 2.2), ClearScript V8 |
 
 Every entry below is a subpath in the package's `exports` map, resolving for both the `types` and the default import condition. The linked pages list each entry's runtime exports; they are generated from the packages themselves (see [API reference](/develop/api-reference)).
 
@@ -58,18 +59,21 @@ npm install @widgentic/webmcp
 npm install @widgentic/mcp
 ```
 
-Requires Node 22 or later (it relies on `net.BlockList`, `AbortSignal.timeout` and the global `fetch`). Depends on `@widgentic/core`. Its other dependencies are optional peers, needed only by the entry that imports them:
+Requires Node 22 or later (it relies on `net.BlockList`, `AbortSignal.timeout` and the global `fetch`) — except `./host`, which needs no Node. Depends on `@widgentic/core`. Its other dependencies are optional peers, needed only by the entry that imports them:
 
 | Entry | What it holds | Needs | Exports |
 |---|---|---|---|
 | `@widgentic/mcp` | the tool-output convention (`toWidgetResult`, `extractWidgetPayload`, `hostSupportsWidgets`), the nine tool definitions and their SDK-free handlers, `buildAppTemplate`, action execution with the guarded fetch, the execution limiter and body cap | nothing beyond core | [mcp](/reference/api/mcp) |
 | `@widgentic/mcp/sdk` | `createWidgenticServer()`, the full assembly on the official MCP TypeScript SDK 2.x | `@modelcontextprotocol/server` 2.3+, `@modelcontextprotocol/ext-apps` 2 (which brings `zod` 4.2+ as its own peer) | [mcp-sdk](/reference/api/mcp-sdk) |
-| `@widgentic/mcp/store` | the per-principal store port, `createMemoryStore`, `createFileStore`, `composeCatalog`, `composeThemes`, key hashing | nothing beyond core; no network I/O | [mcp-store](/reference/api/mcp-store) |
+| `@widgentic/mcp/host` | `createWidgenticHost`: one self-contained ES module serving the render-only tools behind JSON strings, for MCP servers outside Node; what `Widgentic.Mcp` embeds | any engine with ECMAScript and `Intl` — no Node, no web APIs | [mcp-host](/reference/api/mcp-host) |
+| `@widgentic/mcp/authoring` | the hostable write surface: `handleAuthoringRequest` over a writable store, `createAuthoringHttpHandler` for `node:http` | nothing beyond core | [mcp-authoring](/reference/api/mcp-authoring) |
+| `@widgentic/mcp/store` | the per-principal store port, `createMemoryStore`, `createFileStore`, `composeCatalog`, `composeThemes`, `composeResourceDomains`, `readPrincipalSettings`, key hashing | nothing beyond core; no network I/O | [mcp-store](/reference/api/mcp-store) |
+| `@widgentic/mcp/store/sqlite` | `createSqliteStore` | Node 22.5 or later (`node:sqlite`); no dependency | [mcp-store-sqlite](/reference/api/mcp-store-sqlite) |
 | `@widgentic/mcp/store/cosmos` | `createCosmosStore` | `@azure/cosmos`, `@azure/identity` | [mcp-store-cosmos](/reference/api/mcp-store-cosmos) |
 | `@widgentic/mcp/secrets` | envelope encryption: `encryptSecret`, `decryptSecret`, `rewrapSecret`, `createLocalCipher` | nothing beyond core | [mcp-secrets](/reference/api/mcp-secrets) |
 | `@widgentic/mcp/secrets/keyvault` | `createKeyVaultCipher`, `kekVersionOf` | `@azure/keyvault-keys`, a credential from `@azure/identity` | [mcp-secrets-keyvault](/reference/api/mcp-secrets-keyvault) |
 
-The base entry and `./store` import with none of the peers installed. To run a server, install the SDK peers alongside:
+Every entry but `./sdk`, `./store/cosmos` and `./secrets/keyvault` imports with none of the peers installed. To run a server, install the SDK peers (and ext-apps' own peer `zod`) alongside:
 
 ```bash
 npm install @widgentic/mcp @modelcontextprotocol/server @modelcontextprotocol/ext-apps zod
@@ -77,6 +81,14 @@ npm install @widgentic/mcp @modelcontextprotocol/server @modelcontextprotocol/ex
 
 Install the Azure clients only if you import the Cosmos or Key Vault entries. See [Run your own server](/develop/run-your-own-server).
 
+## Widgentic.Mcp (.NET)
+
+```bash
+dotnet add package Widgentic.Mcp
+```
+
+**Beta, render-only** — widgentic for MCP servers written in .NET 10 on the official C# MCP SDK. It does not port the engine: it embeds the `@widgentic/mcp/host` bundle and runs it on V8 (ClearScript), so renders, tool descriptions and the MCP Apps template come from that bundle, byte-identical to the Node server's apart from image inlining (checked against a shared conformance corpus). `WithWidgentic(...)` registers the render tools you select, the app template and the preview pages; `IWidgenticRenderer` renders widgets from your own tools; an `IWidgenticCatalogSource` serves each caller its own catalog. Render-only means no `execute_action` or `list_actions`, http actions render disabled, and nothing is fetched, so images are not inlined. `Widgentic.Mcp` X.Y.* embeds `@widgentic/mcp` X.Y.*; the patch moves on its own for .NET-only fixes. Usage is documented in [dotnet/README.md](https://github.com/widgentic/widgentic/blob/main/dotnet/README.md); the package is on [NuGet](https://www.nuget.org/packages/Widgentic.Mcp).
+
 ## What a tarball contains
 
-Each package publishes `dist/**`, `package.json`, `README.md` and `LICENSE` (MIT) — no TypeScript sources, tests or fixtures — with `sideEffects: false`, an `engines.node` range and a `repository` field pointing at the public repository. The declarations type-check under Node16 and bundler module resolution. Type-only exports (interfaces and type aliases) are not part of the generated export index; the package READMEs and the `.d.ts` files cover them.
+Each npm package publishes `dist/**`, `package.json`, `README.md` and `LICENSE` (MIT) — no TypeScript sources, tests or fixtures — with `sideEffects: false`, an `engines.node` range and a `repository` field pointing at the public repository. The declarations type-check under Node16 and bundler module resolution. Type-only exports (interfaces and type aliases) are not part of the generated export index; the package READMEs and the `.d.ts` files cover them.

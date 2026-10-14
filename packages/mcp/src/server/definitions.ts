@@ -1,8 +1,9 @@
 /**
- * Widgentic MCP server tool definitions as plain, JSON-serializable data.
- * The input schemas are standard JSON Schema; SDK wiring layers convert to
- * their schema flavor (e.g. zod) as needed — this module stays the source
- * of truth and depends on no SDK.
+ * Widgentic MCP server tool definitions as plain, JSON-serializable data:
+ * name, description, a standard JSON Schema input and the MCP annotations.
+ * The SDK assembly registers each input schema as-is and the `./host`
+ * bundle serves the same definitions, so every host advertises one
+ * contract; this module is its source of truth and depends on no SDK.
  */
 export interface McpToolDefinition {
   name: string;
@@ -193,7 +194,7 @@ export const RENDER_WIDGET_TOOL: McpToolDefinition = {
     "(items of mixed kinds, layout hints) instead of calling repeatedly. " +
     "Write 'widget' first and any 'hints' before 'data' in the arguments: " +
     "hosts that stream the call can then show the widget, with its labels, " +
-    "columns and image places, while its data arrives.",
+    "columns, field order and image places, while its data arrives.",
   inputSchema: {
     type: "object",
     properties: {

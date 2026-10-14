@@ -30,7 +30,7 @@ flowchart LR
 
 ## Who can write
 
-- **There is no agent write path.** No MCP tool registers a widget, theme, schema, action or secret. Agents learn the contract through `get_authoring_guide`, `list_widgets`, `list_schemas`, `list_actions` and `list_theme_tokens` and draft import JSON; a person imports, validates and saves it in an authenticated session in the designer at [widgentic.dev/app](https://widgentic.dev/app). See [Authoring with an agent](/design/authoring-with-an-agent).
+- **There is no agent write path.** No MCP tool registers a widget, theme, schema, action or secret, or changes a principal's settings. Agents learn the contract through `get_authoring_guide`, `list_widgets`, `list_schemas`, `list_actions` and `list_theme_tokens` and draft import JSON; a person imports, validates and saves it in an authenticated session in the designer at [widgentic.dev/app](https://widgentic.dev/app). See [Authoring with an agent](/design/authoring-with-an-agent).
 - **API keys are read-only by default** because they travel into third-party hosts and prompt-injectable contexts. The `write` scope can never be granted to a key.
 - **`execute` is an opt-in scope fixed at key creation.** A read-only key still renders widgets that carry http actions, but their descriptors are marked `disabled: "scope"` and no `load` descriptor is emitted; `execute_action` answers `FORBIDDEN_SCOPE`. See [Keys and scopes](/get-started/keys-and-scopes).
 
@@ -41,7 +41,7 @@ flowchart LR
 - `on*` and `srcdoc` attributes are rejected (`FORBIDDEN_ATTRIBUTE`) and skipped at render time; so are hand-written `data-wg-*` attributes — only a validated `action` binding produces a descriptor.
 - URL-bearing attributes (`href`, `src`, `action`, `formaction`, `xlink:href`, `data`, `poster`, `ping`) keep only `http`, `https`, `mailto`, `tel` or relative references. `data:` is accepted solely for base64 `data:image/*` on an `img` `src`. A `prefix`-composed value faces the same guard.
 - Interpretation is bounded by a deterministic node budget (every `each` iteration costs at least one unit) and a maximum nesting depth, so a stored template driven by a large payload cannot spend the process. The values are on [Template DSL](/reference/template-dsl).
-- Custom `styles` and theme values cannot escape a declaration or fetch a resource: no braces, semicolons, angle brackets, `url(` or `expression(`, and style selectors must target `.wg-` classes.
+- Custom `styles` and theme values cannot escape a declaration, run on through the sheet or fetch a resource: no braces, semicolons, angle brackets, backslashes, comment markers or unclosed brackets and strings, and no `url(`, `expression(`, `image-set(` or `src(`. Styles also refuse `@`, and each style selector part must name a `.wg-` class itself or through `:is()`/`:where()`; one only inside `:not()`, `:has()` or an attribute test does not count.
 
 ## Actions execute on the server
 

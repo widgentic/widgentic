@@ -41,7 +41,7 @@ against the schema. Return only the JSON, ready to import in the widget designer
 ```
 </Step>
 <Step title="Review the JSON">
-You receive one object in the shape the store persists: `{ kind, template, descriptor }` for a widget, `{ name, label?, description?, tokens }` for a theme, `{ name, label?, description?, schema }` for a shared schema, `{ name, label?, description?, definition }` for an action.
+You receive one object in the shape the store persists: `{ kind, template, descriptor }` for a widget, `{ name, label?, description?, tokens, styles? }` for a theme, `{ name, label?, description?, schema }` for a shared schema, `{ name, label?, description?, definition }` for an action.
 </Step>
 <Step title="Import in the matching section">
 Sign in at [widgentic.dev](https://widgentic.dev) and open **Widgets**, **Themes**, **Data schemas** or **Actions**. Each designer has an Import section before its Export section. Import treats the JSON as untrusted: it re-validates everything and, if the entry fails, shows the structured errors and leaves your current draft untouched. With a valid import, check the preview against your own sample data and themes.
@@ -63,6 +63,7 @@ The guide steers the agent toward these, and they are what to look for in review
 - **Bindings on schema-declared properties.** Schema-declared data fails fast with dotted paths; `$meta.*` is outside schema validation, so a heading belongs in the schema as an optional `title`.
 - **A `dataExample` that validates.** The designer cross-checks it against the schema and uses it as preview data.
 - **A reference, not a copy, of a saved schema.** A reconstructed inline schema forks the moment you edit the shared one.
+- **Labels in Title Case.** Labels are what the reader sees, whether a template writes them as literals or the card's and table's `hints.labels` supply them, so they read "First Name" and "Order Total" unless you ask for another style or language. The data keeps its keys as they are.
 - **Styles on `.wg-` selectors using `var(--wg-<token>)`.** Themes then restyle the widget; custom `x-*` variables get a fallback.
 - **A theme delivered as an importable entry.** An inline token map passed to `render_widget` styles one render; the entry is what you save.
 
