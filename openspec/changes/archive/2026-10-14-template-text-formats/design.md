@@ -76,6 +76,7 @@ A new module `packages/core/src/templates/markdown.ts` exports `parseMarkdown(te
 - **Inline pass:** one left-to-right scan finds code spans and escapes first, then links, then emphasis.
   - Emphasis uses a delimiter stack with the intraword-underscore rule, so `snake_case` stays text.
   - An unmatched delimiter is emitted as text.
+- **Literal syntax:** a code fence is recognized at block level and its lines (fences and info string included) become one literal paragraph. An image is matched before a link and emitted as its whole source text. Both stay outside the subset with every character preserved (PR #41 review).
 - **Output:** plain `{ tag, attrs?, children? }` objects and strings. It never touches HTML strings, so the existing serializer and patcher handle it unchanged.
 - **Links:**
   - The URL passes `isSafeUrl` from `templates/guards.ts`, the same guard as a bound `href`, or the link degrades to its text.
@@ -109,13 +110,17 @@ The new checks reuse `INVALID_TEMPLATE_NODE` with dotted paths. No new error cod
 
 ### D7. The corpus pins cross-runtime agreement
 
-`tools/conformance-generate.ts` gains these cases:
-- the four formats, pluralize in `en-US` and `pl`;
-- one Markdown value exercising every construct;
-- a refused link and literal HTML;
-- an oversized source.
+`tools/conformance-generate.ts` gains a `corpus-text` widget with six data sets:
+- the example;
+- zero, one and many;
+- pluralize in Polish;
+- a hostile Markdown value: literal HTML, a refused link, unmatched delimiters, an image and a code fence.
 
-Each runs as a render, a page and a preview. The .NET V8 run must reproduce them byte for byte, which is where a plural-rules or code-point difference between engines would show.
+Each runs as a render, and the example and the hostile value also run as a page and a preview. The .NET V8 run must reproduce them byte for byte, which is where a plural-rules or code-point difference between engines would show.
+
+Two cases from the plan were left out during apply, because each multiplies the corpus without exercising engine data:
+- **An oversized source.** It would have added about 120 KB, and string length is identical in every engine. Core tests cover it.
+- **A page and a preview for every data set.** Each page carries the whole stylesheet.
 
 ### D8. Release as a minor of the linked group
 

@@ -335,7 +335,7 @@ The `./designer` entry SHALL export `createActionDesigner(container: Element, op
 - **THEN** the next test call SHALL NOT carry the dropped field
 
 ### Requirement: Schema-driven path completion descends arrays
-The designer's path completions — the bind/each/when dropdowns in the template tree, attribute binds, action input mappings, and both output-map columns — SHALL derive candidate paths from the effective data schema by descending OBJECT properties; an ARRAY is offered as ITSELF and never descended by the enumerator, because neither the template resolver nor the projection steps into an array by name. Each consumer whose scope IS the item asks for the item schema: the scope inside `{ each: <path> }` SHALL be the item schema of the array that path resolves to — `each: "."` over a root-array schema included — so binds inside the each complete from the item's properties; the output-map editor SHALL complete an array side (widget data or action response) from that side's item schema, the per-item projection's vocabulary; and an array SCOPE itself (the template root over a root-array schema) SHALL offer only `"."` — nothing else resolves there, so no item property is advertised where it would render empty. The free-text fallback SHALL appear only when the draft has NO effective schema; a root-array schema is a schema, not the fallback case. Off-schema values stay selectable and marked as today.
+The designer's path completions — the bind/each/when dropdowns in the template tree, attribute binds, action input mappings, and both output-map columns — SHALL derive candidate paths from the effective data schema by descending OBJECT properties; an ARRAY is offered as ITSELF and never descended by the enumerator, because neither the template resolver nor the projection steps into an array by name. Each consumer whose scope IS the item asks for the item schema: the scope inside `{ each: <path> }` SHALL be the item schema of the array that path resolves to — `each: "."` over a root-array schema included — so binds inside the each complete from the item's properties; the output-map editor SHALL complete an array side (widget data or action response) from that side's item schema, the per-item projection's vocabulary; and an array SCOPE itself (the template root over a root-array schema) SHALL offer only `"."` — nothing else resolves there, so no item property is advertised where it would render empty. A bind whose `format` reads a list (`count`, `join` or `pluralize`, as core exports them) SHALL be offered the scope's ARRAY paths as well as its scalar ones, in the template tree and in attribute binds alike; any other bind keeps scalar paths only, since a list bound raw renders its JSON. The free-text fallback SHALL appear only when the draft has NO effective schema; a root-array schema is a schema, not the fallback case. Off-schema values stay selectable and marked as today.
 
 #### Scenario: A root-array schema completes inside each "."
 - **WHEN** a widget's data schema is `{ type: "array", items: { type: "object", properties: { ask, bid, book, date } } }` and the template contains `{ each: "." }` with a bind inside it
@@ -344,17 +344,30 @@ The designer's path completions — the bind/each/when dropdowns in the template
 
 #### Scenario: Nested array items are reachable through their each
 - **WHEN** an object schema carries `lines: { type: "array", items: { properties: { qty } } }` and the template nests a bind inside `{ each: "lines" }`
-- **THEN** the bind SHALL complete with `qty`, and outside the each `lines` SHALL be offered for `each`, not for `bind`
+- **THEN** the bind SHALL complete with `qty`, and outside the each `lines` SHALL be offered for `each`, not for a plain `bind`
 
 #### Scenario: No schema still falls back to free text
 - **WHEN** a draft declares neither `dataSchema` nor `dataSchemaRef`
 - **THEN** path inputs SHALL be free-text, exactly as before
 
+#### Scenario: A list-reading format completes array paths
+- **WHEN** a schema declares `tasks: { type: "array" }` and `name: { type: "string" }`, and a text bind on `tasks` carries `format: { type: "pluralize", ... }`, and an attribute bind on `tasks` carries `format: { type: "join" }`
+- **THEN** both path dropdowns SHALL offer `tasks` without the off-schema mark, and `name` as well
+- **AND** a bind on `tasks` with no format or a `truncate` format SHALL show `tasks` marked off-schema
+
 ### Requirement: Bind rows offer the transforms their position allows
 A bind-mode ATTRIBUTE row SHALL offer all three value transforms — a literal `prefix`, a value→literal
 `map` with its `default`, and a presentation `format` — and SHALL hide the other two once one is set,
-mirroring the validator's mutual exclusion. A TEXT bind row SHALL offer `format` and `map` (with its `default`), hiding one once the
-other is set; it SHALL NOT offer `prefix`, an attribute-value transform the renderer ignores in a text position. No transform SHALL be
+mirroring the validator's mutual exclusion. A TEXT bind row SHALL offer `format`, `map` (with its `default`) and a Markdown toggle, hiding the others once one is set; it SHALL NOT offer `prefix`, an attribute-value transform the renderer ignores in a text position. The format control SHALL offer every type the validator accepts. Choosing a type SHALL commit a complete, valid spec, and each type SHALL reveal its own fields:
+- currency: code, decimals and display;
+- number: decimals;
+- date: the pattern;
+- count: no field;
+- join: separator, last separator and item field;
+- truncate: length and ellipsis;
+- pluralize: the `zero`, `one` and `other` forms. Any other plural category the spec carries SHALL be kept when those forms are edited.
+
+No transform SHALL be
 restricted by attribute name or element tag; attribute-level safety belongs to validation and rendering,
 not to hiding editors. Every control a row offers SHALL be REACHABLE: a hover- or focus-revealed control SHALL be revealed by
 ONE rule that names every row type hosting it (so a new row type cannot ship present-but-invisible
@@ -379,6 +392,20 @@ push another out of reach.
 #### Scenario: No per-attribute or per-element restriction
 - **WHEN** bind-mode rows are inspected across different attribute names and element tags
 - **THEN** each SHALL offer the same three transforms
+
+#### Scenario: A text bind row offers the Markdown toggle
+- **WHEN** a `{ bind }` child node's row is inspected and its Markdown toggle is switched on
+- **THEN** the node SHALL become `{ bind, markdown: true }`, and the format and `map` controls SHALL disappear from the row
+- **AND** switching it off SHALL restore `{ bind }` with both controls
+
+#### Scenario: Every format type is offered with its fields
+- **WHEN** the format control of a bind row is opened
+- **THEN** it SHALL list `number`, `currency`, `date`, `count`, `join`, `truncate` and `pluralize`
+- **AND** choosing `truncate` SHALL commit a spec that passes validation and reveal a length and an ellipsis input, and choosing `pluralize` SHALL reveal `zero`, `one` and `other` inputs
+
+#### Scenario: Editing plural forms keeps the categories the row does not show
+- **WHEN** a bind whose format is `{ type: "pluralize", locale: "pl", forms: { one: "{count} plik", few: "{count} pliki", many: "{count} plików", other: "{count} pliku" } }` has its `one` form edited in the row
+- **THEN** the committed spec SHALL still carry `few`, `many` and `locale` unchanged
 
 ### Requirement: Action binding in the widget designer
 The widget designer SHALL let the person bind a `button` or `a` element to an action — the add menu SHALL offer `action` on those elements only, while an existing binding on any element stays editable — (none, a shared action chosen from `options.actions`, or an inline definition edited in place), edit the binding's input mapping (one row per input-schema field, each a template path or a constant, with `$root`, `$parent` and `$index` completions inside `each`), choose the output mode with its `path`/`map` — the `map` editor SHALL offer target paths from the widget's effective data schema (relative to the `patch` path when that mode is chosen), source paths from the action's output schema, and SHALL flag a source/target type mismatch in place; when either schema is an ARRAY the editor SHALL offer that side's ITEM properties (the per-item projection's vocabulary), a `"."` row's source SHALL complete from the response root while the other rows complete from the SELECTED value's item schema, and the mismatch check SHALL compare the item types of two array sides rather than passing every array-to-array pair — and declare the widget-level `load` binding for http GET actions. Path completions throughout the template panel SHALL resolve a shared `dataSchemaRef` exactly as an inline `dataSchema`. The draft SHALL serialize bindings in the template's `action` form and the widget's `load` field; validation errors (`INVALID_ACTION`, `CONFLICTING_ATTRIBUTES`) SHALL surface in place at the offending node. The live preview SHALL render bound elements with an inert `wg-designer-action` badge and never execute anything. Editors SHALL read the live binding on every commit (a URL typed before a method change survives; two mapping fields set in sequence both persist); new header/query/projection rows SHALL stay editor-local until they have a name (never committing `""` keys); path helpers SHALL be offered as complete paths (`$index`, `$root`, `$parent`), never as dangling prefixes; unknown shared-action references SHALL surface at the referencing node, not only in the Load section; and a binding editor SHALL be constructed only for elements that carry a binding.
