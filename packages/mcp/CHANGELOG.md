@@ -1,5 +1,16 @@
 # @widgentic/mcp
 
+## 0.12.0
+
+### Minor Changes
+
+- cc2c139: `get_authoring_guide` teaches the text formats (`count`, `join`, `truncate`, `pluralize`) with rendered examples and the Markdown text bind with its subset, deriving every bound from core's constants. The host bundle renders them through the same core engine; its conformance corpus gains text-format and Markdown cases, Polish plural rules included.
+
+### Patch Changes
+
+- Updated dependencies [cc2c139]
+  - @widgentic/core@0.12.0
+
 ## 0.11.1
 
 ### Patch Changes
