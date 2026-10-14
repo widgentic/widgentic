@@ -1,5 +1,12 @@
 # @widgentic/designer
 
+## 0.13.0
+
+### Patch Changes
+
+- Updated dependencies [6c53a3c]
+  - @widgentic/core@0.13.0
+
 ## 0.12.0
 
 ### Minor Changes

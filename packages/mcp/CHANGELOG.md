@@ -1,5 +1,16 @@
 # @widgentic/mcp
 
+## 0.13.0
+
+### Minor Changes
+
+- 6c53a3c: The app template's streamed `card` preview applies `hints.fields` as the renderer does, so a card keeps its field order when the result arrives. `list_widgets` carries the card's `fields` hint and the field-order rule through the core descriptors, and the host corpus gains card field-order cases.
+
+### Patch Changes
+
+- Updated dependencies [6c53a3c]
+  - @widgentic/core@0.13.0
+
 ## 0.12.0
 
 ### Minor Changes
