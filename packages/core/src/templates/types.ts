@@ -26,14 +26,17 @@ export type TemplateAttrValue =
 
 /**
  * Renders the value at `bind` as text, optionally through a presentation
- * `format` — the payload keeps the typed value.
+ * `format` — the payload keeps the typed value — or, with `markdown`, as
+ * the fixed Markdown subset's elements.
  */
 export interface TemplateBind {
   bind: string;
-  /** Value → authored label; a miss emits `default` or empty text. Exclusive with `format`. */
+  /** Value → authored label; a miss emits `default` or empty text. Exclusive with `format` and `markdown`. */
   map?: Record<string, string>;
   default?: string;
   format?: FormatSpec;
+  /** Parse the value as Markdown into a `div.wg-md`. Text binds only; exclusive with `map` and `format`. */
+  markdown?: boolean;
 }
 
 /**

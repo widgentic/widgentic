@@ -20,6 +20,7 @@ export { mountNode } from "./dom.js";
 export {
   formatBoundValue,
   FORMAT_TYPES,
+  LIST_FORMAT_TYPES,
   FORMAT_DECIMALS_MIN,
   FORMAT_DECIMALS_MAX,
   CURRENCY_DISPLAYS,
@@ -28,6 +29,17 @@ export {
   DATE_PATTERN_SEPARATORS,
   DATE_PATTERN_MAX,
   DEFAULT_FORMAT_LOCALE,
+  JOIN_SEPARATOR_MAX,
+  JOIN_DEFAULT_SEPARATOR,
+  TRUNCATE_LENGTH_MIN,
+  TRUNCATE_LENGTH_MAX,
+  TRUNCATE_ELLIPSIS_MAX,
+  TRUNCATE_DEFAULT_ELLIPSIS,
+  PLURAL_CATEGORIES,
+  PLURAL_FORM_MAX,
+  PLURAL_COUNT_PLACEHOLDER,
+  isPluralCategory,
+  isPlainDottedPath,
   LOCALE_TAG,
   DATE_PATTERN_ALLOWED,
   EPOCH_SECONDS_BELOW,
@@ -45,6 +57,11 @@ export type {
   NumberFormatSpec,
   CurrencyFormatSpec,
   DateFormatSpec,
+  CountFormatSpec,
+  JoinFormatSpec,
+  TruncateFormatSpec,
+  PluralizeFormatSpec,
+  PluralCategory,
   DatePatternPart
 } from "./widgets/value-format.js";
 export { analyzeHints } from "./hints.js";

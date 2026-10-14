@@ -20,7 +20,7 @@ export function authoringGuideTool(name: NameOf, prefix: string): WebMcpTool {
     readOnly: true,
     description:
       "The complete authoring contract for widgets, themes, shared schemas and actions, derived from the validators the designers enforce: " +
-      "the widget shape, the template DSL (bind/each/when/element, the map/prefix/format transforms, paths, actions), safety rules, style rules, data-schema subset, theme tokens, identifier patterns and limits. " +
+      "the widget shape, the template DSL (bind/each/when/element, the map/prefix/format transforms with every format type, the Markdown text bind, paths, actions), safety rules, style rules, data-schema subset, theme tokens, identifier patterns and limits. " +
       "Read it once before drafting anything non-trivial; the editing tools carry only a summary.",
     inputSchema: objectSchema({}),
     execute() {

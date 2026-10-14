@@ -21,7 +21,15 @@ import {
   DEFAULT_FORMAT_LOCALE,
   FORMAT_DECIMALS_MAX,
   FORMAT_DECIMALS_MIN,
-  FORMAT_TYPES
+  FORMAT_TYPES,
+  JOIN_SEPARATOR_MAX,
+  MARKDOWN_SOURCE_MAX,
+  MARKDOWN_TAGS,
+  PLURAL_CATEGORIES,
+  PLURAL_FORM_MAX,
+  TRUNCATE_ELLIPSIS_MAX,
+  TRUNCATE_LENGTH_MAX,
+  TRUNCATE_LENGTH_MIN
 } from "@widgentic/core";
 import {
   checkStoredAction,
@@ -581,5 +589,71 @@ describe("a guide-only agent binding a saved action", () => {
 
   it("the drafted name obeys the pattern the guide published", () => {
     expect(ACTION_NAME.test(refreshAction.name)).toBe(true);
+  });
+});
+
+describe("guide teaches the text formats and the Markdown bind", () => {
+  const guide = buildAuthoringGuide() as { rules: { template: { forms: string[] } } };
+  const forms = guide.rules.template.forms.join("\n");
+
+  it("derives the text formats' bounds and categories from the constants, with rendered examples", () => {
+    expect(forms).toContain("TEXT FORMATS");
+    for (const category of PLURAL_CATEGORIES) expect(forms).toContain(category);
+    expect(forms).toContain(`at most ${JOIN_SEPARATOR_MAX} characters`);
+    expect(forms).toContain(`${TRUNCATE_LENGTH_MIN}-${TRUNCATE_LENGTH_MAX}`);
+    expect(forms).toContain(`at most ${TRUNCATE_ELLIPSIS_MAX} characters`);
+    expect(forms).toContain(`at most ${PLURAL_FORM_MAX} characters`);
+    expect(forms).toContain(formatBoundValue(["red", "green", "blue"], { type: "join", last: " and " }));
+    expect(forms).toContain(formatBoundValue("Quarterly revenue summary", { type: "truncate", length: 10 }));
+    expect(forms).toContain("No items, 1 item, 1,200 items");
+  });
+
+  it("teaches the Markdown bind, its subset and its bound", () => {
+    expect(forms).toContain('"markdown": true');
+    expect(forms).toContain(MARKDOWN_TAGS.join(", "));
+    expect(forms).toContain(String(MARKDOWN_SOURCE_MAX));
+    expect(forms).toMatch(/parser, not the value, chooses tags/);
+    expect(forms).toMatch(/never with map or format/);
+    expect(forms).toContain(".wg-md");
+  });
+
+  /** A task-list widget an agent could draft from the guide alone. */
+  const tasks = {
+    kind: "task-summary",
+    template: {
+      tag: "div",
+      children: [
+        { tag: "h3", children: [{ bind: "tasks", format: { type: "pluralize", forms: { zero: "No tasks", one: "{count} task", other: "{count} tasks" } } }] },
+        { tag: "p", attrs: { title: { bind: "owners", format: { type: "join", last: " and " } } }, children: [{ bind: "owners", format: { type: "join", field: "name", last: " and " } }] },
+        { tag: "div", children: [{ bind: "notes", markdown: true }] }
+      ]
+    },
+    descriptor: {
+      description: "A task summary: a pluralized count, the owners and Markdown notes.",
+      dataShape: "{ tasks: [...], owners: [{ name }], notes }",
+      dataExample: { tasks: [1, 2, 3], owners: [{ name: "Ada" }, { name: "Lin" }], notes: "Ship **Friday**.\n\n- review\n- merge" },
+      dataSchema: {
+        type: "object",
+        properties: {
+          tasks: { type: "array" },
+          owners: { type: "array", items: { type: "object", properties: { name: { type: "string" } } } },
+          notes: { type: "string" }
+        }
+      }
+    }
+  };
+
+  it("a widget drafted with a join, a pluralize and a Markdown bind passes store validation and renders", async () => {
+    expect(checkStoredWidget(tasks)).toBeUndefined();
+    const { registerTemplate, renderToHtml } = await import("@widgentic/core");
+    const catalog = createCatalog();
+    registerTemplate(catalog, tasks.kind, tasks.template, tasks.descriptor);
+    const rendered = catalog.render({ kind: tasks.kind, data: tasks.descriptor.dataExample });
+    expect(rendered.ok).toBe(true);
+    if (!rendered.ok) return;
+    const html = renderToHtml(rendered.node);
+    expect(html).toContain("<h3>3 tasks</h3>");
+    expect(html).toContain(">Ada and Lin</p>");
+    expect(html).toContain('<div class="wg-md"><p>Ship <strong>Friday</strong>.</p><ul><li>review</li><li>merge</li></ul></div>');
   });
 });

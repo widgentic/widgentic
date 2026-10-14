@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
+import { FORMAT_TYPES } from "@widgentic/core";
 import { designerTools, DEFAULT_PREFIX } from "../index.js";
 
 const none = () => undefined;
@@ -66,6 +67,9 @@ describe("designerTools", () => {
     for (const term of ["map", "prefix", "format", "each", "when", "bind", ".wg-", "var(--wg-", "dataShape", "widgentic_authoring_guide", "widgentic_widget_definition_check"]) {
       expect(load, term).toContain(term);
     }
+    // Every format type and the Markdown text bind are named in the summary.
+    for (const type of FORMAT_TYPES) expect(load, type).toContain(type);
+    expect(load).toContain("markdown: true");
     expect(byName.get("widgentic_theme_load")).toContain("theme_token_specs");
     expect(byName.get("widgentic_schema_load")).toContain("dataSchemaRef");
     const acme = new Map(designerTools(ALL, { prefix: "acme" }).map((t) => [t.name, t.description]));

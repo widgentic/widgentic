@@ -14,6 +14,14 @@ import {
   FORMAT_DECIMALS_MAX,
   FORMAT_DECIMALS_MIN,
   FORMAT_TYPES,
+  JOIN_DEFAULT_SEPARATOR,
+  LIST_FORMAT_TYPES,
+  JOIN_SEPARATOR_MAX,
+  PLURAL_COUNT_PLACEHOLDER,
+  TRUNCATE_DEFAULT_ELLIPSIS,
+  TRUNCATE_ELLIPSIS_MAX,
+  TRUNCATE_LENGTH_MAX,
+  TRUNCATE_LENGTH_MIN,
   activeTransform,
   isCurrencyDisplay,
   isFormatType
@@ -34,7 +42,12 @@ import type { DesignerDiagnostics } from "./validate.js";
 type Path = (string | number)[];
 
 /** What a data path is being used for — decides which paths are offered. */
-type PathUse = "bind" | "each" | "when";
+/** `listBind`: a bind whose format reads a list, so array paths are offered too. */
+type PathUse = "bind" | "listBind" | "each" | "when";
+
+/** The path use of a bind carrying `format`. */
+const bindUse = (format: unknown): PathUse =>
+  isPlainObject(format) && LIST_FORMAT_TYPES.some((type) => type === format.type) ? "listBind" : "bind";
 
 /** Paths worth offering for a given use. */
 function pathOptions(scope: unknown, use: PathUse): string[] {
@@ -55,6 +68,7 @@ function pathOptions(scope: unknown, use: PathUse): string[] {
     const type = schemaType(schema);
     if (use === "each") return type === "array";
     if (use === "bind") return scalars.has(type);
+    if (use === "listBind") return scalars.has(type) || type === "array";
     return true; // `when` tests truthiness of anything
   });
   const paths = filtered.map((entry) => entry.path);
@@ -262,11 +276,88 @@ export function mountTemplatePanel(
         if (next === "number") onCommit({ type: "number", decimals: 2 });
         else if (next === "currency") onCommit({ type: "currency", currency: "USD", decimals: 2 });
         else if (next === "date") onCommit({ type: "date", pattern: "yyyy-MM-dd" });
-        else onCommit(undefined);
+        else if (next === "count") onCommit({ type: "count" });
+        else if (next === "join") onCommit({ type: "join", separator: JOIN_DEFAULT_SEPARATOR });
+        else if (next === "truncate") onCommit({ type: "truncate", length: 80 });
+        else if (next === "pluralize") {
+          onCommit({
+            type: "pluralize",
+            forms: { one: `${PLURAL_COUNT_PLACEHOLDER} item`, other: `${PLURAL_COUNT_PLACEHOLDER} items` }
+          });
+        } else onCommit(undefined);
       },
-      "Present the bound value as a number, a currency amount or a date"
+      "Present the bound value: a number, a currency amount or a date; a list's count or its items joined; text truncated; or a plural form"
     );
     if (active === undefined) return [typeSelect];
+
+    /** A text field of the spec: an empty input drops it, so the engine's default applies. */
+    const specInput = (
+      field: string,
+      placeholder: string,
+      title: string,
+      className: string
+    ): HTMLInputElement => {
+      const current = active[field];
+      const input = changeInput(
+        typeof current === "string" || typeof current === "number" ? String(current) : "",
+        (next) => {
+          const { [field]: _gone, ...rest } = active;
+          onCommit(next === "" ? rest : { ...rest, [field]: next });
+        },
+        `wgd-input ${className}`
+      );
+      input.placeholder = placeholder;
+      input.title = title;
+      return input;
+    };
+
+    if (active.type === "count") return [typeSelect];
+    if (active.type === "join") {
+      return [
+        typeSelect,
+        specInput("separator", "sep", `Between items (at most ${JOIN_SEPARATOR_MAX} characters; default "${JOIN_DEFAULT_SEPARATOR}")`, "wgd-format-separator"),
+        specInput("last", "last", `Before the last item, e.g. " and " (at most ${JOIN_SEPARATOR_MAX} characters)`, "wgd-format-last"),
+        specInput("field", "field", "Each item's field to join, e.g. name (leave empty for the items themselves)", "wgd-format-field")
+      ];
+    }
+    if (active.type === "truncate") {
+      const length = changeInput(
+        typeof active.length === "number" ? String(active.length) : "",
+        (next) => {
+          const parsed = Number(next);
+          onCommit({ ...active, length: next !== "" && Number.isFinite(parsed) ? parsed : next });
+        },
+        "wgd-input wgd-format-length"
+      );
+      length.placeholder = "len";
+      length.title = `Characters kept (${TRUNCATE_LENGTH_MIN}-${TRUNCATE_LENGTH_MAX})`;
+      return [
+        typeSelect,
+        length,
+        specInput("ellipsis", TRUNCATE_DEFAULT_ELLIPSIS, `Appended when cut (at most ${TRUNCATE_ELLIPSIS_MAX} characters)`, "wgd-format-ellipsis")
+      ];
+    }
+    if (active.type === "pluralize") {
+      const forms = isPlainObject(active.forms) ? active.forms : {};
+      // The row edits zero, one and other; any other category (few, many
+      // for some locales) and the locale ride along untouched.
+      const formInput = (category: "zero" | "one" | "other"): HTMLInputElement => {
+        const current = forms[category];
+        const input = changeInput(
+          typeof current === "string" ? current : "",
+          (next) => {
+            const { [category]: _gone, ...rest } = forms;
+            const nextForms = next === "" && category !== "other" ? rest : { ...rest, [category]: next };
+            onCommit({ ...active, forms: nextForms });
+          },
+          `wgd-input wgd-format-form wgd-format-form-${category}`
+        );
+        input.placeholder = category;
+        input.title = `The ${category} form; ${PLURAL_COUNT_PLACEHOLDER} becomes the number`;
+        return input;
+      };
+      return [typeSelect, formInput("zero"), formInput("one"), formInput("other")];
+    }
 
     const decimalsInput = (): HTMLInputElement => {
       const input = changeInput(
@@ -599,7 +690,9 @@ export function mountTemplatePanel(
     }
     if (typeof node.bind === "string") {
       const bind = node.bind;
-      const transform = activeTransform(node);
+      // Markdown is a text-bind mode beside the transforms: on, it hides both.
+      const markdown = node.markdown === true;
+      const transform = markdown ? "markdown" : activeTransform(node);
       const bindFormat = isPlainObject(node.format) ? node.format : undefined;
       const bindMap = isPlainObject(node.map) ? (node.map as Record<string, string>) : undefined;
       // A text bind carries `map` (value → authored label) or `format`; the
@@ -607,15 +700,31 @@ export function mountTemplatePanel(
       // `prefix` is attribute-only and is not offered here.
       const withBind = (extra: Record<string, unknown>): Record<string, unknown> => ({ bind, ...extra });
       const inline: (Node | string)[] = [
-        pathControl(bind, scope, "bind", (value) => commitAt(path, { ...node, bind: value }))
+        pathControl(bind, scope, bindUse(bindFormat), (value) => commitAt(path, { ...node, bind: value }))
       ];
       if (transform === undefined || transform === "format") {
         inline.push(
           ...formatEditor(bindFormat, (next) => commitAt(path, next === undefined ? { bind } : withBind({ format: next })))
         );
       }
+      if (markdown) {
+        const off = h(
+          "button",
+          { class: "wgd-md-toggle", type: "button", "aria-pressed": "true", title: "Rendered as Markdown — click for plain text" },
+          ["markdown"]
+        );
+        off.addEventListener("click", () => commitAt(path, { bind }));
+        inline.push(off);
+      }
       const icons: (Node | string)[] = [];
       if (transform === undefined) {
+        const addMarkdown = h(
+          "button",
+          { class: "wgd-icon", type: "button", title: "Render the value as Markdown (paragraphs, lists, emphasis, code, links)" },
+          ["md"]
+        );
+        addMarkdown.addEventListener("click", () => commitAt(path, withBind({ markdown: true })));
+        icons.push(addMarkdown);
         const addMap = h(
           "button",
           { class: "wgd-icon", type: "button", title: "Map values to authored labels (e.g. status → text)" },
@@ -763,7 +872,7 @@ export function mountTemplatePanel(
           ? pathControl(
               bound.bind,
               scope,
-              "bind",
+              bindUse(bound.format),
               (next) => setAttr(rebuild({ ...bound, bind: next })),
               "wgd-input wgd-attr-value"
             )
