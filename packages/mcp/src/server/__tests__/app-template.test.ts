@@ -322,6 +322,27 @@ describe("streaming input preview", () => {
     expect([...t.root().querySelectorAll(".wg-table-header")].map((th) => th.textContent)).toEqual(["First Name"]);
   });
 
+  it("a streamed card previews in the hinted field order, as the result renders it", async () => {
+    const t = bootTemplate();
+    const keys = () => [...t.root().querySelectorAll(".wg-card-field-key")].map((dt) => dt.textContent);
+    // Hints before data: only company has arrived so far.
+    t.dispatch(toolInputPartial({ widget: "card", hints: { fields: ["role", "company"] }, data: { fields: { company: "Northwind" } } }));
+    await settle();
+    expect(keys()).toEqual(["company"]);
+    const args = {
+      widget: "card",
+      hints: { fields: ["role", "company"] },
+      data: { fields: { company: "Northwind", role: "Designer", avatar: "x" } }
+    };
+    t.dispatch(toolInputPartial(args));
+    await settle();
+    expect(keys()).toEqual(["role", "company"]);
+    const rendered = handleRenderWidget(createCatalog(), args);
+    const tree = JSON.stringify((rendered.structuredContent as { tree: unknown }).tree);
+    expect(tree.indexOf('"children":["role"]')).toBeLessThan(tree.indexOf('"children":["company"]'));
+    expect(tree).not.toContain('"children":["avatar"]');
+  });
+
   it("a card previews its labels as the result renders them, and converges when hints come last", async () => {
     const t = bootTemplate();
     t.dispatch(toolInputPartial({ widget: "card", data: { fields: { order_total: 42 } } }));

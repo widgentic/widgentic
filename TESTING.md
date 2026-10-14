@@ -382,6 +382,19 @@ workspace and the sample first, then point at the built DLL):
 
 ## Verification log
 
+- **Card field order (2026-10-14, change `card-field-order`, on `feature/card-field-order`, core/mcp minor pending release)**: an agent reported that card fields always appear sorted by key.
+  - **Diagnosis.** The renderer and the preview keep argument order. A production `render_widget` with `role, company, email, phone, location` echoed that order in both the HTML and the payload. Hosts that re-serialize tool arguments through a map sort object keys, and the owner's v85 card (`Avatar, Company, Email, Location, Phone, Role`) shows it. Only an array keeps order.
+  - **`hints.fields`** (`field-order.test.ts`, 8 tests).
+    - The hinted keys render in order: `role, company, email`, with no `avatar` row, and `title` untouched.
+    - `title` and `subtitle` are never fields. Missing keys are skipped, a repeat renders once, and `[]` shows no fields.
+    - A malformed value (`"a"`, `["a", 3]`, an object, `null`) renders byte-identically to no hint.
+    - `labels` and `fieldFormat` still address keys (`Unit Price` → `$9.99`).
+    - Analysis gives `NO_MATCH` for `fields.cost` and `INVALID_VALUE` for a string, and is silent for coherent fields.
+  - **Steering.** `FIELD_ORDER_RULE` ends the card's `fields` hint and the table's `columns` hint, and the card's `dataShape` names `hints.fields`.
+  - **Preview.** In the `bootTemplate()` harness, a streamed card with `fields: ["role", "company"]` previewed `company` alone while `role` had not arrived, then `role, company` without `avatar`, matching the result's tree.
+  - **The corpus** gains `field order card`, as a render, a page and a preview: keys `role, Company, email` and a `NO_MATCH` for `fields.zzz`. The bare realm and V8 in .NET reproduce them. Existing cases changed only for `list_widgets` (the descriptor texts) and the app template (the preview code).
+  - **Gates.** Typecheck, `npm test` (1835 passed, 1 skipped), build, `pack:check`, docs check, `openspec validate --strict` and `--specs`, and `dotnet test` (209).
+
 - **Text formats and Markdown text binds (2026-10-13, change `template-text-formats`, on `feature/template-text-formats`, core/designer/mcp minor and webmcp patch pending release)**: BACKLOG DSL-1 and DSL-2.
   - **Text formats.** `count`, `join`, `truncate` and `pluralize` render on text binds and attribute values alike (`text-formats.test.ts`, 10 tests).
     - **count:** `1,234` from a 1 234-item list, and `n/a` stays itself.

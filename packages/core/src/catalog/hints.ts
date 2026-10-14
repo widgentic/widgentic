@@ -180,6 +180,25 @@ export function analyzeHints(
           });
         }
       }
+    } else if (key === "fields") {
+      if (!Array.isArray(value) || value.some((f) => typeof f !== "string")) {
+        diagnostics.push({
+          hint: "fields",
+          code: "INVALID_VALUE",
+          message: "'fields' must be an array of field-key strings (ignored; data order kept)"
+        });
+        continue;
+      }
+      const fields = cardFields(data);
+      for (const field of value) {
+        if (!fields.has(field as string)) {
+          diagnostics.push({
+            hint: `fields.${field}`,
+            code: "NO_MATCH",
+            message: `field '${field}' matches no field in data`
+          });
+        }
+      }
     } else if (key === "fieldFormat") {
       if (!isPlainObject(value)) {
         diagnostics.push({
