@@ -7,8 +7,8 @@
   "dependencies": {
     "@widgentic-examples/mcp-server": "^0.0.0",
     "@widgentic-examples/shared": "^0.0.0",
-    "@widgentic/core": "^0.11.0",
-    "@widgentic/designer": "^0.11.0",
-    "@widgentic/webmcp": "^0.2.2"
+    "@widgentic/core": "^0.12.0",
+    "@widgentic/designer": "^0.12.0",
+    "@widgentic/webmcp": "^0.2.3"
   }
 }
