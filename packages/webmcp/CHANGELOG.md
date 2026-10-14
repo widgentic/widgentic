@@ -1,5 +1,11 @@
 # @widgentic/webmcp
 
+## 0.2.5
+
+### Patch Changes
+
+- dcc935b: The `authoring_guide` tool states the Markdown text bind exception to the markup rule and describes `truncate` as keeping code points, as the MCP authoring guide does.
+
 ## 0.2.4
 
 ### Patch Changes
