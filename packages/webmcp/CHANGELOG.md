@@ -1,5 +1,13 @@
 # @widgentic/webmcp
 
+## 0.2.4
+
+### Patch Changes
+
+- Updated dependencies [6c53a3c]
+  - @widgentic/core@0.13.0
+  - @widgentic/designer@0.13.0
+
 ## 0.2.3
 
 ### Patch Changes
