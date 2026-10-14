@@ -3,6 +3,19 @@
 Versions share their major.minor with the `@widgentic/mcp` release whose host bundle they embed:
 `Widgentic.Mcp` X.Y.* runs `@widgentic/mcp` X.Y.*. The patch moves on its own for .NET-only fixes.
 
+## 0.13.1
+
+Embeds the `@widgentic/mcp` 0.13.1 host bundle.
+
+- **Authoring guide text.** `get_authoring_guide` now states the Markdown text bind exception to
+  the markup rule: bound values are never parsed as HTML, and a Markdown bind's parser chooses
+  only its fixed tags inside one `div.wg-md`. It describes `truncate` as keeping code points.
+  `render_widget`'s description names field order among what a streamed call shows first.
+- **XML docs.** `WidgenticConfigurationException.Section` lists the real sections, including
+  `settings` and `resourceDomains`. The settings shape on `WidgenticOptions` and
+  `IWidgenticCatalogSource` includes `resourceDomains`. `IWidgenticCatalogSource` says the app
+  resource's domain declaration consults the source.
+
 ## 0.13.0
 
 Embeds the `@widgentic/mcp` 0.13.0 host bundle.
