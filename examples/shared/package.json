@@ -7,8 +7,8 @@
   "dependencies": {
     "@widgentic/core": "^0.13.0",
     "@widgentic/designer": "^0.13.0",
-    "@widgentic/mcp": "^0.13.0",
-    "@widgentic/webmcp": "^0.2.4"
+    "@widgentic/mcp": "^0.13.1",
+    "@widgentic/webmcp": "^0.2.5"
   },
   "exports": {
     "./designers": "./designers.ts",
