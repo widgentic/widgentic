@@ -19,10 +19,16 @@
 import { isPlainObject } from "../../shared/plain-object.js";
 import { formatValue } from "./format.js";
 
-/** Format kinds. Closed — an unknown `type` fails validation. */
-export const FORMAT_TYPES = ["number", "currency", "date"] as const;
+/**
+ * Format kinds. Closed — an unknown `type` fails validation. The first
+ * three present one value; the text formats present a list or a text.
+ */
+export const FORMAT_TYPES = ["number", "currency", "date", "count", "join", "truncate", "pluralize"] as const;
 
 export type FormatType = (typeof FORMAT_TYPES)[number];
+
+/** The formats that read a list: count and join, and pluralize, which also reads a number. */
+export const LIST_FORMAT_TYPES = ["count", "join", "pluralize"] as const;
 
 export const isFormatType = (value: unknown): value is FormatType =>
   FORMAT_TYPES.some((type) => type === value);
@@ -75,6 +81,45 @@ export const LOCALE_TAG = /^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{2,8}){0,3}$/;
 /** The default locale — fixed so every surface formats identically. */
 export const DEFAULT_FORMAT_LOCALE = "en-US";
 
+/** Bound on a `join` separator or last separator, in characters. */
+export const JOIN_SEPARATOR_MAX = 16;
+
+/** The separator a `join` uses when the author gives none. */
+export const JOIN_DEFAULT_SEPARATOR = ", ";
+
+/** Bounds on a `truncate` length (inclusive), in code points. */
+export const TRUNCATE_LENGTH_MIN = 1;
+export const TRUNCATE_LENGTH_MAX = 1000;
+
+/** Bound on a `truncate` ellipsis, in characters. */
+export const TRUNCATE_ELLIPSIS_MAX = 8;
+
+/** The ellipsis a `truncate` appends when the author gives none. */
+export const TRUNCATE_DEFAULT_ELLIPSIS = "…";
+
+/** The CLDR plural categories a `pluralize` form may be keyed by; `other` is required. */
+export const PLURAL_CATEGORIES = ["zero", "one", "two", "few", "many", "other"] as const;
+
+export type PluralCategory = (typeof PLURAL_CATEGORIES)[number];
+
+export const isPluralCategory = (value: unknown): value is PluralCategory =>
+  PLURAL_CATEGORIES.some((category) => category === value);
+
+/** Bound on one `pluralize` form, in characters. */
+export const PLURAL_FORM_MAX = 80;
+
+/** Replaced in a `pluralize` form by the grouped number. */
+export const PLURAL_COUNT_PLACEHOLDER = "{count}";
+
+/**
+ * A `join` field: dot segments read in the item's own scope, none of them
+ * empty or `$`-prefixed — no scope tokens, since an item has no `each`
+ * chain of its own.
+ */
+export const isPlainDottedPath = (value: unknown): value is string =>
+  typeof value === "string" &&
+  value.split(".").every((segment) => segment !== "" && !segment.startsWith("$"));
+
 export interface NumberFormatSpec {
   type: "number";
   decimals?: number;
@@ -94,8 +139,39 @@ export interface DateFormatSpec {
   pattern: string;
 }
 
+export interface CountFormatSpec {
+  type: "count";
+  locale?: string;
+}
+
+export interface JoinFormatSpec {
+  type: "join";
+  separator?: string;
+  last?: string;
+  field?: string;
+}
+
+export interface TruncateFormatSpec {
+  type: "truncate";
+  length: number;
+  ellipsis?: string;
+}
+
+export interface PluralizeFormatSpec {
+  type: "pluralize";
+  forms: Partial<Record<PluralCategory, string>> & { other: string };
+  locale?: string;
+}
+
 /** A bind's presentation transform. */
-export type FormatSpec = NumberFormatSpec | CurrencyFormatSpec | DateFormatSpec;
+export type FormatSpec =
+  | NumberFormatSpec
+  | CurrencyFormatSpec
+  | DateFormatSpec
+  | CountFormatSpec
+  | JoinFormatSpec
+  | TruncateFormatSpec
+  | PluralizeFormatSpec;
 
 /** A tokenized pattern: literal runs and the tokens between them. */
 export type DatePatternPart = { token: (typeof DATE_TOKENS)[number] } | { literal: string };
@@ -215,6 +291,46 @@ export function parseFormatSpec(spec: unknown): FormatSpec | undefined {
   if (spec.type === "date") {
     return typeof spec.pattern === "string" ? { type: "date", pattern: spec.pattern } : undefined;
   }
+  const locale =
+    typeof spec.locale === "string" && LOCALE_TAG.test(spec.locale) ? spec.locale : undefined;
+  const withLocale = locale === undefined ? {} : { locale };
+  if (spec.type === "count") return { type: "count", ...withLocale };
+  if (spec.type === "join") {
+    const bounded = (value: unknown): value is string =>
+      typeof value === "string" && value.length <= JOIN_SEPARATOR_MAX;
+    return {
+      type: "join",
+      ...(bounded(spec.separator) ? { separator: spec.separator } : {}),
+      ...(bounded(spec.last) ? { last: spec.last } : {}),
+      ...(isPlainDottedPath(spec.field) ? { field: spec.field } : {})
+    };
+  }
+  if (spec.type === "truncate") {
+    if (
+      typeof spec.length !== "number" ||
+      !Number.isInteger(spec.length) ||
+      spec.length < TRUNCATE_LENGTH_MIN ||
+      spec.length > TRUNCATE_LENGTH_MAX
+    ) {
+      return undefined;
+    }
+    const ellipsis =
+      typeof spec.ellipsis === "string" && spec.ellipsis.length <= TRUNCATE_ELLIPSIS_MAX
+        ? spec.ellipsis
+        : undefined;
+    return { type: "truncate", length: spec.length, ...(ellipsis === undefined ? {} : { ellipsis }) };
+  }
+  if (spec.type === "pluralize") {
+    if (!isPlainObject(spec.forms)) return undefined;
+    const forms: Partial<Record<PluralCategory, string>> = {};
+    for (const category of PLURAL_CATEGORIES) {
+      const form = spec.forms[category];
+      if (typeof form === "string" && form.length <= PLURAL_FORM_MAX) forms[category] = form;
+    }
+    const other = forms.other;
+    if (other === undefined) return undefined;
+    return { type: "pluralize", forms: { ...forms, other }, ...withLocale };
+  }
   const decimals =
     typeof spec.decimals === "number" &&
     Number.isInteger(spec.decimals) &&
@@ -222,8 +338,6 @@ export function parseFormatSpec(spec: unknown): FormatSpec | undefined {
     spec.decimals <= FORMAT_DECIMALS_MAX
       ? spec.decimals
       : undefined;
-  const locale =
-    typeof spec.locale === "string" && LOCALE_TAG.test(spec.locale) ? spec.locale : undefined;
   const common = {
     ...(decimals === undefined ? {} : { decimals }),
     ...(locale === undefined ? {} : { locale })
@@ -244,6 +358,16 @@ export function parseFormatSpec(spec: unknown): FormatSpec | undefined {
  * list formats thousands of cells through one instance.
  */
 function buildFormatter(spec: FormatSpec): Formatter {
+  if (spec.type === "join") return joinFormatter(spec);
+  if (spec.type === "truncate") return truncateFormatter(spec);
+  if (spec.type === "count" || spec.type === "pluralize") {
+    const grouped = groupedNumber(spec.locale ?? DEFAULT_FORMAT_LOCALE);
+    if (grouped === undefined) return plain;
+    if (spec.type === "count") {
+      return (value) => (Array.isArray(value) ? grouped(value.length) : plain(value));
+    }
+    return pluralizeFormatter(spec, grouped);
+  }
   if (spec.type === "date") {
     const parts = tokenizeDatePattern(spec.pattern);
     if (parts === undefined) return plain;
@@ -278,9 +402,78 @@ function buildFormatter(spec: FormatSpec): Formatter {
   };
 }
 
+/** A number grouped in `locale` with ordinary spaces, or `undefined` when the engine refuses the locale. */
+function groupedNumber(locale: string): ((value: number) => string) | undefined {
+  try {
+    const intl = new Intl.NumberFormat(locale);
+    return (value) => intl.format(value).replace(UNICODE_SPACES, " ");
+  } catch {
+    return undefined;
+  }
+}
+
+/** The plain text at `field`'s segments inside `item`, or of the item itself. */
+function itemText(item: unknown, segments: readonly string[] | undefined): string {
+  let current = item;
+  if (segments !== undefined && isPlainObject(item)) {
+    for (const segment of segments) {
+      if (Array.isArray(current)) {
+        const index = Number(segment);
+        current = Number.isInteger(index) ? current[index] : undefined;
+      } else if (isPlainObject(current)) {
+        current = current[segment];
+      } else {
+        current = undefined;
+      }
+    }
+  }
+  // An absent or null item is no item: sparse data never reads ", ,".
+  return current === null || current === undefined ? "" : formatValue(current);
+}
+
+function joinFormatter(spec: JoinFormatSpec): Formatter {
+  const separator = spec.separator ?? JOIN_DEFAULT_SEPARATOR;
+  const segments = spec.field === undefined ? undefined : spec.field.split(".");
+  return (value) => {
+    if (!Array.isArray(value)) return plain(value);
+    const texts = value.map((item) => itemText(item, segments)).filter((text) => text !== "");
+    if (spec.last === undefined || texts.length < 2) return texts.join(separator);
+    return texts.slice(0, -1).join(separator) + spec.last + (texts[texts.length - 1] as string);
+  };
+}
+
+function truncateFormatter(spec: TruncateFormatSpec): Formatter {
+  const ellipsis = spec.ellipsis ?? TRUNCATE_DEFAULT_ELLIPSIS;
+  return (value) => {
+    const text = formatValue(value);
+    // Code points, so a surrogate pair is never split.
+    const points = Array.from(text);
+    if (points.length <= spec.length) return text;
+    return points.slice(0, spec.length).join("").trimEnd() + ellipsis;
+  };
+}
+
+function pluralizeFormatter(spec: PluralizeFormatSpec, grouped: (value: number) => string): Formatter {
+  let rules: Intl.PluralRules;
+  try {
+    rules = new Intl.PluralRules(spec.locale ?? DEFAULT_FORMAT_LOCALE);
+  } catch {
+    return plain;
+  }
+  return (value) => {
+    const count = Array.isArray(value) ? value.length : toFiniteNumber(value);
+    if (count === undefined) return plain(value);
+    // An author's `zero` form reads "No items" in every locale; the locale's
+    // own rules choose otherwise.
+    const category = count === 0 && spec.forms.zero !== undefined ? "zero" : rules.select(count);
+    const form = (isPluralCategory(category) ? spec.forms[category] : undefined) ?? spec.forms.other;
+    return form.split(PLURAL_COUNT_PLACEHOLDER).join(grouped(count));
+  };
+}
+
 /**
  * Formatters keyed by the spec OBJECT, which lives as long as the compiled
- * template that carries it. Holds locale/currency configuration only —
+ * template that carries it. Holds author literals and locale/currency configuration only —
  * never tenant data — so the per-request no-cache rule is untouched.
  */
 const compiled = new WeakMap<object, Formatter>();

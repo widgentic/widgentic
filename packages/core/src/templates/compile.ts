@@ -27,6 +27,7 @@ import { parsePath } from "./paths.js";
 import { InvalidTemplateError, validateTemplate } from "./validate.js";
 import { formatValue } from "../catalog/widgets/format.js";
 import { formatBoundValue } from "../catalog/widgets/value-format.js";
+import { parseMarkdown } from "./markdown.js";
 import { isPlainObject } from "../shared/plain-object.js";
 
 function join(path: string, segment: string): string {
@@ -184,6 +185,10 @@ function interpretNode(
   if (!isPlainObject(node)) return [];
 
   if (typeof node.bind === "string") {
+    if (node.markdown === true) {
+      // The parser chooses the tags and spends the budget per node it emits.
+      return parseMarkdown(formatValue(resolvePath(node.bind, frames, meta)), budget);
+    }
     budget.remaining--;
     const resolved = resolvePath(node.bind, frames, meta);
     if (isPlainObject(node.map)) {

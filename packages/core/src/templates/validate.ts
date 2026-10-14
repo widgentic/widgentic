@@ -12,10 +12,18 @@ import {
   FORMAT_DECIMALS_MAX,
   FORMAT_DECIMALS_MIN,
   FORMAT_TYPES,
+  JOIN_SEPARATOR_MAX,
   LOCALE_TAG,
+  PLURAL_CATEGORIES,
+  PLURAL_FORM_MAX,
+  TRUNCATE_ELLIPSIS_MAX,
+  TRUNCATE_LENGTH_MAX,
+  TRUNCATE_LENGTH_MIN,
   isCurrencyDisplay,
   isFormatType,
   isKnownLocale,
+  isPlainDottedPath,
+  isPluralCategory,
   parseFormatSpec,
   tokenizeDatePattern
 } from "../catalog/widgets/value-format.js";
@@ -80,6 +88,47 @@ function checkFormat(
       );
     }
     return undefined;
+  }
+  if (spec.type === "join") {
+    for (const field of ["separator", "last"] as const) {
+      const value = spec[field];
+      if (value !== undefined && (typeof value !== "string" || value.length > JOIN_SEPARATOR_MAX)) {
+        return bad(`'format.${field}' must be a string of at most ${JOIN_SEPARATOR_MAX} characters.`);
+      }
+    }
+    if (spec.field !== undefined && !isPlainDottedPath(spec.field)) {
+      return bad("'format.field' must be a plain dotted path read in each item, such as 'name' or 'owner.name'.");
+    }
+    return undefined;
+  }
+  if (spec.type === "truncate") {
+    if (
+      typeof spec.length !== "number" ||
+      !Number.isInteger(spec.length) ||
+      spec.length < TRUNCATE_LENGTH_MIN ||
+      spec.length > TRUNCATE_LENGTH_MAX
+    ) {
+      return bad(`'format.length' must be an integer ${TRUNCATE_LENGTH_MIN}-${TRUNCATE_LENGTH_MAX}.`);
+    }
+    if (
+      spec.ellipsis !== undefined &&
+      (typeof spec.ellipsis !== "string" || spec.ellipsis.length > TRUNCATE_ELLIPSIS_MAX)
+    ) {
+      return bad(`'format.ellipsis' must be a string of at most ${TRUNCATE_ELLIPSIS_MAX} characters.`);
+    }
+    return undefined;
+  }
+  if (spec.type === "pluralize") {
+    if (!isPlainObject(spec.forms)) return bad("'format.forms' must be an object of plural forms.");
+    for (const [category, form] of Object.entries(spec.forms)) {
+      if (!isPluralCategory(category)) {
+        return bad(`'format.forms' keys must be plural categories: ${PLURAL_CATEGORIES.join(", ")}.`);
+      }
+      if (typeof form !== "string" || form.length > PLURAL_FORM_MAX) {
+        return bad(`'format.forms.${category}' must be a string of at most ${PLURAL_FORM_MAX} characters.`);
+      }
+    }
+    if (spec.forms.other === undefined) return bad("'format.forms' must carry an 'other' form.");
   }
   if (spec.decimals !== undefined) {
     if (
@@ -151,9 +200,17 @@ function check(node: unknown, path: string, depth: number): TemplateError | unde
     }
     const pathError = checkPathSyntax(node.bind, path);
     if (pathError) return pathError;
-    // A text bind takes `map` (value → authored label) or `format`, never
-    // both. `prefix` is an attribute-value transform: ignored here and kept
-    // valid, so no stored template is refused on read for carrying it.
+    // A text bind takes one of `map` (value → authored label), `format` and
+    // `markdown`. `prefix` is an attribute-value transform: ignored here and
+    // kept valid, so no stored template is refused on read for carrying it.
+    if (node.markdown !== undefined) {
+      if (typeof node.markdown !== "boolean") {
+        return nodeError("Bind: 'markdown' must be true or false.", path);
+      }
+      if (node.markdown && (node.map !== undefined || node.format !== undefined)) {
+        return nodeError("A text bind carries one of 'map', 'format' and 'markdown' — one transform per value.", path);
+      }
+    }
     if (node.map !== undefined && node.format !== undefined) {
       return nodeError("A text bind carries either 'map' or 'format' — one transform per value.", path);
     }
@@ -251,6 +308,12 @@ function check(node: unknown, path: string, depth: number): TemplateError | unde
         if (isPlainObject(value) && typeof value.bind === "string") {
           const pathError = checkPathSyntax(value.bind, attrPath);
           if (pathError) return pathError;
+          if (value.markdown !== undefined) {
+            return nodeError(
+              `Attribute '${name}': 'markdown' is a text-bind mode; an attribute value cannot carry it.`,
+              attrPath
+            );
+          }
           // One transform per value: map selects an authored literal,
           // prefix glues one in front, format presents the value —
           // combining them has no use case and every combination would

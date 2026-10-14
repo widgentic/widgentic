@@ -382,6 +382,37 @@ workspace and the sample first, then point at the built DLL):
 
 ## Verification log
 
+- **Text formats and Markdown text binds (2026-10-13, change `template-text-formats`, on `feature/template-text-formats`, core/designer/mcp minor and webmcp patch pending release)**: BACKLOG DSL-1 and DSL-2.
+  - **Text formats.** `count`, `join`, `truncate` and `pluralize` render on text binds and attribute values alike (`text-formats.test.ts`, 10 tests).
+    - **count:** `1,234` from a 1 234-item list, and `n/a` stays itself.
+    - **join:** `red, green and blue` from sparse items, and `Ada, Lin` through `field`.
+    - **truncate:** `Quarterly…`, with `👍👍...` cut by code point.
+    - **pluralize:** `No items`, `1 item`, `1,200 items`, `2 items` (a numeric string) and `3 items` (a list), with `lots` left raw. Polish renders `1 plik`, `3 pliki`, `5 plików` and `22 pliki`.
+    - **Validation:** 15 malformed specs fail with `INVALID_TEMPLATE_NODE` at the bind's path, naming the field. The 23 existing format tests passed unchanged.
+  - **Markdown** (`markdown.test.ts`, 14 tests).
+    - **The subset:** paragraphs, `br`, strong and em (asterisks and underscores, nested, inside link text), code spans, `ol start`, flat lists with continuation lines, and links guarded like `href` (mailto, tel and relative pass).
+    - **Literal text:** `snake_case`, escapes, headings, quotes, fences, images, tables and raw HTML. `<img onerror>`, `javascript:` and `data:` links yield no `img` and no `a`.
+    - **Bounds:** empty values render nothing, and a 20 001-character value renders as one unparsed paragraph. 4 000 list items under `maxNodes: 1000` stop truncated.
+    - **Pathological input:** five 20 000-character delimiter, bracket and backtick inputs finish in under a second each, deterministically.
+    - **Validation:** a misplaced `markdown` (with `format` or `map`, non-boolean, on an attribute) is refused at its path.
+  - **Styles.** In happy-dom, a Markdown link computes the theme's `accent`, block margins follow `spacing`, and the last block sits flush. happy-dom does not resolve `var()` in `font-family`, so the `font-mono` code font is left to a real-browser check.
+  - **Designer.** The Markdown toggle hides `format` and `map` while on and restores `{ bind }`, with the preview rendering `.wg-md`. Attribute rows offer no toggle. Every format type is offered and commits a valid spec (truncate 80, join with `last` previewing `red, green and blue`, pluralize `3 items`). Editing a Polish `one` form keeps `few`, `many` and `locale`.
+  - **Guides.** The MCP and WebMCP guides teach the text formats with engine-rendered examples and the Markdown bind with `MARKDOWN_TAGS` and `MARKDOWN_SOURCE_MAX`. The WebMCP DSL summary names every format type and `markdown: true`. A drafted widget with a join, a pluralize and a Markdown bind passes `checkStoredWidget` and renders `3 tasks`, `Ada and Lin` and the Markdown list.
+  - **The corpus.** A `corpus-text` widget with 6 data sets (example, zero, one, many, Polish five, hostile Markdown) gives 10 cases; the example and the hostile value also run as a page and a preview. The bare realm and V8 in .NET reproduce them. Existing cases changed only for `list_widgets`, `get_authoring_guide` and the page stylesheet (the `.wg-md` block).
+  - **The seed** gains `project-status-widget` (design D9), and the seed tests count 9 entries.
+  - **PR #41 review findings.** Two Markdown cases broke the "literal text" rule.
+    - An image `![logo](url)` rendered as a literal `!` plus a link, and with a refused URL it dropped the URL. It now renders as its whole source text.
+    - A code fence collapsed into one inline `code` span. Fence lines, the fences and the info string included, now form one literal paragraph with `br` between lines, through the closing fence or the end of the value. A shorter closer does not close it.
+    - The literal-text test fed both inputs without asserting on them. Exact-output tests and a spec scenario ("Images and code fences stay literal") now cover them, and the corpus's hostile Markdown case carries both. Redeployed as `template-text-formats-8439a95` (revision `widgentic-selfhost--0000026`). A keyed render saved to a file shows both literal: `![logo](https://example.com/logo.png)`, then `` ```js``, `const a = 1;` and `` ``` `` separated by `br`. The same render shows `No open tasks` for an empty list.
+  - **Owner finding on staging (design D10).** In a host, the seeded widget rendered as intended: `1 open task`, `Ada and Lin`, the summary cut with `…`, and the Markdown notes with bold, a list, inline code and an accent link. In the designer, though, its `tasks` and `owners` binds showed "(off-schema)", because bind dropdowns offered scalar paths only. A bind whose format reads a list (`LIST_FORMAT_TYPES`) now completes array paths, in text and attribute positions. The regression test checks that a pluralize text bind and a join attribute bind on `tags` list it plainly, while truncate and plain binds still mark it off-schema. Redeployed as `template-text-formats-cd9dfc4` (revision `widgentic-selfhost--0000025`); the served `/app.bundle.js` carries the list-path rule.
+  - **Gates.** Typecheck, `npm test` (1820 passed, 1 skipped, after D10 and the review fixes), build, `pack:check`, docs check, `openspec validate --strict` and `--specs` (19), and `dotnet test` (206).
+  - **Staging (`template-text-formats-1c4899d`, revision `widgentic-selfhost--0000024`).** Each response was saved to a file and then read.
+    - **The guide.** A keyless 2026-07-28 `get_authoring_guide` carries the TEXT FORMATS and MARKDOWN forms, the rendered examples (`red, green and blue`; `No items, 1 item, 1,200 items`), `MARKDOWN_TAGS` and the 20000 bound.
+    - **A keyed render.** Through the deployment key, `render_widget` of the seeded `project-status-widget` (`format: "html"`) renders:
+      - `3 open tasks` and `Owners: Ada, Lin and Grace`;
+      - the summary cut with `…`;
+      - the notes as `div.wg-md` with `strong`, `em`, a `ul` holding `<code>ttl=300</code>`, and a guarded runbook `a` with `rel="noopener noreferrer"`.
+
 - **Tool annotations (2026-10-13, change `tool-annotations`, on `feature/tool-annotations`, `@widgentic/mcp` patch and `Widgentic.Mcp` 0.11.1 pending release)** — raised while integrating `Widgentic.Mcp` 0.11.0 into a .NET MCP server: no tool carried annotations, so hosts assumed the riskiest hints.
   - **The values.** Each definition carries all four hints. The discovery tools and `preview_widget` are read-only, non-destructive, idempotent and closed-world, and `render_widget` is the same but open-world (image inlining). `execute_action` alone declares a write. A `handlers.test.ts` case pins all nine.
   - **Node.** Over the SDK, every tool's `tools/list` annotations deep-equal its definition's (`sdk-interop.test.ts`).
