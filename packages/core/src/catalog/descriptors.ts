@@ -44,6 +44,14 @@ export const LABEL_STYLE_RULE =
   "unless the user asks for another style or language, and keep the data's keys as they are.";
 
 /**
+ * Why a built-in's order hint exists: hosts may re-serialize tool arguments
+ * through a map, which sorts object keys, so only an array keeps an order.
+ * One rule for every surface that documents `fields` or `columns`.
+ */
+export const FIELD_ORDER_RULE =
+  "Object key order is not preserved by every host: list the keys here whenever their order matters.";
+
+/**
  * Honest documentation of the built-ins' actual (lenient) behavior. Every
  * `dataExample` is asserted by tests to render successfully.
  */
@@ -62,13 +70,18 @@ export const BUILTIN_DESCRIPTORS: Record<
       "hints.fieldFormat for display formatting — the payload keeps the " +
       "typed value while the render gets its unit. Field values that are " +
       "image URLs render as images (see hints.images). Each field is labelled " +
-      "by its key unless hints.labels names it.",
+      "by its key unless hints.labels names it. Fields follow the data's key " +
+      "order unless hints.fields lists them.",
     dataExample: {
       title: "Essence Mascara",
       subtitle: "beauty",
       fields: { price: 9.99, rating: 2.56, stock: 99 }
     },
     hints: {
+      fields:
+        "string[] — the field keys to show, in order (e.g. ['name', 'role', " +
+        "'email']); unlisted fields are hidden and missing keys skipped. " +
+        FIELD_ORDER_RULE,
       fieldFormat:
         "Record<fieldKey, pattern> — formats matching field values by " +
         "substituting {value} in the pattern (e.g. { price: '${value}', " +
@@ -112,7 +125,7 @@ export const BUILTIN_DESCRIPTORS: Record<
       { name: "Lin", role: "ops", avatar: "https://picsum.photos/id/65/64/64.jpg" }
     ],
     hints: {
-      columns: "string[] — overrides column selection and order",
+      columns: "string[] — overrides column selection and order. " + FIELD_ORDER_RULE,
       labels:
         "Record<columnKey, string> — the header shown for a column instead " +
         "of its key (also its images' alt text); every other hint, " +
