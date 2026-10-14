@@ -26,7 +26,7 @@ To give an existing integration `execute`, create a new key with the scope and s
 
 ## Keys never write
 
-Saving a widget, theme, schema, action or secret is authorized by your signed-in session only. A request that presents an API key to a write endpoint is refused with `401`, whatever the key's scopes — and there is no registration tool over MCP at all. Agents draft JSON with `get_authoring_guide`; you import and save it in the designer.
+Saving a widget, theme, schema, action, secret or your settings is authorized by your signed-in session only. A request that presents an API key to a write endpoint is refused with `401`, whatever the key's scopes — and there is no registration tool over MCP at all. Agents draft JSON with `get_authoring_guide`; you import and save it in the designer.
 
 The reason is where keys live: in the connector settings of third-party hosts and in conversations an attacker can steer. A leaked key exposes the ability to read and render your catalog, never the ability to change it.
 

@@ -3,7 +3,7 @@ title: "Run your own server"
 description: "Assemble the widgentic MCP server with createWidgenticServer, pick a transport, add a store for per-principal catalogs, and wire secrets."
 ---
 
-`@widgentic/mcp/sdk` exports one function, `createWidgenticServer(options?)`, returning a connectable `McpServer` from the official MCP TypeScript SDK 2.x (`@modelcontextprotocol/server`) with the full wiring: the nine tools, the MCP Apps declaration, the app template resource, output slimming and image inlining. The SDK packages are optional peers, so install them alongside:
+`@widgentic/mcp/sdk` exports one function, `createWidgenticServer(options?)`, returning a connectable `McpServer` from the official MCP TypeScript SDK 2.x (`@modelcontextprotocol/server`) with the full wiring: the nine tools, the MCP Apps declaration, the app template resource, output slimming and image inlining. The SDK packages are optional peers of `@widgentic/mcp`, so install them alongside, with `zod`, which ext-apps needs as its own peer:
 
 ```bash
 npm install @widgentic/mcp @modelcontextprotocol/server @modelcontextprotocol/ext-apps zod
@@ -17,6 +17,8 @@ import { serveStdio } from "@modelcontextprotocol/server/stdio";
 
 serveStdio(() => createWidgenticServer());
 ```
+
+A server in another language embeds the runtime-neutral `@widgentic/mcp/host` bundle instead of porting the engine; for .NET, that is the `Widgentic.Mcp` package ([Packages](/develop/packages)).
 
 ## The stdio example
 
@@ -70,8 +72,8 @@ With no options the assembly serves the built-ins; everything else is your expli
 | `actions` | the action source for the catalog: `bindingAt(kind, id)`, `load(kind)`, `resolve(ref)`; omitted, `execute_action` answers `UNKNOWN_ACTION` |
 | `scopes` | the caller's scopes; `execute` gates `execute_action` and http-bound descriptors |
 | `secrets` | `(name) => Promise<string>` resolving the caller's secret at execution time, `undefined` for an unknown name |
-| `rateLimit` | a `() => boolean` gate for `execute_action`; `false` answers `RATE_LIMITED` |
-| `previewRateLimit` | a `() => boolean` gate for `preview_widget`; `false` answers `RATE_LIMITED` |
+| `rateLimit` | a `() => boolean` gate for `execute_action`; `false` answers `RATE_LIMITED`; omitted, executions are not limited |
+| `previewRateLimit` | a `() => boolean` gate for `preview_widget`; `false` answers `RATE_LIMITED`; omitted, previews are not limited |
 | `fetchDeps` | an injectable transport for tests |
 
 Catalog and themes are passed in because the trust decision belongs where the API key is read.
@@ -115,7 +117,7 @@ Two environment variables are read each time a server is constructed:
 <dir>/<principalId>/settings.json         { defaultThemes?: { light?, dark? }, resourceDomains?: string[] }
 ```
 
-`settings(principalId)` and, on writable stores, `putSettings(principalId, update)` hold one settings record per principal: a write replaces the sections it names (`null` removes one) and keeps the rest. Its `defaultThemes` section names the stored theme light and dark hosts get when a render names no theme; `composeThemes` turns it into the registry's defaults, and a theme named there cannot be removed (`THEME_IN_USE`). Its `resourceDomains` section lists up to 20 domains the caller's frames may load images from directly, stored as canonical origins; an entry the rule refuses is `INVALID_DOMAIN`, and `composeResourceDomains` yields the list for `createWidgenticServer`. Read the record once per request with `readPrincipalSettings` and pass it to both as `{ settings }`.
+`settings(principalId)` and, on writable stores, `putSettings(principalId, update)` hold one settings record per principal: a write replaces the sections it names (`null` removes one) and keeps the rest. Its `defaultThemes` section names the stored theme light and dark hosts get when a render names no theme; `composeThemes` turns it into the registry's defaults, and a theme named there cannot be removed (`THEME_IN_USE`); a default naming no stored theme is refused with `UNKNOWN_THEME`. Its `resourceDomains` section lists up to 20 domains the caller's frames may load images from directly, stored as canonical origins; an entry the rule refuses is `INVALID_DOMAIN`, and `composeResourceDomains` yields the list for `createWidgenticServer`. A record or section of the wrong shape (an unknown section or mode, more than 20 domains) is `INVALID_SHAPE`, and a refused write changes nothing. Read the record once per request with `readPrincipalSettings` and pass it to both as `{ settings }`.
 
 Options carry `limits` (how many widgets, themes, schemas, actions and secrets a principal may hold, the bytes per entry and the template nodes per widget — the defaults are on [Limits](/reference/limits)), an `onDiagnostic` sink and a `cipher` for secrets. Per request:
 
@@ -129,8 +131,16 @@ import {
   readPrincipalSettings
 } from "@widgentic/mcp/store";
 import { createWidgenticServer } from "@widgentic/mcp/sdk";
+import {
+  createExecutionLimiter,
+  DEFAULT_EXECUTIONS_PER_MINUTE,
+  DEFAULT_PREVIEWS_PER_MINUTE
+} from "@widgentic/mcp";
 
 const store = createFileStore("./data");
+// Built once: the buckets must outlive the per-request servers.
+const executions = createExecutionLimiter(DEFAULT_EXECUTIONS_PER_MINUTE);
+const previews = createExecutionLimiter(DEFAULT_PREVIEWS_PER_MINUTE);
 
 async function serverFor(apiKey: string | undefined) {
   const resolved = apiKey === undefined ? undefined : await store.resolvePrincipal(apiKey);
@@ -147,12 +157,14 @@ async function serverFor(apiKey: string | undefined) {
     scopes,
     schemas: () => store.schemas(id),
     sharedActions: () => store.actions(id),
-    secrets: (name) => store.secretValue(id, name)
+    secrets: (name) => store.secretValue(id, name),
+    rateLimit: () => executions.take(id),
+    previewRateLimit: () => previews.take(id)
   });
 }
 ```
 
-`composeCatalog` and `composeThemes` return fresh instances every time, each with a `diagnostics` array: an invalid, oversized or built-in-shadowing entry is skipped with a diagnostic, never fatal. Keys are stored as `sha256:` digests and compared in constant time (`generateKey`, `hashKey`, `verifyKey`); a key carries `read` and optionally `execute`, fixed at creation.
+`composeCatalog` and `composeThemes` return fresh instances every time, each with a `diagnostics` array: an invalid, oversized or built-in-shadowing entry is skipped with a diagnostic, never fatal. `createExecutionLimiter(perMinute)` keeps one token bucket per principal id: build it once, outside the factory — a limiter built per request starts full every time and limits nothing — and keep executions and previews in separate buckets, so a burst of streaming previews never spends a principal's actions. Keys are stored as `sha256:` digests and compared in constant time (`generateKey`, `hashKey`, `verifyKey`); a key carries `read` and optionally `execute`, fixed at creation.
 
 ### SQLite
 
@@ -160,7 +172,7 @@ async function serverFor(apiKey: string | undefined) {
 
 ### Cosmos DB
 
-`@widgentic/mcp/store/cosmos` exports `createCosmosStore(options)`, a `WritableWidgetStore` over two containers: `data`, partitioned by `/principalId` with one document per entry (`profile`, `widget:<kind>`, `theme:<name>`, `schema:<name>`, `action:<name>`, `secret:<name>`), so a principal's catalog is one single-partition query; and `keys`, partitioned by `/digest`, so key resolution is a point read. It takes an `endpoint` and an Azure `credential` (managed identity in deployment) plus optional `databaseId`, `dataContainerId`, `keysContainerId`, `limits`, `cipher` and `log` — deliberately no account-key or connection-string option. Under Cosmos RBAC the serving identity can hold the read-only role, so a write from the MCP server fails at the service. `@azure/cosmos` and `@azure/identity` are optional peers of this entry.
+`@widgentic/mcp/store/cosmos` exports `createCosmosStore(options)`, a `WritableWidgetStore` over two containers: `data`, partitioned by `/principalId` with one document per entry (`profile`, `widget:<kind>`, `theme:<name>`, `schema:<name>`, `action:<name>`, `secret:<name>`) plus a `settings` document holding the principal's settings record, so a principal's catalog is one single-partition query; and `keys`, partitioned by `/digest`, so key resolution is a point read. It takes an `endpoint` and an Azure `credential` (managed identity in deployment) plus optional `databaseId`, `dataContainerId`, `keysContainerId`, `limits`, `cipher` and `log` — deliberately no account-key or connection-string option. Under Cosmos RBAC the serving identity can hold the read-only role, so a write from the MCP server fails at the service. `@azure/cosmos` and `@azure/identity` are optional peers of this entry.
 
 ## Mount the authoring surface
 

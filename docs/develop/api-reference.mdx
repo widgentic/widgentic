@@ -3,7 +3,7 @@ title: "API reference"
 description: "Where the per-entry export index comes from and how to read it."
 ---
 
-The Reference tab carries one page per published package entry — sixteen in all — listing that entry's runtime exports by name. The pages are generated from the packages themselves by the repository's `docs:generate` script, from the same export lists the export-snapshot test pins, and a CI check fails when the committed pages differ from a fresh generation. An index therefore cannot list a symbol that does not exist, and a symbol added or removed in a release shows up here in the same change.
+The Reference tab carries one page per published package entry — twenty in all — listing that entry's runtime exports by name. The pages are generated from the packages themselves by the repository's `docs:generate` script, from the same export lists the export-snapshot test pins, and a CI check fails when the committed pages differ from a fresh generation. An index therefore cannot list a symbol that does not exist, and a symbol added or removed in a release shows up here in the same change.
 
 What the index covers and what it does not:
 
@@ -42,14 +42,26 @@ What the index covers and what it does not:
   <Card title="designer" href="/reference/api/designer">
     Designers, custom elements, chrome tokens, import and export helpers.
   </Card>
+  <Card title="webmcp" href="/reference/api/webmcp">
+    The designers as WebMCP tools (beta).
+  </Card>
   <Card title="mcp" href="/reference/api/mcp">
     Tool-output convention, tool definitions and handlers, app template, guarded fetch.
   </Card>
   <Card title="mcp/sdk" href="/reference/api/mcp-sdk">
     `createWidgenticServer`.
   </Card>
+  <Card title="mcp/host" href="/reference/api/mcp-host">
+    `createWidgenticHost`, the runtime-neutral bundle.
+  </Card>
+  <Card title="mcp/authoring" href="/reference/api/mcp-authoring">
+    The authoring surface and its `node:http` adapter.
+  </Card>
   <Card title="mcp/store" href="/reference/api/mcp-store">
     Store port, memory and file stores, composition, keys.
+  </Card>
+  <Card title="mcp/store/sqlite" href="/reference/api/mcp-store-sqlite">
+    `createSqliteStore`.
   </Card>
   <Card title="mcp/store/cosmos" href="/reference/api/mcp-store-cosmos">
     `createCosmosStore`.
@@ -62,4 +74,4 @@ What the index covers and what it does not:
   </Card>
 </CardGroup>
 
-Which entry to import from is a matter of scope, not capability: the root of `@widgentic/core` re-exports every subpath, while `@widgentic/mcp` keeps its SDK, store and secrets behind their own entries so the base entry imports with no optional peer installed. [Packages](/develop/packages) lists the entries with their runtimes and dependencies.
+Which entry to import from is a matter of scope, not capability: the root of `@widgentic/core` re-exports every subpath, while `@widgentic/mcp` keeps its SDK, host, authoring surface, store and secrets behind their own entries so the base entry imports with no optional peer installed. [Packages](/develop/packages) lists the entries with their runtimes and dependencies.

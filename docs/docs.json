@@ -212,8 +212,16 @@
             "href": "https://www.npmjs.com/package/@widgentic/designer"
           },
           {
+            "label": "@widgentic/webmcp",
+            "href": "https://www.npmjs.com/package/@widgentic/webmcp"
+          },
+          {
             "label": "@widgentic/mcp",
             "href": "https://www.npmjs.com/package/@widgentic/mcp"
+          },
+          {
+            "label": "Widgentic.Mcp (NuGet)",
+            "href": "https://www.nuget.org/packages/Widgentic.Mcp"
           }
         ]
       },

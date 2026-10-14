@@ -25,12 +25,13 @@ A widget is one JSON object: \{ kind, template, descriptor \}.
 | -- | -- |
 | `kind` | String identifier matching ^\[a-zA-Z0-9.\_-\]+\$; must not collide with a reserved kind. |
 | `template` | A template DSL node (see rules.template). |
-| `descriptor` | REQUIRED string — what the widget shows, for agents. |
+| `descriptor` | REQUIRED object — what agents read about the widget; its fields follow. |
 
 ### Descriptor fields
 
 | Field | Meaning |
 | -- | -- |
+| `description` | REQUIRED string — what the widget shows, for agents. |
 | `dataShape` | Strongly recommended string — a compact sketch of the expected data, e.g. '\{ title, lines: \[\{ item, amount \}\] \}'. Agents listing the widget read it; without it they see a generic placeholder, and the designer warns. |
 | `dataExample` | RECOMMENDED — an example the widget renders well; shown to agents and used as the designer's preview data. |
 | `dataSchemaRef` | OPTIONAL string — the NAME of one of the user's saved shared schemas (discover with list\_schemas), used IN PLACE of an inline dataSchema: carrying both is refused. Use this when the user names a saved schema ('use my person schema') — the server resolves it at render time, so one shared schema serves every widget that references it and edits propagate. |
@@ -112,5 +113,9 @@ Kinds with a dataSchema fail fast with dotted paths (e.g. data.lines.0.amount); 
 ## Data modeling
 
 PREFER binding only properties declared in descriptor.dataSchema — schema-declared data is validated with dotted paths, so agents get correctable errors instead of silently blank output. A '\$meta.x' bind path exists (reads the payload's meta) but meta is NOT covered by dataSchema validation: avoid it, or reserve it for genuinely out-of-band display like a caller-supplied heading. If the widget needs a title, declare \`title\` as an optional schema property instead. When the user names a SAVED schema, set descriptor.dataSchemaRef to its name (shape from list\_schemas) and bind those properties — do NOT reconstruct the schema inline: the copy forks the moment the user edits the shared one.
+
+## Labels
+
+Labels are what the reader sees: write them in Title Case ("First Name", "Order Total") unless the user asks for another style or language, and keep the data's keys as they are. It applies to the labels a template writes as literals, and to the built-in card's and table's hints.labels (a field's or column's label in place of its key).
 
 The template node forms and safety rules are on [Template DSL](/reference/template-dsl); per-user limits on [Limits](/reference/limits).

@@ -8,7 +8,9 @@ namespace Widgentic.Mcp;
 /// with one registered, every per-caller call (<c>list_widgets</c>, <c>render_widget</c>,
 /// <c>preview_widget</c>, <c>list_themes</c>, <c>list_schemas</c>, the preview pages, and
 /// <see cref="IWidgenticRenderer"/>'s <c>RequestContext</c> overload) composes the caller's
-/// catalog for that call and drops it afterwards; nothing is cached. How catalogs are stored or
+/// catalog for that call and drops it afterwards; nothing is cached. The app resource's
+/// resource-domain declaration also asks the source, on <c>resources/list</c> and
+/// <c>resources/read</c>; its content stays the same for every caller. How catalogs are stored or
 /// fetched is the implementation's choice. Authenticate callers the ASP.NET Core way, so the
 /// caller's <see cref="ClaimsPrincipal"/> arrives here.
 /// </summary>
@@ -67,11 +69,13 @@ public sealed class WidgenticCatalog
     public WidgenticComposition? Composition { get; set; }
 
     /// <summary>
-    /// The caller's settings record, in the store's shape (<c>{ "defaultThemes": { "light"?, "dark"? } }</c>),
-    /// or null for none. In <see cref="WidgenticComposition.Merge"/> each section it defines
-    /// replaces the startup record's section whole, and the sections it omits are the startup
-    /// record's; in <see cref="WidgenticComposition.Replace"/> it is the only record. Its
-    /// defaults name themes of the caller's composed catalog.
+    /// The caller's settings record, in the store's shape
+    /// (<c>{ "defaultThemes"?: { "light"?, "dark"? }, "resourceDomains"?: [ … ] }</c>), or null for
+    /// none. In <see cref="WidgenticComposition.Merge"/> each section it defines replaces the
+    /// startup record's section whole, and the sections it omits are the startup record's; in
+    /// <see cref="WidgenticComposition.Replace"/> it is the only record. Its defaults name themes
+    /// of the caller's composed catalog, and its resource domains are declared on the app resource
+    /// after <see cref="WidgenticOptions.ResourceDomains"/>.
     /// </summary>
     public string? Settings { get; set; }
 

@@ -21,8 +21,8 @@ Embeds the `@widgentic/mcp` 0.13.0 host bundle.
 
 Embeds the `@widgentic/mcp` 0.12.0 host bundle.
 
-- **Text formats in templates.** Widget templates (from `UseWidgets` or a catalog source) may
-  present a bound value through four more `format` types:
+- **Text formats in templates.** Widget templates (from `AddWidget`, `AddWidgetsFromDirectory`
+  or a catalog source) may present a bound value through four more `format` types:
   - `count`: a list's length;
   - `join`: a list's items with author separators, an optional last separator and an optional
     per-item `field`;
@@ -68,7 +68,8 @@ Embeds the `@widgentic/mcp` 0.11.0 host bundle.
   - The catalog is composed inside each call and dropped with it; nothing is cached.
   - A caller's refused entries are skipped and logged without their contents, and a source that
     throws answers `CATALOG_UNAVAILABLE`.
-  - `tools/list`, `list_theme_tokens`, `get_authoring_guide` and the app template stay global.
+  - `tools/list`, `list_theme_tokens`, `get_authoring_guide` and the app template's content stay
+    global; the template's domain declaration follows the caller (below).
 - **Default themes from settings.** `UseSettings(json)` and `UseSettingsFromFile(path)` take a
   settings record in the store's shape, `{ "defaultThemes": { "light"?, "dark"? } }`.
   - Each default must name a configured theme, and a refused setting stops startup.

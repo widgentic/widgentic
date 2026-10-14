@@ -3,7 +3,7 @@ title: "MCP tools"
 description: "The nine tools the widgentic server exposes, their inputs, result shapes and structured errors."
 ---
 
-Any MCP client can discover the widgets a widgentic server knows and ask it to validate and render. Seven tools are for agents; `execute_action` and `preview_widget` are called by the app template itself. The input schemas are generated from the tool definitions in the [reference](/reference/mcp-tools); this page explains what comes back: `content` blocks (text, or a resource) plus, for renders, `structuredContent` for the MCP Apps template. The hosted server answers at `https://mcp.widgentic.dev/mcp` and serves catalogs, themes and schemas per API key ([Per-principal catalogs](/how-it-works/per-principal-catalogs)).
+Any MCP client can discover the widgets a widgentic server knows and ask it to validate and render. Seven tools are for agents; `execute_action` and `preview_widget` are called by the app template itself. The input schemas and annotations are generated from the tool definitions in the [reference](/reference/mcp-tools): every tool but `execute_action` is annotated read-only, non-destructive and idempotent, and closed-world except `render_widget` (it fetches images to inline them); `execute_action` is the only write. This page explains what comes back: `content` blocks (text, or a resource) plus, for renders, `structuredContent` for the MCP Apps template. The hosted server answers at `https://mcp.widgentic.dev/mcp` and serves catalogs, themes and schemas per API key ([Per-principal catalogs](/how-it-works/per-principal-catalogs)).
 
 ## Discovery
 
@@ -12,7 +12,7 @@ Any MCP client can discover the widgets a widgentic server knows and ask it to v
 | `list_widgets` | none | JSON array of descriptors: `kind`, `description`, `dataShape`, a `dataExample` to imitate, supported `hints`, `dataSchema` when declared |
 | `list_schemas` | none | `{ schemas, rules }` — the caller's saved shared schemas as `{ name, label?, description?, schema }`; anonymous or unknown keys see an empty list, never an error |
 | `list_actions` | none | `{ actions, rules }` — the caller's saved shared actions as their CONTRACT: `{ name, label?, description?, kind, method?, input?, output? }`. The `url`, `headers` and `query` stay on the server; anonymous or unknown keys see an empty list |
-| `list_themes` | none | `{ themes, rules }` — every registered theme as `{ name, label?, description?, tokens, styles? }` |
+| `list_themes` | none | `{ themes, defaults, rules }` — every registered theme as `{ name, label?, description?, tokens, styles? }`; `defaults` names the theme each host mode (`light`, `dark`) gets when a render names none |
 | `list_theme_tokens` | none | `{ tokens, presets, rules }` — each token's `name`, light `default`, value `type` and `use`; the `dark` preset; the value rules, including `x-*` custom variables |
 | `get_authoring_guide` | none | a JSON guide: `workflow`, `widget`, `sharedSchema`, `sharedAction`, `theme`, `rules` (template, styles, dataSchema, actions) and `limits`, derived from the live validators |
 
@@ -41,7 +41,7 @@ Two notes can end the text. Misaimed hints (a misspelled key, a target matching 
 
 ### Themes
 
-`theme` takes a registered name (`"dark"`, or any name from `list_themes`) or an inline token map of bare names to CSS strings (`"6px"`, not `6`; `x-*` keys become `--wg-x-*` custom variables). When the user names a saved theme, pass the name — a reconstructed map drifts the moment they edit it. The resolved map rides the payload block as a top-level `theme` field on every format and styles `page` and `app` output.
+`theme` takes a registered name (`"dark"`, or any name from `list_themes`) or an inline token map of bare names to CSS strings (`"6px"`, not `6`; `x-*` keys become `--wg-x-*` custom variables). When the user names a saved theme, pass the name — a reconstructed map drifts the moment they edit it. The resolved map rides the payload block as a top-level `theme` field on every format and styles `page` and `app` output; a named theme with shared `styles` also rides it by name as `themeName`, so an action's re-render resolves the same entry, styles included. Leaving `theme` out uses the caller's default themes — the built-in `light` and `dark` unless their settings choose others — by host mode (`list_themes` reports them as `defaults`).
 
 ### Groups
 
@@ -49,7 +49,7 @@ Render the built-in `group` kind to show several widgets in one response instead
 
 ### Errors
 
-Failures return `isError: true` with a text block holding a JSON error `{ code, path, message }` in the tool's input vocabulary: `UNKNOWN_KIND` at `path: "widget"` lists the available kinds; a missing `widget` or `data` is `MISSING_FIELD`; invalid `hints`, `meta` or `format` are `INVALID_TYPE`; a schema violation names its path (`data.lines`); an unknown theme name is `UNKNOWN_THEME` listing the registered names; an unsafe token value is `INVALID_TYPE` at `theme.<token>`. Handlers never throw.
+Failures return `isError: true` with a text block holding a JSON error `{ code, path, message }` in the tool's input vocabulary: `UNKNOWN_KIND` at `path: "widget"` lists the available kinds; a missing `widget` or `data` is `MISSING_FIELD` (sent `kind` in place of `widget`, the message says to pass the kind id as `widget`); invalid `hints`, `meta` or `format` are `INVALID_TYPE`; a schema violation names its path (`data.lines`); an unknown theme name is `UNKNOWN_THEME` listing the registered names; an unsafe token value is `INVALID_TYPE` at `theme.<token>`. Handlers never throw.
 
 ## execute_action
 
@@ -57,11 +57,11 @@ Registered with `_meta.ui.visibility: ["app"]`, so Apps hosts hide it from the m
 
 Input: `{ widget, action, args?, payload, at?, item? }` — the rendered kind, a binding identifier (the element's dotted template path, or `"load"`), the descriptor's arguments, the current payload and, inside a group, the item's location (`at: "data.items.2"`) and kind. The server resolves the binding from the caller's composed catalog, never from the request; requires the `execute` scope; validates `args` against the action's input schema; runs the guarded https fetch with secrets injected; validates the response; folds it into `payload.data` under the binding's output mode; and re-renders exactly as `render_widget` would, with the same `structuredContent`.
 
-Errors follow the same contract with `UNKNOWN_KIND`, `UNKNOWN_ACTION`, `ACTION_NOT_HTTP`, `FORBIDDEN_SCOPE`, `INVALID_ACTION_INPUT`, `UNKNOWN_SECRET`, `ACTION_FETCH_FAILED`, `INVALID_ACTION_OUTPUT` and `RATE_LIMITED`; every message is scrubbed of secret values. Declaring actions is covered in [Actions and secrets](/design/actions-and-secrets) and the [action definition reference](/reference/action-definition).
+Errors follow the same contract with `INVALID_TYPE` and `MISSING_FIELD` for malformed input, `UNKNOWN_KIND`, `UNKNOWN_ACTION`, `ACTION_NOT_HTTP`, `FORBIDDEN_SCOPE`, `INVALID_ACTION_INPUT`, `UNKNOWN_SECRET`, `ACTION_FETCH_FAILED`, `INVALID_ACTION_OUTPUT` and `RATE_LIMITED`; every message is scrubbed of secret values. Declaring actions is covered in [Actions and secrets](/design/actions-and-secrets) and the [action definition reference](/reference/action-definition).
 
 ## preview_widget
 
-Registered with `_meta.ui.visibility: ["app"]`, like `execute_action`. The app template calls it while a render's input is still streaming, for kinds it cannot preview itself — any stored widget, alone or inside a `group`. Agents call `render_widget` instead.
+Registered with `_meta.ui.visibility: ["app"]`, like `execute_action`. The app template calls it while a render's input is still streaming, for kinds it cannot preview itself — any stored widget, alone or inside a `group`. For a built-in kind it builds the preview itself and calls the tool once per streamed render for the CSS alone, since the caller's default themes live on the server, and again only when a different `theme` settles. Agents call `render_widget` instead.
 
 Input: `{ widget, data?, hints?, meta?, theme? }` — whatever has streamed so far. The server renders it through the caller's composed catalog with the data-schema check skipped (a required field may not have arrived yet) and returns `structuredContent: { tree, css }` with a one-line text. It never inlines images, computes no hint diagnostics, emits no `load`, and ignores a theme that does not resolve yet; the tool result that follows stays the only authority. Contract failures use the rendering error codes, and a caller past the per-principal preview budget gets `RATE_LIMITED`. In the frame, one request is in flight at a time and any failure keeps the generating skeleton on screen; see [Inline rendering](/how-it-works/inline-rendering).
 

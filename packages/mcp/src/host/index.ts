@@ -74,8 +74,8 @@ export interface WidgenticHost {
   problems(): string;
   /**
    * JSON array of the served tools' definitions (name, description,
-   * inputSchema), with `visibility: ["app"]` on the tools only the mounted
-   * template calls.
+   * inputSchema, annotations), with `visibility: ["app"]` on the tools only
+   * the mounted template calls.
    */
   definitions(): string;
   /**

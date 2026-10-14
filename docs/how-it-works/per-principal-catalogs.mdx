@@ -3,7 +3,7 @@ title: "Per-principal catalogs"
 description: "How an API key becomes a principal and why every request gets its own freshly composed catalog."
 ---
 
-Without a store, a widgentic server serves one catalog to everyone: the built-ins plus whatever the host compiled in. With a store from `@widgentic/mcp/store`, the API key identifies a **principal** whose saved widgets, themes, schemas, actions and secrets exist only for them.
+Without a store, a widgentic server serves one catalog to everyone: the built-ins plus whatever the host compiled in. With a store from `@widgentic/mcp/store`, the API key identifies a **principal** whose saved widgets, themes, schemas, actions, secrets and settings exist only for them.
 
 ## Keys as principals
 
@@ -13,7 +13,7 @@ Without a store, a widgentic server serves one catalog to everyone: the built-in
 
 ## Composition happens per request
 
-When a request arrives, the server resolves the key **before** constructing the request's MCP server, then calls `composeCatalog(store, principalId)` and `composeThemes(store, principalId)`. Each returns a **new** instance holding the built-in kinds or themes plus that principal's stored entries. Nothing mutable is shared between requests, nothing is cached across principals, and a registration made while serving one request is not observable in another. Two keys see two catalogs: principal B rendering A's `report` kind gets `UNKNOWN_KIND` with `report` absent from the listed kinds; themes resolve per principal the same way. Composing on every request is the price of cross-tenant safety: no cache exists that could hand one tenant another's widget.
+When a request arrives, the server resolves the key **before** constructing the request's MCP server, then calls `composeCatalog(store, principalId)` and `composeThemes(store, principalId)`. Each returns a **new** instance holding the built-in kinds or themes plus that principal's stored entries; `composeThemes` also makes the themes the principal's settings choose the registry's default per mode. `composeResourceDomains(store, principalId)` returns the resource domains those settings declare. `readPrincipalSettings(store, principalId)` starts one read of the settings record, and passing it as `{ settings }` to both compositions lets one read serve them. Nothing mutable is shared between requests, nothing is cached across principals, and a registration made while serving one request is not observable in another. Two keys see two catalogs: principal B rendering A's `report` kind gets `UNKNOWN_KIND` with `report` absent from the listed kinds; themes resolve per principal the same way. Composing on every request is the price of cross-tenant safety: no cache exists that could hand one tenant another's widget.
 
 ## Built-ins cannot be shadowed
 
@@ -21,7 +21,7 @@ A stored widget whose `kind` is `table` is refused on write and skipped on read;
 
 ## Validated on write and on read
 
-A store can be edited out of band, so loaded data is untrusted input. Entries are validated before they are persisted — templates through `validateTemplate`, themes through `validateTheme`, actions through the action validator, and descriptors must carry a string `description` — and re-validated as composition loads them. An entry that fails any check — an `on*` attribute, an unknown token, an oversized entry, a dangling `dataSchemaRef` — is **skipped with a diagnostic** naming it: never thrown, never partially registered, so one bad entry cannot deny a principal their remaining widgets. Nothing is ever "saved but vanished": what the write accepted is what composition serves.
+A store can be edited out of band, so loaded data is untrusted input. Entries are validated before they are persisted — templates through `validateTemplate`, themes through `validateTheme`, actions through the action validator, and descriptors must carry a string `description` — and re-validated as composition loads them. An entry that fails any check — an `on*` attribute, an unknown token, an oversized entry, a dangling `dataSchemaRef` — is **skipped with a diagnostic** naming it: never thrown, never partially registered, so one bad entry cannot deny a principal their remaining widgets. Theme token values are the exception: a stored value the token rule now refuses is dropped with a diagnostic and the theme is kept. Nothing is ever "saved but vanished": what the write accepted is what composition serves.
 
 ## Limits per principal
 
@@ -37,14 +37,15 @@ A wrong or revoked key looks like "my custom widgets are missing", not like an e
 
 ## Shared schemas resolve at composition
 
-A widget descriptor may carry `dataSchemaRef: "person"` in place of an inline `dataSchema` (both at once is `INVALID_SHAPE`; a ref to a missing schema is `UNKNOWN_SCHEMA` on write and a skip on read). Composition resolves the reference into the descriptor's `dataSchema`, so downstream of composition the reference does not exist. Editing the stored schema and recomposing validates every referencing widget against the new shape, and `removeSchema` refuses with `SCHEMA_IN_USE` while widgets still point at it. Actions and secrets carry the same guards (`ACTION_IN_USE`, `SECRET_IN_USE`). See [Data schemas](/design/data-schemas).
+A widget descriptor may carry `dataSchemaRef: "person"` in place of an inline `dataSchema` (both at once is `INVALID_SHAPE`; a ref to a missing schema is `UNKNOWN_SCHEMA` on write and a skip on read). Composition resolves the reference into the descriptor's `dataSchema`, so downstream of composition the reference does not exist. Editing the stored schema and recomposing validates every referencing widget against the new shape, and `removeSchema` refuses with `SCHEMA_IN_USE` while widgets still point at it. Actions and secrets carry the same guards (`ACTION_IN_USE`, `SECRET_IN_USE`), and a theme the settings name as a default refuses removal with `THEME_IN_USE`. See [Data schemas](/design/data-schemas).
 
 ## The store is a port
 
-`WidgetStore` is the read port: `resolvePrincipal`, `widgets`, `themes`, `schemas`, `actions`, `listSecrets` and `secretValue`. `WritableWidgetStore` is a **separate type** adding the `put` and `remove` methods, `ensurePrincipal`, key management and identity linking, so a read-only handle cannot write and a read-only deployment need not implement the write half. Three implementations ship:
+`WidgetStore` is the read port: `resolvePrincipal`, `widgets`, `themes`, `schemas`, `actions`, `listSecrets`, `secretValue` and `settings` (`{}` when nothing is set). `WritableWidgetStore` is a **separate type** adding the `put` and `remove` methods, `putSettings`, `ensurePrincipal`, key management and identity linking, so a read-only handle cannot write and a read-only deployment need not implement the write half. A custom adapter implements `settings`, and `putSettings` too when it is writable. Four implementations ship:
 
-- `createMemoryStore(seed?, limits?)` implements the full writable port; the contract suite runs against it.
-- `createFileStore(dir, options?)` keeps one directory per principal (`widgets/`, `themes/`, `schemas/`, `actions/`, `secrets/`) and a `principals.json` of digests.
+- `createMemoryStore(seed?, limits?, options?)` implements the full writable port.
+- `createFileStore(dir, options?)` implements the read port over one directory per principal (`widgets/`, `themes/`, `schemas/`, `actions/`, `secrets/` and a `settings.json`) and a `principals.json` of digests.
+- `createSqliteStore(path, options?)` from `@widgentic/mcp/store/sqlite` implements the writable port over one database file.
 - `createCosmosStore(options)` from `@widgentic/mcp/store/cosmos` uses two containers: `data` partitioned by `/principalId` (a principal's catalog is one single-partition query) and `keys` partitioned by `/digest` (key resolution is a point read). It takes an Azure credential only (no account key or connection string), so the serving identity can hold a read-only role.
 
-All three pass the same contract suite. Wiring one in is covered in [Run your own server](/develop/run-your-own-server).
+The three writable implementations pass the same contract suite. Wiring one in is covered in [Run your own server](/develop/run-your-own-server).
