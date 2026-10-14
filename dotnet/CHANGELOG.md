@@ -3,6 +3,20 @@
 Versions share their major.minor with the `@widgentic/mcp` release whose host bundle they embed:
 `Widgentic.Mcp` X.Y.* runs `@widgentic/mcp` X.Y.*. The patch moves on its own for .NET-only fixes.
 
+## 0.13.0
+
+Embeds the `@widgentic/mcp` 0.13.0 host bundle.
+
+- **Card field order.** The built-in `card` takes `hints.fields`, an array of field keys that
+  chooses which fields render and in what order, as `hints.columns` does for the table.
+  - Keys the data lacks are skipped, and a repeated key renders once.
+  - A malformed value keeps data order, and a card without the hint renders unchanged.
+  - Object key order does not survive every host's serializer, so an array is the only reliable
+    order.
+- **Steering.** `list_widgets` carries the field-order rule in the card's `fields` hint and the
+  table's `columns` hint.
+- **Hint notes.** A `render_widget` result reports unmatched or malformed `fields`.
+
 ## 0.12.0
 
 Embeds the `@widgentic/mcp` 0.12.0 host bundle.
