@@ -1,5 +1,15 @@
 # @widgentic/webmcp
 
+## 0.2.3
+
+### Patch Changes
+
+- cc2c139: The authoring guide tool and every editing tool's DSL summary teach the text formats and the Markdown text bind.
+- Updated dependencies [cc2c139]
+- Updated dependencies [cc2c139]
+  - @widgentic/core@0.12.0
+  - @widgentic/designer@0.12.0
+
 ## 0.2.2
 
 ### Patch Changes
