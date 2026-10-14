@@ -394,6 +394,7 @@ workspace and the sample first, then point at the built DLL):
   - **Preview.** In the `bootTemplate()` harness, a streamed card with `fields: ["role", "company"]` previewed `company` alone while `role` had not arrived, then `role, company` without `avatar`, matching the result's tree.
   - **The corpus** gains `field order card`, as a render, a page and a preview: keys `role, Company, email` and a `NO_MATCH` for `fields.zzz`. The bare realm and V8 in .NET reproduce them. Existing cases changed only for `list_widgets` (the descriptor texts) and the app template (the preview code).
   - **Gates.** Typecheck, `npm test` (1835 passed, 1 skipped), build, `pack:check`, docs check, `openspec validate --strict` and `--specs`, and `dotnet test` (209).
+  - **Staging (`card-field-order-a91fd7b`, revision `widgentic-selfhost--0000027`).** Each response was saved to a file and then read. A keyless `list_widgets` carries the card's `fields` hint and the table's `columns` hint, each ending in the field-order rule. A keyless card with `fields: ["role", "company", "email"]` over `avatar, company, email, role` renders `role, company, email`.
 
 - **Text formats and Markdown text binds (2026-10-13, change `template-text-formats`, on `feature/template-text-formats`, core/designer/mcp minor and webmcp patch pending release)**: BACKLOG DSL-1 and DSL-2.
   - **Text formats.** `count`, `join`, `truncate` and `pluralize` render on text binds and attribute values alike (`text-formats.test.ts`, 10 tests).

@@ -19,4 +19,4 @@
 ## 4. Gates and staging
 
 - [x] 4.1 Run the gates: typecheck, `npm test`, build, `pack:check`, docs check, `openspec validate --strict card-field-order` and `--specs`, and `dotnet test`.
-- [ ] 4.2 Deploy the branch to staging. Check from the served bytes that `list_widgets` carries the `fields` hint with the rule, and that a card with `fields` renders in the hinted order. Hand the owner a host probe prompt.
+- [x] 4.2 Deploy the branch to staging. Check from the served bytes that `list_widgets` carries the `fields` hint with the rule, and that a card with `fields` renders in the hinted order. Hand the owner a host probe prompt.
