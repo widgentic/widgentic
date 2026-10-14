@@ -3,6 +3,32 @@
 Versions share their major.minor with the `@widgentic/mcp` release whose host bundle they embed:
 `Widgentic.Mcp` X.Y.* runs `@widgentic/mcp` X.Y.*. The patch moves on its own for .NET-only fixes.
 
+## 0.12.0
+
+Embeds the `@widgentic/mcp` 0.12.0 host bundle.
+
+- **Text formats in templates.** Widget templates (from `UseWidgets` or a catalog source) may
+  present a bound value through four more `format` types:
+  - `count`: a list's length;
+  - `join`: a list's items with author separators, an optional last separator and an optional
+    per-item `field`;
+  - `truncate`: by code point, with an author ellipsis;
+  - `pluralize`: author forms chosen by the locale's plural rules, with `{count}` replaced by the
+    number.
+
+  They render on V8 exactly as on Node, Polish `few`/`many` rules included.
+- **Markdown text binds.** `{ "bind": "notes", "markdown": true }` renders a fixed Markdown subset
+  into one `div.wg-md`: paragraphs, line breaks, emphasis, inline code, links and flat lists.
+  - The parser, not the value, chooses the tags, and raw HTML, images and code fences stay
+    literal text.
+  - Links face the template URL guard.
+  - The rendered CSS styles `.wg-md` from the theme tokens.
+- **The authoring guide** (`get_authoring_guide`) teaches both features, with limits read from
+  the engine's constants.
+- **The sample's seed** gains `project-status-widget`, which uses all of them.
+- **Upgrading.** Entries that use the new forms are refused by a 0.11 host, which skips and logs
+  them. Upgrade hosts before serving widgets authored in a 0.12 designer.
+
 ## 0.11.1
 
 Embeds the `@widgentic/mcp` 0.11.1 host bundle.
