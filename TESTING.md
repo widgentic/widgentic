@@ -421,6 +421,7 @@ workspace and the sample first, then point at the built DLL):
       - The page having no CSP of its own is queued as EXM-1.
     - **Redeploy (`designer-preview-island-913cca6`, ACR run `cj3t`, revision `--0000030`).** Chrome on the demo: the page has no `style[data-widgentic]` and no `.wg-*` rule, and the frame renders the draft.
     - **Agent retest on `--0000030`.** The base stylesheet is gone, but the chrome stylesheet still held the two `.wgd-preview .wg-designer-action` marker rules. Those rules and `.wgd-preview` moved to a stylesheet that only an in-page preview injects. Tests pin it: absent in island mode, present in page mode.
+    - **Redeploy (`designer-preview-island-7914e25`, ACR run `cj3u`, revision `--0000031`).** Chrome on the demo, after the Widgets and Themes tabs: no `style[data-widgentic]`, no `style[data-widgentic-designer-preview]`, zero `.wg-*`, `.wgd-preview` or `wg-designer-action` rules, and the frame renders.
 
 - **Docs accuracy review (2026-10-14, on `bug/docs-accuracy`, mcp and webmcp patch pending release)**: a review of the hand-written docs against the code for the 13 changes archived since 2026-10-07. Four read-only reviewers, split by area, found about 65 issues, and four fixers on disjoint files corrected them.
   - **Agent-facing text.**
