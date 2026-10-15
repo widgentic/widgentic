@@ -132,6 +132,15 @@ describe("the preview island", () => {
     expect(sent.find((m) => m.id === 9)?.error).toBeDefined();
   });
 
+  it("answers ping and refuses methods it does not host", () => {
+    const { sent, fromFrame, boot } = islandDesigner();
+    boot();
+    fromFrame({ jsonrpc: "2.0", id: 11, method: "ping" });
+    fromFrame({ jsonrpc: "2.0", id: 12, method: "ui/request-display-mode", params: { mode: "fullscreen" } });
+    expect(sent.find((m) => m.id === 11)?.result).toEqual({});
+    expect(sent.find((m) => m.id === 12)?.error?.code).toBe(-32601);
+  });
+
   it("answers ui/message without composing anything", () => {
     const { sent, fromFrame, boot } = islandDesigner();
     boot();

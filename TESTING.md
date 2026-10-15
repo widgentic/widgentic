@@ -390,7 +390,8 @@ workspace and the sample first, then point at the built DLL):
     - Anonymous: the operator's domains alone, and a bare `font-src 'none'` with none. A failing settings read degrades the same way and is logged.
     - API keys get 401; POST gets 404, or 401 when anonymous.
     - The Node adapter sends the core's status, headers and body, and no cookie.
-  - **The island** (`preview-island.test.ts`, 16 tests, with a fake frame window).
+  - **The island** (`preview-island.test.ts`, 17 tests, with a fake frame window).
+    - `ping` is answered, and a method it does not host is refused with -32601.
     - Results are held until `initialized`; tree and CSS order match the in-page pipeline; one more result per edit through the same frame; nothing for an invalid draft.
     - `tools/call` is refused with no fetch, and `ui/message` composes nothing. Links: `https` opens with `noopener`, `javascript:` is refused.
     - The frame's height follows `size-changed`, and messages from a stranger window are ignored.
@@ -405,7 +406,7 @@ workspace and the sample first, then point at the built DLL):
     - **Edits.** They patch the same frame.
   - **The example** (D9, revised). Its MCP endpoint declares only each person's domains, so the web service passes no operator list. `app.test.ts` checks the frames on `/api/preview-frame` for widgets and themes, and a person's policy carrying their domain.
   - **Tests.** Every happy-dom suite now sets `disableIframePageLoading`, so a mounted island never reaches the network.
-  - **Gates.** Typecheck, `npm test` (1861 passed, 1 skipped), build, `pack:check`, docs check, `openspec validate --strict` and `--specs` (19), and `dotnet test` (209). Rerun after the cleanups and the docs review: `npm test` 1862 passed (1 skipped), with the other gates green. `dotnet test` was not rerun, because the host bundle is untouched.
+  - **Gates.** Typecheck, `npm test` (1861 passed, 1 skipped), build, `pack:check`, docs check, `openspec validate --strict` and `--specs` (19), and `dotnet test` (209). Rerun after the cleanups, the docs review and verify's `ping` test: `npm test` 1863 passed (1 skipped), with the other gates green. `dotnet test` was not rerun, because the host bundle is untouched.
   - **Docs review before merge.** Two statements had gone stale and were fixed: the designers' "no network I/O" (they now cause the frame load) and the widget designer's "mounted through `mountWidget`" (in the app, the bridge mounts the preview). Also updated: the theme designer's page, the authoring module headers, `CLAUDE.md`'s layout line, design D1/D7, the stylesheet sentence in the widget-designer delta and the designer changeset.
   - **Staging (`designer-preview-island-764ca55`, ACR run `cj3s`, revision `widgentic-selfhost--0000029`, replacing the stylesheet probe).** Each response was saved to a file and then read.
     - The first request after the cutover still reached the old revision and returned `NOT_FOUND`. After that, the revision FQDN and `demo.widgentic.dev` both answer `/api/preview-frame` with 200.
