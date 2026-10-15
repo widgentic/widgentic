@@ -85,7 +85,7 @@
 ## 9. Gates and staging
 
 - [x] 9.1 Run the gates: typecheck, `npm test`, build, `pack:check`, the docs check, `openspec validate --strict stylesheet-resources` and `--specs`, and `dotnet test`. The host bundle changes, so `dotnet test` is required.
-- [ ] 9.2 Deploy the branch to staging and check the served bytes:
+- [x] 9.2 Deploy the branch to staging and check the served bytes:
   - the settings record and a keyed render's `structuredContent.resources`;
   - a `page` document's link;
   - the frame bundle carries `applyResources`.

@@ -148,7 +148,7 @@ One new optional section.
 ## Risks / Trade-offs
 
 - **[Hosts differ]**
-  - **Copilot is unknown.** It was untestable during the probe. → The staging check retests it. If it blocks `style-src`, the icons fall back to their ligature text ("mail"), which is legible, and the docs say so.
+  - **Copilot was unknown.** It was untestable during the probe. → The staging check retested it, and it rendered the icons like Claude and ChatGPT (2026-10-15). A host that blocks `style-src` would show the ligature text ("mail"), which is legible, and the docs say so.
   - **claude.ai caches the policy per page session.** → The docs repeat the resource-domains note: reload after adding a domain.
 - **[A stylesheet can do anything CSS can inside the frame]** It can hide content, restyle everything, and request images from declared domains, through attribute selectors that could reveal rendered values to that domain's logs. → It is the person's own choice behind their own domains, never an agent's, and the frame holds only the widget. The settings designer states the trust, and `integrity` pins the content.
 - **[Fonts flash or load slowly]** → The frame's size observer reports the new height after the fonts arrive. A link kept across results never reloads.

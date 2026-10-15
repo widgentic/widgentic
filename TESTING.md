@@ -430,6 +430,15 @@ workspace and the sample first, then point at the built DLL):
     - D7: no budget change was needed.
     - D10: `.NET` per-principal composition now carries the operator's domains.
   - **Gates.** Typecheck, `npm test` (1942 passed, 1 skipped), build, `pack:check`, docs check, `openspec validate --strict` and `--specs` (19), and `dotnet test` (219).
+  - **Staging (`stylesheet-resources-40be27a`, ACR run `cj3v`, revision `widgentic-selfhost--0000032`, replacing the island build).** Each response was saved to a file and then read. The deployment key went from Key Vault into a header file only, and was shredded.
+    - `GET /api/settings` holds the seeded stylesheet and the four domains.
+    - `/api/preview-frame` grants the font domains in `style-src` and `font-src`, and its 44,626-byte template carries `applyResources`.
+    - A keyed 2026-07-28 `render_widget` carries `structuredContent.resources` with Material Icons, and the keyed `page` document links it before `<style>`. The keyed `html` fragment never mentions it, and the keyed `list_themes` lists it.
+    - A keyless render carries no `resources`.
+  - **The owner's host check on staging.** All passed, Copilot included this time.
+    - In fresh conversations, the inbox and agenda widgets rendered the mail and calendar icons from the settings stylesheet in claude.ai, ChatGPT and VS Code Copilot Chat, in dark mode.
+    - Removing `fonts.googleapis.com` in Settings was refused with `UNDECLARED_DOMAIN`, naming the stylesheet.
+    - The designer's preview showed the agenda's calendar icon.
 
 - **Designer preview island (2026-10-15, change `designer-preview-island`, on `feature/designer-preview-island`, designer/mcp minor pending release)**: the widget and theme designers can preview in the app template, framed, with the designer as a minimal MCP Apps host.
   - **The frame route** (`preview-frame.test.ts`, 7 tests).
