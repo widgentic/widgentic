@@ -103,9 +103,11 @@ export interface WidgenticServerOptions {
    * The caller's stylesheets (the store's `resources` shape, typically from
    * `composeResources`), linked by every frame and page document their
    * renders produce. Read by the core resource rule; an entry it refuses,
-   * or whose host the declared `resourceDomains` do not cover, is dropped —
-   * the frame policy would block it anyway. Absent/empty links nothing and
-   * leaves every output as it was.
+   * or whose host the declared `resourceDomains` do not cover, is dropped
+   * silently, as a refused domain is — the frame policy would block it
+   * anyway. Refusals are reported where stylesheets are read: by the store
+   * (`composeResources` diagnostics) and the host bundle (`problems()`).
+   * Absent/empty links nothing and leaves every output as it was.
    */
   resources?: readonly unknown[];
   /**

@@ -449,6 +449,21 @@ public sealed class PrincipalCatalogTests
     }
 
     [Fact]
+    public async Task AJsonNullSettingsRecordIsNoRecord()
+    {
+        using var rig = Rig.Start(
+            new FakeSource(_ => new WidgenticCatalog { Settings = "null" }),
+            configure: options =>
+            {
+                options.ResourceDomains.Add("fonts.googleapis.com");
+                options.UseSettings($$"""{"resources":{{Sheets(Icons)}}}""", "startup settings");
+            });
+        // In Merge the startup record still applies, its stylesheet included, and nothing is reported.
+        Assert.Equal([Icons], Delivered(await rig.CallAsync("render_widget", Alpha, Card)));
+        Assert.Empty(rig.Logs.Messages);
+    }
+
+    [Fact]
     public async Task AnUncoveredStylesheetIsSkippedAndLogged()
     {
         using var rig = Rig.Start(

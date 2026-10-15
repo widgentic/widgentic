@@ -30,7 +30,7 @@ By default (`format: "both"`) the content is a text block with the rendered HTML
 |---|---|
 | `html` | the fragment text only (strands widgentic-aware hosts) |
 | `widget` | the payload resource block only |
-| `page` | a self-contained styled HTML document as text (doctype, base stylesheet, the kind's styles, the theme), plus the payload block |
+| `page` | a self-contained styled HTML document as text (doctype, base stylesheet, the kind's styles, the theme, and links to the caller's [stylesheets](/how-it-works/inline-rendering#stylesheets)), plus the payload block |
 | `app` | a one-line text fallback, a `text/html;profile=mcp-app` resource at `ui://widgentic/page/<kind>` holding that page, plus the payload block |
 
 Every successful result also carries `structuredContent: { html, css, payload, tree }` — fragment, generated theme and kind CSS, payload and the render tree the fragment was serialized from — plus `resources` when the caller has [stylesheets](/how-it-works/inline-rendering#stylesheets), which Apps hosts push into the declared app template to mount natively and patch in place ([Inline rendering](/how-it-works/inline-rendering)). On such hosts the default-format text block shrinks to one line saying the visual is already displayed; explicit formats are never slimmed.

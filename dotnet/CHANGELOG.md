@@ -20,6 +20,9 @@ Will embed the `@widgentic/mcp` 0.14.0 host bundle.
   - **No new API.** The settings record already carries the section.
 - **Operator domains per principal.** Per-principal calls now carry `ResourceDomains` into the
   bundle, so they cover a principal's stylesheets as they cover the startup record's.
+- **A `"null"` settings record.** A catalog whose `Settings` is the JSON literal `null` is
+  treated as no record, as a C# `null` is: in Merge the startup record applies. Before, it
+  silently dropped the startup record.
 
 ## 0.13.1
 

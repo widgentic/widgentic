@@ -99,6 +99,7 @@ internal sealed class CatalogComposer
     /// The settings record one call composes with. Replace uses the caller's record alone. Merge
     /// keeps the startup record, each section the caller defines replacing the startup one whole,
     /// so a caller's section reads as the store's own write would apply it. A caller record that
+    /// is the JSON literal <c>null</c> is no record, as a C# <c>null</c> is. Any other record that
     /// is not an object replaces the startup record whole and goes to the bundle, which reports it.
     /// </summary>
     private (JsonNode? Record, SettingsOrigin Origin) ComposeSettings(string? callerJson, WidgenticComposition mode, List<CallerProblem> unreadable)
@@ -116,6 +117,11 @@ internal sealed class CatalogComposer
         {
             unreadable.Add(new CallerProblem("settings", -1, "settings", "INVALID_JSON"));
             return (null, SettingsOrigin.Caller);
+        }
+        if (caller is null)
+        {
+            // "null" is no record: Merge keeps the startup record, its stylesheets included.
+            return mode == WidgenticComposition.Merge ? (_startupSettings?.DeepClone(), SettingsOrigin.Startup) : (null, SettingsOrigin.Startup);
         }
         if (mode == WidgenticComposition.Replace || caller is not JsonObject sections)
         {

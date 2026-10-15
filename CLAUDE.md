@@ -156,7 +156,8 @@ pack:check`, `openspec validate` — all green; plus `dotnet test` when `dotnet/
 - Actions: `prompt` proposes (composer prefill, never triggers), `http` runs
   server-side through the guarded fetch (public https, no redirects, 8 s,
   256 KiB, JSON only, declared args only, author-fixed query/headers win);
-  the iframe never touches the network; bindings resolve from the store,
+  the iframe makes no requests of its own (the browser loads only images and
+  the person's stylesheets on declared domains); bindings resolve from the store,
   never from the request; secrets are referenced by name, injected only at
   execution, never displayed, always redacted.
 - Per-request composition, no caches (cross-tenant leaks); stores validate on

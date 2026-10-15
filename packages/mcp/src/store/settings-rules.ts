@@ -117,7 +117,12 @@ function readResourceDomains(
   return domains.length > 0 ? domains.map((domain) => domain.origin) : undefined;
 }
 
-/** The stored stylesheets that pass today's rule and the record's own domains; each other one reported. */
+/**
+ * The stored stylesheets that pass today's rule and the record's own
+ * domains; each other one reported. Lenient like the domains' read: the
+ * limit is a write-side rule, so a record edited out of band keeps every
+ * entry that passes.
+ */
 function readResources(
   value: unknown,
   domains: readonly string[],

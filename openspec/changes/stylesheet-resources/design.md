@@ -58,6 +58,8 @@ Either can come later on top of this list without changing it.
 - **Delivery: the declared list.** `createWidgenticServer` and the host bundle drop any entry the declared list (operator, then principal) does not cover. The frame policy would block it anyway, and dropping it means no host ever sees a dead link. The host bundle reports the drop through `problems()`, and `Widgentic.Mcp` logs it.
 
   A `.NET` server that lists `fonts.googleapis.com` in `WidgenticOptions.ResourceDomains` and the stylesheet in settings works: the bundle's check reads the declared list, not the record's own.
+
+  `createWidgenticServer` drops silently, as it drops a refused domain: it has no log. Refusals are reported where stylesheets are read, by `composeResources` diagnostics and the host bundle's `problems()`. The option's doc says so (PR #58 review).
 - **The shared check stays shape-only.** `checkSettings` (store rules, host bundle) checks entries by the rule alone. The record-level coverage is the store's write step, and the declared-list coverage is the host's.
 - **Rejected: one code per direction** (`DOMAIN_IN_USE` for removals). The fix is the same either way, "list the stylesheet's domain", and the message says which stylesheet.
 
@@ -123,6 +125,8 @@ Rows of address and integrity inputs with a remove control, an add input, and th
 - **What it changes.** For render calls this changes nothing else: the bundle reads the declared list only for coverage and for `resources()`.
 - **Tests.** The spec scenarios, plus one for this case ("a principal's stylesheet is covered by the operator's domains").
 - **Release note.** The `CHANGELOG` names the change.
+
+**PR #58 review.** A caller `Settings` string holding the JSON literal `null` parsed to no record and, in Merge, silently dropped the startup record, now including its stylesheets. It is now treated as a C# `null` (the startup record applies), with a test and a `CHANGELOG` line.
 
 **Its version** moves to 0.14.0 with the pin at release, not in this change.
 

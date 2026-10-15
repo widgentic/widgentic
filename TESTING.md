@@ -439,6 +439,11 @@ workspace and the sample first, then point at the built DLL):
     - In fresh conversations, the inbox and agenda widgets rendered the mail and calendar icons from the settings stylesheet in claude.ai, ChatGPT and VS Code Copilot Chat, in dark mode.
     - Removing `fonts.googleapis.com` in Settings was refused with `UNDECLARED_DOMAIN`, naming the stylesheet.
     - The designer's preview showed the agenda's calendar icon.
+  - **PR #58 review follow-ups**, all low or nits.
+    - The store port's `putSettings` doc names `INVALID_RESOURCE` and `UNDECLARED_DOMAIN`. The `resources` server option says it drops silently and names where refusals are reported. `readResources` says its limit is a write-side rule.
+    - `.NET` treats a JSON-`null` caller record as no record, with a test: `dotnet test` 220.
+    - Docs: the preview frame "connects nowhere" instead of "reaches no network", and the stylesheet delivery bullet explains why the operator's list only widens delivery.
+    - A consistency sweep fixed the Resource domains intro (images, stylesheets and fonts), the trust model's exceptions, the `page` format rows, `CLAUDE.md`'s iframe invariant and the settings designer's own domain note.
 
 - **Designer preview island (2026-10-15, change `designer-preview-island`, on `feature/designer-preview-island`, designer/mcp minor pending release)**: the widget and theme designers can preview in the app template, framed, with the designer as a minimal MCP Apps host.
   - **The frame route** (`preview-frame.test.ts`, 7 tests).

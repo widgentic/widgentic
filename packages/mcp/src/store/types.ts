@@ -169,9 +169,13 @@ export interface WritableWidgetStore extends WidgetStore {
    * Update the principal's settings: each section `update` names replaces
    * that section (`null` removes it), and every other section is kept.
    * Refused with `INVALID_SHAPE` (unknown section, mode or value, or a
-   * domain list that is not one or is too long), `UNKNOWN_THEME` (a
-   * default naming no stored theme) or `INVALID_DOMAIN` (a domain entry the
-   * resource-domain rule refuses); a refusal changes nothing.
+   * domain or stylesheet list that is not one or is too long),
+   * `UNKNOWN_THEME` (a default naming no stored theme), `INVALID_DOMAIN` (a
+   * domain entry the resource-domain rule refuses), `INVALID_RESOURCE` (a
+   * stylesheet entry the resource rule refuses) or `UNDECLARED_DOMAIN` (a
+   * stylesheet the resulting `resourceDomains` would not cover, including
+   * after a write that removes a domain one still needs); a refusal changes
+   * nothing.
    */
   putSettings(principalId: string, update: PrincipalSettingsUpdate): Promise<void>;
   /**
