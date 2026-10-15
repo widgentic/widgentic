@@ -46,6 +46,10 @@ export default defineConfig({
   resolve: { alias },
   test: {
     globals: false,
+    // Tests never reach the network: a mounted iframe (the designers'
+    // preview island) stays an element, its page never loaded (happy-dom
+    // logs one NotSupportedError line per skipped load).
+    environmentOptions: { happyDOM: { settings: { disableIframePageLoading: true } } },
     projects: [
       project("core", ["packages/core/src/**/__tests__/**/*.test.ts"], ["packages/core/src/**/__tests__/**/*.test-d.ts"]),
       project("designer", ["packages/designer/src/**/__tests__/**/*.test.ts"]),

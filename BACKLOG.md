@@ -51,6 +51,8 @@ appears. Size: **S** one small change, **M** one change with spec deltas,
 | THM-2 | A dark mode for page and app documents | P3 | S | `theme-styles-and-defaults` design |
 | THM-3 | Keep style rules inside the widget: sibling combinators | P3 | S | PR #29 review |
 | AGT-5 | Load-time warnings agents can act on: dropped link schemes, unreachable action hosts | P3 | S | Browser agent, staging 2026-10-12 |
+| THM-4 | Preview under the person's default themes, per scheme | P3 | M | Browser agent, `designer-preview-island` staging |
+| EXM-1 | A Content-Security-Policy for the self-host app page | P3 | S | Browser agent, `designer-preview-island` staging |
 
 **Part 2 · Pairing with other technologies**
 
@@ -304,6 +306,28 @@ are reachable by direct URL.
   tools' results, derived from `ALLOWED_SCHEMES` and the guarded fetch's host rules.
 - **Touches.** `widget-designer`, `designer-webmcp`, actions.
 - **Origin.** 2026-10-12, the browser agent on staging; predates `theme-styles-and-defaults`.
+
+#### THM-4 · Preview under the person's default themes, per scheme — P3, M
+
+- **Problem.** A render that names no theme gets the person's default for the host's mode: google-light on a light host, google-dark on a dark one. The widget designer has no such choice:
+  - "(none — defaults)" previews widgentic's built-in light or dark, following the designer's scheme;
+  - any named pick applies to both modes, as an explicit `theme` does.
+  So no preview shows what a dark host shows under the person's dark default.
+- **Direction.** A "My defaults" choice in the preview theme selector. Its tokens and styles come from the settings' `defaultThemes` for the current scheme, switching with the scheme as a render's mode-scoped CSS does. The host passes the defaults alongside `themes`.
+- **Touches.** `widget-designer`, the self-host example and the apps app, `@widgentic/designer`.
+- **Origin.** 2026-10-15, the browser agent on staging `designer-preview-island-764ca55`, which noted that "(none — defaults)" looks like the built-in Dark theme, not the Settings default for dark hosts.
+
+#### EXM-1 · A Content-Security-Policy for the self-host app page — P3, S
+
+- **Problem.** The example's web service serves its page with no Content-Security-Policy. Only the preview frame carries one.
+- **Direction.** A policy on the page, along these lines:
+  - `default-src 'self'`, with `img-src 'self' data:`, `style-src 'self' 'unsafe-inline'` and `frame-src 'self'` for the island;
+  - `connect-src 'self'`, plus the MCP upstream when it is a different origin;
+  - `frame-ancestors 'none'`.
+
+  Check that WebMCP registration and the origin-trial meta still work under it.
+- **Touches.** `self-host-example`, `examples/docker/web.ts`.
+- **Origin.** 2026-10-15, the browser agent on staging `designer-preview-island-764ca55`.
 
 ### Untriaged
 

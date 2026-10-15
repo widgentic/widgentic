@@ -18,7 +18,9 @@ Everything needed to host the widgentic engine over MCP:
   `{ saved: "settings", settings }`), the guarded action test call,
   write-only secrets and API keys, as a pure request handler plus a
   `node:http` adapter. The host resolves the principal; a presented API key
-  never authorizes authoring.
+  never authorizes authoring. `GET /preview-frame` serves the designers'
+  preview frame: the app template under the policy hosts apply for the
+  operator's domains (`resourceDomains` in the deps) and the principal's.
 - `@widgentic/mcp/store` — the per-principal store port with memory and file
   implementations, composition and validation, including each principal's
   settings record (default themes, and the `resourceDomains` a principal's

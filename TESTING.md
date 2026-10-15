@@ -382,6 +382,49 @@ workspace and the sample first, then point at the built DLL):
 
 ## Verification log
 
+- **Designer preview island (2026-10-15, change `designer-preview-island`, on `feature/designer-preview-island`, designer/mcp minor pending release)**: the widget and theme designers can preview in the app template, framed, with the designer as a minimal MCP Apps host.
+  - **The frame route** (`preview-frame.test.ts`, 7 tests).
+    - `GET /preview-frame` serves `buildAppTemplate()` byte for byte.
+    - The policy lists the operator's domains, then the principal's, deduplicated, in `img-src`, `style-src`, `font-src` and `media-src`.
+    - `script-src` holds one hash per inline script, each recomputed from the body.
+    - Anonymous: the operator's domains alone, and a bare `font-src 'none'` with none. A failing settings read degrades the same way and is logged.
+    - API keys get 401; POST gets 404, or 401 when anonymous.
+    - The Node adapter sends the core's status, headers and body, and no cookie.
+  - **The island** (`preview-island.test.ts`, 17 tests, with a fake frame window).
+    - `ping` is answered, and a method it does not host is refused with -32601.
+    - Results are held until `initialized`; tree and CSS order match the in-page pipeline; one more result per edit through the same frame; nothing for an invalid draft.
+    - `tools/call` is refused with no fetch, and `ui/message` composes nothing. Links: `https` opens with `noopener`, `javascript:` is refused.
+    - The frame's height follows `size-changed`, and messages from a stranger window are ignored.
+    - The scheme follows a pinned `appearance`, else the page, with the built-in palette as host variables.
+    - Styles go only to the frame; dispose removes the frame and its listener; there is no frame without the option; the theme designer and the element attribute work.
+  - **Parity** (`preview-island-parity.test.ts`). For the same widget and theme, the island's tree equals `render_widget`'s `structuredContent.tree`, and its CSS is the render's CSS byte for byte plus the badge rule. The island supplies exactly the host variables the template's bridge reads, with the built-in dark values.
+  - **Chrome 151 against the example** (`examples/docker` web on a scratch SQLite, seeded). A probe widget had a styled title, a `api.dicebear.com` image, a `picsum.photos` image and 12 rows. The page added `.wg-title { text-decoration: underline wavy; letter-spacing: 7px }` and its own `h2.wg-title`.
+    - **Isolation.** The frame's sandbox is `allow-scripts` and its origin `null`, and `window.parent.document` throws. The title is `rgb(4, 5, 6)` with no decoration and normal letter spacing. The page's `h2.wg-title` keeps the page color, and no page stylesheet carries the draft's rule.
+    - **Images.** The declared image loads (`naturalWidth` 150). The undeclared one is blocked by `img-src`, as the console reports.
+    - **Height.** The iframe is 331 px, the frame document's `scrollHeight`.
+    - **Color scheme.** A dark page first gave `data-theme="dark"` on a white background. The template bridges eight tokens to host variables, and a host must supply them (design D7, revised). With the palette sent, the built-in preview turned `#0f131c` on `#e5e9f0`. A picked theme (google-light) stays light in both modes, as an explicit render theme does.
+    - **Edits.** They patch the same frame.
+  - **The example** (D9, revised). Its MCP endpoint declares only each person's domains, so the web service passes no operator list. `app.test.ts` checks the frames on `/api/preview-frame` for widgets and themes, and a person's policy carrying their domain.
+  - **Tests.** Every happy-dom suite now sets `disableIframePageLoading`, so a mounted island never reaches the network.
+  - **Gates.** Typecheck, `npm test` (1861 passed, 1 skipped), build, `pack:check`, docs check, `openspec validate --strict` and `--specs` (19), and `dotnet test` (209). Rerun after the cleanups, the docs review and verify's `ping` test: `npm test` 1863 passed (1 skipped), with the other gates green. `dotnet test` was not rerun, because the host bundle is untouched.
+  - **Docs review before merge.** Two statements had gone stale and were fixed: the designers' "no network I/O" (they now cause the frame load) and the widget designer's "mounted through `mountWidget`" (in the app, the bridge mounts the preview). Also updated: the theme designer's page, the authoring module headers, `CLAUDE.md`'s layout line, design D1/D7, the stylesheet sentence in the widget-designer delta and the designer changeset.
+  - **Staging (`designer-preview-island-764ca55`, ACR run `cj3s`, revision `widgentic-selfhost--0000029`, replacing the stylesheet probe).** Each response was saved to a file and then read.
+    - The first request after the cutover still reached the old revision and returned `NOT_FOUND`. After that, the revision FQDN and `demo.widgentic.dev` both answer `/api/preview-frame` with 200.
+    - The frame is 43,653 bytes. Its CSP carries the seeded `api.dicebear.com` and `*.pravatar.cc` in `img-src`, `style-src`, `font-src` and `media-src`, and its one `script-src` hash matches the served script. The response is `no-store` and `nosniff`, with no cookie.
+    - The served bundle carries `/api/preview-frame` and the host palette variables.
+    - **Chrome on the demo.** Editing `email-inbox-widget` previews in the frame: origin `null`, sandbox `allow-scripts`, height 339 px equal to the document's. The inbox showed 2 unread and both messages under google-light.
+  - **Browser agent on staging (owner's check).** All three checks passed.
+    - **Isolation and live updates.** A red star color and the title "Inbox LIVE" patched the preview without reloading the frame. Nothing crossed the frame either way. A style value meant to break out was refused inline by the Styles panel, and the action badge still shows.
+    - **Images.** `api.dicebear.com`, `i.pravatar.cc` (through the wildcard) and an inline `data:` image load. `picsum.photos` and `placehold.co` are blocked, though both load directly in the page.
+    - **Dark mode.** Under "(none — defaults)", the preview is the built-in dark.
+    - **What it led to.**
+      - The page no longer gets core's widget stylesheet in island mode. It had carried 55 unused `.wg-*` rules; a test now pins that the stylesheet is absent.
+      - The person's dark default not being previewable is queued as BACKLOG THM-4.
+      - The page having no CSP of its own is queued as EXM-1.
+    - **Redeploy (`designer-preview-island-913cca6`, ACR run `cj3t`, revision `--0000030`).** Chrome on the demo: the page has no `style[data-widgentic]` and no `.wg-*` rule, and the frame renders the draft.
+    - **Agent retest on `--0000030`.** The base stylesheet is gone, but the chrome stylesheet still held the two `.wgd-preview .wg-designer-action` marker rules. Those rules and `.wgd-preview` moved to a stylesheet that only an in-page preview injects. Tests pin it: absent in island mode, present in page mode.
+    - **Redeploy (`designer-preview-island-7914e25`, ACR run `cj3u`, revision `--0000031`).** Chrome on the demo, after the Widgets and Themes tabs: no `style[data-widgentic]`, no `style[data-widgentic-designer-preview]`, zero `.wg-*`, `.wgd-preview` or `wg-designer-action` rules, and the frame renders.
+
 - **Docs accuracy review (2026-10-14, on `bug/docs-accuracy`, mcp and webmcp patch pending release)**: a review of the hand-written docs against the code for the 13 changes archived since 2026-10-07. Four read-only reviewers, split by area, found about 65 issues, and four fixers on disjoint files corrected them.
   - **Agent-facing text.**
     - The authoring guides' safety rule said bindings "can never inject markup". It now states the Markdown bind exception, with the tag list from `MARKDOWN_TAGS`.

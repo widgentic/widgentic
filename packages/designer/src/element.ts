@@ -33,6 +33,12 @@ function elementOptions(
   };
 }
 
+/** The widget and theme elements' `preview-frame` attribute: the island's URL. */
+function previewFrameOption(element: Element): { previewFrame?: string } {
+  const url = element.getAttribute("preview-frame");
+  return url === null || url.trim() === "" ? {} : { previewFrame: url.trim() };
+}
+
 export const DEFAULT_TAG = "widgentic-designer";
 export const DEFAULT_THEME_TAG = "widgentic-theme-designer";
 export const DEFAULT_SCHEMA_TAG = "widgentic-schema-designer";
@@ -48,7 +54,7 @@ export function defineDesignerElement(tagName: string = DEFAULT_TAG): void {
 
     connectedCallback(): void {
       if (this.#handle !== undefined) return;
-      this.#handle = createDesigner(this, elementOptions(this));
+      this.#handle = createDesigner(this, { ...elementOptions(this), ...previewFrameOption(this) });
       this.#unsubscribe = this.#handle.subscribe((draft, diagnostics) => {
         this.dispatchEvent(
           new CustomEvent("widgentic-change", {
@@ -85,7 +91,7 @@ export function defineThemeDesignerElement(tagName: string = DEFAULT_THEME_TAG):
 
     connectedCallback(): void {
       if (this.#handle !== undefined) return;
-      this.#handle = createThemeDesigner(this, elementOptions(this));
+      this.#handle = createThemeDesigner(this, { ...elementOptions(this), ...previewFrameOption(this) });
       this.#unsubscribe = this.#handle.subscribe((entry) => {
         this.dispatchEvent(
           new CustomEvent("widgentic-change", { detail: { theme: entry }, bubbles: true })

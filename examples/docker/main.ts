@@ -116,6 +116,13 @@ function renderList(
 
 /* ------------------------------- widgets ------------------------------- */
 
+/**
+ * The designers preview in the authoring surface's frame: the app template
+ * under the policy the MCP endpoint declares for this person, isolated
+ * from this page's styles.
+ */
+const PREVIEW_FRAME = "/api/preview-frame";
+
 let widgetDesigner: DesignerHandle | undefined;
 let widgetMode: Mode = "new";
 let selectedWidget: string | undefined;
@@ -136,6 +143,7 @@ function openWidgetDesigner(widget?: unknown, readOnly = false): void {
     schemas: mySchemas,
     actions: myActions,
     secretNames: mySecrets.map((s) => s.name),
+    previewFrame: PREVIEW_FRAME,
     readOnly
   });
 }
@@ -202,7 +210,7 @@ let selectedTheme: string | undefined;
 function openThemeDesigner(load?: unknown, readOnly = false): void {
   // The principal's own widgets join the preview-kind selector: a theme is
   // judged against the widgets it will actually dress.
-  themeDesigner = mountTheme($("theme-designer"), themeDesigner, { widgets: myWidgets, readOnly });
+  themeDesigner = mountTheme($("theme-designer"), themeDesigner, { widgets: myWidgets, previewFrame: PREVIEW_FRAME, readOnly });
   if (load !== undefined) {
     const result = themeDesigner.loadTheme(load);
     if (!result.ok) status(`load failed: ${result.errors.join("; ")}`, "error");

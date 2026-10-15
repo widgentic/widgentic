@@ -143,3 +143,28 @@ describe("the example app's Settings section", () => {
     expect([...dark.options].map((option) => option.value)).toContain("my-theme");
   });
 });
+
+describe("the example app's designers preview in the island", () => {
+  it("frames the widget and theme previews on the surface's /preview-frame", () => {
+    click("tab-widgets");
+    const widgetFrame = document.querySelector("#widget-designer iframe.wgd-preview-frame");
+    expect(widgetFrame?.getAttribute("src")).toBe("/api/preview-frame");
+    expect(widgetFrame?.getAttribute("sandbox")).toBe("allow-scripts");
+    expect(document.querySelector("#widget-designer .wgd-preview")).toBeNull();
+    click("tab-themes");
+    expect(document.querySelector("#theme-designer iframe.wgd-preview-frame")?.getAttribute("src")).toBe("/api/preview-frame");
+  });
+
+  it("serves the frame under the person's domains, the list its MCP endpoint declares", async () => {
+    // The web service mounts the surface with no operator list, as the MCP
+    // service declares none: the frame grants exactly the person's domains.
+    const person = await store.ensurePrincipal("local:framed", "Framed");
+    await store.putSettings(person.id, { resourceDomains: ["cdn.example.com"] });
+    const frame = await handleAuthoringRequest(
+      { method: "GET", path: "preview-frame", context: { principalId: person.id } },
+      { store }
+    );
+    expect(frame.status).toBe(200);
+    expect(frame.headers?.["Content-Security-Policy"]).toContain("img-src data: https://cdn.example.com;");
+  });
+});
