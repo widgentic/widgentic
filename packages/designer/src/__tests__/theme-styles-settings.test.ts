@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from "vitest";
-import { RESOURCE_DOMAIN_LIMIT } from "@widgentic/core";
+import { RESOURCE_DOMAIN_LIMIT, RESOURCE_LIMIT } from "@widgentic/core";
 import type { ThemeEntry } from "@widgentic/core";
 import {
   createDesigner,
@@ -526,6 +526,97 @@ describe("settings designer", () => {
       expect(text).toContain(`at most ${RESOURCE_DOMAIN_LIMIT}`);
       expect(text).toContain("*.example.com");
       expect(text).toContain("viewer's browser");
+    });
+  });
+
+  describe("stylesheets", () => {
+    const ICONS = "https://fonts.googleapis.com/icon?family=Material+Icons";
+    const sheetInput = (root: Element) => root.querySelector("input.wgd-stylesheet-add") as HTMLInputElement;
+    const sheetButton = (root: Element) => root.querySelector('button[title="Add stylesheet"]') as HTMLButtonElement;
+    const addSheet = (root: Element, value: string) => {
+      sheetInput(root).value = value;
+      sheetButton(root).click();
+    };
+    const sheets = (root: Element) => [...root.querySelectorAll<HTMLElement>(".wgd-stylesheet-entry")];
+
+    it("records an added stylesheet, canonical, when its domain is listed", () => {
+      const root = host();
+      const designer = createSettingsDesigner(root, { themes, initialSettings: { resourceDomains: ["https://fonts.googleapis.com"] } });
+      addSheet(root, "https://Fonts.Googleapis.com/icon?family=Material+Icons");
+      expect(designer.getSettings().resources).toEqual([{ type: "stylesheet", href: ICONS }]);
+      expect(sheets(root)[0]?.querySelector(".wgd-diagnostic")).toBeNull();
+      expect(sheetInput(root).value).toBe("");
+    });
+
+    it("marks an uncovered stylesheet with its domain, and clears the mark once the domain is listed", () => {
+      const root = host();
+      const designer = createSettingsDesigner(root, { themes });
+      addSheet(root, ICONS);
+      expect(designer.getSettings().resources).toEqual([{ type: "stylesheet", href: ICONS }]);
+      expect(sheets(root)[0]?.querySelector(".wgd-diagnostic")?.textContent).toContain("Add fonts.googleapis.com under Resource domains");
+      const domain = root.querySelector("input.wgd-domain-add") as HTMLInputElement;
+      domain.value = "fonts.googleapis.com";
+      (root.querySelector('button[title="Add domain"]') as HTMLButtonElement).click();
+      expect(sheets(root)[0]?.querySelector(".wgd-diagnostic")).toBeNull();
+    });
+
+    it("keeps an invalid stylesheet as typed and marks it with the rule's reason", () => {
+      const root = host();
+      const designer = createSettingsDesigner(root, { themes });
+      addSheet(root, "http://cdn.example.org/a.css");
+      expect(designer.getSettings().resources).toEqual([{ type: "stylesheet", href: "http://cdn.example.org/a.css" }]);
+      expect(sheets(root)[0]?.querySelector(".wgd-diagnostic")?.textContent).toContain("only https://");
+    });
+
+    it("records an integrity value, and marks a malformed one", () => {
+      const root = host();
+      const designer = createSettingsDesigner(root, { themes, initialSettings: { resourceDomains: ["https://cdn.example.org"] } });
+      addSheet(root, "https://cdn.example.org/brand.css");
+      const integrity = sheets(root)[0]?.querySelector("input.wgd-stylesheet-integrity") as HTMLInputElement;
+      change(integrity, "md5-abc");
+      expect(designer.getSettings().resources?.[0]?.integrity).toBe("md5-abc");
+      expect(sheets(root)[0]?.querySelector(".wgd-diagnostic")?.textContent).toContain("integrity");
+      const sri = "sha384-oqVuAfXRKap7fdgcCY5uykM6+R9GqQ8K/uxy9rx7HNQlGYl1kPzQho1wx4JwY8wC";
+      change(sheets(root)[0]?.querySelector("input.wgd-stylesheet-integrity") as HTMLInputElement, sri);
+      expect(designer.getSettings().resources).toEqual([{ type: "stylesheet", href: "https://cdn.example.org/brand.css", integrity: sri }]);
+      expect(sheets(root)[0]?.querySelector(".wgd-diagnostic")).toBeNull();
+    });
+
+    it("disables adding at the exported limit", () => {
+      const root = host();
+      const designer = createSettingsDesigner(root, { themes });
+      const full = Array.from({ length: RESOURCE_LIMIT }, (_v, n) => ({ type: "stylesheet", href: `https://cdn.example.org/${n}.css` }));
+      expect(designer.loadSettings({ resourceDomains: ["https://cdn.example.org"], resources: full })).toEqual({ ok: true });
+      expect(sheetInput(root).disabled).toBe(true);
+      expect(sheetButton(root).disabled).toBe(true);
+    });
+
+    it("refuses a malformed list on load, keeping the current record", () => {
+      const designer = createSettingsDesigner(host(), { themes, initialSettings: { resources: [{ type: "stylesheet", href: ICONS }] } });
+      const refused = designer.loadSettings({ resources: "https://cdn.example.org/a.css" });
+      expect(refused.ok).toBe(false);
+      expect(refused.ok ? [] : refused.errors.join("\n")).toContain("resources");
+      expect(designer.getSettings().resources).toEqual([{ type: "stylesheet", href: ICONS }]);
+    });
+
+    it("carries an emptied list, adds none unasked, and is inert when read-only", () => {
+      const root = host();
+      const designer = createSettingsDesigner(root, { themes, initialSettings: { resources: [{ type: "stylesheet", href: ICONS }] } });
+      (sheets(root)[0]?.querySelector('button[title="Remove stylesheet"]') as HTMLButtonElement).click();
+      expect(designer.getSettings().resources).toEqual([]);
+      expect(createSettingsDesigner(host(), { themes }).getSettings()).not.toHaveProperty("resources");
+      designer.setReadOnly(true);
+      expect(sheetInput(root).closest("[inert]")).not.toBeNull();
+    });
+
+    it("states its form, its limit, the fonts domain and the trust", () => {
+      const root = host();
+      createSettingsDesigner(root, { themes });
+      const text = sectionTitled(root, "Stylesheets").textContent ?? "";
+      expect(text).toContain(`at most ${RESOURCE_LIMIT}`);
+      expect(text).toContain("https://");
+      expect(text).toContain("fonts.gstatic.com");
+      expect(text).toContain("you trust");
     });
   });
 });

@@ -203,6 +203,22 @@ const DOMAIN_CONFIGS: Record<string, { resourceDomains?: string[]; settings?: { 
   }
 };
 
+/** Stylesheets from settings, covered by the declared domains: one plain, one pinned by integrity. */
+const STYLESHEET_CONFIG = {
+  resourceDomains: ["fonts.googleapis.com", "fonts.gstatic.com"],
+  settings: {
+    resourceDomains: ["cdn.example.org"],
+    resources: [
+      { type: "stylesheet", href: "https://fonts.googleapis.com/icon?family=Material+Icons" },
+      {
+        type: "stylesheet",
+        href: "https://cdn.example.org/brand.css?v=1&theme=light",
+        integrity: "sha384-oqVuAfXRKap7fdgcCY5uykM6+R9GqQ8K/uxy9rx7HNQlGYl1kPzQho1wx4JwY8wC"
+      }
+    ]
+  }
+};
+
 /** One configuration per way a settings record chooses default themes. */
 const SETTINGS_CONFIGS: Record<string, Record<string, string>> = {
   "settings light default": { light: "corpus-styled" },
@@ -412,6 +428,27 @@ export function buildCorpus(): Corpus {
     }
     configs[label] = json;
     cases.push({ config: label, name: `${label}: resources`, op: "resources", output: domainHost.resources() });
+  }
+
+  // Stylesheets from settings: every output that carries them, and the fragment that never does.
+  {
+    const label = "stylesheets from settings";
+    const json = JSON.stringify(STYLESHEET_CONFIG);
+    const sheetHost = createWidgenticHost(json);
+    if (sheetHost.problems() !== "[]") {
+      throw new Error(`the '${label}' configuration must compose cleanly: ${sheetHost.problems()}`);
+    }
+    configs[label] = json;
+    const run = (name: string, tool: string, args: unknown): void => {
+      const argsJson = JSON.stringify(args);
+      cases.push({ config: label, name: `${label}: ${name}`, op: "call", tool, args: argsJson, slim: false, output: sheetHost.call(tool, argsJson, false) });
+    };
+    run("render", "render_widget", { widget: "card", data: card });
+    run("page", "render_widget", { widget: "card", data: card, format: "page" });
+    run("html fragment", "render_widget", { widget: "card", data: card, format: "html" });
+    run("preview", "preview_widget", { widget: "card", data: card });
+    run("listing", "list_themes", {});
+    cases.push({ config: label, name: `${label}: widget page`, op: "widgetPage", kind: "card", output: sheetHost.widgetPage("card") });
   }
 
   cases.push({ name: "app template", op: "appTemplate", output: host.appTemplate() });

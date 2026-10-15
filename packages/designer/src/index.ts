@@ -41,7 +41,8 @@ export type {
   SettingsDesignerHandle,
   SettingsDesignerOptions,
   SettingsLoadResult,
-  SettingsRecord
+  SettingsRecord,
+  SettingsStylesheet
 } from "./settings-designer.js";
 export { createActionDesigner, checkActionEntry } from "./action-designer.js";
 export type {

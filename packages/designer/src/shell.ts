@@ -42,6 +42,12 @@ export interface DesignerOptions {
    */
   previewFrame?: string;
   /**
+   * The person's stylesheets, as their settings record holds them. The
+   * island links the entries the core resource rule accepts, under the
+   * frame's policy; the in-page preview never adds a stylesheet to the page.
+   */
+  resources?: readonly unknown[];
+  /**
    * Shared data schemas the draft may reference by name (the Data schema
    * section's "use shared" mode). Schema authoring belongs to the
    * standalone schema designer; the widget designer only selects.
@@ -131,7 +137,8 @@ export function createDesigner(
 
   const preview = createPreview({
     actions: options.actions ?? [],
-    ...(options.previewFrame === undefined ? {} : { previewFrame: options.previewFrame })
+    ...(options.previewFrame === undefined ? {} : { previewFrame: options.previewFrame }),
+    ...(options.resources === undefined ? {} : { resources: options.resources })
   });
   const leftColumn = h("div", { class: "wgd-panels" });
   const rightSections = h("div", { class: "wgd-preview-pane" });

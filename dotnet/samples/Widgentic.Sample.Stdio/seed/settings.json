@@ -5,6 +5,14 @@
   },
   "resourceDomains": [
     "https://api.dicebear.com",
-    "https://*.pravatar.cc"
+    "https://*.pravatar.cc",
+    "https://fonts.googleapis.com",
+    "https://fonts.gstatic.com"
+  ],
+  "resources": [
+    {
+      "type": "stylesheet",
+      "href": "https://fonts.googleapis.com/icon?family=Material+Icons"
+    }
   ]
 }

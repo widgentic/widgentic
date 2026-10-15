@@ -382,6 +382,55 @@ workspace and the sample first, then point at the built DLL):
 
 ## Verification log
 
+- **Stylesheet resources (2026-10-15, change `stylesheet-resources`, on `feature/stylesheet-resources`, core/designer/mcp minor pending release with the island)**: a person's stylesheets load in every frame of their widgets, behind their resource domains.
+  - **The rule** (`resources.test.ts`, 8 tests).
+    - Accepted: `https://` addresses, host lowercased, path, query and fragment kept.
+    - Refused, each with its reason: `http:`, userinfo, a port, IPv4 and IPv6, `localhost`, a wildcard host, `javascript:`, a quote, a space, `<`, non-ASCII, over 2,048 characters, a bad integrity, `script`, an unknown key and a non-object.
+    - Lists keep their order and drop repeats by address.
+    - Coverage: exact, a wildcard over its subdomains (not its apex), and a refused domain covers nothing.
+  - **The store** (shared adapter suite, memory, file, SQLite and Cosmos).
+    - Stored in order and canonical.
+    - Each refused form gives `INVALID_RESOURCE` with the record unchanged. Shape and limit give `INVALID_SHAPE` (9 refused, 8 accepted).
+    - An uncovered host gives `UNDECLARED_DOMAIN`, and is accepted when its domain comes in the same write.
+    - Removing a domain a stylesheet needs is refused, whether by a narrower list, `null` or `[]`.
+    - A wildcard covers subdomains, never the apex. An empty list removes the section.
+    - Composition yields only the caller's list.
+    - Old-shape records (defaults and domains only) read back unchanged, and a write naming neither section never checks coverage.
+    - Out-of-band records drop a `script` entry and an uncovered one, with diagnostics naming each, in all three persistent adapters. Unreadable settings yield none.
+  - **The authoring route.** `PUT /settings` answers `422 UNDECLARED_DOMAIN` naming `fonts.googleapis.com`, and `422 INVALID_RESOURCE` for a script. The same stylesheet saves with its two domains in one body.
+  - **Delivery** (`stylesheet-delivery.test.ts`, `execute-action.test.ts`).
+    - Through the SDK: render and preview carry the covered stylesheets in order, and `list_themes` lists them with its explanatory sentence. An uncovered or refused entry is never delivered.
+    - Without stylesheets, `both`, `page`, `html` and `app` outputs are identical to a server without the option.
+    - `page` and `app` documents link each stylesheet before `<style>`, with `&` escaped and integrity carrying `crossorigin`. The `html`, `widget` and payload never mention one.
+    - The action re-render carries them, and structured content never shares an object with the caller's list.
+  - **The frame** (`app-template-resources.test.ts`, `bootTemplate()` harness).
+    - Links go before `#wg-dynamic-css`, in order; integrity and `crossorigin` appear only on the pinned one.
+    - A listed link keeps its element. An unlisted one is removed, and a result without the key removes all. A reorder moves elements rather than recreating them, and a repeat is linked once.
+    - `script`, `http:`, `javascript:`, a string and an entry without an address are ignored.
+    - A server preview links them before the result, and the result keeps the same element.
+    - The template has no `https://` literal: the check is a regex. It is 44,631 bytes raw and 11,602 gzipped, inside both budgets.
+  - **The host bundle and .NET.**
+    - The host links the covered stylesheet in render, preview, listing and widget page. `problems()` reports `INVALID_RESOURCE` and `UNDECLARED_DOMAIN` under `settings`.
+    - The corpus gains six "stylesheets from settings" cases; only the app template case changed.
+    - `dotnet test`: 219, including startup delivery, a principal covered by the operator's domains (design D10, revised: `Compose` now carries `ResourceDomains`), Replace isolation under a pool of 4, and an uncovered stylesheet skipped and logged.
+  - **The designers.**
+    - The island sends only the rule's entries with every revision, and the in-page preview adds no link.
+    - The settings designer's Stylesheets subsection records entries canonically. It marks an uncovered host with the domain to add, and the mark clears when the domain is listed. It keeps an invalid entry as typed with its reason, records and checks integrity, and disables adding at 8. It refuses a malformed list on load, carries an emptied list, is inert when read-only, and states the form, limit, fonts domain and trust.
+  - **The example.**
+    - The endpoint delivers a saved stylesheet on the next render, only to its principal.
+    - The app saves domains and a stylesheet through Settings, and the remounted widget designer's preview carries it.
+    - The seed (10 entries written) adds the two font domains, the Material Icons stylesheet, and `event` and `mail` icons in the agenda and inbox headers.
+  - **Chrome 151 against the example**, local and seeded.
+    - The island's head is `meta, title, style, link (Material Icons), style#wg-dynamic-css`.
+    - The `mail` span renders in `"Material Icons"` at 22×22 with `document.fonts.check` true, so it shows as a glyph, not text. An edit keeps the same link element.
+    - In Settings, a stylesheet on `cdn.example.org` is marked "Add cdn.example.org under Resource domains, or chat hosts block it.", and the mark clears when that domain is added.
+    - Removing `fonts.googleapis.com` and saving answers `UNDECLARED_DOMAIN: the stylesheet '…Material+Icons' needs fonts.googleapis.com in your resource domains.`
+  - **Revisions during apply.**
+    - D6: `list_themes` explains `resources` in its result's `rules`, not its description, so `tools/list` is unchanged.
+    - D7: no budget change was needed.
+    - D10: `.NET` per-principal composition now carries the operator's domains.
+  - **Gates.** Typecheck, `npm test` (1942 passed, 1 skipped), build, `pack:check`, docs check, `openspec validate --strict` and `--specs` (19), and `dotnet test` (219).
+
 - **Designer preview island (2026-10-15, change `designer-preview-island`, on `feature/designer-preview-island`, designer/mcp minor pending release)**: the widget and theme designers can preview in the app template, framed, with the designer as a minimal MCP Apps host.
   - **The frame route** (`preview-frame.test.ts`, 7 tests).
     - `GET /preview-frame` serves `buildAppTemplate()` byte for byte.

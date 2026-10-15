@@ -14,7 +14,7 @@
  */
 import { errorMessage } from "../internal.js";
 import { createCatalog } from "@widgentic/core";
-import type { WidgetCatalog } from "@widgentic/core";
+import type { Resource, WidgetCatalog } from "@widgentic/core";
 import type { ActionBinding, ActionDefinition, ActionDisabledReason, StoredAction } from "@widgentic/core";
 import {
   collectActionRefs,
@@ -374,6 +374,24 @@ export async function composeResourceDomains(
     return { value: [], diagnostics: [`resource domains not read (${read.failure}); none are declared.`] };
   }
   return { value: [...(read.settings.resourceDomains ?? [])], diagnostics: [] };
+}
+
+/**
+ * The principal's stylesheets, for the frames their renders mount: only
+ * those the record's own domains cover (the read keeps no other). Cosmetic
+ * like the domains: an unreadable record links none, with a diagnostic,
+ * and never fails the request.
+ */
+export async function composeResources(
+  store: WidgetStore | undefined,
+  principalId: string,
+  options: SettingsComposeOptions = {}
+): Promise<ComposeResult<Resource[]>> {
+  const read = await (options.settings ?? readPrincipalSettings(store, principalId));
+  if ("failure" in read) {
+    return { value: [], diagnostics: [`stylesheets not read (${read.failure}); none are linked.`] };
+  }
+  return { value: (read.settings.resources ?? []).map((resource) => ({ ...resource })), diagnostics: [] };
 }
 
 /**

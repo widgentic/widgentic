@@ -452,6 +452,17 @@ describe("cosmos settings written out of band", () => {
     expect(lines.join("\n")).toContain("http://old.example.com");
   });
 
+  it("drops a stored stylesheet of an unknown type or an uncovered host, logging each", async () => {
+    const { client, data } = fakeCosmos();
+    const lines: string[] = [];
+    const store = createCosmosStore({ client, log: (line) => lines.push(line) });
+    const p = await store.ensurePrincipal("cosmos:settings-resources");
+    data.seed({ id: "settings", principalId: p.id, settings: { resourceDomains: ["https://fonts.googleapis.com"], resources: [{ type: "stylesheet", href: "https://fonts.googleapis.com/icon?family=Material+Icons" }, { type: "script", href: "https://fonts.googleapis.com/x.js" }, { type: "stylesheet", href: "https://cdn.example.org/a.css" }] } });
+    expect((await store.settings(p.id)).resources).toEqual([{ type: "stylesheet", href: "https://fonts.googleapis.com/icon?family=Material+Icons" }]);
+    expect(lines.join("\n")).toContain("x.js");
+    expect(lines.join("\n")).toContain("https://cdn.example.org/a.css");
+  });
+
   it("ignores a later version's section, keeps it on write, and drops a dangling default", async () => {
     const { client, data } = fakeCosmos();
     const store = createCosmosStore({ client, log: () => {} });

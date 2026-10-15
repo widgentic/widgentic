@@ -85,6 +85,11 @@ internal sealed class CatalogComposer
             config[section.Name] = array;
             origins[section.Name] = from;
         }
+        // The operator's domains cover the caller's stylesheets as they do the startup record's.
+        if (_operatorDomains.Length > 0)
+        {
+            config["resourceDomains"] = new JsonArray([.. _operatorDomains.Select(domain => (JsonNode?)JsonValue.Create(domain))]);
+        }
         var (settings, settingsOrigin) = ComposeSettings(catalog.Settings, mode, unreadable);
         if (settings is not null) config["settings"] = settings;
         return new ComposedConfig(config.ToJsonString(), origins, unreadable, settingsOrigin);

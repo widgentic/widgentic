@@ -3,6 +3,24 @@
 Versions share their major.minor with the `@widgentic/mcp` release whose host bundle they embed:
 `Widgentic.Mcp` X.Y.* runs `@widgentic/mcp` X.Y.*. The patch moves on its own for .NET-only fixes.
 
+## Unreleased
+
+Will embed the `@widgentic/mcp` 0.14.0 host bundle.
+
+- **Stylesheets from settings.** A settings record may carry
+  `resources: [{ "type": "stylesheet", "href", "integrity"? }]`, at startup through
+  `UseSettings` and per principal through `IWidgenticCatalogSource`.
+  - **Combination.** Merge and Replace combine the section like every other: a principal's
+    `resources` replaces the startup one whole.
+  - **Delivery.** A stylesheet is delivered in render and preview results'
+    `structuredContent.resources`, and linked by the app template. It is delivered only when a
+    declared domain covers its host: `ResourceDomains`, then the settings' `resourceDomains`.
+  - **Refusals.** A refused or uncovered stylesheet stops startup in the startup record. In a
+    principal's record it is skipped and logged with section `settings`.
+  - **No new API.** The settings record already carries the section.
+- **Operator domains per principal.** Per-principal calls now carry `ResourceDomains` into the
+  bundle, so they cover a principal's stylesheets as they cover the startup record's.
+
 ## 0.13.1
 
 Embeds the `@widgentic/mcp` 0.13.1 host bundle.

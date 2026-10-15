@@ -107,8 +107,8 @@ public sealed class SampleTests
             Assert.Contains(widgets, w => w.Kind == "appointment-agenda-widget");
             Assert.DoesNotContain(widgets, w => w.Kind == "release-notes-widget");
             Assert.Equal(("google-light", "google-dark"), await Defaults(keyless));
-            // The seed's settings declare its two image domains.
-            Assert.Equal(["https://api.dicebear.com", "https://*.pravatar.cc"], await Declared(keyless));
+            // The seed's settings declare its two image domains and the icon font's two.
+            Assert.Equal(["https://api.dicebear.com", "https://*.pravatar.cc", "https://fonts.googleapis.com", "https://fonts.gstatic.com"], await Declared(keyless));
         }
         // Merge, keyed by header: the seed, with the principal's inbox in place of the seed's, and its theme.
         await using (var merge = await McpClient.CreateAsync(sample.Transport(headers: new() { ["x-api-key"] = mergeKey }), cancellationToken: Cancel))
@@ -122,8 +122,10 @@ public sealed class SampleTests
             Assert.Contains("merge-demo-dark", themeText);
             Assert.Contains("google-dark", themeText);
             Assert.Equal(("google-light", "merge-demo-dark"), await Defaults(merge));
-            // Its section replaces the seed's whole: the seed's two domains and a third of its own.
-            Assert.Equal(["https://api.dicebear.com", "https://*.pravatar.cc", "https://ui-avatars.com"], await Declared(merge));
+            // Its section replaces the seed's whole: the seed's four domains and one of its own.
+            Assert.Equal(
+                ["https://api.dicebear.com", "https://*.pravatar.cc", "https://fonts.googleapis.com", "https://fonts.gstatic.com", "https://ui-avatars.com"],
+                await Declared(merge));
         }
         // Replace, keyed in the URL as hosts that only take a URL send it: the built-ins and its own widget.
         await using (var replace = await McpClient.CreateAsync(sample.Transport(query: $"?key={replaceKey}"), cancellationToken: Cancel))

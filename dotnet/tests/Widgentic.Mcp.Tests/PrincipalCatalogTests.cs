@@ -397,6 +397,70 @@ public sealed class PrincipalCatalogTests
         await Task.WhenAll(reads);
     }
 
+    // Stylesheets from settings, at startup and per principal.
+
+    private const string Icons = "https://fonts.googleapis.com/icon?family=Material+Icons";
+
+    private static string Sheets(params string[] hrefs) =>
+        "[" + string.Join(",", hrefs.Select(href => $$"""{"type":"stylesheet","href":"{{href}}"}""")) + "]";
+
+    private static string[] Delivered(string result) =>
+        JsonDocument.Parse(result).RootElement.GetProperty("structuredContent").TryGetProperty("resources", out var resources)
+            ? [.. resources.EnumerateArray().Select(resource => resource.GetProperty("href").GetString() ?? "")]
+            : [];
+
+    [Fact]
+    public async Task StartupSettingsDeliverTheirStylesheets()
+    {
+        using var rig = Rig.Start(source: null, configure: options =>
+        {
+            options.ResourceDomains.Add("fonts.googleapis.com");
+            options.UseSettings($$"""{"resources":{{Sheets(Icons)}}}""", "startup settings");
+        });
+        Assert.Equal([Icons], Delivered(await rig.CallAsync("render_widget", Alpha, Card)));
+    }
+
+    [Fact]
+    public async Task APrincipalsStylesheetIsCoveredByTheOperatorsDomains()
+    {
+        using var rig = Rig.Start(
+            new FakeSource(_ => new WidgenticCatalog().UseSettings($$"""{"resources":{{Sheets(Icons)}}}""")),
+            configure: options => options.ResourceDomains.Add("fonts.googleapis.com"));
+        Assert.Equal([Icons], Delivered(await rig.CallAsync("render_widget", Alpha, Card)));
+        Assert.Empty(rig.Logs.Messages);
+    }
+
+    [Fact]
+    public async Task PrincipalsGetOnlyTheirOwnStylesheets()
+    {
+        using var rig = Rig.Start(
+            new FakeSource(user => new WidgenticCatalog().UseSettings(
+                $$"""{"resourceDomains":["{{Name(user)}}.tenant.example"],"resources":{{Sheets($"https://{Name(user)}.tenant.example/brand.css")}}}""")),
+            WidgenticComposition.Replace,
+            poolSize: 4);
+        var renders = Enumerable.Range(0, 32).Select(async index =>
+        {
+            var (user, own, other) = index % 2 == 0 ? (Alpha, "alpha", "beta") : (Beta, "beta", "alpha");
+            var delivered = Delivered(await rig.CallAsync("render_widget", user, Card));
+            Assert.Equal([$"https://{own}.tenant.example/brand.css"], delivered);
+            Assert.DoesNotContain($"https://{other}.tenant.example/brand.css", delivered);
+        });
+        await Task.WhenAll(renders);
+    }
+
+    [Fact]
+    public async Task AnUncoveredStylesheetIsSkippedAndLogged()
+    {
+        using var rig = Rig.Start(
+            new FakeSource(_ => new WidgenticCatalog().UseSettings($$"""{"resources":{{Sheets(Icons)}}}""")),
+            configure: OperatorAndStartupDomains);
+        var result = await rig.CallAsync("render_widget", Alpha, Card);
+        Assert.False(IsError(result));
+        Assert.Empty(Delivered(result));
+        Assert.Contains(rig.Logs.Messages, message =>
+            message.Contains("setting", StringComparison.Ordinal) && message.Contains("UNDECLARED_DOMAIN", StringComparison.Ordinal));
+    }
+
     [Fact]
     public async Task AFailingSourceKeepsTheTemplate()
     {

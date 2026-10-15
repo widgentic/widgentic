@@ -257,6 +257,8 @@ export type StoreRejectionCode =
   | "SCHEMA_IN_USE"
   | "UNKNOWN_THEME"
   | "INVALID_DOMAIN"
+  | "INVALID_RESOURCE"
+  | "UNDECLARED_DOMAIN"
   | "THEME_IN_USE"
   | "ACTION_IN_USE"
   | "SECRET_IN_USE"

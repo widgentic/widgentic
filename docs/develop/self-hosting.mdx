@@ -15,8 +15,9 @@ docker compose up --build
 - **`web`** (port 8080) — the authoring app: the widget, theme, schema and
   action designers over the published authoring surface
   (`@widgentic/mcp/authoring`), plus write-only secrets, API keys, and
-  **Settings** (your default themes for light and dark hosts, and the
-  resource domains your widgets' images may load from directly). The widget
+  **Settings** (your default themes for light and dark hosts, the resource
+  domains your widgets' images and stylesheets may load from directly, and
+  the stylesheets every frame links). The widget
   and theme designers preview in the surface's `/api/preview-frame`: the
   document hosts mount, under the policy the MCP endpoint declares for you,
   so a preview loads only what a conversation would.

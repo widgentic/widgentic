@@ -13,7 +13,7 @@
  * same tree and CSS go to the app template framed at that URL (see
  * preview-island.ts), whose own document needs no scoping.
  */
-import { isPlainObject } from "@widgentic/core";
+import { isPlainObject, parseResources } from "@widgentic/core";
 import { createCatalog } from "@widgentic/core";
 import type { WidgetRenderer } from "@widgentic/core";
 import type { WidgetPayload } from "@widgentic/core";
@@ -57,6 +57,8 @@ export interface PreviewOptions {
    * the preview then runs there as an island instead of in the page.
    */
   previewFrame?: string;
+  /** The person's stylesheets; only the island links them (see the factories' option). */
+  resources?: readonly unknown[];
 }
 
 /**
@@ -138,6 +140,8 @@ export function createPreview(options: PreviewOptions = {}): PreviewController {
       : "light";
   };
   const island: PreviewIsland | undefined = islandUrl === undefined ? undefined : createPreviewIsland(islandUrl, scheme);
+  // Read once by the core rule: an entry it refuses is never sent to the frame.
+  const resources = island === undefined ? [] : parseResources(options.resources ?? []).resources;
   if (island !== undefined) pane.append(island.frame);
 
   const catalog = createCatalog();
@@ -252,7 +256,7 @@ export function createPreview(options: PreviewOptions = {}): PreviewController {
         draft.theme && Object.keys(draft.theme).length > 0 ? themeToCss(draft.theme, BOTH_MODES) : "",
         ISLAND_BADGE_CSS
       ].filter((part) => part !== "").join("\n");
-      island.show({ tree: rendered.node, css, payload });
+      island.show({ tree: rendered.node, css, payload, ...(resources.length === 0 ? {} : { resources }) });
       shown = true;
       return;
     }

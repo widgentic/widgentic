@@ -155,6 +155,38 @@ describe("the example app's designers preview in the island", () => {
     expect(document.querySelector("#theme-designer iframe.wgd-preview-frame")?.getAttribute("src")).toBe("/api/preview-frame");
   });
 
+  it("previews with the stylesheet the person saved in Settings", async () => {
+    const icons = "https://fonts.googleapis.com/icon?family=Material+Icons";
+    click("tab-settings");
+    const settingsRoot = document.getElementById("settings-designer") as HTMLElement;
+    for (const domain of ["fonts.googleapis.com", "fonts.gstatic.com"]) {
+      (settingsRoot.querySelector("input.wgd-domain-add") as HTMLInputElement).value = domain;
+      (settingsRoot.querySelector('button[title="Add domain"]') as HTMLButtonElement).click();
+    }
+    (settingsRoot.querySelector("input.wgd-stylesheet-add") as HTMLInputElement).value = icons;
+    (settingsRoot.querySelector('button[title="Add stylesheet"]') as HTMLButtonElement).click();
+    click("settings-save");
+    await until(() => status() === "saved settings", "the settings save");
+    expect((await store.settings(principalId)).resources).toEqual([{ type: "stylesheet", href: icons }]);
+
+    click("tab-widgets");
+    const frame = document.querySelector("#widget-designer iframe.wgd-preview-frame") as HTMLIFrameElement;
+    const sent: { method?: string; params?: { structuredContent?: { resources?: unknown } } }[] = [];
+    const fake = { postMessage: (message: (typeof sent)[number]) => sent.push(message) };
+    Object.defineProperty(frame, "contentWindow", { configurable: true, get: () => fake });
+    const post = (data: unknown) => window.dispatchEvent(new MessageEvent("message", { data, source: fake as unknown as Window }));
+    post({ jsonrpc: "2.0", id: 1, method: "ui/initialize", params: {} });
+    post({ jsonrpc: "2.0", method: "ui/notifications/initialized" });
+    // The draft carried from the earlier trip has an invalid kind; a valid one previews.
+    const kindField = [...document.querySelectorAll("#widget-designer .wgd-field")].find((field) =>
+      field.textContent?.startsWith("Kind (id)")
+    )?.querySelector("input") as HTMLInputElement;
+    kindField.value = "my-widget";
+    kindField.dispatchEvent(new Event("input", { bubbles: true }));
+    const result = sent.filter((message) => message.method === "ui/notifications/tool-result").at(-1);
+    expect(result?.params?.structuredContent?.resources).toEqual([{ type: "stylesheet", href: icons }]);
+  });
+
   it("serves the frame under the person's domains, the list its MCP endpoint declares", async () => {
     // The web service mounts the surface with no operator list, as the MCP
     // service declares none: the frame grants exactly the person's domains.
