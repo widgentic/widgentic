@@ -429,7 +429,7 @@ workspace and the sample first, then point at the built DLL):
     - D6: `list_themes` explains `resources` in its result's `rules`, not its description, so `tools/list` is unchanged.
     - D7: no budget change was needed.
     - D10: `.NET` per-principal composition now carries the operator's domains.
-  - **Gates.** Typecheck, `npm test` (1942 passed, 1 skipped), build, `pack:check`, docs check, `openspec validate --strict` and `--specs` (19), and `dotnet test` (219).
+  - **Gates.** Typecheck, `npm test` (1942 passed, 1 skipped), build, `pack:check`, docs check, `openspec validate --strict` and `--specs` (19), and `dotnet test` (219). Verify added a theme-designer island assertion for `resources`. The rerun at archive passed: 1942 tests, 19 specs.
   - **Staging (`stylesheet-resources-40be27a`, ACR run `cj3v`, revision `widgentic-selfhost--0000032`, replacing the island build).** Each response was saved to a file and then read. The deployment key went from Key Vault into a header file only, and was shredded.
     - `GET /api/settings` holds the seeded stylesheet and the four domains.
     - `/api/preview-frame` grants the font domains in `style-src` and `font-src`, and its 44,626-byte template carries `applyResources`.

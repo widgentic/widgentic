@@ -233,7 +233,8 @@ describe("the preview island", () => {
   it("the theme designer previews catalog kinds in the island too", () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
-    createThemeDesigner(container, { previewFrame: FRAME, initialTheme: BRAND });
+    const icons = { type: "stylesheet", href: "https://fonts.googleapis.com/icon?family=Material+Icons" };
+    createThemeDesigner(container, { previewFrame: FRAME, initialTheme: BRAND, resources: [icons] });
     const frame = container.querySelector("iframe.wgd-preview-frame") as HTMLIFrameElement;
     const sent: Sent[] = [];
     const fake = { postMessage: (message: Sent) => sent.push(message) };
@@ -245,6 +246,7 @@ describe("the preview island", () => {
     const content = result?.params?.structuredContent as { css: string; payload: { kind: string } };
     expect(content.payload.kind).toBe("card");
     expect(content.css).toContain("--wg-accent: #0b6e4f");
+    expect((result?.params?.structuredContent as { resources?: unknown }).resources).toEqual([icons]);
   });
 
   it("sends the person's stylesheets with each preview, only those the rule accepts", () => {
