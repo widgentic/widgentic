@@ -406,6 +406,19 @@ workspace and the sample first, then point at the built DLL):
   - **The example** (D9, revised). Its MCP endpoint declares only each person's domains, so the web service passes no operator list. `app.test.ts` checks the frames on `/api/preview-frame` for widgets and themes, and a person's policy carrying their domain.
   - **Tests.** Every happy-dom suite now sets `disableIframePageLoading`, so a mounted island never reaches the network.
   - **Gates.** Typecheck, `npm test` (1861 passed, 1 skipped), build, `pack:check`, docs check, `openspec validate --strict` and `--specs` (19), and `dotnet test` (209).
+  - **Staging (`designer-preview-island-764ca55`, ACR run `cj3s`, revision `widgentic-selfhost--0000029`, replacing the stylesheet probe).** Each response was saved to a file and then read.
+    - The first request after the cutover still reached the old revision and returned `NOT_FOUND`. After that, the revision FQDN and `demo.widgentic.dev` both answer `/api/preview-frame` with 200.
+    - The frame is 43,653 bytes. Its CSP carries the seeded `api.dicebear.com` and `*.pravatar.cc` in `img-src`, `style-src`, `font-src` and `media-src`, and its one `script-src` hash matches the served script. The response is `no-store` and `nosniff`, with no cookie.
+    - The served bundle carries `/api/preview-frame` and the host palette variables.
+    - **Chrome on the demo.** Editing `email-inbox-widget` previews in the frame: origin `null`, sandbox `allow-scripts`, height 339 px equal to the document's. The inbox showed 2 unread and both messages under google-light.
+  - **Browser agent on staging (owner's check).** All three checks passed.
+    - **Isolation and live updates.** A red star color and the title "Inbox LIVE" patched the preview without reloading the frame. Nothing crossed the frame either way. A style value meant to break out was refused inline by the Styles panel, and the action badge still shows.
+    - **Images.** `api.dicebear.com`, `i.pravatar.cc` (through the wildcard) and an inline `data:` image load. `picsum.photos` and `placehold.co` are blocked, though both load directly in the page.
+    - **Dark mode.** Under "(none — defaults)", the preview is the built-in dark.
+    - **What it led to.**
+      - The page no longer gets core's widget stylesheet in island mode. It had carried 55 unused `.wg-*` rules; a test now pins that the stylesheet is absent.
+      - The person's dark default not being previewable is queued as BACKLOG THM-4.
+      - The page having no CSP of its own is queued as EXM-1.
 
 - **Docs accuracy review (2026-10-14, on `bug/docs-accuracy`, mcp and webmcp patch pending release)**: a review of the hand-written docs against the code for the 13 changes archived since 2026-10-07. Four read-only reviewers, split by area, found about 65 issues, and four fixers on disjoint files corrected them.
   - **Agent-facing text.**

@@ -99,8 +99,6 @@ let previewCount = 0;
 const previewSalt = Math.random().toString(36).slice(2, 8);
 
 export function createPreview(options: PreviewOptions = {}): PreviewController {
-  injectBaseStyles(document);
-
   const banner = h("div", { class: "wgd-banner" });
   banner.hidden = true;
   // Theme styles first: the previewed kind's own rule wins a tie, as it
@@ -115,6 +113,9 @@ export function createPreview(options: PreviewOptions = {}): PreviewController {
   const scoped = (styles: Record<string, Record<string, string>>) =>
     themeStylesToCss(styles, `[data-wgd-scope="${scope}"]`);
   const islandUrl = options.previewFrame !== undefined && options.previewFrame !== "" ? options.previewFrame : undefined;
+  // Only an in-page preview needs the widget stylesheet in the page; the
+  // island's document carries its own.
+  if (islandUrl === undefined) injectBaseStyles(document);
   // The island's empty state lives in the designer's document, like the banner.
   const emptyState = h("div", { class: "wgd-preview-empty" }, ["No preview: the draft has never been valid."]);
   emptyState.hidden = true;

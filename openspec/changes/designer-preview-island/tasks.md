@@ -41,4 +41,4 @@
 ## 5. Gates and staging
 
 - [x] 5.1 Run the gates: typecheck, `npm test`, build, `pack:check`, docs check, `openspec validate --strict designer-preview-island` and `--specs`. Also run `dotnet test`: the host bundle is untouched, but the template module is shared.
-- [ ] 5.2 Deploy the branch to staging, replacing the stylesheet probe. Check from the served bytes that `/api/preview-frame` carries the policy. Hand the owner a designer check (isolation, external images, dark mode).
+- [x] 5.2 Deploy the branch to staging, replacing the stylesheet probe. Check from the served bytes that `/api/preview-frame` carries the policy. Hand the owner a designer check (isolation, external images, dark mode).

@@ -102,6 +102,7 @@ Every message is accepted only when `event.source === iframe.contentWindow`. The
 - **Without it:** today's mount, untouched.
 - **Read-only mode** is unaffected: the preview stays live.
 - **`dispose`** removes the message listener and the iframe.
+- **No widget stylesheet in the page (added after the staging check).** In island mode the page does not get core's base widget stylesheet; only an in-page preview injects it. The browser agent found its 55 `.wg-*` rules in a page that no longer rendered a widget. The designer's own badge rule for the in-page preview stays in the chrome stylesheet, which both modes share.
 
 ### D9. The self-host example
 
@@ -117,6 +118,9 @@ Every message is accepted only when `event.source === iframe.contentWindow`. The
 - **[A misbehaving page posting messages]** → The source check (D6) ignores every window but the frame.
 - **[Embedders without a server]** → They keep the in-page preview. The option is additive.
 - **[Cost per keystroke]** → One `postMessage` with the tree and CSS per revision. The bridge patches in place, and the payload is the size of a render.
+
+- **[Defaults per scheme]** → "(none — defaults)" previews widgentic's built-in light or dark, and a named pick applies to both modes. Neither shows a dark host under the person's dark default. Queued as BACKLOG THM-4.
+- **[The self-host page has no policy of its own]** → Only the frame carries a CSP. Queued as BACKLOG EXM-1.
 
 ## Migration Plan
 

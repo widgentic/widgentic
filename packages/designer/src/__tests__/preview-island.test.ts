@@ -190,6 +190,8 @@ describe("the preview island", () => {
     expect((results()[0]?.params?.structuredContent as { css: string }).css).toContain(".wg-title {");
     const pageCss = [...document.querySelectorAll("style")].map((style) => style.textContent ?? "").join("\n");
     expect(pageCss).not.toContain("rgb(4, 5, 6)");
+    // Nor does the page get the widget stylesheet: the frame's document has its own.
+    expect(document.head.querySelector("style[data-widgentic]")).toBeNull();
   });
 
   it("dispose removes the frame and stops listening", () => {
@@ -206,6 +208,7 @@ describe("the preview island", () => {
     createDesigner(container, { initialWidget: WIDGET });
     expect(container.querySelector("iframe")).toBeNull();
     expect(container.querySelector(".wgd-preview")?.textContent).toContain("Ada");
+    expect(document.head.querySelector("style[data-widgentic]")).not.toBeNull();
   });
 
   it("the theme designer previews catalog kinds in the island too", () => {
