@@ -20,3 +20,5 @@ export {
   parseResourceDomain,
   parseResourceDomains
 } from "./domains.js";
+export type { Resource, ResourceResult, StylesheetResource } from "./resources.js";
+export { RESOURCE_LIMIT, parseResource, parseResources, resourceCovered, resourceHost } from "./resources.js";

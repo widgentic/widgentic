@@ -4,13 +4,24 @@
  * lenient read, and checks that report each refused part instead of
  * throwing. One record per principal, made of named sections; this version
  * defines `defaultThemes`, the theme each host mode uses when a render names
- * none, and `resourceDomains`, the domains an MCP Apps frame may load assets
- * from directly (read by the core resource-domain rule). The store's write
- * path (`./settings.ts`) turns the first problem into its refusal; the host
- * bundle keeps the parts that pass and reports the rest.
+ * none, `resourceDomains`, the domains an MCP Apps frame may load assets
+ * from directly (read by the core resource-domain rule), and `resources`,
+ * the stylesheets those frames link (read by the core resource rule). The
+ * store's write path (`./settings.ts`) turns the first problem into its
+ * refusal and adds the record's own coverage check; the host bundle keeps
+ * the parts that pass, checks coverage against what it declares, and
+ * reports the rest.
  */
-import { RESOURCE_DOMAIN_LIMIT, isPlainObject, parseResourceDomains } from "@widgentic/core";
-import type { ThemeMode } from "@widgentic/core";
+import {
+  RESOURCE_DOMAIN_LIMIT,
+  RESOURCE_LIMIT,
+  isPlainObject,
+  parseResourceDomains,
+  parseResources,
+  resourceCovered,
+  resourceHost
+} from "@widgentic/core";
+import type { Resource, ThemeMode } from "@widgentic/core";
 
 // A type literal, not an interface: it stays assignable to records with an
 // index signature (the designer's pass-through settings record).
@@ -19,6 +30,8 @@ export type PrincipalSettings = {
   defaultThemes?: Partial<Record<ThemeMode, string>>;
   /** Canonical `https://` origins the app frame may load assets from directly. */
   resourceDomains?: string[];
+  /** Stylesheets the app frame links, each on a host `resourceDomains` covers. */
+  resources?: Resource[];
 };
 
 /** A write: each named section replaces, `null` removes, absent keeps. */
@@ -28,13 +41,13 @@ export type PrincipalSettingsUpdate = {
 
 /** One refused part of a settings record. */
 export interface SettingsProblem {
-  code: "INVALID_SHAPE" | "UNKNOWN_THEME" | "INVALID_DOMAIN";
-  /** What was refused: the record (`settings`), a section, `defaultThemes.<mode>`, or `resourceDomains.<entry>`. */
+  code: "INVALID_SHAPE" | "UNKNOWN_THEME" | "INVALID_DOMAIN" | "INVALID_RESOURCE" | "UNDECLARED_DOMAIN";
+  /** What was refused: the record (`settings`), a section, `defaultThemes.<mode>`, `resourceDomains.<entry>` or `resources.<href>`. */
   name: string;
   message: string;
 }
 
-export const SETTINGS_SECTIONS: readonly (keyof PrincipalSettings)[] = ["defaultThemes", "resourceDomains"];
+export const SETTINGS_SECTIONS: readonly (keyof PrincipalSettings)[] = ["defaultThemes", "resourceDomains", "resources"];
 
 /** The host colour schemes a default theme is chosen for, in reporting order. */
 export const THEME_MODES: readonly ThemeMode[] = ["light", "dark"];
@@ -56,9 +69,11 @@ export function readSettings(raw: unknown, report?: (message: string) => void): 
   }
   const defaultThemes = readDefaultThemes(raw.defaultThemes, report);
   const resourceDomains = readResourceDomains(raw.resourceDomains, report);
+  const resources = readResources(raw.resources, resourceDomains ?? [], report);
   return {
     ...(defaultThemes === undefined ? {} : { defaultThemes }),
-    ...(resourceDomains === undefined ? {} : { resourceDomains })
+    ...(resourceDomains === undefined ? {} : { resourceDomains }),
+    ...(resources === undefined ? {} : { resources })
   };
 }
 
@@ -100,6 +115,37 @@ function readResourceDomains(
   const { domains, refused } = parseResourceDomains(entries);
   for (const { entry, error } of refused) report?.(`ignored the resource domain '${entry}': ${error}.`);
   return domains.length > 0 ? domains.map((domain) => domain.origin) : undefined;
+}
+
+/**
+ * The stored stylesheets that pass today's rule and the record's own
+ * domains; each other one reported. Lenient like the domains' read: the
+ * limit is a write-side rule, so a record edited out of band keeps every
+ * entry that passes.
+ */
+function readResources(
+  value: unknown,
+  domains: readonly string[],
+  report: ((message: string) => void) | undefined
+): Resource[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) {
+    report?.("ignored a 'resources' setting that is not a list.");
+    return undefined;
+  }
+  const { resources, refused } = parseResources(value);
+  for (const { entry, error } of refused) report?.(`ignored the resource ${resourceName(entry)}: ${error}.`);
+  const covered = resources.filter((resource) => {
+    if (resourceCovered(resource.href, domains)) return true;
+    report?.(`ignored the stylesheet '${resource.href}': ${resourceHost(resource.href)} is not one of the resource domains.`);
+    return false;
+  });
+  return covered.length > 0 ? covered : undefined;
+}
+
+/** How a resource entry is named in a report: its address when it has one. */
+function resourceName(entry: unknown): string {
+  return isPlainObject(entry) && typeof entry.href === "string" ? `'${entry.href}'` : JSON.stringify(entry) ?? "entry";
 }
 
 /**
@@ -183,11 +229,70 @@ export function checkResourceDomains(value: unknown): { resourceDomains: string[
 }
 
 /**
+ * A `resources` value checked entry by entry by the core rule alone: the
+ * entries that pass, deduplicated by address in first-seen order, and one
+ * problem per refused entry. A value that is not a list of objects, or that
+ * holds more than the limit, is one shape problem and keeps nothing.
+ * Coverage is the caller's: the store checks the record's own domains, a
+ * host the domains it declares.
+ */
+export function checkResources(value: unknown): { resources: Resource[]; problems: SettingsProblem[] } {
+  if (!Array.isArray(value) || !value.every((entry) => isPlainObject(entry))) {
+    return {
+      resources: [],
+      problems: [
+        {
+          code: "INVALID_SHAPE",
+          name: "resources",
+          message: "'resources' must be a list of { type: \"stylesheet\", href, integrity? } objects."
+        }
+      ]
+    };
+  }
+  if (value.length > RESOURCE_LIMIT) {
+    return {
+      resources: [],
+      problems: [
+        {
+          code: "INVALID_SHAPE",
+          name: "resources",
+          message: `'resources' holds ${value.length} entries; at most ${RESOURCE_LIMIT} are allowed.`
+        }
+      ]
+    };
+  }
+  const { resources, refused } = parseResources(value);
+  return {
+    resources,
+    problems: refused.map(({ entry, error }) => ({
+      code: "INVALID_RESOURCE",
+      name: `resources.${isPlainObject(entry) && typeof entry.href === "string" ? entry.href : "entry"}`,
+      message: `the resource ${resourceName(entry)} is refused: ${error}.`
+    }))
+  };
+}
+
+/** The stylesheets of `resources` that `domains` do not cover, each as an `UNDECLARED_DOMAIN` problem. */
+export function uncoveredResources(resources: readonly Resource[], domains: readonly string[]): SettingsProblem[] {
+  return resources
+    .filter((resource) => !resourceCovered(resource.href, domains))
+    .map((resource) => {
+      const host = resourceHost(resource.href);
+      return {
+        code: "UNDECLARED_DOMAIN",
+        name: `resources.${resource.href}`,
+        message: `the stylesheet '${resource.href}' needs ${host} in your resource domains.`
+      };
+    });
+}
+
+/**
  * A whole settings record checked against today's rules, each section by
  * its own rule, keeping what passes: the record itself when it is not an
  * object, an unknown section, each default naming a theme outside
- * `themes`, and each refused domain are reported and skipped. An absent or
- * `null` section is no section.
+ * `themes`, each refused domain and each refused resource are reported and
+ * skipped. Resource coverage is not checked here (see `checkResources`).
+ * An absent or `null` section is no section.
  */
 export function checkSettings(
   record: unknown,
@@ -211,6 +316,10 @@ export function checkSettings(
       const checked = checkResourceDomains(value);
       problems.push(...checked.problems);
       if (checked.resourceDomains.length > 0) settings.resourceDomains = checked.resourceDomains;
+    } else if (section === "resources") {
+      const checked = checkResources(value);
+      problems.push(...checked.problems);
+      if (checked.resources.length > 0) settings.resources = checked.resources;
     } else {
       problems.push({ code: "INVALID_SHAPE", name: section, message: `'${section}' is not a settings section.` });
     }

@@ -46,7 +46,7 @@ packages/core       @widgentic/core   contract, adapters, mapper, catalog, themi
 packages/designer   @widgentic/designer   widget/theme/schema/action designers, custom elements, src/browser.ts → single-file bundle
 packages/webmcp     @widgentic/webmcp   BETA: the designers as WebMCP tools (document.modelContext) — descriptor factory, feature-detected registration, dispose; outside the linked release group
 packages/mcp        @widgentic/mcp    output/ (tool-output convention), server/ (handlers, app template, actions, guarded fetch,
-                                      server.ts = createWidgenticServer behind ./sdk), authoring/ (./authoring — the hostable write surface),
+                                      server.ts = createWidgenticServer behind ./sdk), authoring/ (./authoring — the hostable write surface and the designers' preview frame),
                                       store/ (./store, ./store/sqlite, ./store/cosmos), secrets/ (./secrets, ./secrets/keyvault),
                                       host/ (./host — the runtime-neutral bundle for embedded engines; scripts/bundle-host.mjs)
 dotnet/              Widgentic.Mcp (NuGet, BETA, render-only): the ./host bundle on ClearScript V8 + WithWidgentic on the C# MCP SDK;
@@ -156,7 +156,8 @@ pack:check`, `openspec validate` — all green; plus `dotnet test` when `dotnet/
 - Actions: `prompt` proposes (composer prefill, never triggers), `http` runs
   server-side through the guarded fetch (public https, no redirects, 8 s,
   256 KiB, JSON only, declared args only, author-fixed query/headers win);
-  the iframe never touches the network; bindings resolve from the store,
+  the iframe makes no requests of its own (the browser loads only images, the
+  person's stylesheets and their fonts on declared domains); bindings resolve from the store,
   never from the request; secrets are referenced by name, injected only at
   execution, never displayed, always redacted.
 - Per-request composition, no caches (cross-tenant leaks); stores validate on

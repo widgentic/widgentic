@@ -143,6 +143,23 @@ options.UseSettings(""" { "resourceDomains": ["cdn.example.com", "*.example.net"
   sources too. List only domains you control.
 - **Caching.** Hosts keep the declaration they read: claude.ai keeps it until the page reloads.
 
+The settings record may also list stylesheets every frame links: an icon font or a brand font,
+on a declared domain.
+
+```csharp
+options.ResourceDomains.Add("fonts.googleapis.com");
+options.ResourceDomains.Add("fonts.gstatic.com");
+options.UseSettings(""" { "resources": [{ "type": "stylesheet", "href": "https://fonts.googleapis.com/icon?family=Material+Icons" }] } """);
+```
+
+- **Delivery.** Each stylesheet rides every render and preview in `structuredContent.resources`.
+  The app template links it before the widget's CSS, and templates may then use its classes
+  (`material-icons`).
+- **Rules.** Up to 8 entries, each `{ "type": "stylesheet", "href", "integrity"? }` with an
+  `https://` address and no port. Its host must be covered by `ResourceDomains` or the record's
+  `resourceDomains`, and the fonts' domain must be declared too. A refused or uncovered entry
+  stops startup.
+
 ## A catalog per caller
 
 One server can serve each caller (a tenant, a user) its own widgets, themes and schemas.
@@ -186,6 +203,9 @@ A catalog may also carry the caller's settings record (`Settings`, or `UseSettin
   followed by the caller's effective section, on `resources/list` and `resources/read` alike.
   The template's content stays global. A caller's refused domain is skipped and logged, and a
   source that throws leaves the startup declaration.
+- **Stylesheets** combine the same way, by section. A caller's stylesheet is delivered when
+  `ResourceDomains` or the caller's effective `resourceDomains` cover it. Otherwise it is skipped
+  and logged as `UNDECLARED_DOMAIN`.
 
 `list_widgets`, `render_widget`, `preview_widget`, `list_themes`, `list_schemas`, the preview
 pages and the renderer's `RequestContext` overload answer from the caller's catalog. `tools/list`,
@@ -271,8 +291,9 @@ dotnet run --project dotnet/samples/Widgentic.Sample.Stdio -- --http \
 
 - **`merge-demo`** gets the seed, with its own `email-inbox-widget` in place of the seed's and a
   `merge-demo-dark` theme, a copy of `google-dark` with a green accent. Its settings make
-  `merge-demo-dark` its dark default, and its `resourceDomains` section lists the seed's two
-  domains plus `ui-avatars.com` (a caller's section replaces the startup one whole).
+  `merge-demo-dark` its dark default, and its `resourceDomains` section lists the seed's four
+  domains plus `ui-avatars.com` (a caller's section replaces the startup one whole, so it keeps
+  the font domains the seed's Material Icons stylesheet needs).
 - **`replace-demo`** gets the built-ins and its own `release-notes-widget` only, with the
   built-in defaults.
 - **Callers without a known key** get the seed.

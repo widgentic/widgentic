@@ -24,7 +24,8 @@ public sealed class WidgenticOptions
     /// <c>resourceDomains</c> section (the caller's, with a catalog source). Read by the bundle's
     /// resource-domain rule: a refused entry stops startup. No widget, theme or render input can
     /// extend the list. Empty by default. This package does not inline images, so in hosts that
-    /// enforce <c>img-src</c> a declared domain is the only way an external image displays.
+    /// enforce <c>img-src</c> a declared domain is the only way an external image displays. These
+    /// domains also cover the settings' stylesheets.
     /// </summary>
     public IList<string> ResourceDomains { get; } = new List<string>();
 
@@ -85,10 +86,13 @@ public sealed class WidgenticOptions
 
     /// <summary>
     /// Set the settings record, in the store's shape
-    /// (<c>{ "defaultThemes"?: { "light"?, "dark"? }, "resourceDomains"?: [ … ] }</c>): its default
-    /// themes stand in for the built-ins when a render names no theme, and its resource domains
-    /// are declared after <see cref="ResourceDomains"/>. The bundle checks it at startup (defaults
-    /// against the configured themes), and a refused setting stops startup like a refused entry.
+    /// (<c>{ "defaultThemes"?: { "light"?, "dark"? }, "resourceDomains"?: [ … ], "resources"?: [ … ] }</c>):
+    /// its default themes stand in for the built-ins when a render names no theme, its resource
+    /// domains are declared after <see cref="ResourceDomains"/>, and its stylesheets
+    /// (<c>{ "type": "stylesheet", "href", "integrity"? }</c>) ride every render's structured
+    /// content when a declared domain covers them. The bundle checks it at startup (defaults
+    /// against the configured themes, stylesheets against the declared domains), and a refused
+    /// setting stops startup like a refused entry.
     /// A later call replaces the record.
     /// </summary>
     /// <param name="json">The settings record JSON.</param>

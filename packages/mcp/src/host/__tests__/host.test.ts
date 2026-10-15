@@ -320,6 +320,27 @@ describe("createWidgenticHost resource domains", () => {
     expect(declared(host)).toEqual(["https://cdn.example.com"]);
   });
 
+  it("delivers the settings' covered stylesheets and reports the rest", () => {
+    const icons = { type: "stylesheet", href: "https://fonts.googleapis.com/icon?family=Material+Icons" };
+    const uncovered = { type: "stylesheet", href: "https://cdn.example.org/a.css" };
+    const script = { type: "script", href: "https://fonts.googleapis.com/x.js" };
+    const host = createWidgenticHost(
+      JSON.stringify({ resourceDomains: ["fonts.googleapis.com"], settings: { resources: [icons, uncovered, script] } })
+    );
+    expect(JSON.parse(host.problems())).toEqual([
+      expect.objectContaining({ section: "settings", index: -1, name: `resources.${script.href}`, code: "INVALID_RESOURCE" }),
+      expect.objectContaining({ section: "settings", index: -1, name: `resources.${uncovered.href}`, code: "UNDECLARED_DOMAIN" })
+    ]);
+    const render = JSON.parse(host.call("render_widget", JSON.stringify({ widget: "card", data: { title: "A" } }), false));
+    expect(render.structuredContent.resources).toEqual([icons]);
+    const preview = JSON.parse(host.call("preview_widget", JSON.stringify({ widget: "card", data: { title: "A" } }), false));
+    expect(preview.structuredContent.resources).toEqual([icons]);
+    expect(JSON.parse(JSON.parse(host.call("list_themes", "{}", false)).content[0].text).resources).toEqual([icons]);
+    expect(host.widgetPage("card")).toContain(`<link rel="stylesheet" href="${icons.href}">`);
+    const none = JSON.parse(createWidgenticHost("{}").call("render_widget", JSON.stringify({ widget: "card", data: { title: "A" } }), false));
+    expect(none.structuredContent).not.toHaveProperty("resources");
+  });
+
   it("reports a malformed operator list or settings section as shape", () => {
     const listless = createWidgenticHost(JSON.stringify({ resourceDomains: "cdn.example.com" }));
     expect(JSON.parse(listless.problems())).toEqual([expect.objectContaining({ section: "resourceDomains", code: "INVALID_SHAPE" })]);

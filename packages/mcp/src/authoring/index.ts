@@ -1,7 +1,8 @@
 /**
  * widgentic/authoring — the write side of the store port as a hostable HTTP
  * surface: widgets, themes, schemas, shared actions, write-only secrets and
- * API keys, authorized by the host's resolved principal and nothing else.
+ * API keys, authorized by the host's resolved principal and nothing else,
+ * plus the designers' preview frame.
  * The core is a pure function over decoded requests; the node adapter beside
  * it mounts it on a standard server.
  */

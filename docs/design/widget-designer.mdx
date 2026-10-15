@@ -91,7 +91,9 @@ Two modes. **Define inline** edits `descriptor.dataSchema` through a builder and
 
 ### Sample data and preview
 
-The preview renders the draft — and only the draft — against `dataExample` or sample data you supply, compiled by the public template compiler and mounted through `mountWidget`, so what you see is what a host receives. `dataExample` is cross-checked against the schema with dotted paths (`data.lines.0.amount`). Valid edits patch the mounted DOM in place. When the draft is invalid the preview freezes the last good render and shows the structured error in a banner; it is never blank, not even when the initial widget fails validation.
+The preview renders the draft — and only the draft — against `dataExample` or sample data you supply, compiled by the public template compiler and rendered through the real catalog, so what you see is what a host receives. Embedded without a frame, the preview mounts it through `mountWidget`; in the app, the frame's bridge mounts it, as a host's does (below). `dataExample` is cross-checked against the schema with dotted paths (`data.lines.0.amount`). Valid edits patch the mounted DOM in place. When the draft is invalid the preview freezes the last good render and shows the structured error in a banner; it is never blank, not even when the initial widget fails validation.
+
+In the app the preview runs in a frame: the same document MCP Apps hosts mount, under the policy your resource domains set. An image from a domain in **Settings** loads there and one from anywhere else is blocked, as in a conversation; the stylesheets in Settings load there too, so an icon font previews as it renders, and the app's own styles never reach the widget. The frame follows the app's light or dark mode.
 
 ### Preview theme and token reference
 

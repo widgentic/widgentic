@@ -48,7 +48,11 @@ export interface AuthoringRequest {
 
 export interface AuthoringResponse {
   status: number;
+  /** The JSON body every route but the preview frame answers with. */
   body: unknown;
+  /** The preview frame's document; when present it is the body, sent with `headers`. */
+  html?: string;
+  headers?: Record<string, string>;
 }
 
 export interface AuthoringDeps {
@@ -61,6 +65,11 @@ export interface AuthoringDeps {
   fetchDeps?: GuardedFetchDeps;
   /** Sink for unexpected server-side failures (defaults to stderr); clients only ever see `INTERNAL`. */
   log?: (line: string) => void;
+  /**
+   * The operator's resource domains, as the MCP server is given them: the
+   * preview frame's policy grants them before the principal's own.
+   */
+  resourceDomains?: readonly string[];
 }
 
 /**

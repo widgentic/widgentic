@@ -3,7 +3,7 @@ title: "Embed the designers"
 description: "Mount the widget, theme, schema, action and settings designers in your own page as functions or custom elements, and theme their chrome."
 ---
 
-`@widgentic/designer` ships five designers — widget, theme, schema, action and settings — each as a function taking a container and each as an opt-in custom element. They run in the browser, depend only on `@widgentic/core`, and perform no network I/O: every edit re-runs widgentic's validators and re-renders a live preview through the real pipeline; persistence is yours.
+`@widgentic/designer` ships five designers — widget, theme, schema, action and settings — each as a function taking a container and each as an opt-in custom element. They run in the browser, depend only on `@widgentic/core`, and perform no network I/O of their own: every edit re-runs widgentic's validators and re-renders a live preview through the real pipeline; persistence is yours. The one load they cause is the preview frame you name with `previewFrame`, which the browser fetches from your server.
 
 ```bash
 npm install @widgentic/designer
@@ -32,6 +32,8 @@ designer.subscribe((draft) => save(draft));
 | `appearance` | `"auto"` (default, follows `prefers-color-scheme`), `"light"` or `"dark"` for the designer's own chrome |
 | `chrome` | host chrome tokens, see below |
 | `readOnly` | mount with every editing surface inert |
+| `resources` | the person's stylesheets, as their settings record holds them; the preview frame links the entries `parseResource` accepts, and the in-page preview ignores them |
+| `previewFrame` | the URL of a preview frame, such as the authoring surface's `/api/preview-frame`: the preview then runs in that frame instead of the page (see [The preview](#the-preview)) |
 
 The handle is `{ getDraft, getDiagnostics, loadWidget, checkWidget, loadTheme, setReadOnly, subscribe, dispose }`. `getDraft()` returns a copy of the current draft; `getDiagnostics()` returns its diagnostics and `checkWidget(definition)` checks a definition as a load would, without touching the draft, both resolved against the `schemas` and `actions` you supplied; `loadWidget(definition)` and `loadTheme(theme)` validate first and return `{ ok: true }` or `{ ok: false, errors }` without touching the draft on failure; `loadTheme(tokens)` layers its tokens over the preview theme the person chose, which stays selected with its styles, so `loadTheme({})` returns to it; `loadWidget` keeps the preview theme and refuses a kind Save would refuse only when the load changes the kind; `subscribe(listener)` calls `listener(draft, diagnostics)` on every change and returns an unsubscribe function; `dispose()` removes the UI. Read-only mode — `readOnly: true` or `setReadOnly(true)` — leaves editing surfaces visible but inert while the preview, its theme selector and Export keep working: it restricts editing, not looking.
 
@@ -58,20 +60,33 @@ const settingsDesigner = createSettingsDesigner(el, { themes, initialSettings, r
 // → { getSettings, loadSettings, setThemes, setReadOnly, subscribe, dispose }
 ```
 
-- `createThemeDesigner` edits a named entry `{ name, label?, description?, tokens, styles? }`, its shared styles in the widget designer's own Styles panel. Its `widgets` option adds custom widget definitions to the preview-kind selector beside the built-ins, so a theme is judged against the widgets it will dress; invalid definitions are skipped. `initialTheme` opens an existing entry.
+- `createThemeDesigner` edits a named entry `{ name, label?, description?, tokens, styles? }`, its shared styles in the widget designer's own Styles panel. Its `widgets` option adds custom widget definitions to the preview-kind selector beside the built-ins, so a theme is judged against the widgets it will dress; invalid definitions are skipped. `initialTheme` opens an existing entry. It takes `previewFrame` and `resources` too.
 - `createSchemaDesigner` edits a shared schema entry `{ name, label?, description?, schema }`; `initialSchema` opens one.
 - `createActionDesigner` edits a stored action `{ name, label?, description?, definition }`; `initialAction` opens one. `schemas` offers shared schemas as copy-from sources for the input and output schemas, and `secretNames` offers names for header and query values. A Test control appears only when you pass `testCall(definition, args)`, which must run through your server's execution path — the library performs no network I/O itself.
 
-- `createSettingsDesigner` edits the principal's settings record. Its **Default themes** subsection offers, per mode (light hosts, dark hosts), the built-in and every entry you pass in `themes`; `getSettings()` returns `{ defaultThemes: { light?, dark? } }`, built-in choices omitted, with any section it does not edit passed through untouched. Save it with `PUT /settings` on the authoring surface. A name you did not pass in `themes` shows as unavailable rather than disappearing. `setThemes(themes)` replaces the themes offered and keeps the record as it is. Its **Resource domains** subsection lists the domains the principal's frames may load images from directly. Each entry is checked as it is typed by the same rule the store applies (`parseResourceDomain` from `@widgentic/core`). A valid entry is recorded in its canonical `https://` form; an invalid one is kept as typed and marked, so the save's `INVALID_DOMAIN` names it. Adding stops at `RESOURCE_DOMAIN_LIMIT`. `getSettings()` carries `resourceDomains` once the record had it or the person edited the list, so a save clears an emptied list.
+- `createSettingsDesigner` edits the principal's settings record. Its **Default themes** subsection offers, per mode (light hosts, dark hosts), the built-in and every entry you pass in `themes`; `getSettings()` returns `{ defaultThemes: { light?, dark? } }`, built-in choices omitted, with any section it does not edit passed through untouched. Save it with `PUT /settings` on the authoring surface. A name you did not pass in `themes` shows as unavailable rather than disappearing. `setThemes(themes)` replaces the themes offered and keeps the record as it is. Its **Resource domains** subsection lists the domains the principal's frames may load images from directly. Each entry is checked as it is typed by the same rule the store applies (`parseResourceDomain` from `@widgentic/core`). A valid entry is recorded in its canonical `https://` form; an invalid one is kept as typed and marked, so the save's `INVALID_DOMAIN` names it. Adding stops at `RESOURCE_DOMAIN_LIMIT`. `getSettings()` carries `resourceDomains` once the record had it or the person edited the list, so a save clears an emptied list. Its **Stylesheets** subsection lists `{ type: "stylesheet", href, integrity? }` entries the same way, checked by `parseResource` against `RESOURCE_LIMIT`. An entry whose host none of the listed domains covers (`resourceCovered`) is marked with the domain to add, and the mark clears as soon as that domain is listed. `getSettings()` carries `resources` on the same terms as `resourceDomains`.
 
-The preview renders widgets in your page's DOM, not in a frame. Its styles stay inside it: the widget's and the theme's rules are scoped to the preview. Your page's element rules are another matter. A rule like `header { border-bottom: … }` would dress a widget's `<header>` that no MCP Apps host dresses, so fence them out of the preview:
+## The preview
+
+The widget and theme designers preview in one of two ways.
+
+**In a frame (`previewFrame`).** The preview runs in the document MCP Apps hosts mount: the app template, framed with `sandbox="allow-scripts"`, and the designer acts as its host. The frame's bridge mounts and patches each render as it does in Claude or ChatGPT, under the image, style, font and media policy hosts apply for the person's resource domains. So an image from a declared domain loads, and an undeclared one is blocked, exactly as in a conversation. Neither your page's styles nor the preview's cross the frame.
+- **The route.** Serve the frame with the authoring surface's `GET /preview-frame` (see [Run your own server](/develop/run-your-own-server#mount-the-authoring-surface)). It needs no sign-in, and grants a signed-in person their own domains; a widgentic API key is refused there as on every authoring route.
+- **The frame never executes.** It has no server tools: actions show as unavailable, and nothing leaves the designer. Links open in a new tab when they are `http`, `https`, `mailto` or `tel`.
+- **The color scheme.** The frame follows the designer's: `appearance` when you pin it, otherwise your page's `data-theme` on `<html>`, otherwise `prefers-color-scheme`. Under "none", the preview wears widgentic's built-in light or dark palette. A preview theme the person picks applies to both, as an explicit `theme` does in a render.
+- **Stylesheets.** Pass the person's `resources` too, and the frame links them as hosts do ([Stylesheets](/how-it-works/inline-rendering#stylesheets)). The in-page preview never adds a stylesheet to your page.
+- **The custom elements** take it as the `preview-frame` attribute.
+
+<Note>`previewFrame` and `GET /preview-frame` are available from `@widgentic/designer` and `@widgentic/mcp` 0.14.0.</Note>
+
+**In the page (the default).** Without `previewFrame`, the preview renders in your page's DOM, with no server needed. Its styles stay inside it: the widget's and the theme's rules are scoped to the preview. Your page's element rules are another matter. A rule like `header { border-bottom: … }` would dress a widget's `<header>` that no MCP Apps host dresses, so fence them out of the preview:
 
 ```css
 header:where(:not(.wgd-preview *)) { border-bottom: 1px solid var(--line); }
 button:where(:not(.wgd-preview *)) { padding: 4px 10px; }
 ```
 
-`:where()` keeps the rule's weight unchanged. Rules on your own classes need no fence.
+`:where()` keeps the rule's weight unchanged. Rules on your own classes need no fence. In the page, your page's own policy decides what a preview may load, not the person's resource domains.
 
 All five accept `appearance`, `chrome` and `readOnly`. The widget designer only selects among the themes, schemas and actions you pass; authoring each belongs to its own designer, so a host ships only what it embeds.
 
@@ -95,7 +110,7 @@ defineActionDesignerElement();    // <widgentic-action-designer>
 defineSettingsDesignerElement();  // <widgentic-settings-designer>
 ```
 
-Each registrar takes an optional tag name and does nothing if that tag is already defined. The elements wrap their factory and re-emit its subscription as bubbling `widgentic-change` CustomEvents whose `detail` carries `{ draft, diagnostics }`, `{ theme }`, `{ schema }`, `{ action }` or `{ settings }`. Two attributes are read when the element connects: `appearance` (`light` or `dark`) and `chrome` (the token map as JSON). The wrapped handle is available as the element's `designer` property. `<widgentic-settings-designer>` also takes its choices through a `themes` property (`{ name, label? }` entries), settable before or after the element connects, or before it is defined; a change after connecting reaches the mounted designer through `setThemes`.
+Each registrar takes an optional tag name and does nothing if that tag is already defined. The elements wrap their factory and re-emit its subscription as bubbling `widgentic-change` CustomEvents whose `detail` carries `{ draft, diagnostics }`, `{ theme }`, `{ schema }`, `{ action }` or `{ settings }`. Two attributes are read when the element connects: `appearance` (`light` or `dark`) and `chrome` (the token map as JSON). `<widgentic-designer>` and `<widgentic-theme-designer>` also read `preview-frame`. The wrapped handle is available as the element's `designer` property. `<widgentic-settings-designer>` also takes its choices through a `themes` property (`{ name, label? }` entries), settable before or after the element connects, or before it is defined; a change after connecting reaches the mounted designer through `setThemes`.
 
 Without a bundler, load the single-file bundle and use the elements directly:
 

@@ -70,12 +70,13 @@ public sealed class WidgenticCatalog
 
     /// <summary>
     /// The caller's settings record, in the store's shape
-    /// (<c>{ "defaultThemes"?: { "light"?, "dark"? }, "resourceDomains"?: [ … ] }</c>), or null for
+    /// (<c>{ "defaultThemes"?: { "light"?, "dark"? }, "resourceDomains"?: [ … ], "resources"?: [ … ] }</c>), or null for
     /// none. In <see cref="WidgenticComposition.Merge"/> each section it defines replaces the
     /// startup record's section whole, and the sections it omits are the startup record's; in
     /// <see cref="WidgenticComposition.Replace"/> it is the only record. Its defaults name themes
-    /// of the caller's composed catalog, and its resource domains are declared on the app resource
-    /// after <see cref="WidgenticOptions.ResourceDomains"/>.
+    /// of the caller's composed catalog, its resource domains are declared on the app resource
+    /// after <see cref="WidgenticOptions.ResourceDomains"/>, and its stylesheets that those domains
+    /// cover ride the caller's renders (one they do not cover is skipped and logged).
     /// </summary>
     public string? Settings { get; set; }
 

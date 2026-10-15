@@ -50,7 +50,7 @@ const widget = (kind: string, ref: string) => ({
 describe("startup seed", () => {
   it("populates an empty store with the sample content, and its widgets render", async () => {
     const summary = await seedPrincipal(store, principalId, SAMPLE, log);
-    expect(summary).toEqual({ written: 9, skipped: 0, refused: 0 });
+    expect(summary).toEqual({ written: 10, skipped: 0, refused: 0 });
     expect((await store.schemas(principalId)).map((s) => s.name).sort()).toEqual(["appointment-agenda", "email-inbox"]);
     expect((await store.themes(principalId)).map((t) => t.name).sort()).toEqual(["google-dark", "google-light"]);
     const widgets = await store.widgets(principalId);
@@ -60,13 +60,13 @@ describe("startup seed", () => {
       const result = handleRenderWidget(catalog, { widget: stored.kind, data: stored.descriptor.dataExample });
       expect(result.isError, stored.kind).toBeUndefined();
     }
-    expect(lines.at(-1)).toContain("9 written, 0 already present, 0 refused");
+    expect(lines.at(-1)).toContain("10 written, 0 already present, 0 refused");
   });
 
   it("never overwrites an entry the principal already holds", async () => {
     await store.putTheme(principalId, { name: "google-dark", tokens: { accent: "#ff0000" } });
     const summary = await seedPrincipal(store, principalId, SAMPLE, log);
-    expect(summary).toEqual({ written: 8, skipped: 1, refused: 0 });
+    expect(summary).toEqual({ written: 9, skipped: 1, refused: 0 });
     const kept = (await store.themes(principalId)).find((t) => t.name === "google-dark");
     expect(kept?.tokens).toEqual({ accent: "#ff0000" });
   });
@@ -113,16 +113,17 @@ describe("startup seed", () => {
 
   it("seeds through the single principal at startup", async () => {
     const summary = await seedOnStartup(store, { principalId }, SAMPLE, log);
-    expect(summary?.written).toBe(9);
+    expect(summary?.written).toBe(10);
   });
 });
 
 describe("startup seed settings", () => {
-  it("sets the demo's default themes and resource domains, and a render naming no theme uses the themes", async () => {
+  it("sets the demo's default themes, resource domains and stylesheet, and a render naming no theme uses the themes", async () => {
     await seedPrincipal(store, principalId, SAMPLE, log);
     expect(await store.settings(principalId)).toEqual({
       defaultThemes: { light: "google-light", dark: "google-dark" },
-      resourceDomains: ["https://api.dicebear.com", "https://*.pravatar.cc"]
+      resourceDomains: ["https://api.dicebear.com", "https://*.pravatar.cc", "https://fonts.googleapis.com", "https://fonts.gstatic.com"],
+      resources: [{ type: "stylesheet", href: "https://fonts.googleapis.com/icon?family=Material+Icons" }]
     });
     const themes = (await composeThemes(store, principalId)).value;
     expect(themes.defaults()).toEqual({ light: "google-light", dark: "google-dark" });
@@ -140,10 +141,11 @@ describe("startup seed settings", () => {
     // The person sets dark hosts back to the built-in, then the service restarts.
     await store.putSettings(principalId, { defaultThemes: { light: "google-light" } });
     const summary = await seedPrincipal(store, principalId, SAMPLE, log);
-    expect(summary).toEqual({ written: 0, skipped: 9, refused: 0 });
+    expect(summary).toEqual({ written: 0, skipped: 10, refused: 0 });
     expect(await store.settings(principalId)).toEqual({
       defaultThemes: { light: "google-light" },
-      resourceDomains: ["https://api.dicebear.com", "https://*.pravatar.cc"]
+      resourceDomains: ["https://api.dicebear.com", "https://*.pravatar.cc", "https://fonts.googleapis.com", "https://fonts.gstatic.com"],
+      resources: [{ type: "stylesheet", href: "https://fonts.googleapis.com/icon?family=Material+Icons" }]
     });
   });
 

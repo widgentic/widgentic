@@ -1,7 +1,7 @@
 # widget-designer Specification
 
 ## Purpose
-The embeddable, zero-dependency designer for authoring custom widgets and themes. A programmatic factory (plus an opt-in custom element) mounts a DOM editor over a draft in the server's `CustomWidget` shape; every edit re-runs widgentic's own pure validators and re-renders a live preview through the real catalog/template/theming pipeline. It is a library, not an app: drafts import and export as the exact JSON shapes the server consumes, and the designer performs no network I/O — hosts own persistence.
+The embeddable, zero-dependency designer for authoring custom widgets and themes. A programmatic factory (plus an opt-in custom element) mounts a DOM editor over a draft in the server's `CustomWidget` shape; every edit re-runs widgentic's own pure validators and re-renders a live preview through the real catalog/template/theming pipeline. It is a library, not an app: drafts import and export as the exact JSON shapes the server consumes, and the designer performs no network I/O of its own (with `previewFrame` the browser loads the frame the host names) — hosts own persistence.
 
 ## Requirements
 
@@ -161,7 +161,7 @@ The designer SHALL edit a draft in the server's `CustomWidget` shape — `kind`,
 - **AND** loading a template that carries transforms SHALL show them in those controls, round-tripping unchanged through export
 
 ### Requirement: Live preview through the real pipeline
-The designer SHALL preview the draft continuously through widgentic's own pipeline: the draft template compiled by the public template compiler and registered into a scratch catalog (built-ins always present; registration via `catalog.register` with a compile delegate, so one mounted preview survives every recompile), rendered with `mountWidget` against `dataExample` or user-supplied sample data, under the currently selected theme — updates patching the existing DOM in place. When the draft is invalid, the preview SHALL freeze the last good render and show the structured error in a banner; it SHALL never show a blank or stale-placeholder state — including on the FIRST render, where there is no last good render to freeze on (an invalid or reserved-kind `initialWidget` must still leave a legible pane, not an empty one).
+The designer SHALL preview the draft continuously through widgentic's own pipeline: the draft template compiled by the public template compiler and registered into a scratch catalog (built-ins always present; registration via `catalog.register` with a compile delegate, so one mounted preview survives every recompile), rendered with `mountWidget` against `dataExample` or user-supplied sample data, under the currently selected theme — updates patching the existing DOM in place. In island mode (requirement "Preview island") the same pipeline renders the tree, and the frame's bridge mounts and patches it in place instead of `mountWidget` in the page. When the draft is invalid, the preview SHALL freeze the last good render and show the structured error in a banner; it SHALL never show a blank or stale-placeholder state — including on the FIRST render, where there is no last good render to freeze on (an invalid or reserved-kind `initialWidget` must still leave a legible pane, not an empty one).
 
 #### Scenario: Valid edits patch the preview in place
 - **WHEN** a text node's content changes in a valid draft
@@ -534,7 +534,7 @@ The template tree editor SHALL let an author set and clear an `each` node's opti
 - **THEN** the validator's `INVALID_PATH` error SHALL appear beside that `each` row
 
 ### Requirement: Theme styles in the widget designer's preview
-When the widget designer's preview theme is a supplied entry carrying `styles`, the preview SHALL apply those styles beneath the draft's own descriptor styles, so classes a theme defines (a shared `.wg-btn`, say) look in the draft as they will in a render under that theme. Choosing "none" SHALL apply no theme styles. The selection SHALL still never reach the exported widget. Every style a designer preview emits — the theme's and the widget's own, in the widget designer and in the theme designer — SHALL be scoped to that preview at no added weight, since the preview shares the host page's DOM: a widget's rule SHALL NOT reach a matching element elsewhere on the page.
+When the widget designer's preview theme is a supplied entry carrying `styles`, the preview SHALL apply those styles beneath the draft's own descriptor styles, so classes a theme defines (a shared `.wg-btn`, say) look in the draft as they will in a render under that theme. Choosing "none" SHALL apply no theme styles. The selection SHALL still never reach the exported widget. Every style a designer preview emits — the theme's and the widget's own, in the widget designer and in the theme designer — SHALL be scoped to that preview at no added weight while the preview shares the host page's DOM (the in-page mode): a widget's rule SHALL NOT reach a matching element elsewhere on the page. In island mode the preview has its own document, so the styles SHALL be emitted unscoped, exactly as a render emits them, and the page SHALL receive neither core's widget stylesheet nor the in-page preview's own rules.
 
 #### Scenario: A preview theme's shared class dresses the draft
 - **WHEN** the preview theme defines `.wg-btn { color: rgb(1, 2, 3) }` and the draft's template renders a `button` with class `wg-btn`
@@ -545,8 +545,14 @@ When the widget designer's preview theme is a supplied entry carrying `styles`, 
 - **WHEN** the draft's styles color `.wg-title` and the page holds another `.wg-title` element outside the designer
 - **THEN** the previewed title SHALL take the color and the element outside SHALL NOT
 
+#### Scenario: The island emits styles unscoped
+- **WHEN** a widget designer with a `previewFrame` previews a draft whose styles color `.wg-title`, and the page holds another `.wg-title` element outside the designer
+- **THEN** the CSS the designer sends to the frame SHALL carry the rule with the selector `.wg-title`, unscoped
+- **AND** the element outside SHALL NOT take the color
+- **AND** the page SHALL carry no widget stylesheet and no in-page preview rule
+
 ### Requirement: Settings designer
-The settings designer SHALL edit a principal's settings record (`{ defaultThemes?: { light?, dark? }, resourceDomains?: string[] }` in this version) in titled subsections, starting with "Default themes": one choice for light hosts and one for dark hosts, each offering the built-in theme of that mode (the choice that leaves the mode unset) and every theme entry the host supplies in `options.themes`. Because each mode holds one choice, choosing a theme for a mode replaces whatever that mode held, and the same theme SHALL be selectable for both. A supplied settings record naming a theme absent from `options.themes` SHALL show that name as unavailable and selected, so the person sees the problem and picks another, and SHALL NOT be silently changed. A second subsection, "Resource domains", SHALL list the record's domains for the person to add, edit and remove. Each entry SHALL be checked as it is edited by the rule and limit the store applies, exported by the core package. A valid entry SHALL be recorded and shown in its canonical `https://` form. An invalid entry SHALL be recorded as typed and marked with the rule's reason, never dropped, so a save's refusal names it. The add control SHALL be disabled at the limit. The subsection SHALL state the accepted forms and the limit, derived from the exported rule. It SHALL also state the trust a declaration grants: hosts that honor declared domains may load images from a listed domain directly when the server does not inline them, so any render, including image addresses an agent supplies, may load from that domain in the viewer's browser, and only domains the person controls belong there. `getSettings()` SHALL return the record with built-in choices omitted. It SHALL carry `resourceDomains` whenever the supplied record had it or the person edited the list, possibly empty, so a save clears a list the person emptied. It SHALL keep any section the designer does not edit exactly as it was supplied, and `subscribe` listeners SHALL be notified on every change. `loadSettings` SHALL refuse a record whose `resourceDomains` is not an array of strings, keeping the current record. In read-only mode the choices and the domain list SHALL be inert. `setThemes(themes)` SHALL replace the offered themes and keep the record, and the custom element SHALL take the themes through a `themes` property, settable before or after it connects, or before the element is defined (adopted at upgrade). Saving is the host's: the designer writes nothing.
+The settings designer SHALL edit a principal's settings record (`{ defaultThemes?: { light?, dark? }, resourceDomains?: string[], resources?: { type, href, integrity? }[] }` in this version) in titled subsections, starting with "Default themes": one choice for light hosts and one for dark hosts, each offering the built-in theme of that mode (the choice that leaves the mode unset) and every theme entry the host supplies in `options.themes`. Because each mode holds one choice, choosing a theme for a mode replaces whatever that mode held, and the same theme SHALL be selectable for both. A supplied settings record naming a theme absent from `options.themes` SHALL show that name as unavailable and selected, so the person sees the problem and picks another, and SHALL NOT be silently changed. A second subsection, "Resource domains", SHALL list the record's domains for the person to add, edit and remove. Each entry SHALL be checked as it is edited by the rule and limit the store applies, exported by the core package. A valid entry SHALL be recorded and shown in its canonical `https://` form. An invalid entry SHALL be recorded as typed and marked with the rule's reason, never dropped, so a save's refusal names it. The add control SHALL be disabled at the limit. The subsection SHALL state the accepted forms and the limit, derived from the exported rule. It SHALL also state the trust a declaration grants: hosts that honor declared domains may load images from a listed domain directly when the server does not inline them, so any render, including image addresses an agent supplies, may load from that domain in the viewer's browser, and only domains the person controls belong there. A third subsection, "Stylesheets", SHALL list the record's stylesheets for the person to add, edit and remove, each an address with an optional integrity value. Each entry SHALL be checked as it is edited by the resource rule and limit exported by the core package, as the store applies them. An invalid entry SHALL be recorded as typed and marked with the rule's reason, never dropped. An entry whose host none of the listed domains covers SHALL be marked with the domain to add to "Resource domains". The add control SHALL be disabled at the limit. The subsection SHALL state the accepted form and the limit, derived from the exported rule, and SHALL state that a stylesheet's fonts come from their own domain, which must be listed too. `getSettings()` SHALL return the record with built-in choices omitted. It SHALL carry `resourceDomains`, and likewise `resources`, whenever the supplied record had it or the person edited the list, possibly empty, so a save clears a list the person emptied. It SHALL keep any section the designer does not edit exactly as it was supplied, and `subscribe` listeners SHALL be notified on every change. `loadSettings` SHALL refuse a record whose `resourceDomains` is not an array of strings, or whose `resources` is not an array of objects, keeping the current record. In read-only mode the choices, the domain list and the stylesheet list SHALL be inert. `setThemes(themes)` SHALL replace the offered themes and keep the record, and the custom element SHALL take the themes through a `themes` property, settable before or after it connects, or before the element is defined (adopted at upgrade). Saving is the host's: the designer writes nothing.
 
 #### Scenario: Choosing defaults edits the record
 - **WHEN** the designer is created with themes `ocean` and `night` and no settings, and the person picks `ocean` for light hosts and `night` for dark hosts
@@ -598,6 +604,27 @@ The settings designer SHALL edit a principal's settings record (`{ defaultThemes
 - **WHEN** the designer renders the "Resource domains" subsection
 - **THEN** its text SHALL state the exported limit's value and the accepted forms, and that any render may load from a listed domain in the viewer's browser
 
+#### Scenario: Adding a stylesheet records it
+- **WHEN** the record's domains cover `fonts.googleapis.com` and the person adds `https://fonts.googleapis.com/icon?family=Material+Icons`
+- **THEN** `getSettings().resources` SHALL be `[{ type: "stylesheet", href: "https://fonts.googleapis.com/icon?family=Material+Icons" }]`
+
+#### Scenario: An uncovered stylesheet is marked with its domain
+- **WHEN** the record's domains do not cover `fonts.googleapis.com` and the person adds a stylesheet there
+- **THEN** the entry SHALL be recorded and marked, naming `fonts.googleapis.com` as the domain to add
+- **AND** adding that domain under "Resource domains" SHALL clear the mark
+
+#### Scenario: An invalid stylesheet is kept and marked
+- **WHEN** the person adds `http://cdn.example.org/a.css`
+- **THEN** the entry SHALL be recorded as typed and marked with the rule's reason
+
+#### Scenario: The stylesheet limit disables adding
+- **WHEN** the record holds 8 stylesheets
+- **THEN** the stylesheet add control SHALL be disabled
+
+#### Scenario: A malformed stylesheet list is refused on load
+- **WHEN** `loadSettings({ resources: "https://cdn.example.org/a.css" })` is called
+- **THEN** it SHALL be refused, and the current record SHALL be kept
+
 ### Requirement: Designers refuse at import what saving would refuse
 The widget designer's import (and `loadWidget`) SHALL refuse a definition whose `kind` is not a safe identifier — the same pattern the store enforces, exported by core as `SAFE_IDENTIFIER` — with an `INVALID_IDENTIFIER` error, or names a built-in kind with a `RESERVED_KIND` error, and its diagnostics SHALL flag the draft's own kind the same way while the person types. The theme designer's import (and `loadTheme`) SHALL refuse a `name` that is not a safe identifier (`INVALID_IDENTIFIER`) or names a built-in theme (`RESERVED_THEME`), and its Name field SHALL show the same message inline while the person types, so a name saving would refuse is visible before Save. A definition whose descriptor carries both `dataSchema` and `dataSchemaRef`, or a `dataSchemaRef` that is not a schema name, SHALL be refused at import and load with `INVALID_SHAPE`, as saving refuses it; a `dataSchema` that is not an object SHALL be refused too, because the designer cannot open it. Without the host's shared schemas, a reference SHALL NOT be reported as unknown — it cannot be verified. These identity checks SHALL apply only when a load changes the identity: a kind or name the draft or entry already has is the person's to fix, and reloading it with new data or tokens SHALL NOT be refused for it. The Styles panel's JSON tab SHALL clear its parse error once a valid value arrives through the Tree view or a load. The widget designer SHALL show a warning under the data-shape field while the shape is empty — agents listing the widget would see a placeholder — without affecting whether the draft previews.
 
@@ -631,3 +658,73 @@ The schema designer SHALL show, under its definition, every warning `auditDataSc
 #### Scenario: An inline schema warns in the widget designer
 - **WHEN** a widget whose `descriptor.dataSchema` is `{ type: "banana" }` is loaded
 - **THEN** the Data schema section SHALL show a warning naming `dataSchema.type`
+
+### Requirement: Preview island
+The widget designer and the theme designer SHALL accept `previewFrame`, a URL, in their options. Their custom elements SHALL accept it as a `preview-frame` attribute, read when the element connects. With it, the preview SHALL render in its own framed document.
+- **The frame.** The preview pane SHALL hold one iframe whose `src` is that URL and whose `sandbox` is exactly `allow-scripts`, so the document runs in an opaque origin. The frame SHALL NOT be reloaded between revisions. Its height SHALL follow the size the frame reports.
+- **The host protocol.** The designer SHALL answer the frame as a minimal MCP Apps host:
+  - `ui/initialize` is answered with a host context and no host capabilities, so the frame offers no server tools. The host context's `theme` is the designer's color scheme (`light` or `dark`), and its `styles.variables` carry every host style variable the app template bridges, valued from the built-in theme of that scheme, as a host hands a frame its own palette. A change of scheme SHALL be sent as `ui/notifications/host-context-changed` with the same two fields;
+  - `ping` is answered;
+  - messages to the frame are held until it sends `ui/notifications/initialized`.
+- **Each revision.** For each previewable revision, the designer SHALL send one `ui/notifications/tool-result` whose `structuredContent` carries:
+  - the tree rendered through the live-preview pipeline;
+  - the CSS: the preview theme's styles, the previewed kind's styles, then the preview theme's token declarations, the order a render's `css` uses;
+  - the designer's own rule marking action-bound elements.
+
+  A revision that is not previewable SHALL send nothing. The frame keeps the last good render, and the banner and empty state stay in the designer's own document.
+- **Never executes.** A frame request to call a tool SHALL be answered with a JSON-RPC error, and no request SHALL leave the designer. A `ui/message` request SHALL be answered without composing anything. A `ui/open-link` request SHALL open the URL in a new browsing context only when it passes the template URL guard (`http`, `https`, `mailto`, `tel`); any other URL SHALL be refused.
+- **Strangers ignored.** Messages from any window other than the frame SHALL be ignored.
+- **Fallback.** Without `previewFrame`, the designers SHALL preview in the page exactly as before.
+
+#### Scenario: The preview renders in the frame
+- **WHEN** a widget designer is created with `previewFrame: "/api/preview-frame"` and a valid draft, and the frame initializes
+- **THEN** the preview pane SHALL hold an iframe with that `src` and `sandbox="allow-scripts"`
+- **AND** the designer SHALL send a `ui/notifications/tool-result` whose `structuredContent.tree` equals the in-page pipeline's render of the same draft, and whose `css` carries the draft's styles after the preview theme's styles
+
+#### Scenario: Edits patch through the same frame
+- **WHEN** a valid edit follows the first render
+- **THEN** the designer SHALL send one more `tool-result`, and the iframe element and its `src` SHALL be unchanged
+
+#### Scenario: An invalid draft sends nothing
+- **WHEN** the template becomes invalid mid-edit
+- **THEN** no `tool-result` SHALL be sent, and the banner SHALL show the structured error
+
+#### Scenario: The preview never executes
+- **WHEN** the frame requests `tools/call` for `execute_action`
+- **THEN** the designer SHALL answer with a JSON-RPC error, and no network request SHALL be made
+
+#### Scenario: Links open outside, unsafe ones never
+- **WHEN** the frame requests `ui/open-link` with `https://example.com/a`, then with `javascript:alert(1)`
+- **THEN** the first SHALL open in a new browsing context, and the second SHALL be refused
+
+#### Scenario: The frame's size sets the iframe height
+- **WHEN** the frame reports `ui/notifications/size-changed` with height 480
+- **THEN** the iframe's height SHALL become 480 px
+
+#### Scenario: Messages from elsewhere are ignored
+- **WHEN** a window other than the frame posts a `ui/initialize` request or a size change
+- **THEN** the designer SHALL neither answer nor change anything
+
+#### Scenario: The frame follows the designer's color scheme
+- **WHEN** the page's `<html>` carries `data-theme="dark"` and the frame initializes
+- **THEN** the host context's `theme` SHALL be `dark`, and its `--color-background-primary` variable SHALL be the built-in dark theme's `bg`
+- **AND WHEN** the page switches to `light`
+- **THEN** the designer SHALL send `ui/notifications/host-context-changed` with `theme: "light"` and the default `bg`
+
+#### Scenario: Without a frame, the preview is unchanged
+- **WHEN** a designer is created without `previewFrame`
+- **THEN** the preview SHALL mount in the page, as today, with no iframe
+
+### Requirement: The island loads the person's stylesheets
+The widget and theme designers SHALL accept `resources`: stylesheet entries in the settings record's shape.
+- **Island mode.** Each preview's structured content SHALL carry the entries that pass the core resource rule, in order, as `resources`, so the frame links them under the frame policy that grants the person's domains.
+- **In-page mode.** The option SHALL have no effect, and no stylesheet link SHALL be added to the page.
+- **Without the option, or with none passing,** previews SHALL carry no `resources` key.
+
+#### Scenario: The island previews with the stylesheets
+- **WHEN** a widget designer is created with a `previewFrame` and `resources` holding a Material Icons stylesheet and an entry of type `"script"`, and the frame initializes
+- **THEN** each `tool-result` the designer sends SHALL carry `resources` holding only the stylesheet
+
+#### Scenario: The page never links them
+- **WHEN** a widget designer without `previewFrame` is created with the same `resources`
+- **THEN** the page SHALL hold no stylesheet link the designer added

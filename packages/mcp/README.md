@@ -18,12 +18,16 @@ Everything needed to host the widgentic engine over MCP:
   `{ saved: "settings", settings }`), the guarded action test call,
   write-only secrets and API keys, as a pure request handler plus a
   `node:http` adapter. The host resolves the principal; a presented API key
-  never authorizes authoring.
+  never authorizes authoring. `GET /preview-frame` serves the designers'
+  preview frame: the app template under the policy hosts apply for the
+  operator's domains (`resourceDomains` in the deps) and the principal's.
 - `@widgentic/mcp/store` — the per-principal store port with memory and file
   implementations, composition and validation, including each principal's
-  settings record (default themes, and the `resourceDomains` a principal's
-  frames may load images from: `composeResourceDomains`, refusals as
-  `INVALID_DOMAIN`); `@widgentic/mcp/store/sqlite`
+  settings record (default themes; the `resourceDomains` a principal's
+  frames may load images and stylesheets from: `composeResourceDomains`,
+  refusals as `INVALID_DOMAIN`; and the `resources` stylesheets those frames
+  link: `composeResources`, refusals as `INVALID_RESOURCE` and
+  `UNDECLARED_DOMAIN`); `@widgentic/mcp/store/sqlite`
   adds the single-node durable adapter on the Node runtime's built-in SQLite
   (no dependency at all); `@widgentic/mcp/store/cosmos` adds the Azure Cosmos
   DB adapter (optional peers `@azure/cosmos`, `@azure/identity`).
@@ -67,7 +71,7 @@ import { createWidgenticHost } from "@widgentic/mcp/host";
 const host = createWidgenticHost(JSON.stringify({
   widgets, themes, schemas,          // all optional
   resourceDomains,                   // the embedding server's own domains
-  settings                           // { defaultThemes?: { light?, dark? }, resourceDomains? }
+  settings                           // { defaultThemes?: { light?, dark? }, resourceDomains?, resources? }
 }));
 host.version();      // the @widgentic/mcp version the bundle was built from
 host.problems();     // JSON: entries and settings refused at the door, with codes — never thrown
@@ -82,7 +86,10 @@ Every argument and result is a string. `widgets` are designer exports
 (`{ kind, template, descriptor, load? }`), `themes` theme entries, `schemas`
 shared schemas; they go through the same composition and checks as the store.
 `settings` is a principal settings record checked by the store's rules: each
-default theme that names a configured theme stands in for its mode's built-in.
+default theme that names a configured theme stands in for its mode's built-in,
+and each stylesheet a declared domain covers rides every render and preview in
+`structuredContent.resources`; an uncovered one is reported by `problems()` as
+`UNDECLARED_DOMAIN`.
 The served tools are `list_widgets`, `render_widget`, `list_theme_tokens`,
 `list_themes`, `list_schemas` and `get_authoring_guide`, plus the template's
 own `preview_widget` (marked `visibility: ["app"]` in `definitions()`; rate

@@ -26,7 +26,7 @@ import {
   getUiCapability,
   RESOURCE_MIME_TYPE
 } from "@modelcontextprotocol/ext-apps/server";
-import { createCatalog, isPlainObject, parseResourceDomains } from "@widgentic/core";
+import { createCatalog, isPlainObject, parseResourceDomains, parseResources, resourceCovered } from "@widgentic/core";
 import type { StoredAction, WidgetCatalog } from "@widgentic/core";
 import {
   LIST_WIDGETS_TOOL,
@@ -100,6 +100,17 @@ export interface WidgenticServerOptions {
    */
   resourceDomains?: string[];
   /**
+   * The caller's stylesheets (the store's `resources` shape, typically from
+   * `composeResources`), linked by every frame and page document their
+   * renders produce. Read by the core resource rule; an entry it refuses,
+   * or whose host the declared `resourceDomains` do not cover, is dropped
+   * silently, as a refused domain is — the frame policy would block it
+   * anyway. Refusals are reported where stylesheets are read: by the store
+   * (`composeResources` diagnostics) and the host bundle (`problems()`).
+   * Absent/empty links nothing and leaves every output as it was.
+   */
+  resources?: readonly unknown[];
+  /**
    * Composition's action source for the caller's catalog (bindings by
    * template path, `load` per kind, shared definitions). Omitted: no widget
    * binds anything and `execute_action` answers UNKNOWN_ACTION.
@@ -142,6 +153,9 @@ export function createWidgenticServer(
   // ranked as declared, and the rest are declared in canonical form.
   const declaredDomains = parseResourceDomains(options.resourceDomains ?? []).domains;
   const resourceDomains = declaredDomains.map((domain) => domain.origin);
+  const resources = parseResources(options.resources ?? []).resources.filter((resource) =>
+    resourceCovered(resource.href, resourceDomains)
+  );
   const executeAllowed = (options.scopes ?? []).includes("execute");
   const renderActions: RenderActionOptions | undefined =
     options.actions === undefined
@@ -182,7 +196,7 @@ export function createWidgenticServer(
   server.registerTool(
     LIST_THEMES_TOOL.name,
     toolConfig(LIST_THEMES_TOOL),
-    () => handleListThemes(themes) as CallToolResult
+    () => handleListThemes(themes, resources) as CallToolResult
   );
 
   server.registerTool(
@@ -218,6 +232,7 @@ export function createWidgenticServer(
       const result = handleRenderWidget(catalog, args, {
         slim: slimFor(ctx),
         themes,
+        resources,
         actions: renderActions
       }) as CallToolResult;
       // Apps-host sandboxes block external img-src but allow data:, so the
@@ -249,6 +264,7 @@ export function createWidgenticServer(
         secrets: options.secrets,
         rateLimit: options.rateLimit,
         themes,
+        resources,
         fetchDeps: options.fetchDeps
       })) as CallToolResult;
       if (inlineImages) await inlineRenderResultImages(result, { declaredDomains });
@@ -271,6 +287,7 @@ export function createWidgenticServer(
     (args) =>
       handlePreviewWidget(catalog, args, {
         themes,
+        resources,
         rateLimit: options.previewRateLimit
       }) as CallToolResult
   );
@@ -310,7 +327,7 @@ export function createWidgenticServer(
     async (uri, variables) => {
       const kind = String(variables.kind ?? "");
       return {
-        contents: [{ uri: uri.href, mimeType: WIDGET_PAGE_RESOURCE.mimeType, text: renderWidgetPage(catalog, kind, themes) }]
+        contents: [{ uri: uri.href, mimeType: WIDGET_PAGE_RESOURCE.mimeType, text: renderWidgetPage(catalog, kind, themes, resources) }]
       };
     }
   );

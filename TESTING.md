@@ -382,6 +382,113 @@ workspace and the sample first, then point at the built DLL):
 
 ## Verification log
 
+- **Stylesheet resources (2026-10-15, change `stylesheet-resources`, on `feature/stylesheet-resources`, core/designer/mcp minor pending release with the island)**: a person's stylesheets load in every frame of their widgets, behind their resource domains.
+  - **The rule** (`resources.test.ts`, 8 tests).
+    - Accepted: `https://` addresses, host lowercased, path, query and fragment kept.
+    - Refused, each with its reason: `http:`, userinfo, a port, IPv4 and IPv6, `localhost`, a wildcard host, `javascript:`, a quote, a space, `<`, non-ASCII, over 2,048 characters, a bad integrity, `script`, an unknown key and a non-object.
+    - Lists keep their order and drop repeats by address.
+    - Coverage: exact, a wildcard over its subdomains (not its apex), and a refused domain covers nothing.
+  - **The store** (shared adapter suite, memory, file, SQLite and Cosmos).
+    - Stored in order and canonical.
+    - Each refused form gives `INVALID_RESOURCE` with the record unchanged. Shape and limit give `INVALID_SHAPE` (9 refused, 8 accepted).
+    - An uncovered host gives `UNDECLARED_DOMAIN`, and is accepted when its domain comes in the same write.
+    - Removing a domain a stylesheet needs is refused, whether by a narrower list, `null` or `[]`.
+    - A wildcard covers subdomains, never the apex. An empty list removes the section.
+    - Composition yields only the caller's list.
+    - Old-shape records (defaults and domains only) read back unchanged, and a write naming neither section never checks coverage.
+    - Out-of-band records drop a `script` entry and an uncovered one, with diagnostics naming each, in all three persistent adapters. Unreadable settings yield none.
+  - **The authoring route.** `PUT /settings` answers `422 UNDECLARED_DOMAIN` naming `fonts.googleapis.com`, and `422 INVALID_RESOURCE` for a script. The same stylesheet saves with its two domains in one body.
+  - **Delivery** (`stylesheet-delivery.test.ts`, `execute-action.test.ts`).
+    - Through the SDK: render and preview carry the covered stylesheets in order, and `list_themes` lists them with its explanatory sentence. An uncovered or refused entry is never delivered.
+    - Without stylesheets, `both`, `page`, `html` and `app` outputs are identical to a server without the option.
+    - `page` and `app` documents link each stylesheet before `<style>`, with `&` escaped and integrity carrying `crossorigin`. The `html`, `widget` and payload never mention one.
+    - The action re-render carries them, and structured content never shares an object with the caller's list.
+  - **The frame** (`app-template-resources.test.ts`, `bootTemplate()` harness).
+    - Links go before `#wg-dynamic-css`, in order; integrity and `crossorigin` appear only on the pinned one.
+    - A listed link keeps its element. An unlisted one is removed, and a result without the key removes all. A reorder moves elements rather than recreating them, and a repeat is linked once.
+    - `script`, `http:`, `javascript:`, a string and an entry without an address are ignored.
+    - A server preview links them before the result, and the result keeps the same element.
+    - The template has no `https://` literal: the check is a regex. It is 44,631 bytes raw and 11,602 gzipped, inside both budgets.
+  - **The host bundle and .NET.**
+    - The host links the covered stylesheet in render, preview, listing and widget page. `problems()` reports `INVALID_RESOURCE` and `UNDECLARED_DOMAIN` under `settings`.
+    - The corpus gains six "stylesheets from settings" cases; only the app template case changed.
+    - `dotnet test`: 219, including startup delivery, a principal covered by the operator's domains (design D10, revised: `Compose` now carries `ResourceDomains`), Replace isolation under a pool of 4, and an uncovered stylesheet skipped and logged.
+  - **The designers.**
+    - The island sends only the rule's entries with every revision, and the in-page preview adds no link.
+    - The settings designer's Stylesheets subsection records entries canonically. It marks an uncovered host with the domain to add, and the mark clears when the domain is listed. It keeps an invalid entry as typed with its reason, records and checks integrity, and disables adding at 8. It refuses a malformed list on load, carries an emptied list, is inert when read-only, and states the form, limit, fonts domain and trust.
+  - **The example.**
+    - The endpoint delivers a saved stylesheet on the next render, only to its principal.
+    - The app saves domains and a stylesheet through Settings, and the remounted widget designer's preview carries it.
+    - The seed (10 entries written) adds the two font domains, the Material Icons stylesheet, and `event` and `mail` icons in the agenda and inbox headers.
+  - **Chrome 151 against the example**, local and seeded.
+    - The island's head is `meta, title, style, link (Material Icons), style#wg-dynamic-css`.
+    - The `mail` span renders in `"Material Icons"` at 22×22 with `document.fonts.check` true, so it shows as a glyph, not text. An edit keeps the same link element.
+    - In Settings, a stylesheet on `cdn.example.org` is marked "Add cdn.example.org under Resource domains, or chat hosts block it.", and the mark clears when that domain is added.
+    - Removing `fonts.googleapis.com` and saving answers `UNDECLARED_DOMAIN: the stylesheet '…Material+Icons' needs fonts.googleapis.com in your resource domains.`
+  - **Revisions during apply.**
+    - D6: `list_themes` explains `resources` in its result's `rules`, not its description, so `tools/list` is unchanged.
+    - D7: no budget change was needed.
+    - D10: `.NET` per-principal composition now carries the operator's domains.
+  - **Gates.** Typecheck, `npm test` (1942 passed, 1 skipped), build, `pack:check`, docs check, `openspec validate --strict` and `--specs` (19), and `dotnet test` (219). Verify added a theme-designer island assertion for `resources`. The rerun at archive passed: 1942 tests, 19 specs.
+  - **Staging (`stylesheet-resources-40be27a`, ACR run `cj3v`, revision `widgentic-selfhost--0000032`, replacing the island build).** Each response was saved to a file and then read. The deployment key went from Key Vault into a header file only, and was shredded.
+    - `GET /api/settings` holds the seeded stylesheet and the four domains.
+    - `/api/preview-frame` grants the font domains in `style-src` and `font-src`, and its 44,626-byte template carries `applyResources`.
+    - A keyed 2026-07-28 `render_widget` carries `structuredContent.resources` with Material Icons, and the keyed `page` document links it before `<style>`. The keyed `html` fragment never mentions it, and the keyed `list_themes` lists it.
+    - A keyless render carries no `resources`.
+  - **The owner's host check on staging.** All passed, Copilot included this time.
+    - In fresh conversations, the inbox and agenda widgets rendered the mail and calendar icons from the settings stylesheet in claude.ai, ChatGPT and VS Code Copilot Chat, in dark mode.
+    - Removing `fonts.googleapis.com` in Settings was refused with `UNDECLARED_DOMAIN`, naming the stylesheet.
+    - The designer's preview showed the agenda's calendar icon.
+  - **PR #58 review follow-ups**, all low or nits.
+    - The store port's `putSettings` doc names `INVALID_RESOURCE` and `UNDECLARED_DOMAIN`. The `resources` server option says it drops silently and names where refusals are reported. `readResources` says its limit is a write-side rule.
+    - `.NET` treats a JSON-`null` caller record as no record, with a test: `dotnet test` 220.
+    - Docs: the preview frame "connects nowhere" instead of "reaches no network", and the stylesheet delivery bullet explains why the operator's list only widens delivery.
+    - A consistency sweep fixed the Resource domains intro (images, stylesheets and fonts), the trust model's exceptions, the `page` format rows, `CLAUDE.md`'s iframe invariant and the settings designer's own domain note.
+    - The re-check confirmed all six fixes. Its two wording nits are fixed: `CLAUDE.md` names the stylesheets' fonts, and the settings designer's note scopes "when the server does not copy them inline" to images.
+
+- **Designer preview island (2026-10-15, change `designer-preview-island`, on `feature/designer-preview-island`, designer/mcp minor pending release)**: the widget and theme designers can preview in the app template, framed, with the designer as a minimal MCP Apps host.
+  - **The frame route** (`preview-frame.test.ts`, 7 tests).
+    - `GET /preview-frame` serves `buildAppTemplate()` byte for byte.
+    - The policy lists the operator's domains, then the principal's, deduplicated, in `img-src`, `style-src`, `font-src` and `media-src`.
+    - `script-src` holds one hash per inline script, each recomputed from the body.
+    - Anonymous: the operator's domains alone, and a bare `font-src 'none'` with none. A failing settings read degrades the same way and is logged.
+    - API keys get 401; POST gets 404, or 401 when anonymous.
+    - The Node adapter sends the core's status, headers and body, and no cookie.
+  - **The island** (`preview-island.test.ts`, 17 tests, with a fake frame window).
+    - `ping` is answered, and a method it does not host is refused with -32601.
+    - Results are held until `initialized`; tree and CSS order match the in-page pipeline; one more result per edit through the same frame; nothing for an invalid draft.
+    - `tools/call` is refused with no fetch, and `ui/message` composes nothing. Links: `https` opens with `noopener`, `javascript:` is refused.
+    - The frame's height follows `size-changed`, and messages from a stranger window are ignored.
+    - The scheme follows a pinned `appearance`, else the page, with the built-in palette as host variables.
+    - Styles go only to the frame; dispose removes the frame and its listener; there is no frame without the option; the theme designer and the element attribute work.
+  - **Parity** (`preview-island-parity.test.ts`). For the same widget and theme, the island's tree equals `render_widget`'s `structuredContent.tree`, and its CSS is the render's CSS byte for byte plus the badge rule. The island supplies exactly the host variables the template's bridge reads, with the built-in dark values.
+  - **Chrome 151 against the example** (`examples/docker` web on a scratch SQLite, seeded). A probe widget had a styled title, a `api.dicebear.com` image, a `picsum.photos` image and 12 rows. The page added `.wg-title { text-decoration: underline wavy; letter-spacing: 7px }` and its own `h2.wg-title`.
+    - **Isolation.** The frame's sandbox is `allow-scripts` and its origin `null`, and `window.parent.document` throws. The title is `rgb(4, 5, 6)` with no decoration and normal letter spacing. The page's `h2.wg-title` keeps the page color, and no page stylesheet carries the draft's rule.
+    - **Images.** The declared image loads (`naturalWidth` 150). The undeclared one is blocked by `img-src`, as the console reports.
+    - **Height.** The iframe is 331 px, the frame document's `scrollHeight`.
+    - **Color scheme.** A dark page first gave `data-theme="dark"` on a white background. The template bridges eight tokens to host variables, and a host must supply them (design D7, revised). With the palette sent, the built-in preview turned `#0f131c` on `#e5e9f0`. A picked theme (google-light) stays light in both modes, as an explicit render theme does.
+    - **Edits.** They patch the same frame.
+  - **The example** (D9, revised). Its MCP endpoint declares only each person's domains, so the web service passes no operator list. `app.test.ts` checks the frames on `/api/preview-frame` for widgets and themes, and a person's policy carrying their domain.
+  - **Tests.** Every happy-dom suite now sets `disableIframePageLoading`, so a mounted island never reaches the network.
+  - **Gates.** Typecheck, `npm test` (1861 passed, 1 skipped), build, `pack:check`, docs check, `openspec validate --strict` and `--specs` (19), and `dotnet test` (209). Rerun after the cleanups, the docs review and verify's `ping` test: `npm test` 1863 passed (1 skipped), with the other gates green. `dotnet test` was not rerun, because the host bundle is untouched.
+  - **Docs review before merge.** Two statements had gone stale and were fixed: the designers' "no network I/O" (they now cause the frame load) and the widget designer's "mounted through `mountWidget`" (in the app, the bridge mounts the preview). Also updated: the theme designer's page, the authoring module headers, `CLAUDE.md`'s layout line, design D1/D7, the stylesheet sentence in the widget-designer delta and the designer changeset.
+  - **Staging (`designer-preview-island-764ca55`, ACR run `cj3s`, revision `widgentic-selfhost--0000029`, replacing the stylesheet probe).** Each response was saved to a file and then read.
+    - The first request after the cutover still reached the old revision and returned `NOT_FOUND`. After that, the revision FQDN and `demo.widgentic.dev` both answer `/api/preview-frame` with 200.
+    - The frame is 43,653 bytes. Its CSP carries the seeded `api.dicebear.com` and `*.pravatar.cc` in `img-src`, `style-src`, `font-src` and `media-src`, and its one `script-src` hash matches the served script. The response is `no-store` and `nosniff`, with no cookie.
+    - The served bundle carries `/api/preview-frame` and the host palette variables.
+    - **Chrome on the demo.** Editing `email-inbox-widget` previews in the frame: origin `null`, sandbox `allow-scripts`, height 339 px equal to the document's. The inbox showed 2 unread and both messages under google-light.
+  - **Browser agent on staging (owner's check).** All three checks passed.
+    - **Isolation and live updates.** A red star color and the title "Inbox LIVE" patched the preview without reloading the frame. Nothing crossed the frame either way. A style value meant to break out was refused inline by the Styles panel, and the action badge still shows.
+    - **Images.** `api.dicebear.com`, `i.pravatar.cc` (through the wildcard) and an inline `data:` image load. `picsum.photos` and `placehold.co` are blocked, though both load directly in the page.
+    - **Dark mode.** Under "(none — defaults)", the preview is the built-in dark.
+    - **What it led to.**
+      - The page no longer gets core's widget stylesheet in island mode. It had carried 55 unused `.wg-*` rules; a test now pins that the stylesheet is absent.
+      - The person's dark default not being previewable is queued as BACKLOG THM-4.
+      - The page having no CSP of its own is queued as EXM-1.
+    - **Redeploy (`designer-preview-island-913cca6`, ACR run `cj3t`, revision `--0000030`).** Chrome on the demo: the page has no `style[data-widgentic]` and no `.wg-*` rule, and the frame renders the draft.
+    - **Agent retest on `--0000030`.** The base stylesheet is gone, but the chrome stylesheet still held the two `.wgd-preview .wg-designer-action` marker rules. Those rules and `.wgd-preview` moved to a stylesheet that only an in-page preview injects. Tests pin it: absent in island mode, present in page mode.
+    - **Redeploy (`designer-preview-island-7914e25`, ACR run `cj3u`, revision `--0000031`).** Chrome on the demo, after the Widgets and Themes tabs: no `style[data-widgentic]`, no `style[data-widgentic-designer-preview]`, zero `.wg-*`, `.wgd-preview` or `wg-designer-action` rules, and the frame renders.
+
 - **Docs accuracy review (2026-10-14, on `bug/docs-accuracy`, mcp and webmcp patch pending release)**: a review of the hand-written docs against the code for the 13 changes archived since 2026-10-07. Four read-only reviewers, split by area, found about 65 issues, and four fixers on disjoint files corrected them.
   - **Agent-facing text.**
     - The authoring guides' safety rule said bindings "can never inject markup". It now states the Markdown bind exception, with the tag list from `MARKDOWN_TAGS`.

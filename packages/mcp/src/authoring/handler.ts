@@ -1,7 +1,9 @@
 /**
  * The authoring surface: widgets, themes, schemas, shared actions, secrets
  * and API keys over plain request values, authorized by the host's resolved
- * principal and nothing else (authoring-api spec).
+ * principal and nothing else (authoring-api spec). One read route sits
+ * beside them: `GET /preview-frame` (preview-frame.ts), the designers'
+ * preview island, which answers HTML and degrades without a principal.
  *
  * The trust rules this module exists to enforce:
  *   - An API key never authorizes authoring. A presented key — valid or not —
@@ -23,6 +25,7 @@ import { testHttpAction } from "../server/index.js";
 import { normalizeKeyScopes, principalIdForSubject, StoreRejectionError } from "../store/types.js";
 import type { StoredAction, StoredSchema, StoredWidget } from "../store/types.js";
 import type { AuthoringDeps, AuthoringRequest, AuthoringResponse, PrincipalContext } from "./types.js";
+import { handlePreviewFrame } from "./preview-frame.js";
 
 function ok(status: number, body: unknown): AuthoringResponse {
   return { status, body };
@@ -78,6 +81,11 @@ export async function handleAuthoringRequest(
     return refusal(401, "KEY_NOT_A_SESSION", "API keys do not authorize this endpoint.");
   }
   const context = request.context;
+  // The preview frame answers anyone: with no principal it grants the
+  // operator's domains alone, so an embedded preview never breaks.
+  if (request.method.toUpperCase() === "GET" && request.path.replace(/^\/+/, "") === "preview-frame") {
+    return handlePreviewFrame(deps, context);
+  }
   if (context === undefined) {
     return refusal(401, "NO_PRINCIPAL", "The host resolved no principal for this request.");
   }

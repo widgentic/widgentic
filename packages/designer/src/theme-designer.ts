@@ -61,6 +61,18 @@ export interface ThemeDesignerOptions {
    */
   widgets?: PreviewWidget[];
   /**
+   * The URL of a preview frame — an authoring surface's `/preview-frame` —
+   * to preview in an isolated island under the frame policy MCP Apps hosts
+   * apply. Without it the preview runs in the page.
+   */
+  previewFrame?: string;
+  /**
+   * The person's stylesheets, as their settings record holds them. The
+   * island links the entries the core resource rule accepts, under the
+   * frame's policy; the in-page preview never adds a stylesheet to the page.
+   */
+  resources?: readonly unknown[];
+  /**
    * Mount with editing disabled: panels stay visible but inert, only the
    * preview and its kind selector operate. Toggle later via `setReadOnly`.
    */
@@ -143,9 +155,11 @@ export function createThemeDesigner(
   let entry: ThemeEntry = options.initialTheme ? takeEntry(options.initialTheme) : starterEntry();
   const listeners = new Set<(entry: ThemeEntry) => void>();
 
-  const preview = createPreview(
-    options.widgets ? { widgets: options.widgets } : {}
-  );
+  const preview = createPreview({
+    ...(options.widgets ? { widgets: options.widgets } : {}),
+    ...(options.previewFrame === undefined ? {} : { previewFrame: options.previewFrame }),
+    ...(options.resources === undefined ? {} : { resources: options.resources })
+  });
   // Built-ins plus whatever custom definitions the host supplied.
   const previewKinds = preview.kinds.length > 0 ? preview.kinds : BASE_KINDS;
   let previewKind = previewKinds[0] ?? "card";

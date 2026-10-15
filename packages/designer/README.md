@@ -3,7 +3,7 @@
 Hostable designers for widgentic: the widget designer (template tree, data
 schema, sample data, styles, action bindings, live preview), plus standalone
 theme (tokens and shared styles), schema, action and settings (default themes
-per host mode, resource domains) designers. Each is a function taking a container, and
+per host mode, resource domains, stylesheets) designers. Each is a function taking a container, and
 each is also a custom element. Runs in the browser; depends only on
 `@widgentic/core`.
 
@@ -17,6 +17,20 @@ import { createDesigner } from "@widgentic/designer";
 const designer = createDesigner(document.querySelector("#host")!, { themes: [] });
 designer.subscribe((draft) => save(draft));
 ```
+
+With `previewFrame` (the `preview-frame` attribute on the elements), the
+widget and theme designers preview in a frame instead of the page: the MCP
+Apps app template served by `@widgentic/mcp/authoring`'s `GET /preview-frame`,
+with the designer as its host. The preview then renders as hosts render it,
+under the same image and style policy, isolated from the page's styles:
+
+```ts
+createDesigner(host, { previewFrame: "/api/preview-frame", resources: settings.resources });
+```
+
+`resources` is the person's stylesheets as their settings record holds them:
+the frame links the ones the core resource rule accepts, as hosts do, and the
+in-page preview never adds a stylesheet to the page.
 
 Without a bundler, load the single-file bundle and use the elements:
 

@@ -6,6 +6,7 @@ import {
   ANONYMOUS_PRINCIPAL,
   composeCatalog,
   composeResourceDomains,
+  composeResources,
   composeThemes,
   createFileStore,
   createMemoryStore,
@@ -242,6 +243,17 @@ describe("file store", () => {
     expect(await store.settings("alice")).toEqual({ resourceDomains: ["https://cdn.example.com"] });
     expect((await composeResourceDomains(store, "alice")).value).toEqual(["https://cdn.example.com"]);
     expect(lines.join("\n")).toContain("http://old.example.com");
+  });
+
+  it("reads stored stylesheets, dropping an unknown type and an uncovered host with diagnostics naming them", async () => {
+    const dir = await seeded();
+    await writeFile(join(dir, "alice", "settings.json"), JSON.stringify({ resourceDomains: ["https://fonts.googleapis.com"], resources: [{ type: "stylesheet", href: "https://fonts.googleapis.com/icon?family=Material+Icons" }, { type: "script", href: "https://fonts.googleapis.com/x.js" }, { type: "stylesheet", href: "https://cdn.example.org/a.css" }] }));
+    const lines: string[] = [];
+    const store = createFileStore(dir, { onDiagnostic: (line) => lines.push(line) });
+    expect((await store.settings("alice")).resources).toEqual([{ type: "stylesheet", href: "https://fonts.googleapis.com/icon?family=Material+Icons" }]);
+    expect((await composeResources(store, "alice")).value).toEqual([{ type: "stylesheet", href: "https://fonts.googleapis.com/icon?family=Material+Icons" }]);
+    expect(lines.join("\n")).toContain("x.js");
+    expect(lines.join("\n")).toContain("https://cdn.example.org/a.css");
   });
 
   it("reads no settings for a principal with entries but no settings.json", async () => {
@@ -857,6 +869,14 @@ describe("composition without readable settings", () => {
     expect(failing.value).toEqual([]);
     expect(failing.diagnostics.join("\n")).toContain("resource domains not read (unreachable)");
     expect(await composeResourceDomains(undefined, "p")).toEqual({ value: [], diagnostics: [] });
+  });
+
+  it("unreadable settings link no stylesheets, reporting only a throwing read", async () => {
+    expect(await composeResources(themesOnly(), "p")).toEqual({ value: [], diagnostics: [] });
+    const failing = await composeResources(themesOnly(async () => { throw new Error("unreachable"); }), "p");
+    expect(failing.value).toEqual([]);
+    expect(failing.diagnostics.join("\n")).toContain("stylesheets not read (unreachable)");
+    expect(await composeResources(undefined, "p")).toEqual({ value: [], diagnostics: [] });
   });
 
   it("a default naming a stored theme that fails validation is dropped with a diagnostic", async () => {
