@@ -175,9 +175,11 @@ seeded, and multi-user mode ignores the seed.
 `seed/demo.json` ships in the image as a starting point: two shared schemas,
 two themes (set as the default light and dark themes), three widgets (an
 appointment agenda and an email inbox built on the schemas, and a project
-status widget that needs no shared schema), and two resource domains
-(`api.dicebear.com` and `*.pravatar.cc`, avatar services) that hosts may load
-images from directly.
+status widget that needs no shared schema), four resource domains
+(`api.dicebear.com` and `*.pravatar.cc`, avatar services, plus
+`fonts.googleapis.com` and `fonts.gstatic.com`) that hosts may load from
+directly, and the Material Icons stylesheet, whose icons the agenda and inbox
+headers use.
 
 ```sh
 WIDGENTIC_SEED_FILE=/srv/docker/seed/demo.json

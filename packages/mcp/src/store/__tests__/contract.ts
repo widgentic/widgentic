@@ -15,7 +15,7 @@ import type { WritableWidgetStore } from "../types.js";
 import { ANONYMOUS_PRINCIPAL, StoreRejectionError } from "../types.js";
 import type { PrincipalSettingsUpdate, StoredAction, StoredWidget } from "../types.js";
 import type { ThemeEntry } from "@widgentic/core";
-import { composeResourceDomains, composeThemes, readPrincipalSettings } from "../compose.js";
+import { composeResourceDomains, composeResources, composeThemes, readPrincipalSettings } from "../compose.js";
 
 export interface ContractContext {
   /** Built WITH a secret cipher — the suite exercises secrets. */
@@ -539,6 +539,137 @@ export function describeStoreContract(
       ]);
       expect(themes.value.defaults()).toEqual({ light: "brand", dark: "dark" });
       expect(domains.value).toEqual(["https://cdn.a.example"]);
+    });
+
+    const ICONS = "https://fonts.googleapis.com/icon?family=Material+Icons";
+    const SRI = "sha384-oqVuAfXRKap7fdgcCY5uykM6+R9GqQ8K/uxy9rx7HNQlGYl1kPzQho1wx4JwY8wC";
+    const sheet = (href: string, extra: Record<string, unknown> = {}) => ({ type: "stylesheet" as const, href, ...extra });
+    const resourcesUpdate = (value: unknown) => ({ resources: value }) as unknown as PrincipalSettingsUpdate;
+
+    it("stylesheets: accepted entries are stored in order, deduplicated, host lowercased", async () => {
+      const { store } = await factory();
+      const p = await store.ensurePrincipal("contract:resources");
+      await store.putSettings(p.id, { resourceDomains: ["fonts.googleapis.com", "*.example.org"] });
+      await store.putSettings(p.id, {
+        resources: [
+          sheet("https://Fonts.Googleapis.com/icon?family=Material+Icons"),
+          sheet("https://cdn.example.org/brand.css", { integrity: SRI }),
+          sheet(ICONS)
+        ]
+      });
+      expect((await store.settings(p.id)).resources).toEqual([
+        { type: "stylesheet", href: ICONS },
+        { type: "stylesheet", href: "https://cdn.example.org/brand.css", integrity: SRI }
+      ]);
+      expect((await composeResources(store, p.id)).value).toEqual((await store.settings(p.id)).resources);
+    });
+
+    it("stylesheets: unacceptable entries are refused by name and change nothing", async () => {
+      const { store } = await factory();
+      const p = await store.ensurePrincipal("contract:resources-refused");
+      await store.putSettings(p.id, { resourceDomains: ["cdn.example.org"], resources: [sheet("https://cdn.example.org/ok.css")] });
+      const before = await store.settings(p.id);
+      for (const entry of [
+        sheet("http://cdn.example.org/a.css"),
+        sheet("https://user:pw@cdn.example.org/a.css"),
+        sheet("https://cdn.example.org:8443/a.css"),
+        sheet("https://192.168.1.10/a.css"),
+        sheet("https://localhost/a.css"),
+        sheet("javascript:alert(1)"),
+        sheet('https://cdn.example.org/a.css" onload="x'),
+        sheet("https://cdn.example.org/a.css", { integrity: "md5-abc" }),
+        { type: "script", href: "https://cdn.example.org/x.js" },
+        sheet("https://cdn.example.org/a.css", { media: "print" })
+      ]) {
+        const refusal = store.putSettings(p.id, resourcesUpdate([entry]));
+        await expect(refusal).rejects.toMatchObject({ code: "INVALID_RESOURCE" });
+        await expect(refusal).rejects.toThrow(String(entry.href));
+      }
+      expect(await store.settings(p.id)).toEqual(before);
+    });
+
+    it("stylesheets: shape and limit are refused as shape", async () => {
+      const { store } = await factory();
+      const p = await store.ensurePrincipal("contract:resources-shape");
+      await store.putSettings(p.id, { resourceDomains: ["cdn.example.org"] });
+      for (const value of ["https://cdn.example.org/a.css", ["https://cdn.example.org/a.css"]]) {
+        await expect(store.putSettings(p.id, resourcesUpdate(value))).rejects.toMatchObject({ code: "INVALID_SHAPE" });
+      }
+      const many = (count: number) => Array.from({ length: count }, (_value, index) => sheet(`https://cdn.example.org/${index}.css`));
+      await expect(store.putSettings(p.id, { resources: many(9) })).rejects.toMatchObject({ code: "INVALID_SHAPE" });
+      expect((await store.settings(p.id)).resources).toBeUndefined();
+      await store.putSettings(p.id, { resources: many(8) });
+      expect((await store.settings(p.id)).resources).toHaveLength(8);
+    });
+
+    it("stylesheets: one outside the declared domains is refused, accepted with its domain in the same write", async () => {
+      const { store } = await factory();
+      const p = await store.ensurePrincipal("contract:resources-undeclared");
+      await store.putSettings(p.id, { resourceDomains: ["cdn.example.org"] });
+      const inter = sheet("https://fonts.googleapis.com/css2?family=Inter");
+      const refusal = store.putSettings(p.id, { resources: [inter] });
+      await expect(refusal).rejects.toMatchObject({ code: "UNDECLARED_DOMAIN" });
+      await expect(refusal).rejects.toThrow("fonts.googleapis.com");
+      expect(await store.settings(p.id)).toEqual({ resourceDomains: ["https://cdn.example.org"] });
+      await store.putSettings(p.id, { resourceDomains: ["cdn.example.org", "fonts.googleapis.com"], resources: [inter] });
+      expect((await store.settings(p.id)).resources).toEqual([inter]);
+    });
+
+    it("stylesheets: a domain a stylesheet needs cannot be removed", async () => {
+      const { store } = await factory();
+      const p = await store.ensurePrincipal("contract:resources-domain-in-use");
+      await store.putSettings(p.id, { resourceDomains: ["fonts.googleapis.com", "cdn.example.org"], resources: [sheet(ICONS)] });
+      const before = await store.settings(p.id);
+      for (const update of [{ resourceDomains: ["cdn.example.org"] }, { resourceDomains: null }, { resourceDomains: [] }]) {
+        const refusal = store.putSettings(p.id, update);
+        await expect(refusal).rejects.toMatchObject({ code: "UNDECLARED_DOMAIN" });
+        await expect(refusal).rejects.toThrow(ICONS);
+      }
+      expect(await store.settings(p.id)).toEqual(before);
+    });
+
+    it("stylesheets: a wildcard domain covers its subdomains, never its apex", async () => {
+      const { store } = await factory();
+      const p = await store.ensurePrincipal("contract:resources-wildcard");
+      await store.putSettings(p.id, { resourceDomains: ["*.example.org"] });
+      await store.putSettings(p.id, { resources: [sheet("https://cdn.example.org/a.css")] });
+      await expect(store.putSettings(p.id, { resources: [sheet("https://example.org/a.css")] })).rejects.toMatchObject({
+        code: "UNDECLARED_DOMAIN"
+      });
+      expect((await store.settings(p.id)).resources).toEqual([sheet("https://cdn.example.org/a.css")]);
+    });
+
+    it("stylesheets: an empty list removes the section, as null does, keeping the domains", async () => {
+      const { store } = await factory();
+      const p = await store.ensurePrincipal("contract:resources-empty");
+      await store.putSettings(p.id, { resourceDomains: ["fonts.googleapis.com"], resources: [sheet(ICONS)] });
+      await store.putSettings(p.id, { resources: [] });
+      expect(await store.settings(p.id)).toEqual({ resourceDomains: ["https://fonts.googleapis.com"] });
+      await store.putSettings(p.id, { resources: [sheet(ICONS)] });
+      await store.putSettings(p.id, { resources: null });
+      expect(await store.settings(p.id)).toEqual({ resourceDomains: ["https://fonts.googleapis.com"] });
+    });
+
+    it("stylesheets: composition yields only the caller's", async () => {
+      const { store } = await factory();
+      const a = await store.ensurePrincipal("contract:resources-a");
+      const b = await store.ensurePrincipal("contract:resources-b");
+      await store.putSettings(a.id, { resourceDomains: ["fonts.googleapis.com"], resources: [sheet(ICONS)] });
+      expect((await composeResources(store, a.id)).value).toEqual([sheet(ICONS)]);
+      expect((await composeResources(store, b.id)).value).toEqual([]);
+      expect((await composeResources(store, ANONYMOUS_PRINCIPAL.id)).value).toEqual([]);
+    });
+
+    it("settings written before stylesheets read back unchanged", async () => {
+      const { store } = await factory();
+      const p = await store.ensurePrincipal("contract:resources-old-shape");
+      await store.putTheme(p.id, { name: "brand", tokens: {} });
+      await store.putSettings(p.id, { defaultThemes: { light: "brand" }, resourceDomains: ["cdn.example.org"] });
+      expect(await store.settings(p.id)).toEqual({ defaultThemes: { light: "brand" }, resourceDomains: ["https://cdn.example.org"] });
+      expect((await composeResources(store, p.id)).value).toEqual([]);
+      // A write naming neither section never checks stylesheet coverage.
+      await store.putSettings(p.id, { defaultThemes: null });
+      expect(await store.settings(p.id)).toEqual({ resourceDomains: ["https://cdn.example.org"] });
     });
   });
 }

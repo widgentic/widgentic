@@ -606,6 +606,16 @@
                   "class": "wg-title"
                 },
                 "children": [
+                  {
+                    "tag": "span",
+                    "attrs": {
+                      "class": "material-icons wg-title-icon",
+                      "aria-hidden": "true"
+                    },
+                    "children": [
+                      "event"
+                    ]
+                  },
                   "Agenda"
                 ]
               },
@@ -844,6 +854,13 @@
           ],
           "date": "2026-09-03",
           "timezone": "America/Bogota"
+        },
+        "styles": {
+          ".wg-title-icon": {
+            "vertical-align": "-5px",
+            "margin-right": "6px",
+            "font-size": "22px"
+          }
         }
       }
     },
@@ -867,6 +884,16 @@
                   "class": "wg-title"
                 },
                 "children": [
+                  {
+                    "tag": "span",
+                    "attrs": {
+                      "class": "material-icons wg-title-icon",
+                      "aria-hidden": "true"
+                    },
+                    "children": [
+                      "mail"
+                    ]
+                  },
                   "Inbox"
                 ]
               },
@@ -1076,6 +1103,11 @@
           },
           ".wg-inbox-star": {
             "color": "var(--wg-warning)"
+          },
+          ".wg-title-icon": {
+            "vertical-align": "-5px",
+            "margin-right": "6px",
+            "font-size": "22px"
           }
         }
       }
@@ -1260,7 +1292,15 @@
     },
     "resourceDomains": [
       "https://api.dicebear.com",
-      "https://*.pravatar.cc"
+      "https://*.pravatar.cc",
+      "https://fonts.googleapis.com",
+      "https://fonts.gstatic.com"
+    ],
+    "resources": [
+      {
+        "type": "stylesheet",
+        "href": "https://fonts.googleapis.com/icon?family=Material+Icons"
+      }
     ]
   }
 }

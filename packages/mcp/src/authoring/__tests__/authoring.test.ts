@@ -278,6 +278,29 @@ describe("theme styles and settings", () => {
     await put("/settings", { resourceDomains: null });
   });
 
+  it("a stylesheet outside the declared domains is refused, and saved with its domains in one body", async () => {
+    const before = await settings();
+    const icons = { type: "stylesheet", href: "https://fonts.googleapis.com/icon?family=Material+Icons" };
+    const refused = await put("/settings", { resources: [icons] });
+    expect(refused.status).toBe(422);
+    const body = (await refused.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe("UNDECLARED_DOMAIN");
+    expect(body.error.message).toContain("fonts.googleapis.com");
+    expect(await settings()).toEqual(before);
+    const invalid = await put("/settings", { resourceDomains: ["cdn.example.org"], resources: [{ type: "script", href: "https://cdn.example.org/x.js" }] });
+    expect(invalid.status).toBe(422);
+    expect(((await invalid.json()) as { error: { code: string } }).error.code).toBe("INVALID_RESOURCE");
+    expect(await settings()).toEqual(before);
+    const saved = await put("/settings", { resourceDomains: ["fonts.googleapis.com", "fonts.gstatic.com"], resources: [icons] });
+    expect(saved.status).toBe(200);
+    expect(await settings()).toEqual({
+      ...(before as object),
+      resourceDomains: ["https://fonts.googleapis.com", "https://fonts.gstatic.com"],
+      resources: [icons]
+    });
+    await put("/settings", { resources: null, resourceDomains: null });
+  });
+
   it("the core handler answers exactly as the Node adapter does", async () => {
     const erin = await store.ensurePrincipal("erin");
     await store.putTheme(erin.id, { name: "a", tokens: {} });

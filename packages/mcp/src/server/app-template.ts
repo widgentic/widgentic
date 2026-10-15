@@ -18,7 +18,9 @@ import { baseStylesheet, darkTheme } from "@widgentic/core";
  *     states, one-shot `load`, and `ui/update-model-context` afterwards
  *   - ResizeObserver-driven `size-changed`; `ping`/`resource-teardown`
  * Widget content stays script-free and fully escaped; this loader is fixed
- * infrastructure. The frame never fetches; the only egress is the host.
+ * infrastructure. The frame never fetches; the only egress is the host and
+ * the stylesheets a result lists (`structuredContent.resources`), which the
+ * browser loads under the host's frame policy.
  * CSP resource domains, when the operator declares any, are announced on
  * the resource by the server assembly, not here.
  */
@@ -26,6 +28,32 @@ export function buildAppTemplate(): string {
   const bridge = `
 const root = document.getElementById("wg-root");
 const dynamicCss = document.getElementById("wg-dynamic-css");
+// The result's stylesheets, linked before the result CSS so its rules win
+// a tie; a listed link stays put (no reload), an unlisted one goes.
+let linked = new Map();
+function applyResources(list) {
+  const keep = new Map();
+  (Array.isArray(list) ? list : []).forEach(function (r) {
+    if (!isObj(r) || r.type !== "stylesheet" || typeof r.href !== "string" || !/^https:\\/\\//.test(r.href)) return;
+    const key = r.href + " " + (r.integrity || "");
+    if (keep.has(key)) return;
+    let link = linked.get(key);
+    if (!link) {
+      link = document.createElement("link");
+      link.rel = "stylesheet";
+      if (typeof r.integrity === "string") { link.setAttribute("integrity", r.integrity); link.setAttribute("crossorigin", "anonymous"); }
+      link.href = r.href;
+    }
+    keep.set(key, link);
+  });
+  linked.forEach(function (link, key) { if (!keep.has(key)) link.remove(); });
+  let next = dynamicCss;
+  Array.from(keep.values()).reverse().forEach(function (link) {
+    if (link.nextSibling !== next) dynamicCss.parentNode.insertBefore(link, next);
+    next = link;
+  });
+  linked = keep;
+}
 const pending = new Map();
 let nextId = 1;
 function send(message) { window.parent.postMessage(message, "*"); }
@@ -169,6 +197,7 @@ function mountResult(sc) {
   resultRendered = true;
   root.removeAttribute("data-wgd-preview");
   if (typeof sc.css === "string") dynamicCss.textContent = sc.css;
+  applyResources(sc.resources);
   if (sc.tree !== undefined && sc.tree !== null) {
     if (mountedTree !== undefined && mountedRoot && mountedRoot.parentNode === root) {
       mountedRoot = patch(mountedTree, sc.tree, mountedRoot);
@@ -817,6 +846,7 @@ function requestServerPreview(args) {
       if (!result || result.isError || !sc || !isElement(sc.tree)) { state.stopped = true; return; }
       state.tree = holdImages(sc.tree);
       if (typeof sc.css === "string") dynamicCss.textContent = sc.css;
+      applyResources(sc.resources);
       root.setAttribute("data-wgd-preview", "true");
       mountPreviewTree(state.tree);
     },
@@ -863,6 +893,7 @@ function requestThemeCss(widget, args) {
       const sc = result && result.structuredContent;
       if (!result || result.isError || !isObj(sc)) { state.stopped = true; return; }
       if (typeof sc.css === "string") dynamicCss.textContent = sc.css;
+      applyResources(sc.resources);
     },
     function () { state.stopped = true; }
   ).then(function () {

@@ -83,3 +83,26 @@ describe("the endpoint declares each caller's resource domains", () => {
     expect(lines.join("\n")).toContain("resource domains not read (disk gone)");
   });
 });
+
+describe("the endpoint delivers each caller's stylesheets", () => {
+  const icons = { type: "stylesheet" as const, href: "https://fonts.googleapis.com/icon?family=Material+Icons" };
+
+  async function render(store: WidgetStore, principal: Principal): Promise<Record<string, unknown>> {
+    const server = await serverForPrincipal(store, principal, { execute: open, preview: open }, () => {});
+    const client = new Client({ name: "t", version: "0" });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+    const result = await client.callTool({ name: "render_widget", arguments: { widget: "card", data: { title: "Ada" } } });
+    await client.close();
+    return (result.structuredContent ?? {}) as Record<string, unknown>;
+  }
+
+  it("a saved stylesheet reaches the next render, and only its principal's", async () => {
+    const store = createMemoryStore([{ principal: alice }, { principal: bob }]);
+    expect(await render(store, alice)).not.toHaveProperty("resources");
+    await store.putSettings(alice.id, { resourceDomains: ["fonts.googleapis.com", "fonts.gstatic.com"], resources: [icons] });
+    expect((await render(store, alice)).resources).toEqual([icons]);
+    expect(await render(store, bob)).not.toHaveProperty("resources");
+    expect(await render(store, ANONYMOUS_PRINCIPAL)).not.toHaveProperty("resources");
+  });
+});

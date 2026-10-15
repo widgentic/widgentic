@@ -18,6 +18,16 @@
               "class": "wg-title"
             },
             "children": [
+              {
+                "tag": "span",
+                "attrs": {
+                  "class": "material-icons wg-title-icon",
+                  "aria-hidden": "true"
+                },
+                "children": [
+                  "event"
+                ]
+              },
               "Agenda"
             ]
           },
@@ -256,6 +266,13 @@
       ],
       "date": "2026-09-03",
       "timezone": "America/Bogota"
+    },
+    "styles": {
+      ".wg-title-icon": {
+        "vertical-align": "-5px",
+        "margin-right": "6px",
+        "font-size": "22px"
+      }
     }
   }
 }

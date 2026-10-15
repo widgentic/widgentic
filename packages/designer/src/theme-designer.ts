@@ -67,6 +67,12 @@ export interface ThemeDesignerOptions {
    */
   previewFrame?: string;
   /**
+   * The person's stylesheets, as their settings record holds them. The
+   * island links the entries the core resource rule accepts, under the
+   * frame's policy; the in-page preview never adds a stylesheet to the page.
+   */
+  resources?: readonly unknown[];
+  /**
    * Mount with editing disabled: panels stay visible but inert, only the
    * preview and its kind selector operate. Toggle later via `setReadOnly`.
    */
@@ -151,7 +157,8 @@ export function createThemeDesigner(
 
   const preview = createPreview({
     ...(options.widgets ? { widgets: options.widgets } : {}),
-    ...(options.previewFrame === undefined ? {} : { previewFrame: options.previewFrame })
+    ...(options.previewFrame === undefined ? {} : { previewFrame: options.previewFrame }),
+    ...(options.resources === undefined ? {} : { resources: options.resources })
   });
   // Built-ins plus whatever custom definitions the host supplied.
   const previewKinds = preview.kinds.length > 0 ? preview.kinds : BASE_KINDS;

@@ -393,4 +393,22 @@ describe("sqlite settings values that are not names", () => {
     expect(diagnostics.join("\n")).toContain("http://old.example.com");
     reopened.close();
   });
+
+  it("drop a stored stylesheet of an unknown type or an uncovered host, naming each", async () => {
+    const path = freshPath();
+    const store = open(path);
+    const p = await store.ensurePrincipal("sqlite:settings-resources");
+    store.close();
+    const raw = new DatabaseSync(path);
+    raw
+      .prepare("INSERT INTO entries (principal_id, kind, name, json) VALUES (?, 'settings', 'principal', ?)")
+      .run(p.id, JSON.stringify({ resourceDomains: ["https://fonts.googleapis.com"], resources: [{ type: "stylesheet", href: "https://fonts.googleapis.com/icon?family=Material+Icons" }, { type: "script", href: "https://fonts.googleapis.com/x.js" }, { type: "stylesheet", href: "https://cdn.example.org/a.css" }] }));
+    raw.close();
+    const diagnostics: string[] = [];
+    const reopened = createSqliteStore(path, { limits: LIMITS, cipher: createLocalCipher(KEK), onDiagnostic: (m) => diagnostics.push(m) });
+    expect((await reopened.settings(p.id)).resources).toEqual([{ type: "stylesheet", href: "https://fonts.googleapis.com/icon?family=Material+Icons" }]);
+    expect(diagnostics.join("\n")).toContain("x.js");
+    expect(diagnostics.join("\n")).toContain("https://cdn.example.org/a.css");
+    reopened.close();
+  });
 });

@@ -69,6 +69,7 @@ With no options the assembly serves the built-ins; everything else is your expli
 | `schemas` | an async source of shared schemas, read only when `list_schemas` is called; omitted, empty |
 | `sharedActions` | an async source of the STORED shared actions, read only when `list_actions` is called — the handler reduces each entry to its contract, so the URL, headers and query never leave the server; omitted, empty |
 | `resourceDomains` | domains the app frame may load assets from directly: your own list, followed by the caller's `resourceDomains` setting (`composeResourceDomains`). Entries such as `cdn.example.com` or `*.example.com` are read by the core rule, refused ones dropped, and the rest declared as canonical `https://` origins in `_meta.ui.csp.resourceDomains`. Images on them are inlined only with the room undeclared images leave, and one left external keeps its URL for hosts that honor the declaration. Stored widgets and render inputs can never extend it |
+| `resources` | the caller's stylesheets (`composeResources`), linked by every frame and `page` document their renders produce and listed by `list_themes`; an entry the core rule refuses, or whose host `resourceDomains` does not cover, is dropped. Omitted, nothing is linked |
 | `actions` | the action source for the catalog: `bindingAt(kind, id)`, `load(kind)`, `resolve(ref)`; omitted, `execute_action` answers `UNKNOWN_ACTION` |
 | `scopes` | the caller's scopes; `execute` gates `execute_action` and http-bound descriptors |
 | `secrets` | `(name) => Promise<string>` resolving the caller's secret at execution time, `undefined` for an unknown name |
@@ -114,10 +115,10 @@ Two environment variables are read each time a server is constructed:
 <dir>/<principalId>/schemas/<name>.json   { name, label?, description?, schema }
 <dir>/<principalId>/actions/<name>.json   { name, label?, description?, definition }
 <dir>/<principalId>/secrets/<name>.json   envelope records, ciphertext only
-<dir>/<principalId>/settings.json         { defaultThemes?: { light?, dark? }, resourceDomains?: string[] }
+<dir>/<principalId>/settings.json         { defaultThemes?: { light?, dark? }, resourceDomains?: string[], resources?: { type, href, integrity? }[] }
 ```
 
-`settings(principalId)` and, on writable stores, `putSettings(principalId, update)` hold one settings record per principal: a write replaces the sections it names (`null` removes one) and keeps the rest. Its `defaultThemes` section names the stored theme light and dark hosts get when a render names no theme; `composeThemes` turns it into the registry's defaults, and a theme named there cannot be removed (`THEME_IN_USE`); a default naming no stored theme is refused with `UNKNOWN_THEME`. Its `resourceDomains` section lists up to 20 domains the caller's frames may load images from directly, stored as canonical origins; an entry the rule refuses is `INVALID_DOMAIN`, and `composeResourceDomains` yields the list for `createWidgenticServer`. A record or section of the wrong shape (an unknown section or mode, more than 20 domains) is `INVALID_SHAPE`, and a refused write changes nothing. Read the record once per request with `readPrincipalSettings` and pass it to both as `{ settings }`.
+`settings(principalId)` and, on writable stores, `putSettings(principalId, update)` hold one settings record per principal: a write replaces the sections it names (`null` removes one) and keeps the rest. Its `defaultThemes` section names the stored theme light and dark hosts get when a render names no theme; `composeThemes` turns it into the registry's defaults, and a theme named there cannot be removed (`THEME_IN_USE`); a default naming no stored theme is refused with `UNKNOWN_THEME`. Its `resourceDomains` section lists up to 20 domains the caller's frames may load images from directly, stored as canonical origins; an entry the rule refuses is `INVALID_DOMAIN`, and `composeResourceDomains` yields the list for `createWidgenticServer`. A record or section of the wrong shape (an unknown section or mode, more than 20 domains) is `INVALID_SHAPE`, and a refused write changes nothing. Its `resources` section lists up to 8 stylesheets every frame links, `{ type: "stylesheet", href, integrity? }`: an `https://` address whose host the same record's `resourceDomains` must cover, so a stylesheet on an undeclared host, or a write that removes a domain a stylesheet needs, is refused with `UNDECLARED_DOMAIN`, and a malformed entry or another type with `INVALID_RESOURCE`. `composeResources` yields the list for `createWidgenticServer`. Read the record once per request with `readPrincipalSettings` and pass it to each composition as `{ settings }`.
 
 Options carry `limits` (how many widgets, themes, schemas, actions and secrets a principal may hold, the bytes per entry and the template nodes per widget — the defaults are on [Limits](/reference/limits)), an `onDiagnostic` sink and a `cipher` for secrets. Per request:
 
@@ -126,6 +127,7 @@ import {
   ANONYMOUS_PRINCIPAL,
   composeCatalog,
   composeResourceDomains,
+  composeResources,
   composeThemes,
   createFileStore,
   readPrincipalSettings
@@ -149,10 +151,12 @@ async function serverFor(apiKey: string | undefined) {
   const settings = readPrincipalSettings(store, id);
   const themes = await composeThemes(store, id, { settings });
   const domains = await composeResourceDomains(store, id, { settings });
+  const stylesheets = await composeResources(store, id, { settings });
   return createWidgenticServer({
     catalog: catalog.value,
     themes: themes.value,
     resourceDomains: domains.value,
+    resources: stylesheets.value,
     actions: catalog.actions,
     scopes,
     schemas: () => store.schemas(id),
@@ -178,7 +182,7 @@ async function serverFor(apiKey: string | undefined) {
 
 The write side — how people author the entries the store serves — ships as `@widgentic/mcp/authoring`. `handleAuthoringRequest({ method, path, body, context }, deps)` is a pure core over the writable store: widgets, themes, schemas and shared actions (the path names the entry; the body can never redirect it), the principal's settings at `/settings`, the action test call through the guarded fetch, write-only secrets, and API keys minted once with fixed scopes. `createAuthoringHttpHandler(deps, resolveContext)` mounts it on `node:http` under `/api`.
 
-`GET /preview-frame` serves the designers' preview frame (see [Embed the designers](/develop/embed-the-designers#the-preview)). It answers with the app template as HTML, under a Content-Security-Policy built from your operator domains (`deps.resourceDomains`, the list your MCP server declares for everyone) followed by the signed-in principal's `resourceDomains` setting. That is the list `createWidgenticServer` declares for that principal, so the preview loads what a host would. Its scripts are allowed only by hash. It may be framed only by its own origin, reaches no network, and is never cached. Without a principal, or when the settings read fails, the policy carries the operator domains alone.
+`GET /preview-frame` serves the designers' preview frame (see [Embed the designers](/develop/embed-the-designers#the-preview)). It answers with the app template as HTML, under a Content-Security-Policy built from your operator domains (`deps.resourceDomains`, the list your MCP server declares for everyone) followed by the signed-in principal's `resourceDomains` setting. That is the list `createWidgenticServer` declares for that principal, so the preview loads what a host would. Its scripts are allowed only by hash. It may be framed only by its own origin, connects nowhere (`connect-src 'none'`), loads images, styles, fonts and media only from the declared domains, and is never cached. Without a principal, or when the settings read fails, the policy carries the operator domains alone.
 
 Authentication is yours: the surface begins where it ends. Your `resolveContext(req)` returns `{ principalId, subject?, label? }` however you authenticate — a session cookie, a trusted proxy header, or a fixed principal for a single-user deployment — and identity routes (linked accounts) exist only when you supply a `subject`. Two rules are the surface's own and cannot be dropped by a host: a presented widgentic API key is refused with `401 KEY_NOT_A_SESSION` before any store access (keys travel into prompt-injectable hosts and must never author), and nothing in a request can name a principal other than the one you resolved.
 

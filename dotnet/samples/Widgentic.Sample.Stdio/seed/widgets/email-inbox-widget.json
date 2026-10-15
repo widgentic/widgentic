@@ -18,6 +18,16 @@
               "class": "wg-title"
             },
             "children": [
+              {
+                "tag": "span",
+                "attrs": {
+                  "class": "material-icons wg-title-icon",
+                  "aria-hidden": "true"
+                },
+                "children": [
+                  "mail"
+                ]
+              },
               "Inbox"
             ]
           },
@@ -227,6 +237,11 @@
       },
       ".wg-inbox-star": {
         "color": "var(--wg-warning)"
+      },
+      ".wg-title-icon": {
+        "vertical-align": "-5px",
+        "margin-right": "6px",
+        "font-size": "22px"
       }
     }
   }

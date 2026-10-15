@@ -233,7 +233,8 @@ describe("the preview island", () => {
   it("the theme designer previews catalog kinds in the island too", () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
-    createThemeDesigner(container, { previewFrame: FRAME, initialTheme: BRAND });
+    const icons = { type: "stylesheet", href: "https://fonts.googleapis.com/icon?family=Material+Icons" };
+    createThemeDesigner(container, { previewFrame: FRAME, initialTheme: BRAND, resources: [icons] });
     const frame = container.querySelector("iframe.wgd-preview-frame") as HTMLIFrameElement;
     const sent: Sent[] = [];
     const fake = { postMessage: (message: Sent) => sent.push(message) };
@@ -245,6 +246,34 @@ describe("the preview island", () => {
     const content = result?.params?.structuredContent as { css: string; payload: { kind: string } };
     expect(content.payload.kind).toBe("card");
     expect(content.css).toContain("--wg-accent: #0b6e4f");
+    expect((result?.params?.structuredContent as { resources?: unknown }).resources).toEqual([icons]);
+  });
+
+  it("sends the person's stylesheets with each preview, only those the rule accepts", () => {
+    const icons = { type: "stylesheet", href: "https://fonts.googleapis.com/icon?family=Material+Icons" };
+    const { designer, boot, results } = islandDesigner({
+      resources: [icons, { type: "script", href: "https://fonts.googleapis.com/x.js" }]
+    });
+    boot();
+    designer.loadWidget({ ...WIDGET, descriptor: { ...WIDGET.descriptor, dataExample: { name: "Lin" } } });
+    expect(results()).toHaveLength(2);
+    for (const result of results()) {
+      expect((result.params?.structuredContent as { resources?: unknown }).resources).toEqual([icons]);
+    }
+  });
+
+  it("sends no stylesheet key without any, and the in-page preview never links one", () => {
+    const { boot, results } = islandDesigner();
+    boot();
+    expect(results()[0]?.params?.structuredContent).not.toHaveProperty("resources");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    createDesigner(container, {
+      initialWidget: WIDGET,
+      resources: [{ type: "stylesheet", href: "https://fonts.googleapis.com/icon?family=Material+Icons" }]
+    });
+    expect(document.querySelectorAll('link[rel="stylesheet"]')).toHaveLength(0);
+    expect(container.querySelector(".wgd-preview")?.textContent).toContain("Ada");
   });
 
   it("the element reads the preview-frame attribute", () => {

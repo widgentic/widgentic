@@ -73,6 +73,8 @@ When a render names no theme, hosts fall back to the built-in look: the light de
 
 Your choice applies to every render that names no theme, for all your keys. On a host in dark mode the dark default's tokens apply; elsewhere the light default's do. Shared styles follow the same split only when both modes' defaults carry styles; otherwise a default's styles apply in both modes, since widgets rely on those classes for layout. One theme chosen for both modes applies in both, tokens and styles, as a named theme does. Documents with no host colour scheme (`format: "page"` and `"app"`) use the light default. A render that names a theme still uses that theme. A default theme overrides the host's own colours in its mode, as a named theme does.
 
+Theme values cannot load a font (`url(` is refused), so a brand or icon font comes from a stylesheet. Add it in **Settings → Stylesheets** with its domains ([Stylesheets](/how-it-works/inline-rendering#stylesheets)), then name its family in a theme's `font-family` token, or use its classes in a template.
+
 A theme that is a default cannot be deleted; the app answers `THEME_IN_USE` until you choose another default. `list_themes` reports the current defaults to agents. Settings are not part of the theme entry, so exporting or importing a theme never changes your defaults.
 
 ## Previewing

@@ -6,21 +6,24 @@
  *
  * The configuration (designer-exported widgets, theme entries, shared
  * schemas, the embedding server's own resource domains, and a settings
- * record choosing default themes and resource domains) is composed once per
+ * record choosing default themes, resource domains and stylesheets) is composed once per
  * host by the store's own composition and checks; refused entries and
  * settings are skipped and listed by `problems()`, never thrown. Calls
  * dispatch to the same handlers the Node assembly wires, and nothing is
  * kept from one call to the next. `resources()` reports the domains the app
  * template declares — the operator's, then the settings' — in the same
  * canonical form the Node assembly declares them, so an embedding server
- * declares exactly what it is told.
+ * declares exactly what it is told. The settings' stylesheets those domains
+ * cover ride every render and preview, as in the Node assembly; one they do
+ * not cover is reported and never delivered.
  *
  * Render-only: http actions compile disabled (`unresolved`), no `load` is
  * emitted, and neither `execute_action` nor `list_actions` is served. The
  * template's own `preview_widget` is served, marked app-only; rate limiting
  * previews belongs to the embedding server's transport.
  */
-import { createThemeRegistry, isPlainObject, parseResourceDomain } from "@widgentic/core";
+import { createThemeRegistry, isPlainObject, parseResourceDomain, resourceCovered } from "@widgentic/core";
+import type { Resource } from "@widgentic/core";
 import type { McpToolResult } from "../output/index.js";
 import {
   GET_AUTHORING_GUIDE_TOOL,
@@ -51,7 +54,7 @@ import { buildAppTemplate } from "../server/app-template.js";
 import { composeCatalogEntries, composeThemeEntries } from "../store/compose.js";
 import type { ComposeProblem } from "../store/compose.js";
 import { checkStoredSchema } from "../store/validate.js";
-import { THEME_MODES, checkSettings } from "../store/settings-rules.js";
+import { THEME_MODES, checkSettings, uncoveredResources } from "../store/settings-rules.js";
 import { DEFAULT_LIMITS } from "../store/limits.js";
 
 /** Replaced with the package version when the bundle is built. */
@@ -212,7 +215,9 @@ function refusals(problems: readonly ComposeProblem[]): HostProblem[] {
  * `settings` is checked with the store's rules against the configured themes that composed;
  * each default that passes stands in for its mode's built-in, as a principal's stored
  * defaults do in the Node assembly. `resourceDomains` (the embedding server's own) and the
- * settings' section are read by the core resource-domain rule and declared operator first.
+ * settings' section are read by the core resource-domain rule and declared operator first;
+ * the settings' `resources` are read by the core resource rule, and those the declared
+ * domains cover are delivered.
  */
 export function createWidgenticHost(configJson: string): WidgenticHost {
   const problems: HostProblem[] = [];
@@ -245,6 +250,7 @@ export function createWidgenticHost(configJson: string): WidgenticHost {
   const catalog = composed.catalog;
   const registry = themes.registry;
   const domains = operatorDomains(config, problems);
+  let stylesheets: Resource[] = [];
   // An absent or null record is no settings; anything else is checked.
   if (config.settings !== undefined && config.settings !== null) {
     // Defaults may name only configured themes that composed, never a built-in.
@@ -258,10 +264,16 @@ export function createWidgenticHost(configJson: string): WidgenticHost {
       if (name !== undefined) registry.setDefault(mode, name);
     }
     domains.push(...(checked.settings.resourceDomains ?? []));
+    stylesheets = checked.settings.resources ?? [];
   }
   const declared = [...new Set(domains)];
+  // A stylesheet no declared domain covers would be blocked by the frame policy: reported, never delivered.
+  for (const { name, code, message } of uncoveredResources(stylesheets, declared)) {
+    problems.push({ section: "settings", index: -1, name, code, message });
+  }
+  const resources = stylesheets.filter((resource) => resourceCovered(resource.href, declared));
   // Without a declared domain the documents are exactly the Node assembly's constants.
-  const resources = JSON.stringify(
+  const served = JSON.stringify(
     declared.length === 0
       ? SERVED_RESOURCES
       : { ...SERVED_RESOURCES, appTemplate: { ...SERVED_RESOURCES.appTemplate, resourceDomains: declared } }
@@ -269,18 +281,18 @@ export function createWidgenticHost(configJson: string): WidgenticHost {
   const handlers = new Map<string, (args: unknown, slim: boolean) => McpToolResult>([
     [LIST_WIDGETS_TOOL.name, () => handleListWidgets(catalog)],
     [LIST_THEME_TOKENS_TOOL.name, () => handleListThemeTokens()],
-    [LIST_THEMES_TOOL.name, () => handleListThemes(registry)],
+    [LIST_THEMES_TOOL.name, () => handleListThemes(registry, resources)],
     [LIST_SCHEMAS_TOOL.name, () => listSchemasResult(schemas)],
     [GET_AUTHORING_GUIDE_TOOL.name, () => handleGetAuthoringGuide()],
-    [RENDER_WIDGET_TOOL.name, (args, slim) => handleRenderWidget(catalog, args, { slim, themes: registry })],
-    [PREVIEW_WIDGET_TOOL.name, (args) => handlePreviewWidget(catalog, args, { themes: registry })]
+    [RENDER_WIDGET_TOOL.name, (args, slim) => handleRenderWidget(catalog, args, { slim, themes: registry, resources })],
+    [PREVIEW_WIDGET_TOOL.name, (args) => handlePreviewWidget(catalog, args, { themes: registry, resources })]
   ]);
 
   return {
     version: () => (typeof WIDGENTIC_HOST_VERSION === "string" ? WIDGENTIC_HOST_VERSION : "source"),
     problems: () => JSON.stringify(problems),
     definitions: () => JSON.stringify(SERVED_TOOLS),
-    resources: () => resources,
+    resources: () => served,
     call(name, argsJson, slim) {
       const handler = handlers.get(name);
       if (handler === undefined) {
@@ -292,6 +304,6 @@ export function createWidgenticHost(configJson: string): WidgenticHost {
       return JSON.stringify(handler(args.ok ? args.value : argsJson, slim === true));
     },
     appTemplate: () => buildAppTemplate(),
-    widgetPage: (kind) => renderWidgetPage(catalog, kind, registry)
+    widgetPage: (kind) => renderWidgetPage(catalog, kind, registry, resources)
   };
 }

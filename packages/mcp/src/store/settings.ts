@@ -13,7 +13,15 @@
 import { isPlainObject } from "@widgentic/core";
 import type { ThemeMode } from "@widgentic/core";
 import { StoreRejectionError } from "./types.js";
-import { THEME_MODES, checkDefaultThemes, checkResourceDomains, isSettingsSection, readSettings } from "./settings-rules.js";
+import {
+  THEME_MODES,
+  checkDefaultThemes,
+  checkResourceDomains,
+  checkResources,
+  isSettingsSection,
+  readSettings,
+  uncoveredResources
+} from "./settings-rules.js";
 
 export type { PrincipalSettings, PrincipalSettingsUpdate } from "./settings-rules.js";
 export { readSettings } from "./settings-rules.js";
@@ -22,9 +30,11 @@ export { readSettings } from "./settings-rules.js";
  * Validate `update` and apply it to the raw stored record. Returns the
  * record to persist, or `undefined` when nothing is left to keep (adapters
  * then delete the record). `storedThemes` is every theme name the principal
- * stores, raw — an entry that fails validation today is still theirs. A
- * refusal changes nothing: the first problem is thrown before anything is
- * kept.
+ * stores, raw — an entry that fails validation today is still theirs. When
+ * the update writes `resources` or `resourceDomains`, every stylesheet of
+ * the resulting record must be on a host its domains cover, so a domain a
+ * stylesheet needs cannot be removed. A refusal changes nothing: the first
+ * problem is thrown before anything is kept.
  */
 export function applySettingsUpdate(
   raw: unknown,
@@ -45,6 +55,15 @@ export function applySettingsUpdate(
       delete next[section];
       continue;
     }
+    if (section === "resources") {
+      const checked = checkResources(value);
+      const [problem] = checked.problems;
+      if (problem !== undefined) throw new StoreRejectionError(problem.code, problem.message);
+      // An empty list is no section: "no stylesheets".
+      if (checked.resources.length > 0) next.resources = checked.resources;
+      else delete next.resources;
+      continue;
+    }
     if (section === "resourceDomains") {
       const checked = checkResourceDomains(value);
       const [problem] = checked.problems;
@@ -60,6 +79,13 @@ export function applySettingsUpdate(
     // An empty section is no section: "both modes built-in".
     if (Object.keys(checked.defaultThemes).length > 0) next.defaultThemes = checked.defaultThemes;
     else delete next.defaultThemes;
+  }
+  if (update.resources !== undefined || update.resourceDomains !== undefined) {
+    // Stored stylesheets that fail today's rule are dropped on read and checked by nobody.
+    const stylesheets = Array.isArray(next.resources) ? checkResources(next.resources).resources : [];
+    const domains = Array.isArray(next.resourceDomains) ? checkResourceDomains(next.resourceDomains).resourceDomains : [];
+    const [problem] = uncoveredResources(stylesheets, domains);
+    if (problem !== undefined) throw new StoreRejectionError(problem.code, problem.message);
   }
   return Object.keys(next).length > 0 ? next : undefined;
 }

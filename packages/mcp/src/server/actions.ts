@@ -23,7 +23,7 @@ import {
 import { errorMessage } from "../internal.js";
 import { isPlainObject } from "@widgentic/core";
 import type { McpToolResult } from "../output/index.js";
-import type { ThemeRegistry } from "@widgentic/core";
+import type { Resource, ThemeRegistry } from "@widgentic/core";
 import { guardedJsonFetch } from "./guarded-fetch.js";
 import type { GuardedFetchDeps } from "./guarded-fetch.js";
 import { handleRenderWidget } from "./handlers.js";
@@ -72,6 +72,8 @@ export interface ExecuteActionOptions {
   /** Per-principal rate limit gate: `false` refuses with RATE_LIMITED. */
   rateLimit?: (() => boolean) | undefined;
   themes?: ThemeRegistry | undefined;
+  /** The caller's delivered stylesheets, carried by the re-render as by any render. */
+  resources?: readonly Resource[] | undefined;
   fetchDeps?: GuardedFetchDeps | undefined;
 }
 
@@ -287,6 +289,7 @@ export async function handleExecuteAction(
   const rendered = handleRenderWidget(catalog, renderInput, {
     slim: true,
     themes: options.themes,
+    resources: options.resources,
     actions: options.actions === undefined ? undefined : { load: options.actions.load, resolve: options.actions.resolve, executeAllowed: true }
   });
   if (rendered.isError === true) {

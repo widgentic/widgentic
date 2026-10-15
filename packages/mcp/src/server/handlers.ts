@@ -5,7 +5,7 @@ import type { WidgetContractError } from "@widgentic/core";
 import type { McpToolResult, McpContentBlock } from "../output/index.js";
 import { WIDGENTIC_MIME_TYPE, WIDGENTIC_URI } from "../output/index.js";
 import type { ThemeEntry, ThemeRegistry, WidgetStyles, WidgetTheme } from "@widgentic/core";
-import type { WidgetPayload } from "@widgentic/core";
+import type { Resource, WidgetPayload } from "@widgentic/core";
 import type { ActionBinding, ActionDefinition, StoredAction } from "@widgentic/core";
 import { resolveActionDescriptor } from "@widgentic/core";
 import {
@@ -54,15 +54,42 @@ const PAGE_BODY_CSS =
   `  margin: calc(var(--wg-spacing, ${TOKEN_DEFAULTS.spacing}) * 2);\n` +
   `}`;
 
+/** An attribute value: the resource rule admits no quote or `<`, but a query's `&` still needs escaping. */
+function attributeValue(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/**
+ * A document's stylesheet links, in order: integrity pins a stylesheet and
+ * needs a CORS fetch, so `crossorigin` rides only with it.
+ */
+function resourceLinks(resources: readonly Resource[]): string {
+  return resources
+    .map((resource) => {
+      const integrity = resource.integrity === undefined
+        ? ""
+        : ` integrity="${attributeValue(resource.integrity)}" crossorigin="anonymous"`;
+      return `<link rel="stylesheet" href="${attributeValue(resource.href)}"${integrity}>\n`;
+    })
+    .join("");
+}
+
+/** The caller's stylesheets for `structuredContent`, copied so no result shares an object. */
+function resourcesContent(resources: readonly Resource[]): Resource[] {
+  return resources.map((resource) => ({ ...resource }));
+}
+
 /**
  * Self-contained styled document for `format: "page"` and `"app"`. A
  * document carries no host colour scheme, so without an explicit theme it
- * takes the light default only.
+ * takes the light default only. The caller's stylesheets link before its
+ * styles, so a theme's or widget's rule wins a tie.
  */
 function composePage(
   fragment: string,
   themes: RenderThemes,
-  styleCss: string
+  styleCss: string,
+  resources: readonly Resource[] = []
 ): string {
   const theme = themes.explicit ?? themes.light;
   const parts = [
@@ -74,6 +101,7 @@ function composePage(
   ];
   return (
     `<!doctype html>\n<meta charset="utf-8">\n<title>widgentic</title>\n` +
+    resourceLinks(resources) +
     `<style>\n${parts.join("\n")}\n</style>\n<body>${fragment}</body>`
   );
 }
@@ -194,10 +222,13 @@ export function handleListWidgets(catalog: WidgetCatalog): McpToolResult {
  * `theme: "dark"` instead of composing a token map. Pure — the registry is
  * supplied, mirroring `handleListWidgets(catalog)`.
  */
-export function handleListThemes(registry: ThemeRegistry): McpToolResult {
-  const listing = {
+export function handleListThemes(registry: ThemeRegistry, resources: readonly Resource[] = []): McpToolResult {
+  const listing: Record<string, unknown> = {
     themes: registry.list(),
     defaults: registry.defaults(),
+    ...(resources.length === 0
+      ? {}
+      : { resources: resources.map((resource) => ({ type: resource.type, href: resource.href })) }),
     rules:
       "Pass any 'name' above as render_widget's 'theme' input. Tokens are " +
       "shown for reference; a token map may still be passed inline. A " +
@@ -207,7 +238,11 @@ export function handleListThemes(registry: ThemeRegistry): McpToolResult {
       "user chooses them in Settings. A new theme the user wants to keep " +
       "belongs in the designer: deliver it as " +
       "{ name, label?, description?, tokens, styles? } for Import at widgentic.dev " +
-      "(see get_authoring_guide)."
+      "(see get_authoring_guide)." +
+      (resources.length === 0
+        ? ""
+        : " 'resources' lists the stylesheets every frame of this user links: the classes they " +
+          "define (an icon font's, say) may be used in widget templates.")
   };
   return {
     content: [{ type: "text", text: JSON.stringify(listing, null, 2) }]
@@ -533,6 +568,8 @@ function templateCss(styleCss: string, themes: RenderThemes): string {
 
 export interface PreviewWidgetOptions {
   themes?: ThemeRegistry | undefined;
+  /** The caller's delivered stylesheets: a preview links what the result will. */
+  resources?: readonly Resource[] | undefined;
   /** Per-principal rate-limit gate (`false` refuses with RATE_LIMITED). */
   rateLimit?: (() => boolean) | undefined;
 }
@@ -589,7 +626,10 @@ export function handlePreviewWidget(
     content: [{ type: "text", text: `Preview of '${widget}'.` }],
     structuredContent: {
       tree: rendered.node,
-      css: templateCss(kindStylesCss(catalog, widget, payload.data), themes)
+      css: templateCss(kindStylesCss(catalog, widget, payload.data), themes),
+      ...(options.resources === undefined || options.resources.length === 0
+        ? {}
+        : { resources: resourcesContent(options.resources) })
     }
   };
 }
@@ -606,6 +646,8 @@ export function handleRenderWidget(
     slim?: boolean | undefined;
     themes?: ThemeRegistry | undefined;
     actions?: RenderActionOptions | undefined;
+    /** The caller's delivered stylesheets: structured content and documents link them, fragments never. */
+    resources?: readonly Resource[] | undefined;
   }
 ): McpToolResult {
   if (!isPlainObject(input)) {
@@ -744,6 +786,8 @@ export function handleRenderWidget(
     });
   }
   if (diagnostics.length > 0) structuredContent.diagnostics = diagnostics;
+  const resources = options?.resources ?? [];
+  if (resources.length > 0) structuredContent.resources = resourcesContent(resources);
   // The widget-level `load` binding rides the template channel as a
   // resolved descriptor — only for callers who may execute; a read-only
   // key sees no load at all rather than a click that fails.
@@ -796,7 +840,7 @@ export function handleRenderWidget(
       return {
         structuredContent,
         content: [
-          { type: "text", text: composePage(html, themes, styleCss) },
+          { type: "text", text: composePage(html, themes, styleCss, resources) },
           widgetBlock
         ]
       };
@@ -817,7 +861,7 @@ export function handleRenderWidget(
             resource: {
               uri: `${WIDGENTIC_UI_URI_PREFIX}${widget}`,
               mimeType: WIDGENTIC_APP_MIME_TYPE,
-              text: composePage(html, themes, styleCss)
+              text: composePage(html, themes, styleCss, resources)
             }
           },
           widgetBlock
@@ -857,12 +901,13 @@ export function handleRenderWidget(
 export function renderWidgetPage(
   catalog: WidgetCatalog,
   kind: string,
-  themes?: ThemeRegistry | undefined
+  themes?: ThemeRegistry | undefined,
+  resources?: readonly Resource[] | undefined
 ): string {
   const example = catalog.describe(kind)?.dataExample;
   // With the caller's registry the page takes the light default, as every
   // document does; without one (or with built-in defaults) it is unchanged.
-  const result = handleRenderWidget(catalog, { widget: kind, data: example ?? null, format: "page" }, { themes });
+  const result = handleRenderWidget(catalog, { widget: kind, data: example ?? null, format: "page" }, { themes, resources });
   const page = result.content.find((block) => block.type === "text");
   return !result.isError && typeof page?.text === "string"
     ? page.text

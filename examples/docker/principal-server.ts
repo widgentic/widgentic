@@ -2,14 +2,15 @@
  * The MCP server one request gets, for the principal its key resolved to:
  * the catalog, themes and resource domains composed from the store with no
  * cache, so one principal's entries never reach another's session. The
- * settings are read once and serve the default themes and the declared
- * domains alike. Kept apart from `mcp.ts`, which listens when imported, so
+ * settings are read once and serve the default themes, the declared domains
+ * and the stylesheets alike. Kept apart from `mcp.ts`, which listens when imported, so
  * the composition is testable.
  */
 import { createWidgenticServer } from "@widgentic/mcp/sdk";
 import {
   composeCatalog,
   composeResourceDomains,
+  composeResources,
   composeThemes,
   readPrincipalSettings
 } from "@widgentic/mcp/store";
@@ -28,12 +29,18 @@ export async function serverForPrincipal(
 ): Promise<ReturnType<typeof createWidgenticServer>> {
   const executeAllowed = principal.scopes.includes("execute");
   const settings = readPrincipalSettings(store, principal.id);
-  const [catalogResult, themeResult, domainResult] = await Promise.all([
+  const [catalogResult, themeResult, domainResult, resourceResult] = await Promise.all([
     composeCatalog(store, principal.id, { executeAllowed }),
     composeThemes(store, principal.id, { settings }),
-    composeResourceDomains(store, principal.id, { settings })
+    composeResourceDomains(store, principal.id, { settings }),
+    composeResources(store, principal.id, { settings })
   ]);
-  for (const diagnostic of [...catalogResult.diagnostics, ...themeResult.diagnostics, ...domainResult.diagnostics]) {
+  for (const diagnostic of [
+    ...catalogResult.diagnostics,
+    ...themeResult.diagnostics,
+    ...domainResult.diagnostics,
+    ...resourceResult.diagnostics
+  ]) {
     log(`widgentic store [${principal.id}]: ${diagnostic}`);
   }
   return createWidgenticServer({
@@ -47,6 +54,8 @@ export async function serverForPrincipal(
     rateLimit: () => gates.execute.take(principal.id),
     previewRateLimit: () => gates.preview.take(principal.id),
     // The principal's own domains, declared on the app resource for its frames.
-    resourceDomains: domainResult.value
+    resourceDomains: domainResult.value,
+    // Their stylesheets, which those domains cover (the store refuses any other).
+    resources: resourceResult.value
   });
 }

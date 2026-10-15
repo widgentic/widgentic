@@ -83,6 +83,15 @@ describe("execute_action", () => {
     expect(JSON.stringify(result)).not.toContain("sk-live-123");
   });
 
+  it("the re-render carries the caller's stylesheets like any render", async () => {
+    const { run } = await rig();
+    const icons = { type: "stylesheet" as const, href: "https://fonts.googleapis.com/icon?family=Material+Icons" };
+    const result = await run({ widget: "weather", action: "children.1", args: { city: "Oslo" }, payload }, () => jsonResponse(200, { temp: 18 }), {
+      resources: [icons]
+    });
+    expect((result.structuredContent as { resources?: unknown }).resources).toEqual([icons]);
+  });
+
   it("ignores tampered request fields and executes only the stored definition", async () => {
     const { run, calls } = await rig();
     await run(

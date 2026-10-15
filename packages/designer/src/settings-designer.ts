@@ -3,13 +3,23 @@
  * preferences, one titled subsection per section. This version edits
  * `defaultThemes` (the theme light hosts and dark hosts get when a render
  * names none; one choice per mode, so choosing a theme replaces the mode's
- * previous one) and `resourceDomains` (the domains MCP Apps frames may load
- * images from directly), each entry checked live by the core rule the store
- * applies: a valid one is recorded canonical, an invalid one as typed, so
- * the save's refusal names what the person sees. Sections it does not edit
+ * previous one), `resourceDomains` (the domains MCP Apps frames may load
+ * assets from directly) and `resources` (the stylesheets those frames link),
+ * each entry checked live by the core rule the store applies: a valid one is
+ * recorded canonical, an invalid one as typed, so the save's refusal names
+ * what the person sees. A stylesheet no listed domain covers is marked with
+ * the domain to add, as the store would refuse it. Sections it does not edit
  * pass through untouched, and the host saves (the designer writes nothing).
  */
-import { RESOURCE_DOMAIN_LIMIT, isPlainObject, parseResourceDomain } from "@widgentic/core";
+import {
+  RESOURCE_DOMAIN_LIMIT,
+  RESOURCE_LIMIT,
+  isPlainObject,
+  parseResource,
+  parseResourceDomain,
+  resourceCovered,
+  resourceHost
+} from "@widgentic/core";
 import type { ThemeEntry, ThemeMode } from "@widgentic/core";
 import { applyChrome, diagnosticLine, h, injectDesignerStyles, section } from "./dom.js";
 import type { ChromeOptions } from "./dom.js";
@@ -20,7 +30,16 @@ export interface SettingsRecord {
   defaultThemes?: Partial<Record<ThemeMode, string>>;
   /** Canonical origins, plus any entry the person typed that the rule refuses. */
   resourceDomains?: string[];
+  /** Stylesheets: canonical when the rule accepts them, else as typed. */
+  resources?: SettingsStylesheet[];
   [section: string]: unknown;
+}
+
+/** One stylesheet entry as the designer records it. */
+export interface SettingsStylesheet {
+  type: "stylesheet";
+  href: string;
+  integrity?: string;
 }
 
 export interface SettingsDesignerOptions {
@@ -59,6 +78,10 @@ function checkSettings(settings: unknown): string[] {
   const domains = settings.resourceDomains;
   if (domains !== undefined && (!Array.isArray(domains) || !domains.every((entry) => typeof entry === "string"))) {
     errors.push("resourceDomains: must be a list of domain strings.");
+  }
+  const sheets = settings.resources;
+  if (sheets !== undefined && (!Array.isArray(sheets) || !sheets.every((entry) => isPlainObject(entry)))) {
+    errors.push("resources: must be a list of { type: \"stylesheet\", href, integrity? } objects.");
   }
   const themes = settings.defaultThemes;
   if (themes === undefined) return errors;
@@ -161,6 +184,8 @@ export function createSettingsDesigner(
   function setDomains(next: string[]): void {
     record = { ...record, resourceDomains: next };
     renderDomains();
+    // Coverage follows the list: a stylesheet's mark clears once its domain is listed.
+    renderSheets();
     notify();
   }
 
@@ -205,8 +230,8 @@ export function createSettingsDesigner(
 
   const domainsPanel = section("Resource domains", [
     h("span", { class: "wgd-field-label" }, [
-      "Domains your widgets' images may load from directly in chat hosts that honor them, " +
-        "when the server does not copy an image inline. Enter cdn.example.com or *.example.com, " +
+      "Domains your widgets' images, stylesheets and fonts may load from directly in chat hosts " +
+        "that honor them (images only when the server does not copy them inline). Enter cdn.example.com or *.example.com, " +
         `optionally with https:// (no ports, paths or IP addresses), at most ${RESOURCE_DOMAIN_LIMIT}.`
     ]),
     h("span", { class: "wgd-field-label" }, [
@@ -220,6 +245,113 @@ export function createSettingsDesigner(
   panels.append(domainsPanel);
   renderDomains();
 
+  // --- Stylesheets -------------------------------------------------------
+  // Present in the record once supplied or edited, like the domains.
+  const sheetRows = h("div", { class: "wgd-stylesheets" });
+  const sheetInput = h("input", {
+    type: "text",
+    class: "wgd-input wgd-stylesheet-add",
+    placeholder: "https://fonts.googleapis.com/icon?family=Material+Icons",
+    spellcheck: "false",
+    "aria-label": "Add a stylesheet"
+  });
+  const sheetButton = h("button", { class: "wgd-icon", type: "button", title: "Add stylesheet" }, ["+"]);
+
+  /** A typed stylesheet as the record keeps it: canonical when the rule accepts it, else as typed. */
+  function recordedSheet(href: string, integrity: string): SettingsStylesheet {
+    const typed: SettingsStylesheet = {
+      type: "stylesheet",
+      href: href.trim(),
+      ...(integrity.trim() === "" ? {} : { integrity: integrity.trim() })
+    };
+    const parsed = parseResource(typed);
+    return "error" in parsed ? typed : { ...parsed.resource };
+  }
+
+  /** What a stylesheet row says under its inputs: the rule's reason, the domain to add, or nothing. */
+  function sheetMark(entry: SettingsStylesheet): { text: string; error: boolean } | undefined {
+    const parsed = parseResource(entry);
+    if ("error" in parsed) return { text: `Not a stylesheet: ${parsed.error}.`, error: true };
+    if (!resourceCovered(parsed.resource.href, record.resourceDomains ?? [])) {
+      return { text: `Add ${resourceHost(parsed.resource.href)} under Resource domains, or chat hosts block it.`, error: true };
+    }
+    return undefined;
+  }
+
+  function setSheets(next: SettingsStylesheet[]): void {
+    record = { ...record, resources: next };
+    renderSheets();
+    notify();
+  }
+
+  function renderSheets(): void {
+    const sheets = record.resources ?? [];
+    sheetRows.replaceChildren(
+      ...sheets.map((entry, index) => {
+        const href = h("input", { type: "text", class: "wgd-input wgd-stylesheet", spellcheck: "false", "aria-label": `Stylesheet ${index + 1}` });
+        href.value = typeof entry.href === "string" ? entry.href : "";
+        const integrity = h("input", {
+          type: "text",
+          class: "wgd-input wgd-stylesheet-integrity",
+          spellcheck: "false",
+          placeholder: "integrity (optional): sha384-…",
+          "aria-label": `Stylesheet ${index + 1} integrity`
+        });
+        integrity.value = typeof entry.integrity === "string" ? entry.integrity : "";
+        const edit = () => {
+          const next = [...sheets];
+          next[index] = recordedSheet(href.value, integrity.value);
+          setSheets(next);
+        };
+        href.addEventListener("change", edit);
+        integrity.addEventListener("change", edit);
+        const remove = h("button", { class: "wgd-icon", type: "button", title: "Remove stylesheet" }, ["✕"]);
+        remove.addEventListener("click", () => setSheets(sheets.filter((_entry, at) => at !== index)));
+        const mark = sheetMark(entry);
+        return h("div", { class: "wgd-stylesheet-entry" }, [
+          h("div", { class: "wgd-row" }, [href, remove]),
+          integrity,
+          ...(mark === undefined ? [] : [diagnosticLine(mark.text)])
+        ]);
+      })
+    );
+    const full = sheets.length >= RESOURCE_LIMIT;
+    sheetInput.disabled = full;
+    sheetButton.disabled = full;
+  }
+
+  function addSheet(): void {
+    if (sheetInput.value.trim() === "" || (record.resources ?? []).length >= RESOURCE_LIMIT) return;
+    const entry = recordedSheet(sheetInput.value, "");
+    sheetInput.value = "";
+    setSheets([...(record.resources ?? []), entry]);
+  }
+  sheetButton.addEventListener("click", addSheet);
+  sheetInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      addSheet();
+    }
+  });
+
+  const sheetsPanel = section("Stylesheets", [
+    h("span", { class: "wgd-field-label" }, [
+      "Stylesheets every frame of your widgets loads, before the widgets' own styles: an icon font, say, " +
+        "whose classes your templates can then use. Enter an https:// address on one of your resource " +
+        `domains, at most ${RESOURCE_LIMIT}. A stylesheet's fonts come from their own domain ` +
+        "(fonts.gstatic.com for Google Fonts), which must be listed too."
+    ]),
+    h("span", { class: "wgd-field-label" }, [
+      "A stylesheet styles everything in the frame and may load from your domains, so add only " +
+        "stylesheets you trust. An integrity value pins one that must not change; a stylesheet that " +
+        "varies by browser, such as Google Fonts', cannot be pinned."
+    ]),
+    sheetRows,
+    h("div", { class: "wgd-row" }, [sheetInput, sheetButton])
+  ]);
+  panels.append(sheetsPanel);
+  renderSheets();
+
   function loadSettings(settings: unknown): SettingsLoadResult {
     const errors = checkSettings(settings);
     if (errors.length > 0) return { ok: false, errors };
@@ -229,6 +361,7 @@ export function createSettingsDesigner(
       if (select !== undefined) fillSelect(select, mode, builtIn);
     }
     renderDomains();
+    renderSheets();
     notify();
     return { ok: true };
   }

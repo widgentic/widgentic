@@ -144,6 +144,8 @@ function openWidgetDesigner(widget?: unknown, readOnly = false): void {
     actions: myActions,
     secretNames: mySecrets.map((s) => s.name),
     previewFrame: PREVIEW_FRAME,
+    // The person's stylesheets: the island links them under its frame policy.
+    resources: mySettings?.resources ?? [],
     readOnly
   });
 }
@@ -210,7 +212,12 @@ let selectedTheme: string | undefined;
 function openThemeDesigner(load?: unknown, readOnly = false): void {
   // The principal's own widgets join the preview-kind selector: a theme is
   // judged against the widgets it will actually dress.
-  themeDesigner = mountTheme($("theme-designer"), themeDesigner, { widgets: myWidgets, previewFrame: PREVIEW_FRAME, readOnly });
+  themeDesigner = mountTheme($("theme-designer"), themeDesigner, {
+    widgets: myWidgets,
+    previewFrame: PREVIEW_FRAME,
+    resources: mySettings?.resources ?? [],
+    readOnly
+  });
   if (load !== undefined) {
     const result = themeDesigner.loadTheme(load);
     if (!result.ok) status(`load failed: ${result.errors.join("; ")}`, "error");
