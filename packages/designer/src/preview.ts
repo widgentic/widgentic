@@ -22,7 +22,7 @@ import type { WidgetMount } from "@widgentic/core";
 import { compileTemplate, validateTemplate } from "@widgentic/core";
 import { applyTheme, injectBaseStyles, themeStylesToCss, themeToCss, widgetStylesToCss } from "@widgentic/core";
 import type { WidgetStyles } from "@widgentic/core";
-import { h } from "./dom.js";
+import { h, injectPagePreviewStyles } from "./dom.js";
 import { createPreviewIsland } from "./preview-island.js";
 import type { PreviewIsland, PreviewScheme } from "./preview-island.js";
 import type { WidgetDraft } from "./store.js";
@@ -113,9 +113,12 @@ export function createPreview(options: PreviewOptions = {}): PreviewController {
   const scoped = (styles: Record<string, Record<string, string>>) =>
     themeStylesToCss(styles, `[data-wgd-scope="${scope}"]`);
   const islandUrl = options.previewFrame !== undefined && options.previewFrame !== "" ? options.previewFrame : undefined;
-  // Only an in-page preview needs the widget stylesheet in the page; the
-  // island's document carries its own.
-  if (islandUrl === undefined) injectBaseStyles(document);
+  // Only an in-page preview needs the widget stylesheet and its own rules
+  // in the page; the island's document carries its own.
+  if (islandUrl === undefined) {
+    injectBaseStyles(document);
+    injectPagePreviewStyles(document);
+  }
   // The island's empty state lives in the designer's document, like the banner.
   const emptyState = h("div", { class: "wgd-preview-empty" }, ["No preview: the draft has never been valid."]);
   emptyState.hidden = true;

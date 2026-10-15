@@ -102,7 +102,7 @@ Every message is accepted only when `event.source === iframe.contentWindow`. The
 - **Without it:** today's mount, untouched.
 - **Read-only mode** is unaffected: the preview stays live.
 - **`dispose`** removes the message listener and the iframe.
-- **No widget stylesheet in the page (added after the staging check).** In island mode the page does not get core's base widget stylesheet; only an in-page preview injects it. The browser agent found its 55 `.wg-*` rules in a page that no longer rendered a widget. The designer's own badge rule for the in-page preview stays in the chrome stylesheet, which both modes share.
+- **No widget stylesheet in the page (added after the staging check).** In island mode the page does not get core's base widget stylesheet; only an in-page preview injects it. The browser agent found its 55 `.wg-*` rules in a page that no longer rendered a widget. Its retest then found the in-page preview's own rules still in the chrome stylesheet: the "⚡ action" marker and the `.wgd-preview` surface. They now sit in a separate stylesheet (`data-widgentic-designer-preview`) that only an in-page preview injects.
 
 ### D9. The self-host example
 

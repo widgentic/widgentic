@@ -225,6 +225,28 @@ export function parseChromeAttribute(value: string | null): ChromeOptions | unde
 }
 
 const STYLE_MARKER = "data-widgentic-designer";
+const PAGE_PREVIEW_MARKER = "data-widgentic-designer-preview";
+
+/**
+ * The in-page preview's own rules, injected once per document by an
+ * in-page preview only: a page whose previews all run in the island
+ * carries none of them.
+ */
+export function injectPagePreviewStyles(doc: Document): void {
+  if (doc.head.querySelector(`style[${PAGE_PREVIEW_MARKER}]`)) return;
+  const style = doc.createElement("style");
+  style.setAttribute(PAGE_PREVIEW_MARKER, "page");
+  style.textContent = `
+/* The preview is the WIDGET's surface, not chrome: it establishes the
+   --wg-* context (like composePage does for page output) so widget content
+   — including custom kinds the base stylesheet doesn't color — never
+   inherits the designer's own text/background. */
+.wgd-preview { border: 1px dashed var(--wgd-border); border-radius: var(--wgd-radius-lg); padding: 16px; background: var(--wg-bg); color: var(--wg-fg); }
+.wgd-preview .wg-designer-action { position: relative; outline: 1px dashed var(--wgd-muted); outline-offset: 2px; }
+.wgd-preview .wg-designer-action::after { content: "⚡ action"; position: absolute; top: -0.9em; right: 0; font: calc(var(--wgd-font-size-xs) - 1px) var(--wgd-font); color: var(--wgd-muted); background: var(--wgd-panel); padding: 0 4px; border-radius: var(--wgd-radius-sm); pointer-events: none; }
+`;
+  doc.head.appendChild(style);
+}
 
 /** Designer chrome stylesheet — injected once per document. */
 export function injectDesignerStyles(doc: Document): void {
@@ -278,8 +300,6 @@ ${chromeCss(CHROME_DEFAULTS, {
 .wgd-input, .wgd-textarea, .wgd-select { font: inherit; padding: 4px 6px; border: 1px solid var(--wgd-border); border-radius: var(--wgd-radius); background: var(--wgd-bg); color: var(--wgd-text); }
 /* Textareas fill their panel regardless of the intrinsic cols width. */
 .wgd-textarea { font-family: var(--wgd-font-mono); white-space: pre; width: 100%; box-sizing: border-box; min-width: 0; resize: vertical; }
-.wgd-preview .wg-designer-action { position: relative; outline: 1px dashed var(--wgd-muted); outline-offset: 2px; }
-.wgd-preview .wg-designer-action::after { content: "⚡ action"; position: absolute; top: -0.9em; right: 0; font: calc(var(--wgd-font-size-xs) - 1px) var(--wgd-font); color: var(--wgd-muted); background: var(--wgd-panel); padding: 0 4px; border-radius: var(--wgd-radius-sm); pointer-events: none; }
 .wgd-binding { display: flex; flex-direction: column; gap: 6px; padding: 6px 8px; border: 1px dashed var(--wgd-border); border-radius: var(--wgd-radius); margin: 4px 0; }
 .wgd-binding-field { min-width: 8ch; font-family: var(--wgd-font-mono); font-size: var(--wgd-font-size-sm); }
 .wgd-action-definition { display: flex; flex-direction: column; gap: 6px; }
@@ -287,11 +307,6 @@ ${chromeCss(CHROME_DEFAULTS, {
 .wgd-test-output { font: var(--wgd-font-size-sm) var(--wgd-font-mono); white-space: pre-wrap; word-break: break-all; max-height: 240px; overflow: auto; margin: 6px 0 0; }
 .wgd-diagnostic { color: var(--wgd-danger); font-size: var(--wgd-font-size-sm); white-space: pre-wrap; }
 .wgd-banner { border: 1px solid var(--wgd-danger-line); background: var(--wgd-danger-bg); color: var(--wgd-danger); border-radius: var(--wgd-radius-lg); padding: 8px 10px; margin-bottom: 8px; }
-/* The preview is the WIDGET's surface, not chrome: it establishes the
-   --wg-* context (like composePage does for page output) so widget content
-   — including custom kinds the base stylesheet doesn't color — never
-   inherits the designer's own text/background. */
-.wgd-preview { border: 1px dashed var(--wgd-border); border-radius: var(--wgd-radius-lg); padding: 16px; background: var(--wg-bg); color: var(--wg-fg); }
 .wgd-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .wgd-button { font: inherit; padding: 4px 10px; border: 1px solid var(--wgd-border); border-radius: var(--wgd-radius); background: var(--wgd-bg); color: var(--wgd-text); cursor: pointer; }
 .wgd-button:hover { background: var(--wgd-hover); }

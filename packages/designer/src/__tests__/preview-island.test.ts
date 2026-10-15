@@ -192,6 +192,8 @@ describe("the preview island", () => {
     expect(pageCss).not.toContain("rgb(4, 5, 6)");
     // Nor does the page get the widget stylesheet: the frame's document has its own.
     expect(document.head.querySelector("style[data-widgentic]")).toBeNull();
+    expect(document.head.querySelector("style[data-widgentic-designer-preview]")).toBeNull();
+    expect(pageCss).not.toContain("wg-designer-action");
   });
 
   it("dispose removes the frame and stops listening", () => {
@@ -209,6 +211,7 @@ describe("the preview island", () => {
     expect(container.querySelector("iframe")).toBeNull();
     expect(container.querySelector(".wgd-preview")?.textContent).toContain("Ada");
     expect(document.head.querySelector("style[data-widgentic]")).not.toBeNull();
+    expect(document.head.querySelector("style[data-widgentic-designer-preview]")?.textContent).toContain(".wgd-preview .wg-designer-action::after");
   });
 
   it("the theme designer previews catalog kinds in the island too", () => {

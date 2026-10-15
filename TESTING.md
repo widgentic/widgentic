@@ -419,6 +419,8 @@ workspace and the sample first, then point at the built DLL):
       - The page no longer gets core's widget stylesheet in island mode. It had carried 55 unused `.wg-*` rules; a test now pins that the stylesheet is absent.
       - The person's dark default not being previewable is queued as BACKLOG THM-4.
       - The page having no CSP of its own is queued as EXM-1.
+    - **Redeploy (`designer-preview-island-913cca6`, ACR run `cj3t`, revision `--0000030`).** Chrome on the demo: the page has no `style[data-widgentic]` and no `.wg-*` rule, and the frame renders the draft.
+    - **Agent retest on `--0000030`.** The base stylesheet is gone, but the chrome stylesheet still held the two `.wgd-preview .wg-designer-action` marker rules. Those rules and `.wgd-preview` moved to a stylesheet that only an in-page preview injects. Tests pin it: absent in island mode, present in page mode.
 
 - **Docs accuracy review (2026-10-14, on `bug/docs-accuracy`, mcp and webmcp patch pending release)**: a review of the hand-written docs against the code for the 13 changes archived since 2026-10-07. Four read-only reviewers, split by area, found about 65 issues, and four fixers on disjoint files corrected them.
   - **Agent-facing text.**
