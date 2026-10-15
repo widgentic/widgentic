@@ -1,7 +1,9 @@
 /**
  * The authoring surface: widgets, themes, schemas, shared actions, secrets
  * and API keys over plain request values, authorized by the host's resolved
- * principal and nothing else (authoring-api spec).
+ * principal and nothing else (authoring-api spec). One read route sits
+ * beside them: `GET /preview-frame` (preview-frame.ts), the designers'
+ * preview island, which answers HTML and degrades without a principal.
  *
  * The trust rules this module exists to enforce:
  *   - An API key never authorizes authoring. A presented key — valid or not —

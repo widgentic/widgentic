@@ -46,7 +46,7 @@ packages/core       @widgentic/core   contract, adapters, mapper, catalog, themi
 packages/designer   @widgentic/designer   widget/theme/schema/action designers, custom elements, src/browser.ts → single-file bundle
 packages/webmcp     @widgentic/webmcp   BETA: the designers as WebMCP tools (document.modelContext) — descriptor factory, feature-detected registration, dispose; outside the linked release group
 packages/mcp        @widgentic/mcp    output/ (tool-output convention), server/ (handlers, app template, actions, guarded fetch,
-                                      server.ts = createWidgenticServer behind ./sdk), authoring/ (./authoring — the hostable write surface),
+                                      server.ts = createWidgenticServer behind ./sdk), authoring/ (./authoring — the hostable write surface and the designers' preview frame),
                                       store/ (./store, ./store/sqlite, ./store/cosmos), secrets/ (./secrets, ./secrets/keyvault),
                                       host/ (./host — the runtime-neutral bundle for embedded engines; scripts/bundle-host.mjs)
 dotnet/              Widgentic.Mcp (NuGet, BETA, render-only): the ./host bundle on ClearScript V8 + WithWidgentic on the C# MCP SDK;

@@ -37,7 +37,7 @@ See proposal.md for the motivation. Current state:
 ### D1. The island is the app template; the designer is a minimal host
 
 The frame document is `buildAppTemplate()`, the bytes hosts mount, served by the authoring surface.
-- **The designer side.** It speaks just enough of the MCP Apps protocol: answer `ui/initialize` with `hostContext.theme` and no `hostCapabilities`, answer `ping`, hold messages until `initialized`, send one `ui/notifications/tool-result` per previewable revision, and apply `size-changed` to the iframe height.
+- **The designer side.** It speaks just enough of the MCP Apps protocol: answer `ui/initialize` with `hostContext` (the theme, and since D7's revision the host style variables) and no `hostCapabilities`, answer `ping`, hold messages until `initialized`, send one `ui/notifications/tool-result` per previewable revision, and apply `size-changed` to the iframe height.
 - **Parity comes from the bridge.** The bridge does the mounting and keyed patching, and applies CSS and host context, so the island cannot drift from what hosts show.
 - **Alternatives rejected:**
   - *A purpose-built frame page with its own mount script.* It would be a second renderer to keep in step with the template.
@@ -88,7 +88,7 @@ Every message is accepted only when `event.source === iframe.contentWindow`. The
 
 ### D7. The color scheme
 
-`hostContext.theme` follows the designer's scheme: the host page's `data-theme` on `<html>` when it is `light` or `dark`, otherwise `prefers-color-scheme`. A change re-sends `ui/notifications/host-context-changed`, which the bridge applies. Hosts behave this way, and the preview then matches the chrome around it.
+`hostContext.theme` follows the designer's scheme: its pinned `appearance` when set, else the host page's `data-theme` on `<html>` when it is `light` or `dark`, otherwise `prefers-color-scheme`. A change re-sends `ui/notifications/host-context-changed`, which the bridge applies. Hosts behave this way, and the preview then matches the chrome around it.
 
 **Revised during apply: the host palette.** The Chrome check (task 4.1) showed a dark page giving a frame with `data-theme="dark"` but a white background. The template maps eight tokens (`bg`, `fg`, `muted`, `border`, `accent`, `font-family`, `radius`, `shadow`) onto MCP Apps host style variables, whose fallbacks are the light defaults. Its dark overrides deliberately skip those eight, because hosts supply them. A host that sends only `theme` therefore gets light colors in dark mode.
 - **The fix.** The designer now sends `hostContext.styles.variables` as well, valued from the built-in theme of the scheme: `darkTheme` in dark mode, the `TOKEN_SPECS` defaults otherwise. It sends them on initialize and on every scheme change.

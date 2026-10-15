@@ -74,7 +74,7 @@ The designer SHALL preview the draft continuously through widgentic's own pipeli
 - **THEN** the preview pane SHALL show an explicit empty state rather than nothing, with the structured error in the banner
 
 ### Requirement: Theme styles in the widget designer's preview
-When the widget designer's preview theme is a supplied entry carrying `styles`, the preview SHALL apply those styles beneath the draft's own descriptor styles, so classes a theme defines (a shared `.wg-btn`, say) look in the draft as they will in a render under that theme. Choosing "none" SHALL apply no theme styles. The selection SHALL still never reach the exported widget. Every style a designer preview emits — the theme's and the widget's own, in the widget designer and in the theme designer — SHALL be scoped to that preview at no added weight while the preview shares the host page's DOM (the in-page mode): a widget's rule SHALL NOT reach a matching element elsewhere on the page. In island mode the preview has its own document, so the styles SHALL be emitted unscoped, exactly as a render emits them.
+When the widget designer's preview theme is a supplied entry carrying `styles`, the preview SHALL apply those styles beneath the draft's own descriptor styles, so classes a theme defines (a shared `.wg-btn`, say) look in the draft as they will in a render under that theme. Choosing "none" SHALL apply no theme styles. The selection SHALL still never reach the exported widget. Every style a designer preview emits — the theme's and the widget's own, in the widget designer and in the theme designer — SHALL be scoped to that preview at no added weight while the preview shares the host page's DOM (the in-page mode): a widget's rule SHALL NOT reach a matching element elsewhere on the page. In island mode the preview has its own document, so the styles SHALL be emitted unscoped, exactly as a render emits them, and the page SHALL receive neither core's widget stylesheet nor the in-page preview's own rules.
 
 #### Scenario: A preview theme's shared class dresses the draft
 - **WHEN** the preview theme defines `.wg-btn { color: rgb(1, 2, 3) }` and the draft's template renders a `button` with class `wg-btn`
@@ -89,3 +89,4 @@ When the widget designer's preview theme is a supplied entry carrying `styles`, 
 - **WHEN** a widget designer with a `previewFrame` previews a draft whose styles color `.wg-title`, and the page holds another `.wg-title` element outside the designer
 - **THEN** the CSS the designer sends to the frame SHALL carry the rule with the selector `.wg-title`, unscoped
 - **AND** the element outside SHALL NOT take the color
+- **AND** the page SHALL carry no widget stylesheet and no in-page preview rule

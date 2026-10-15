@@ -3,8 +3,9 @@
  * this side of the boundary that touches request and response objects. It
  * decodes (URL, method, size-capped JSON body, presented-credential
  * detection), asks the host who is calling, hands plain values to the core,
- * and writes the answer. It adds no route behavior — the same operation
- * through the core and through this adapter yields the same status and body —
+ * and writes the answer: JSON, or the preview frame's HTML with the core's
+ * own headers. It adds no route behavior — the same operation through the
+ * core and through this adapter yields the same status and body —
  * and it CONTAINS the host's principal resolution: a store rejection thrown
  * there keeps the surface's mapped refusal, anything else answers the
  * surface's INTERNAL with the trace on the log sink, and no rejection ever

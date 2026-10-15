@@ -165,6 +165,13 @@ describe("the preview island", () => {
     expect(sent.find((m) => m.method === "ui/notifications/host-context-changed")?.params).toMatchObject({ theme: "light" });
   });
 
+  it("follows a pinned appearance over the page's scheme", () => {
+    document.documentElement.setAttribute("data-theme", "light");
+    const { sent, boot } = islandDesigner({ appearance: "dark" });
+    boot();
+    expect(sent.find((m) => m.id === 1)?.result).toMatchObject({ hostContext: { theme: "dark" } });
+  });
+
   it("hands the frame the built-in palette of its scheme, as a host hands its own", async () => {
     document.documentElement.setAttribute("data-theme", "dark");
     const { sent, boot } = islandDesigner();
