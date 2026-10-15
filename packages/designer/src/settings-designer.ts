@@ -231,7 +231,7 @@ export function createSettingsDesigner(
   const domainsPanel = section("Resource domains", [
     h("span", { class: "wgd-field-label" }, [
       "Domains your widgets' images, stylesheets and fonts may load from directly in chat hosts " +
-        "that honor them, when the server does not copy an image inline. Enter cdn.example.com or *.example.com, " +
+        "that honor them (images only when the server does not copy them inline). Enter cdn.example.com or *.example.com, " +
         `optionally with https:// (no ports, paths or IP addresses), at most ${RESOURCE_DOMAIN_LIMIT}.`
     ]),
     h("span", { class: "wgd-field-label" }, [

@@ -444,6 +444,7 @@ workspace and the sample first, then point at the built DLL):
     - `.NET` treats a JSON-`null` caller record as no record, with a test: `dotnet test` 220.
     - Docs: the preview frame "connects nowhere" instead of "reaches no network", and the stylesheet delivery bullet explains why the operator's list only widens delivery.
     - A consistency sweep fixed the Resource domains intro (images, stylesheets and fonts), the trust model's exceptions, the `page` format rows, `CLAUDE.md`'s iframe invariant and the settings designer's own domain note.
+    - The re-check confirmed all six fixes. Its two wording nits are fixed: `CLAUDE.md` names the stylesheets' fonts, and the settings designer's note scopes "when the server does not copy them inline" to images.
 
 - **Designer preview island (2026-10-15, change `designer-preview-island`, on `feature/designer-preview-island`, designer/mcp minor pending release)**: the widget and theme designers can preview in the app template, framed, with the designer as a minimal MCP Apps host.
   - **The frame route** (`preview-frame.test.ts`, 7 tests).
