@@ -93,6 +93,8 @@ Two modes. **Define inline** edits `descriptor.dataSchema` through a builder and
 
 The preview renders the draft — and only the draft — against `dataExample` or sample data you supply, compiled by the public template compiler and mounted through `mountWidget`, so what you see is what a host receives. `dataExample` is cross-checked against the schema with dotted paths (`data.lines.0.amount`). Valid edits patch the mounted DOM in place. When the draft is invalid the preview freezes the last good render and shows the structured error in a banner; it is never blank, not even when the initial widget fails validation.
 
+In the app the preview runs in a frame: the same document MCP Apps hosts mount, under the policy your resource domains set. An image from a domain in **Settings** loads there and one from anywhere else is blocked, as in a conversation, and the app's own styles never reach the widget. The frame follows the app's light or dark mode.
+
 ### Preview theme and token reference
 
 A selector offers your saved themes plus a **none** choice for the built-in defaults. Beside it, a read-only listing shows the effective tokens — name, value, and a swatch for color-typed tokens — so styles can reach for `var(--wg-…)` by sight. The widget designer does not edit tokens (that is the [theme designer](/design/themes)), and the selected theme never leaks into the export.

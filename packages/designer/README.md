@@ -18,6 +18,16 @@ const designer = createDesigner(document.querySelector("#host")!, { themes: [] }
 designer.subscribe((draft) => save(draft));
 ```
 
+With `previewFrame` (the `preview-frame` attribute on the elements), the
+widget and theme designers preview in a frame instead of the page: the MCP
+Apps app template served by `@widgentic/mcp/authoring`'s `GET /preview-frame`,
+with the designer as its host. The preview then renders as hosts render it,
+under the same image and style policy, isolated from the page's styles:
+
+```ts
+createDesigner(host, { previewFrame: "/api/preview-frame" });
+```
+
 Without a bundler, load the single-file bundle and use the elements:
 
 ```html

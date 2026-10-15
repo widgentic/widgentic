@@ -36,6 +36,12 @@ export interface DesignerOptions {
    */
   previewTheme?: string;
   /**
+   * The URL of a preview frame — an authoring surface's `/preview-frame` —
+   * to preview in an isolated island under the frame policy MCP Apps hosts
+   * apply. Without it the preview runs in the page.
+   */
+  previewFrame?: string;
+  /**
    * Shared data schemas the draft may reference by name (the Data schema
    * section's "use shared" mode). Schema authoring belongs to the
    * standalone schema designer; the widget designer only selects.
@@ -123,7 +129,10 @@ export function createDesigner(
     (draft: WidgetDraft, diagnostics: DesignerDiagnostics) => void
   >();
 
-  const preview = createPreview({ actions: options.actions ?? [] });
+  const preview = createPreview({
+    actions: options.actions ?? [],
+    ...(options.previewFrame === undefined ? {} : { previewFrame: options.previewFrame })
+  });
   const leftColumn = h("div", { class: "wgd-panels" });
   const rightSections = h("div", { class: "wgd-preview-pane" });
   const rightColumn = h("div", { class: "wgd-side" }, [preview.pane, rightSections]);

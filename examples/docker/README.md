@@ -18,6 +18,11 @@ docker compose up --build
 #    http://localhost:8081/mcp on the next tool call, no restart.
 ```
 
+The widget and theme designers preview in the authoring surface's
+`/api/preview-frame`: the document MCP Apps hosts mount, under the image and
+style policy the MCP endpoint declares for you (the resource domains in
+**Settings**), so a preview loads exactly what a conversation would.
+
 Mint a key under **Keys** (shown exactly once, together with the ready-to-paste
 `…/mcp?key=…` form). The Keys section also names the endpoint hosts connect
 to — `http://<host>:8081/mcp` by default, this origin's `/mcp` when the web

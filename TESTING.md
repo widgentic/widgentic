@@ -382,6 +382,31 @@ workspace and the sample first, then point at the built DLL):
 
 ## Verification log
 
+- **Designer preview island (2026-10-15, change `designer-preview-island`, on `feature/designer-preview-island`, designer/mcp minor pending release)**: the widget and theme designers can preview in the app template, framed, with the designer as a minimal MCP Apps host.
+  - **The frame route** (`preview-frame.test.ts`, 7 tests).
+    - `GET /preview-frame` serves `buildAppTemplate()` byte for byte.
+    - The policy lists the operator's domains, then the principal's, deduplicated, in `img-src`, `style-src`, `font-src` and `media-src`.
+    - `script-src` holds one hash per inline script, each recomputed from the body.
+    - Anonymous: the operator's domains alone, and a bare `font-src 'none'` with none. A failing settings read degrades the same way and is logged.
+    - API keys get 401; POST gets 404, or 401 when anonymous.
+    - The Node adapter sends the core's status, headers and body, and no cookie.
+  - **The island** (`preview-island.test.ts`, 15 tests, with a fake frame window).
+    - Results are held until `initialized`; tree and CSS order match the in-page pipeline; one more result per edit through the same frame; nothing for an invalid draft.
+    - `tools/call` is refused with no fetch, and `ui/message` composes nothing. Links: `https` opens with `noopener`, `javascript:` is refused.
+    - The frame's height follows `size-changed`, and messages from a stranger window are ignored.
+    - The scheme follows the page, with the built-in palette as host variables.
+    - Styles go only to the frame; dispose removes the frame and its listener; there is no frame without the option; the theme designer and the element attribute work.
+  - **Parity** (`preview-island-parity.test.ts`). For the same widget and theme, the island's tree equals `render_widget`'s `structuredContent.tree`, and its CSS is the render's CSS byte for byte plus the badge rule. The island supplies exactly the host variables the template's bridge reads, with the built-in dark values.
+  - **Chrome 151 against the example** (`examples/docker` web on a scratch SQLite, seeded). A probe widget had a styled title, a `api.dicebear.com` image, a `picsum.photos` image and 12 rows. The page added `.wg-title { text-decoration: underline wavy; letter-spacing: 7px }` and its own `h2.wg-title`.
+    - **Isolation.** The frame's sandbox is `allow-scripts` and its origin `null`, and `window.parent.document` throws. The title is `rgb(4, 5, 6)` with no decoration and normal letter spacing. The page's `h2.wg-title` keeps the page color, and no page stylesheet carries the draft's rule.
+    - **Images.** The declared image loads (`naturalWidth` 150). The undeclared one is blocked by `img-src`, as the console reports.
+    - **Height.** The iframe is 331 px, the frame document's `scrollHeight`.
+    - **Color scheme.** A dark page first gave `data-theme="dark"` on a white background. The template bridges eight tokens to host variables, and a host must supply them (design D7, revised). With the palette sent, the built-in preview turned `#0f131c` on `#e5e9f0`. A picked theme (google-light) stays light in both modes, as an explicit render theme does.
+    - **Edits.** They patch the same frame.
+  - **The example** (D9, revised). Its MCP endpoint declares only each person's domains, so the web service passes no operator list. `app.test.ts` checks the frames on `/api/preview-frame` for widgets and themes, and a person's policy carrying their domain.
+  - **Tests.** Every happy-dom suite now sets `disableIframePageLoading`, so a mounted island never reaches the network.
+  - **Gates.** Typecheck, `npm test` (1861 passed, 1 skipped), build, `pack:check`, docs check, `openspec validate --strict` and `--specs` (19), and `dotnet test` (209).
+
 - **Docs accuracy review (2026-10-14, on `bug/docs-accuracy`, mcp and webmcp patch pending release)**: a review of the hand-written docs against the code for the 13 changes archived since 2026-10-07. Four read-only reviewers, split by area, found about 65 issues, and four fixers on disjoint files corrected them.
   - **Agent-facing text.**
     - The authoring guides' safety rule said bindings "can never inject markup". It now states the Markdown bind exception, with the tag list from `MARKDOWN_TAGS`.

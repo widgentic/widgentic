@@ -269,6 +269,7 @@ ${chromeCss(CHROME_DEFAULTS, {
 .wgd-panels { flex: 1 1 460px; min-width: 340px; display: flex; flex-direction: column; gap: 8px; }
 .wgd-side { flex: 1 1 420px; min-width: 320px; display: flex; flex-direction: column; gap: 8px; position: sticky; top: 8px; }
 .wgd-preview-pane { display: flex; flex-direction: column; gap: 8px; }
+.wgd-preview-frame { display: block; width: 100%; border: 0; }
 .wgd-section { border: 1px solid var(--wgd-border); border-radius: var(--wgd-radius-lg); padding: 6px 10px; background: var(--wgd-panel); }
 .wgd-section-title { cursor: pointer; font-weight: 600; }
 .wgd-section-body { display: flex; flex-direction: column; gap: 8px; padding-top: 8px; }

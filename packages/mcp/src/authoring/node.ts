@@ -13,7 +13,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { BodyTooLargeError, readBodyText } from "../server/index.js";
 import { handleAuthoringRequest, internalRefusal, logSink, storeRefusal } from "./handler.js";
-import type { AuthoringDeps, PrincipalContext, ResolvePrincipalContext } from "./types.js";
+import type { AuthoringDeps, AuthoringResponse, PrincipalContext, ResolvePrincipalContext } from "./types.js";
 
 /** Top-level body fields a credential travels in; a string value in any of them is a presented key. */
 const KEY_BODY_FIELDS = ["key", "apiKey", "api_key", "x-api-key"] as const;
@@ -71,7 +71,7 @@ export function createAuthoringHttpHandler(
     // mapped refusal, anything else becomes the surface's INTERNAL, with
     // the trace on the log sink and nothing about it in the body.
     let context: PrincipalContext | undefined;
-    let failure: { status: number; body: unknown } | undefined;
+    let failure: AuthoringResponse | undefined;
     if (!presentedApiKey) {
       try {
         context = await resolveContext(req);
@@ -96,6 +96,11 @@ export function createAuthoringHttpHandler(
           },
           deps
         );
+    if (response.html !== undefined) {
+      res.writeHead(response.status, response.headers ?? { "Content-Type": "text/html; charset=utf-8" });
+      res.end(response.html);
+      return true;
+    }
     res.writeHead(response.status, { "Content-Type": "application/json" });
     res.end(JSON.stringify(response.body));
     return true;
