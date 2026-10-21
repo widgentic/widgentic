@@ -398,6 +398,10 @@ workspace and the sample first, then point at the built DLL):
   - **Corpus** (`corpus-dates`). It covers an offset, an unzoned value, an epoch and `soon` across the three zones and a `value`-zone `title`, plus a `page` render showing the viewer zone's UTC text. The .NET suite runs it (229 tests).
   - **Demo seed.** The agenda's `startsAt`/`endsAt` use `viewer`, and the inbox's `receivedAt` uses `value`. Their examples carry `-05:00`.
   - **Gates.** Typecheck, 1,994 tests, build, `pack:check`, `docs:check`, OpenSpec strict and specs, and `dotnet test` (229) all pass.
+  - **Staging** (`date-time-zones-a853bb4`, revision `--0000036`).
+    - A keyed agenda render carries 4 `time` elements: `09:15-05:00` becomes `datetime="2026-09-03T14:15:30.000Z"` over the UTC text `2026-09-03 14:15`.
+    - The inbox renders `09:15` and `08:30` as written.
+    - The served template carries the zone walker, and the probe is gone.
 
 - **Encoded prefix values (2026-10-21, change `encode-prefixed-url-values`, on `bug/encode-prefixed-url-values`, core/designer/mcp/webmcp patch pending release)**: a value composed behind an author's URL prefix is percent-encoded, so data cannot restructure the URL.
   - **The report, reproduced on 0.14.0.** A `src` with prefix `https://api.dicebear.com/9.x/initials/svg?seed=` over `Ada & Lin?x=1#y` rendered the value raw, so the service received `seed=Ada `. A `hints.links` prefix and the app template's streamed preview did the same. Whole URLs bound with no prefix were already correct.

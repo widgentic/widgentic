@@ -58,10 +58,12 @@
 ## 6. Gates and staging
 
 - [x] 6.1 Run the gates: typecheck, `npm test`, build, `pack:check`, `docs:check`, `openspec validate --strict date-time-zones` and `--specs`, and `dotnet test`.
-- [ ] 6.2 Deploy the branch to staging and check from the served bytes:
+- [x] 6.2 Deploy the branch to staging and check from the served bytes. Staging now runs `date-time-zones-a853bb4` (ACR cj41, revision `--0000036`), replacing the probe. Checked:
   - a keyed render of the seeded agenda carries `time` elements with `datetime` and `data-wg-date`;
   - the inbox shows the value's own offset time;
   - the served template carries the localizing bridge.
+
+  Result: a keyed render of the agenda example carries 4 `time` elements (for example `datetime="2026-09-03T14:15:30.000Z"` over UTC text `2026-09-03 14:15`) in both the tree and the HTML. The inbox shows `09:15` and `08:30` as written. The template carries `zonedText` and `rezone`, and no probe.
 - [ ] 6.3 Owner leg, in a fresh chat on each host:
   - the agenda's times show in the viewer's local time;
   - the inbox shows the times as the values state them;
