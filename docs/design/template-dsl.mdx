@@ -97,7 +97,17 @@ Non-ASCII characters are encoded as UTF-8 (`José` → `Jos%C3%A9`). Pass raw va
 }
 ```
 
-Against `{ "ask": "3206.9905920000", "date": "2026-09-01T02:04:47.257871358" }` that renders `$3,207 @ 01-09-2026 02:04`. An unzoned timestamp is read as UTC and formatted in UTC, and the default locale is fixed at `en-US`, so a server render, a designer preview and an action's re-render agree byte for byte — anything else would make the in-place patcher see phantom text changes.
+Against `{ "ask": "3206.9905920000", "date": "2026-09-01T02:04:47.257871358" }` that renders `$3,207 @ 01-09-2026 02:04`. An unzoned timestamp is read as UTC, and the default locale is fixed at `en-US`, so a server render, a designer preview and an action's re-render agree byte for byte — anything else would make the in-place patcher see phantom text changes.
+
+A date format's optional `zone` chooses the clock its tokens read:
+
+| `zone` | Shows | `2026-10-21T09:30:00-07:00` with `HH:mm` |
+|---|---|---|
+| `utc` (the default) | the instant in UTC | `16:30` |
+| `value` | the time the value itself states: its own offset, an unzoned value as written, an epoch number in UTC | `09:30` |
+| `viewer` | the viewer's local time, inside MCP Apps frames | `01:30` for a viewer in Tokyo |
+
+`utc` and `value` are computed by the renderer, so every surface agrees. `viewer` needs a viewer: the renderer wraps the text in `<time datetime="2026-10-21T16:30:00.000Z" data-wg-date="HH:mm">16:30</time>`, and the app template rewrites it in the host's `timeZone` when the host sends one, or else in the frame's own zone, which is the viewer's device zone. HTML fragments, `page` documents and text output have no viewer, so they show the UTC text. A frame can rewrite only text, so `viewer` is for text binds: on an attribute value it is refused with `INVALID_TEMPLATE_NODE`.
 
 The text formats present lists and text under the same rules. `count` renders an array's length, grouped (`1,234`). `join` joins an array's items with `separator` (default `", "`), puts the optional `last` before the final item, and with `field`, a plain dotted path such as `owner.name`, reads that path in each item; null and empty items are skipped. `truncate` keeps `length` code points (1 to 1000) and appends `ellipsis` (default `…`) when it cuts. `pluralize` picks one of its `forms`, keyed by plural category (`zero`, `one`, `two`, `few`, `many`, `other`; `other` is required), and replaces `{count}` with the grouped number. It reads a number, a numeric string or an array's length, uses a `zero` form for exactly 0, and otherwise follows the locale's plural rules. `count` and `pluralize` take an optional `locale`.
 

@@ -117,7 +117,8 @@
                       "bind": "receivedAt",
                       "format": {
                         "type": "date",
-                        "pattern": "yyyy-MM-dd HH:mm"
+                        "pattern": "yyyy-MM-dd HH:mm",
+                        "zone": "value"
                       }
                     }
                   ]
@@ -207,7 +208,7 @@
             "Work"
           ],
           "preview": "The latest draft is ready for review.",
-          "receivedAt": "2026-09-03T09:15:30",
+          "receivedAt": "2026-09-03T09:15:30-05:00",
           "subject": "Project update"
         },
         {
@@ -219,7 +220,7 @@
             "Planning"
           ],
           "preview": "Here are the topics for our weekly planning session.",
-          "receivedAt": "2026-09-03T08:30:00",
+          "receivedAt": "2026-09-03T08:30:00-05:00",
           "subject": "Friday agenda"
         }
       ],

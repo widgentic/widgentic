@@ -9,6 +9,8 @@ import {
   DATE_PATTERN_ALLOWED,
   DATE_PATTERN_MAX,
   DATE_TOKENS,
+  DATE_ZONES,
+  isDateZone,
   FORMAT_DECIMALS_MAX,
   FORMAT_DECIMALS_MIN,
   FORMAT_TYPES,
@@ -65,7 +67,8 @@ function nodeError(message: string, path: string): TemplateError {
 function checkFormat(
   spec: unknown,
   label: string,
-  path: string
+  path: string,
+  position: "text" | "attribute"
 ): TemplateError | undefined {
   const bad = (message: string): TemplateError => nodeError(`${label}: ${message}`, path);
   if (!isPlainObject(spec)) return bad("'format' must be an object.");
@@ -86,6 +89,15 @@ function checkFormat(
       return bad(
         `'format.pattern' must use at least one of ${DATE_TOKENS.join(", ")} and no stray letters.`
       );
+    }
+    if (spec.zone !== undefined && !isDateZone(spec.zone)) {
+      return bad(`'format.zone' must be one of ${DATE_ZONES.join(", ")}.`);
+    }
+    // The frame rewrites text nodes only, so a viewer zone on an attribute
+    // would silently render UTC.
+    if (spec.zone === "viewer" && position === "attribute") {
+      const here = DATE_ZONES.filter((zone) => zone !== "viewer").join(" or ");
+      return bad(`'format.zone' "viewer" is for text binds only, since a frame rewrites text, not attributes: use ${here} here.`);
     }
     return undefined;
   }
@@ -227,7 +239,7 @@ function check(node: unknown, path: string, depth: number): TemplateError | unde
       return nodeError("Bind: 'default' requires 'map'.", path);
     }
     if (node.format !== undefined) {
-      return checkFormat(node.format, "Bind", path);
+      return checkFormat(node.format, "Bind", path, "text");
     }
     return undefined;
   }
@@ -357,7 +369,7 @@ function check(node: unknown, path: string, depth: number): TemplateError | unde
             );
           }
           if (hasFormat) {
-            const formatError = checkFormat(value.format, `Attribute '${name}'`, attrPath);
+            const formatError = checkFormat(value.format, `Attribute '${name}'`, attrPath, "attribute");
             if (formatError) return formatError;
           }
           continue;

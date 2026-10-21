@@ -8,10 +8,12 @@
  *
  * Determinism is a hard requirement: server render, designer preview and
  * in-frame re-render must agree byte for byte, or the patcher would see
- * phantom text changes. Hence a fixed default locale, UTC throughout (an
- * unzoned ISO value is read as UTC — ECMAScript would read it as LOCAL
- * time), and ordinary spaces in numeric output (ICU builds differ in the
- * no-break spaces they emit).
+ * phantom text changes. Hence a fixed default locale, UTC unless a date's
+ * `zone` says otherwise (an unzoned ISO value is read as UTC — ECMAScript
+ * would read it as LOCAL time), and ordinary spaces in numeric output (ICU
+ * builds differ in the no-break spaces they emit). A date's `value` zone is
+ * as deterministic as UTC; its `viewer` zone renders UTC text that only the
+ * app template's frame rewrites, from the instant the renderer marks.
  *
  * Total by construction: a value the format cannot parse renders as its
  * plain `formatValue` text. A format never hides data and never throws.
@@ -53,6 +55,20 @@ export const CURRENCY_CODE = /^[A-Z]{3}$/;
  * order so `mm` cannot eat the tail of `MM`.
  */
 export const DATE_TOKENS = ["yyyy", "MM", "dd", "HH", "mm", "ss"] as const;
+
+/** The wall clock a date's tokens read. `utc`, the default, may be omitted. */
+export const DATE_ZONES = ["utc", "value", "viewer"] as const;
+
+export type DateZone = (typeof DATE_ZONES)[number];
+
+export const isDateZone = (value: unknown): value is DateZone =>
+  DATE_ZONES.some((zone) => zone === value);
+
+/** The zones as authors and agents read them, derived by every surface that documents the date format. */
+export const DATE_ZONE_RULE =
+  "zone: utc (the default) shows the instant in UTC; value shows the time the value itself states " +
+  "(its own offset, an unzoned value as written, an epoch number in UTC); viewer shows the viewer's " +
+  "local time inside MCP Apps frames and UTC everywhere else, and is for text binds only.";
 
 /** Characters a pattern may carry outside its tokens. */
 export const DATE_PATTERN_SEPARATORS = " -/:.,T";
@@ -137,6 +153,7 @@ export interface CurrencyFormatSpec {
 export interface DateFormatSpec {
   type: "date";
   pattern: string;
+  zone?: DateZone;
 }
 
 export interface CountFormatSpec {
@@ -230,15 +247,17 @@ function toFiniteNumber(value: unknown): number | undefined {
 }
 
 /**
- * Epoch milliseconds from an ISO-8601 string or an epoch number (seconds
- * below {@link EPOCH_SECONDS_BELOW}, milliseconds above). An unzoned value
- * is read as UTC; fractional seconds beyond three digits are truncated,
- * since `Date.parse` is not required to accept them.
+ * The instant an ISO-8601 string or an epoch number names (seconds below
+ * {@link EPOCH_SECONDS_BELOW}, milliseconds above), with the offset the
+ * value states in minutes. An unzoned value is read as UTC and states no
+ * offset, so it reads back as written; an epoch number states none either.
+ * Fractional seconds beyond three digits are truncated, since `Date.parse`
+ * is not required to accept them.
  */
-function toEpochMillis(value: unknown): number | undefined {
+function readDate(value: unknown): { millis: number; offset: number } | undefined {
   if (typeof value === "number") {
     if (!Number.isFinite(value)) return undefined;
-    return Math.abs(value) < EPOCH_SECONDS_BELOW ? value * 1000 : value;
+    return { millis: Math.abs(value) < EPOCH_SECONDS_BELOW ? value * 1000 : value, offset: 0 };
   }
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
@@ -252,7 +271,13 @@ function toEpochMillis(value: unknown): number | undefined {
   const millis = fraction === undefined ? "" : `.${fraction.slice(0, 3)}`;
   const clock = time === undefined ? "00:00:00" : time.length === 5 ? `${time}:00` : time;
   const parsed = Date.parse(`${date}T${clock}${millis}${zone ?? "Z"}`);
-  return Number.isFinite(parsed) ? parsed : undefined;
+  if (!Number.isFinite(parsed)) return undefined;
+  const stated = zone === undefined || zone === "Z" ? undefined : /^([+-])(\d{2}):?(\d{2})$/.exec(zone);
+  const offset =
+    stated === undefined || stated === null
+      ? 0
+      : (stated[1] === "-" ? -1 : 1) * (Number(stated[2]) * 60 + Number(stated[3]));
+  return { millis: parsed, offset };
 }
 
 const pad = (value: number, width: number): string => String(value).padStart(width, "0");
@@ -289,7 +314,8 @@ type Formatter = (value: unknown) => string;
 export function parseFormatSpec(spec: unknown): FormatSpec | undefined {
   if (!isPlainObject(spec) || !isFormatType(spec.type)) return undefined;
   if (spec.type === "date") {
-    return typeof spec.pattern === "string" ? { type: "date", pattern: spec.pattern } : undefined;
+    if (typeof spec.pattern !== "string") return undefined;
+    return { type: "date", pattern: spec.pattern, ...(isDateZone(spec.zone) ? { zone: spec.zone } : {}) };
   }
   const locale =
     typeof spec.locale === "string" && LOCALE_TAG.test(spec.locale) ? spec.locale : undefined;
@@ -371,9 +397,13 @@ function buildFormatter(spec: FormatSpec): Formatter {
   if (spec.type === "date") {
     const parts = tokenizeDatePattern(spec.pattern);
     if (parts === undefined) return plain;
+    // `value` reads the clock the value states; `utc` and `viewer` read
+    // UTC (the frame rewrites a viewer-zone date from its marked instant).
+    const stated = spec.zone === "value";
     return (value) => {
-      const millis = toEpochMillis(value);
-      return millis === undefined ? plain(value) : formatDate(millis, parts);
+      const read = readDate(value);
+      if (read === undefined) return plain(value);
+      return formatDate(stated ? read.millis + read.offset * 60_000 : read.millis, parts);
     };
   }
   const locale = spec.locale ?? DEFAULT_FORMAT_LOCALE;
@@ -487,6 +517,27 @@ export function compileFormat(spec: unknown): Formatter {
   const formatter = parsed === undefined ? plain : buildFormatter(parsed);
   compiled.set(spec, formatter);
   return formatter;
+}
+
+/**
+ * A viewer-zone date as the renderer marks it for the frame: the instant
+ * (ISO-8601 UTC), the pattern and the UTC text every other surface shows.
+ * `undefined` when `spec` is not a viewer-zone date or the value does not
+ * parse — it then renders as plain text, with nothing for the frame to
+ * rewrite.
+ */
+export function viewerDate(
+  value: unknown,
+  spec: unknown
+): { datetime: string; pattern: string; text: string } | undefined {
+  const parsed = parseFormatSpec(spec);
+  if (parsed === undefined || parsed.type !== "date" || parsed.zone !== "viewer") return undefined;
+  const parts = tokenizeDatePattern(parsed.pattern);
+  const read = readDate(value);
+  if (parts === undefined || read === undefined) return undefined;
+  const at = new Date(read.millis);
+  if (!Number.isFinite(at.getTime())) return undefined;
+  return { datetime: at.toISOString(), pattern: parsed.pattern, text: formatDate(read.millis, parts) };
 }
 
 /** Render `value` through `spec`, or as plain text when it cannot be parsed. */
