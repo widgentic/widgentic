@@ -398,7 +398,7 @@ workspace and the sample first, then point at the built DLL):
     - Address: a Google Maps query prefix.
     - Website: a whole URL with no prefix.
 
-    Its example renders `seed=Zo%C3%AB%20O'Brien`, `tel:+1%20(555)%20010-0199`, `query=12%20Main%20St%20%26%205th%20Ave%2C%20Apt%20%234%2C%20Springfield`, and the website with `&amp;` in the HTML.
+    Its example renders `seed=Zo%C3%AB%20O'Brien`, `tel:+1%20(555)%20010-0199`, `query=12%20Main%20St%20%26%205th%20Ave%2C%20Apt%20%234%2C%20Springfield`, and the website with `&amp;` in the HTML. On staging (`encode-prefixed-url-values-ac3df97`, revision `--0000034`), a keyed render of `Ada & Lin` carries the encoded URLs. The server-inlined DiceBear SVG reads `AL`, where the raw seed would have stopped at `Ada `.
   - **Gates.** Typecheck, 1,965 tests, build, `pack:check`, `docs:check`, OpenSpec strict and specs, and `dotnet test` (224) all pass.
 
 - **Stylesheet resources (2026-10-15, change `stylesheet-resources`, on `feature/stylesheet-resources`, core/designer/mcp minor pending release with the island)**: a person's stylesheets load in every frame of their widgets, behind their resource domains.
