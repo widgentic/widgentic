@@ -355,7 +355,7 @@ describe("a guide-only agent using the attr transforms", () => {
     const html = renderToHtml(rendered.node);
     expect(html).toContain('class="wg-status wg-status-danger"');
     expect(html).toContain('href="mailto:m.oyelaran@example.org"');
-    expect(html).toContain('href="tel:+1 250-555-0163"');
+    expect(html).toContain('href="tel:+1%20250-555-0163"');
   });
 
   it("the guide's form lines actually teach the transforms", () => {
@@ -366,6 +366,7 @@ describe("a guide-only agent using the attr transforms", () => {
     expect(forms).toContain("ATTR MAP");
     expect(forms).toContain("ATTR PREFIX");
     expect(forms).toContain("mailto:");
+    expect(forms).toMatch(/ATTR PREFIX[^\n]*percent-encoded[^\n]*bare mailto:\/tel: keeps the address/);
     // the mutual-exclusion rule states itself, rather than riding on the
     // ACTION line's unrelated "never both href and action"
     expect(forms).toContain("ONE TRANSFORM PER VALUE");

@@ -382,6 +382,18 @@ workspace and the sample first, then point at the built DLL):
 
 ## Verification log
 
+- **Encoded prefix values (2026-10-21, change `encode-prefixed-url-values`, on `bug/encode-prefixed-url-values`, core/designer/mcp/webmcp patch pending release)**: a value composed behind an author's URL prefix is percent-encoded, so data cannot restructure the URL.
+  - **The report, reproduced on 0.14.0.** A `src` with prefix `https://api.dicebear.com/9.x/initials/svg?seed=` over `Ada & Lin?x=1#y` rendered the value raw, so the service received `seed=Ada `. A `hints.links` prefix and the app template's streamed preview did the same. Whole URLs bound with no prefix were already correct.
+  - **The rule** (`url-values.test.ts`, 5 tests). A query or path prefix encodes one component. A bare `mailto:`/`tel:`/`sms:` keeps the address and encodes `% ? # & [ ]` and spaces. A bare `http:`/`https:` keeps the URL's delimiters and escapes. Non-ASCII is UTF-8, an astral character encodes whole, and a lone surrogate becomes `%EF%BF%BD`.
+  - **The renderers.**
+    - Template: 5 new scenario tests in `compile.test.ts`, including a scheme-less prefix that can no longer assemble `javascript:` (its `:` becomes `%3A`).
+    - Built-ins: 2 new tests in `chrome-links.test.ts` (card and table `hints.links`). The analyzer checks the encoded href.
+    - Existing tests updated: a phone with spaces now links `tel:+1%20250-555-0163`.
+  - **The preview** (`app-template-links.test.ts`, 3 tests). Card fields and table cells streamed through `bootTemplate()` link exactly the hrefs the renderer builds over 11 cases (9 linked). A streamed table links `?q=a%26b%20c`. Template 44,985 / 45,056 raw (71 B left), 11,768 / 13,312 gzipped.
+  - **Steering.** The `ATTR PREFIX` guide line (server and webmcp), the card and table `links` descriptors and the designer's prefix field say the value is encoded. The corpus gained 4 prefix cases.
+  - **Stored data** (read-only production scan, counts only). 11 `prefix` transforms in 7 of 25 widgets: 5 `mailto:` and 5 `tel:` on `href`, 1 `https:` on `src`. Emails and the `https:` remainder render byte for byte as before. Spaces in phone numbers become `%20`.
+  - **Gates.** Typecheck, 1,965 tests, build, `pack:check`, `docs:check`, OpenSpec strict and specs, and `dotnet test` (224) all pass.
+
 - **Stylesheet resources (2026-10-15, change `stylesheet-resources`, on `feature/stylesheet-resources`, core/designer/mcp minor pending release with the island)**: a person's stylesheets load in every frame of their widgets, behind their resource domains.
   - **The rule** (`resources.test.ts`, 8 tests).
     - Accepted: `https://` addresses, host lowercased, path, query and fragment kept.

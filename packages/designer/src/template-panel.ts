@@ -906,7 +906,7 @@ export function mountTemplatePanel(
             "wgd-input wgd-attr-prefix"
           );
           prefixInput.placeholder = "prefix";
-          prefixInput.title = "Literal prefix, e.g. mailto: — emitted only when the bound value is non-empty";
+          prefixInput.title = "Literal prefix, e.g. mailto: — emitted only when the bound value is non-empty; the value is percent-encoded";
           row.push(prefixInput);
         }
         if (showAddMap) {
