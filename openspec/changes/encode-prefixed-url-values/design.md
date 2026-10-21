@@ -68,4 +68,5 @@ The corpus changes for `get_authoring_guide`, `list_widgets` and the app templat
 No stored data changes. The 11 production prefixes keep working: only spaces in phone numbers change bytes (`%20`).
 1. Apply on `bug/encode-prefixed-url-values`.
 2. Deploy to staging and check a keyed render with a query-prefixed image.
-3. Merge into `staging`. It rides the 0.15.0 release with the date and widget-theme changes, and `Widgentic.Mcp` follows the pin.
+3. The demo seed gains `person-card-widget` (owner request). Its avatar, phone, address and website cover the query-prefix, address and whole-URL cases in a host.
+4. Merge into `staging`. It rides the 0.15.0 release with the date and widget-theme changes, and `Widgentic.Mcp` follows the pin.

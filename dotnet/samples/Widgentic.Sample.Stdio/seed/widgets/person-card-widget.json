@@ -1,0 +1,217 @@
+{
+  "kind": "person-card-widget",
+  "template": {
+    "tag": "div",
+    "attrs": {
+      "class": "wg-card wg-person"
+    },
+    "children": [
+      {
+        "tag": "header",
+        "attrs": {
+          "class": "wg-person-head"
+        },
+        "children": [
+          {
+            "tag": "img",
+            "attrs": {
+              "class": "wg-img wg-img-avatar",
+              "src": {
+                "bind": "name",
+                "prefix": "https://api.dicebear.com/9.x/initials/svg?seed="
+              },
+              "alt": {
+                "bind": "name"
+              }
+            }
+          },
+          {
+            "tag": "div",
+            "attrs": {
+              "class": "wg-card-title"
+            },
+            "children": [
+              {
+                "bind": "name"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "tag": "dl",
+        "attrs": {
+          "class": "wg-card-fields"
+        },
+        "children": [
+          {
+            "when": "phone",
+            "template": {
+              "tag": "div",
+              "attrs": {
+                "class": "wg-card-field"
+              },
+              "children": [
+                {
+                  "tag": "dt",
+                  "attrs": {
+                    "class": "wg-card-field-key"
+                  },
+                  "children": [
+                    "Phone"
+                  ]
+                },
+                {
+                  "tag": "dd",
+                  "attrs": {
+                    "class": "wg-card-field-value"
+                  },
+                  "children": [
+                    {
+                      "tag": "a",
+                      "attrs": {
+                        "class": "wg-link",
+                        "href": {
+                          "bind": "phone",
+                          "prefix": "tel:"
+                        }
+                      },
+                      "children": [
+                        {
+                          "bind": "phone"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "when": "address",
+            "template": {
+              "tag": "div",
+              "attrs": {
+                "class": "wg-card-field"
+              },
+              "children": [
+                {
+                  "tag": "dt",
+                  "attrs": {
+                    "class": "wg-card-field-key"
+                  },
+                  "children": [
+                    "Address"
+                  ]
+                },
+                {
+                  "tag": "dd",
+                  "attrs": {
+                    "class": "wg-card-field-value"
+                  },
+                  "children": [
+                    {
+                      "tag": "a",
+                      "attrs": {
+                        "class": "wg-link",
+                        "href": {
+                          "bind": "address",
+                          "prefix": "https://www.google.com/maps/search/?api=1&query="
+                        }
+                      },
+                      "children": [
+                        {
+                          "bind": "address"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "when": "website",
+            "template": {
+              "tag": "div",
+              "attrs": {
+                "class": "wg-card-field"
+              },
+              "children": [
+                {
+                  "tag": "dt",
+                  "attrs": {
+                    "class": "wg-card-field-key"
+                  },
+                  "children": [
+                    "Website"
+                  ]
+                },
+                {
+                  "tag": "dd",
+                  "attrs": {
+                    "class": "wg-card-field-value"
+                  },
+                  "children": [
+                    {
+                      "tag": "a",
+                      "attrs": {
+                        "class": "wg-link",
+                        "href": {
+                          "bind": "website"
+                        }
+                      },
+                      "children": [
+                        {
+                          "bind": "website"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "descriptor": {
+    "description": "Shows a person's contact card: an initials avatar drawn from the name, and the phone, address and website as links that call, open a map and open the site.",
+    "dataShape": "{ name, phone?, address?, website? }",
+    "dataSchema": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "phone": {
+          "type": "string"
+        },
+        "address": {
+          "type": "string"
+        },
+        "website": {
+          "type": "string"
+        }
+      }
+    },
+    "dataExample": {
+      "name": "Zoë O'Brien",
+      "phone": "+1 (555) 010-0199",
+      "address": "12 Main St & 5th Ave, Apt #4, Springfield",
+      "website": "https://example.com/team/zoe?ref=card&lang=en"
+    },
+    "styles": {
+      ".wg-person-head": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "var(--wg-spacing)",
+        "margin-bottom": "var(--wg-spacing)"
+      }
+    }
+  }
+}

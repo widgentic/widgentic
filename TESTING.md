@@ -392,6 +392,13 @@ workspace and the sample first, then point at the built DLL):
   - **The preview** (`app-template-links.test.ts`, 3 tests). Card fields and table cells streamed through `bootTemplate()` link exactly the hrefs the renderer builds over 11 cases (9 linked). A streamed table links `?q=a%26b%20c`. Template 44,985 / 45,056 raw (71 B left), 11,768 / 13,312 gzipped.
   - **Steering.** The `ATTR PREFIX` guide line (server and webmcp), the card and table `links` descriptors and the designer's prefix field say the value is encoded. The corpus gained 4 prefix cases.
   - **Stored data** (read-only production scan, counts only). 11 `prefix` transforms in 7 of 25 widgets: 5 `mailto:` and 5 `tel:` on `href`, 1 `https:` on `src`. Emails and the `https:` remainder render byte for byte as before. Spaces in phone numbers become `%20`.
+  - **The demo seed** gains `person-card-widget` (11 entries written).
+    - Avatar: a DiceBear initials `src` behind a query prefix.
+    - Phone: a `tel:` address.
+    - Address: a Google Maps query prefix.
+    - Website: a whole URL with no prefix.
+
+    Its example renders `seed=Zo%C3%AB%20O'Brien`, `tel:+1%20(555)%20010-0199`, `query=12%20Main%20St%20%26%205th%20Ave%2C%20Apt%20%234%2C%20Springfield`, and the website with `&amp;` in the HTML.
   - **Gates.** Typecheck, 1,965 tests, build, `pack:check`, `docs:check`, OpenSpec strict and specs, and `dotnet test` (224) all pass.
 
 - **Stylesheet resources (2026-10-15, change `stylesheet-resources`, on `feature/stylesheet-resources`, core/designer/mcp minor pending release with the island)**: a person's stylesheets load in every frame of their widgets, behind their resource domains.

@@ -31,4 +31,15 @@
   - The keyed render of the seeded inbox keeps `mailto:nora@example.com` unchanged.
   - The guide carries the new `ATTR PREFIX` clause, and the served app template carries the bridge encoder.
   - Not checked here: a template with a query-prefixed image `src`. The seed has none, and agents have no write path. Unit tests and the host corpus cover it, and 4.3 covers it in a host.
-- [ ] 4.3 Owner leg: in the staging designer, import a widget whose image `src` binds a name behind `https://api.dicebear.com/9.x/initials/svg?seed=`. Declare `api.dicebear.com` in Settings. Render it in a fresh chat with a name like `Ada & Lin`: the avatar shows both initials (`AL`), not just `A`.
+- [x] 4.3 The demo seed gains `person-card-widget` (owner request, 2026-10-21), so staging exercises every case live.
+  - Avatar: a DiceBear initials `src` behind a query prefix.
+  - Phone: a `tel:` address.
+  - Address: a Google Maps query prefix, with `&` and `#` in the example.
+  - Website: a whole URL bound with no prefix, with `&` in its query.
+
+  The seed tests count 11 entries. The .NET sample seed is regenerated. The example README, the self-hosting page and the .NET README describe four widgets.
+- [ ] 4.4 Owner leg: in a fresh chat on staging, render `person-card-widget` with a name like `Ada & Lin` and an address with `&` or `#`. Check that:
+  - the avatar shows both initials;
+  - the address link opens Maps on the whole address;
+  - the phone link dials the number;
+  - the website link opens with its full query.

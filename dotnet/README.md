@@ -261,8 +261,8 @@ asks the source on `resources/list` and `resources/read` (above).
 ## Sample
 
 [`samples/Widgentic.Sample.Stdio`](samples/Widgentic.Sample.Stdio) serves the docker example's demo
-seed (an appointment agenda, an email inbox and a project status widget, two Google-style themes
-as the light and dark defaults, two resource domains, and the shared schemas the agenda and inbox
+seed (an appointment agenda, an email inbox, a project status widget and a person card, two Google-style themes
+as the light and dark defaults, four resource domains, the Material Icons stylesheet, and the shared schemas the agenda and inbox
 reference) plus one host tool, over stdio by default or over Streamable HTTP with
 `--http`. The seed files under `seed/` are generated from `examples/docker/seed/demo.json` by
 `npm run conformance:generate`:
