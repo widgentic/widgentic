@@ -24,10 +24,10 @@
 
 /** The rule as agents and authors read it, derived by every surface that documents a prefix. */
 export const PREFIX_ENCODING_RULE =
-  "The value is percent-encoded by the prefix's shape: behind a query or path prefix (…?seed=) it is one " +
-  "URI component, so it cannot add parameters or a fragment; behind a bare mailto:/tel: it stays an address; " +
-  "behind http:/https: (with or without //) it is the rest of the URL and keeps its delimiters; behind a " +
-  "data: prefix it is kept as written. Pass raw values, never pre-encoded ones.";
+  "The value is composed by the prefix's shape: behind a query or path prefix (…?seed=) it is percent-encoded " +
+  "as one URI component, so it cannot add parameters or a fragment; behind a bare mailto:/tel: it stays an " +
+  "address, with ?, #, & and spaces encoded; behind http:/https: (with or without //) it is the rest of the URL " +
+  "and keeps its delimiters; behind a data: prefix it is kept as written. Pass raw values, never pre-encoded ones.";
 
 const WEB_SCHEME = /^https?:(\/\/)?$/i;
 const DATA_SCHEME = /^data:/i;
