@@ -26,6 +26,9 @@
 ## 4. Gates and staging
 
 - [x] 4.1 Run the gates: typecheck, `npm test`, build, `pack:check`, the docs check, `openspec validate --strict encode-prefixed-url-values` and `--specs`. Also run `dotnet test`, because the host bundle renders the changed code.
-- [ ] 4.2 Deploy the branch to staging and check from the served bytes:
-  - a keyed `render_widget` of a template with a query-prefixed image `src` carries the encoded URL in the tree and in the `page` document;
-  - the seeded `mailto:`/`tel:` links are unchanged.
+- [x] 4.2 Deploy the branch to staging and check from the served bytes. Staging runs `encode-prefixed-url-values-fc662ed` (ACR cj3x, revision `--0000033`, 100%).
+  - A `render_widget` card with a `hints.links` query prefix carries `?q=Main%20St%20%26%205th%20%232` in the result, and its `page` document carries it too. A `tel:` prefix links `tel:+1%20555-0100`.
+  - The keyed render of the seeded inbox keeps `mailto:nora@example.com` unchanged.
+  - The guide carries the new `ATTR PREFIX` clause, and the served app template carries the bridge encoder.
+  - Not checked here: a template with a query-prefixed image `src`. The seed has none, and agents have no write path. Unit tests and the host corpus cover it, and 4.3 covers it in a host.
+- [ ] 4.3 Owner leg: in the staging designer, import a widget whose image `src` binds a name behind `https://api.dicebear.com/9.x/initials/svg?seed=`. Declare `api.dicebear.com` in Settings. Render it in a fresh chat with a name like `Ada & Lin`: the avatar shows both initials (`AL`), not just `A`.
