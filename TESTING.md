@@ -392,6 +392,7 @@ workspace and the sample first, then point at the built DLL):
     - With no host zone, `Mars/Base`, `""` or a number, the frame's own zone applies. The test sets the process zone to `Asia/Kolkata` (`22:00`), so the case is not vacuous.
     - A `host-context-changed` to New York re-renders `12:30` in the same `time` node, and a theme-only change leaves the zone.
     - A server preview localizes. A repeated result patches with node and text identity kept. A renderer-built tree localizes, and an unreadable instant keeps its UTC text.
+  - **Host probe** (staging `date-time-zones-probe-e4d7b28`, a never-merged branch). claude.ai sends `timeZone="America/Bogota"` (locale `es-419`). ChatGPT sends `America/Bogota` (locale `en-US`). VS Code Copilot sends no zone (locale `en-us`). Every frame's own zone is `America/Bogota` (GMT-0500), so the host value and the fallback both give the viewer's zone.
   - **Budget.** The raw budget rises to 46,080. The template measures 46,072 raw (8 B left) and 12,213 of 13,312 gzipped.
   - **Steering and the designer.** `DATE_ZONES`, `DATE_ZONE_RULE` and `isDateZone` are exported (exports snapshot). Both guides' `FORMAT` line derives from the rule, and each guide's test checks it. The designer's zone select offers `viewer` on text rows only and omits `zone` for UTC (`editors.test.ts`).
   - **Corpus** (`corpus-dates`). It covers an offset, an unzoned value, an epoch and `soon` across the three zones and a `value`-zone `title`, plus a `page` render showing the viewer zone's UTC text. The .NET suite runs it (229 tests).

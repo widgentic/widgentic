@@ -84,6 +84,13 @@ Written in the bridge's style, it costs about 1 KiB raw.
 
 The probe in task 1 records, per host, whether `timeZone` arrives and how it compares with the frame's default. It informs the docs and does not change the design.
 
+**Probe results (2026-10-21, staging `date-time-zones-probe-e4d7b28`):**
+- **claude.ai:** host `timeZone="America/Bogota"` and `locale="es-419"`. The frame's own zone is also `America/Bogota`, with the clock at GMT-0500, so both sources agree.
+- **ChatGPT:** host `timeZone="America/Bogota"` and `locale="en-US"`. The frame's zone is `America/Bogota` (GMT-0500), so both sources agree.
+- **VS Code Copilot:** no host `timeZone`, and `locale="en-us"`. The frame's zone is `America/Bogota` (GMT-0500), so the fallback path carries the viewer's zone.
+
+All three frames report the viewer's device zone. The host value is used where it is sent, and the fallback covers Copilot. No host sent a zone that differs from the device.
+
 ### D7. The raw budget rises to 45 KiB
 
 The bridge cannot fit about 1 KiB into the 64 B left, and the feature lives only in the frame. The raw budget moves from 45,056 to **46,080** bytes. This is a reviewed edit to the pinned number and the "App template size budget" requirement, as that requirement demands. The gzipped budget (13,312) keeps about 1.5 KiB of headroom and does not move.

@@ -1,7 +1,10 @@
 ## 1. Host probe (before implementation)
 
 - [x] 1.1 Create a never-merged branch `feature/date-time-zones-probe` from this change's base. The app template shows one status line in the frame: the host context's `timeZone` (or "none") and the frame's default zone (`Intl.DateTimeFormat().resolvedOptions().timeZone`). Stage it. Done: `e4d7b28` (local only) also shows the host `locale` and the frame's clock. Staged as `date-time-zones-probe-e4d7b28` (ACR cj40, revision `--0000035`), and the served template carries the probe.
-- [ ] 1.2 Owner leg: render any widget in a fresh chat in claude.ai, ChatGPT and VS Code Copilot, and report the status line for each. Record the results in design D6, then restore staging with this change's own image in task 6.
+- [x] 1.2 Owner leg: render any widget in a fresh chat in claude.ai, ChatGPT and VS Code Copilot, and report the status line for each. Record the results in design D6, then restore staging with this change's own image in task 6. Done 2026-10-21:
+  - claude.ai and ChatGPT send `timeZone="America/Bogota"`;
+  - Copilot sends none;
+  - every frame's own zone is `America/Bogota` (GMT-0500).
 
 ## 2. The format (`@widgentic/core`)
 
