@@ -382,6 +382,27 @@ workspace and the sample first, then point at the built DLL):
 
 ## Verification log
 
+- **Encoded prefix values (2026-10-21, change `encode-prefixed-url-values`, on `bug/encode-prefixed-url-values`, core/designer/mcp/webmcp patch pending release)**: a value composed behind an author's URL prefix is percent-encoded, so data cannot restructure the URL.
+  - **The report, reproduced on 0.14.0.** A `src` with prefix `https://api.dicebear.com/9.x/initials/svg?seed=` over `Ada & Lin?x=1#y` rendered the value raw, so the service received `seed=Ada `. A `hints.links` prefix and the app template's streamed preview did the same. Whole URLs bound with no prefix were already correct.
+  - **The rule** (`url-values.test.ts`, 7 tests). A query or path prefix encodes one component. A bare `mailto:`/`tel:`/`sms:` keeps the address and encodes `% ? # & [ ]` and spaces. `http:`/`https:`, with or without `//`, keeps the URL's delimiters and escapes. A `data:` prefix keeps its value. `https:///` and `ftp:` are classified as component and address prefixes. Non-ASCII is UTF-8, an astral character encodes whole, and a lone surrogate becomes `%EF%BF%BD`.
+  - **The renderers.**
+    - Template: 7 new scenario tests in `compile.test.ts`. They include a scheme-less prefix that can no longer assemble `javascript:` (its `:` becomes `%3A`), an `https://` prefix that keeps `example.com/a/b?c=1`, and a base64 value behind `data:image/png;base64,` that stays an image source, where `<svg onload=x>` is dropped.
+    - Built-ins: 2 new tests in `chrome-links.test.ts` (card and table `hints.links`). The analyzer checks the encoded href.
+    - Existing tests updated: a phone with spaces now links `tel:+1%20250-555-0163`.
+  - **The preview** (`app-template-links.test.ts`, 3 tests). Card fields and table cells streamed through `bootTemplate()` link exactly the hrefs the renderer builds over 16 cases (12 linked). The prefixes vary as well: `MAILTO:`, `HTTPS:`, `https://`, `ftp:` and `data:`. A streamed table links `?q=a%26b%20c`. Template 44,992 / 45,056 raw (64 B left), 11,774 / 13,312 gzipped.
+  - **Steering.** The new core constant `PREFIX_ENCODING_RULE` states the rule. Every surface derives from it: the `ATTR PREFIX` guide line (server and webmcp, each pinned by its guide test), the card and table `links` descriptors, and the designer's prefix field. The exports snapshot gains the constant. The corpus gained 4 prefix cases, the `corpus-prefixes` widget covering `https://` and `data:` too.
+  - **PR review (#63) revision.** An `https://` prefix and a `data:` prefix were regressions compared with raw concatenation, and both are now cases of the rule. The guarantee is scoped per case in code comments, docs and the rule text. The bridge agreement test varies the prefixes.
+  - **Stored data** (read-only production scan, counts only). 11 `prefix` transforms in 7 of 25 widgets: 5 `mailto:` and 5 `tel:` on `href`, 1 `https:` on `src`. Emails and the `https:` remainder render byte for byte as before. Spaces in phone numbers become `%20`.
+  - **The demo seed** gains `person-card-widget` (11 entries written).
+    - Avatar: a DiceBear initials `src` behind a query prefix.
+    - Phone: a `tel:` address.
+    - Address: a Google Maps query prefix.
+    - Website: a whole URL with no prefix.
+
+    Its example renders `seed=Zo%C3%AB%20O'Brien`, `tel:+1%20(555)%20010-0199`, `query=12%20Main%20St%20%26%205th%20Ave%2C%20Apt%20%234%2C%20Springfield`, and the website with `&amp;` in the HTML. On staging (`encode-prefixed-url-values-ac3df97`, revision `--0000034`), a keyed render of `Ada & Lin` carries the encoded URLs. The server-inlined DiceBear SVG reads `AL`, where the raw seed would have stopped at `Ada `.
+  - **Owner host check (2026-10-21).** The owner rendered `person-card-widget` in a fresh chat on staging and reports it working as expected: the avatar shows both initials, the address link opens Maps on the whole address, the phone link dials, and the website link opens with its full query.
+  - **Gates.** Typecheck, 1,969 tests, build, `pack:check`, `docs:check`, OpenSpec strict and specs, and `dotnet test` (224) all pass.
+
 - **Stylesheet resources (2026-10-15, change `stylesheet-resources`, on `feature/stylesheet-resources`, core/designer/mcp minor pending release with the island)**: a person's stylesheets load in every frame of their widgets, behind their resource domains.
   - **The rule** (`resources.test.ts`, 8 tests).
     - Accepted: `https://` addresses, host lowercased, path, query and fragment kept.

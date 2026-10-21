@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
 import { invoiceWidget } from "@widgentic-examples/mcp-server/widgets";
-import { LABEL_STYLE_RULE, TOKEN_SPECS, createCatalog } from "@widgentic/core";
+import { LABEL_STYLE_RULE, PREFIX_ENCODING_RULE, TOKEN_SPECS, createCatalog } from "@widgentic/core";
 import { importWidgetJson } from "@widgentic/designer";
 import { designerTools } from "../index.js";
 import { run } from "./helpers.js";
@@ -26,6 +26,7 @@ describe("the authoring guide tool", () => {
     expect((guide.rules.template as unknown as { labels: string }).labels).toContain(LABEL_STYLE_RULE);
     expect(guide.theme.tokens.map((t) => t.name).sort()).toEqual(Object.keys(TOKEN_SPECS).sort());
     const forms = guide.rules.template.forms.join("\n");
+    expect(forms).toContain(PREFIX_ENCODING_RULE);
     for (const term of ["BIND", "EACH", "WHEN", "ELEMENT", "ATTR MAP", "ATTR PREFIX", "FORMAT", "TEXT FORMATS", "MARKDOWN", "ONE TRANSFORM PER VALUE", "ACTION", "$3,207", "01-09-2026 02:04", "red, green and blue", "No items, 1 item, 1,200 items", "parser, not the value, chooses tags"]) {
       expect(forms, term).toContain(term);
     }

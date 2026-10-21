@@ -1,4 +1,5 @@
 import type { WidgetKind } from "../contract/types.js";
+import { PREFIX_ENCODING_RULE } from "../contract/url-values.js";
 import type { DataSchema } from "./schema.js";
 import type { WidgetStyles } from "./styles.js";
 
@@ -105,7 +106,9 @@ export const BUILTIN_DESCRIPTORS: Record<
         "value already IS an http(s)/mailto/tel URL; a prefix string " +
         "composes the href while the display stays the clean value " +
         "(e.g. { email: 'mailto:', phone: 'tel:' } shows a@b.c but links " +
-        "mailto:a@b.c). Unsafe compositions and non-strings stay plain " +
+        "mailto:a@b.c). " +
+        PREFIX_ENCODING_RULE +
+        " Unsafe compositions and non-strings stay plain " +
         "text; image treatment wins for the same key. Links are never " +
         "automatic — opt in per field."
     }
@@ -141,7 +144,9 @@ export const BUILTIN_DESCRIPTORS: Record<
         "value already IS an http(s)/mailto/tel URL; a prefix string " +
         "composes the href while the display stays the clean value " +
         "(e.g. { email: 'mailto:', phone: 'tel:' } shows a@b.c but links " +
-        "mailto:a@b.c). Unsafe compositions and non-strings stay plain " +
+        "mailto:a@b.c). " +
+        PREFIX_ENCODING_RULE +
+        " Unsafe compositions and non-strings stay plain " +
         "text; image treatment wins for the same column. Links are never " +
         "automatic — opt in per column.",
       images:

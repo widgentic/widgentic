@@ -24,6 +24,7 @@ import {
   isSafeUrl
 } from "./guards.js";
 import { parsePath } from "./paths.js";
+import { composePrefixedUrl } from "../contract/url-values.js";
 import { InvalidTemplateError, validateTemplate } from "./validate.js";
 import { formatValue } from "../catalog/widgets/format.js";
 import { formatBoundValue } from "../catalog/widgets/value-format.js";
@@ -271,9 +272,10 @@ function interpretNode(
                   : "";
           } else if (typeof raw.prefix === "string") {
             // The prefix is never emitted alone: no dead mailto: hrefs.
-            // The composed value still faces the URL guard below.
+            // The value is composed by the URL-value rule; the composed
+            // value still faces the URL guard below.
             const text = formatValue(resolved);
-            value = text === "" ? "" : raw.prefix + text;
+            value = text === "" ? "" : composePrefixedUrl(raw.prefix, text);
           } else if (raw.format !== undefined) {
             // Formats produce TEXT; a URL attribute's scheme guard still
             // runs below, so a format can never build a scheme.

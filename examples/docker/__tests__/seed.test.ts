@@ -50,23 +50,23 @@ const widget = (kind: string, ref: string) => ({
 describe("startup seed", () => {
   it("populates an empty store with the sample content, and its widgets render", async () => {
     const summary = await seedPrincipal(store, principalId, SAMPLE, log);
-    expect(summary).toEqual({ written: 10, skipped: 0, refused: 0 });
+    expect(summary).toEqual({ written: 11, skipped: 0, refused: 0 });
     expect((await store.schemas(principalId)).map((s) => s.name).sort()).toEqual(["appointment-agenda", "email-inbox"]);
     expect((await store.themes(principalId)).map((t) => t.name).sort()).toEqual(["google-dark", "google-light"]);
     const widgets = await store.widgets(principalId);
-    expect(widgets.map((w) => w.kind).sort()).toEqual(["appointment-agenda-widget", "email-inbox-widget", "project-status-widget"]);
+    expect(widgets.map((w) => w.kind).sort()).toEqual(["appointment-agenda-widget", "email-inbox-widget", "person-card-widget", "project-status-widget"]);
     const catalog = (await composeCatalog(store, principalId)).value;
     for (const stored of widgets) {
       const result = handleRenderWidget(catalog, { widget: stored.kind, data: stored.descriptor.dataExample });
       expect(result.isError, stored.kind).toBeUndefined();
     }
-    expect(lines.at(-1)).toContain("10 written, 0 already present, 0 refused");
+    expect(lines.at(-1)).toContain("11 written, 0 already present, 0 refused");
   });
 
   it("never overwrites an entry the principal already holds", async () => {
     await store.putTheme(principalId, { name: "google-dark", tokens: { accent: "#ff0000" } });
     const summary = await seedPrincipal(store, principalId, SAMPLE, log);
-    expect(summary).toEqual({ written: 9, skipped: 1, refused: 0 });
+    expect(summary).toEqual({ written: 10, skipped: 1, refused: 0 });
     const kept = (await store.themes(principalId)).find((t) => t.name === "google-dark");
     expect(kept?.tokens).toEqual({ accent: "#ff0000" });
   });
@@ -113,7 +113,7 @@ describe("startup seed", () => {
 
   it("seeds through the single principal at startup", async () => {
     const summary = await seedOnStartup(store, { principalId }, SAMPLE, log);
-    expect(summary?.written).toBe(10);
+    expect(summary?.written).toBe(11);
   });
 });
 
@@ -141,7 +141,7 @@ describe("startup seed settings", () => {
     // The person sets dark hosts back to the built-in, then the service restarts.
     await store.putSettings(principalId, { defaultThemes: { light: "google-light" } });
     const summary = await seedPrincipal(store, principalId, SAMPLE, log);
-    expect(summary).toEqual({ written: 0, skipped: 10, refused: 0 });
+    expect(summary).toEqual({ written: 0, skipped: 11, refused: 0 });
     expect(await store.settings(principalId)).toEqual({
       defaultThemes: { light: "google-light" },
       resourceDomains: ["https://api.dicebear.com", "https://*.pravatar.cc", "https://fonts.googleapis.com", "https://fonts.gstatic.com"],

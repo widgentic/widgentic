@@ -13,6 +13,7 @@ export {
   isSafeImageSrc,
   looksLikeImageUrl
 } from "./urls.js";
+export { PREFIX_ENCODING_RULE } from "./url-values.js";
 export type { ResourceDomain, ResourceDomainResult } from "./domains.js";
 export {
   RESOURCE_DOMAIN_LIMIT,

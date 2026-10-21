@@ -1225,3 +1225,10 @@ The server assembly SHALL accept `resources`: the caller's stylesheet entries, i
 - **WHEN** a host is created with `resourceDomains: ["fonts.googleapis.com"]` and `settings: { resources: [<a stylesheet on fonts.googleapis.com>, <one on cdn.example.org>, { type: "script", href: "https://fonts.googleapis.com/x.js" }] }`
 - **THEN** its renders SHALL carry only the first in `structuredContent.resources`
 - **AND** `problems()` SHALL report the second as `UNDECLARED_DOMAIN` and the third as `INVALID_RESOURCE`, each under section `settings`
+
+### Requirement: Previews compose links as the result does
+The app template's client-built previews of `card` fields and `table` cells SHALL compose a `hints.links` prefix with the value by the same URL-value rule the renderer uses, so a streamed preview links exactly the `href` its tool result will carry.
+
+#### Scenario: A streamed table links the encoded href
+- **WHEN** a streamed `table` render with `hints: { links: { q: "https://search.example.com/?q=" } }` previews the row `{ q: "a&b c" }`
+- **THEN** the preview's cell SHALL link `https://search.example.com/?q=a%26b%20c`, as the tool result's tree does

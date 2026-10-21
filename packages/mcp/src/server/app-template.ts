@@ -488,6 +488,13 @@ function pattern(patternText, value) {
     ? patternText.split("{value}").join(value)
     : patternText + value;
 }
+// The URL-value rule, as core's composePrefixedUrl (pinned by an agreement
+// test). A data: prefix never composes a link, so the preview has no data case.
+function prefixed(prefix, value) {
+  const unsafe = /^https?:(\\/\\/)?$/i.test(prefix) ? /[\\u0000-\\u0020\\u007f"<>\\\\^\\x60{|}]|[^\\u0000-\\u007f]/gu
+    : /^[a-z][a-z0-9+.-]*:$/i.test(prefix) ? /[^\\w\\-.~@+:;,=!$'()*\\/]/gu : /[^\\w\\-.!~*'()]/gu;
+  return prefix + value.replace(unsafe, (c) => { try { return encodeURIComponent(c); } catch (e) { return "%EF%BF%BD"; } });
+}
 function cellNode(key, raw, hints, cls) {
   let text = fmt(raw);
   const formats = isObj(hints) && isObj(hints.fieldFormat) ? hints.fieldFormat : undefined;
@@ -495,7 +502,7 @@ function cellNode(key, raw, hints, cls) {
   const links = isObj(hints) && isObj(hints.links) ? hints.links : undefined;
   const hint = links ? links[key] : undefined;
   if (typeof raw === "string" && raw !== "" && hint !== undefined && hint !== false) {
-    const href = hint === true ? raw : typeof hint === "string" ? hint + raw : undefined;
+    const href = hint === true ? raw : typeof hint === "string" ? prefixed(hint, raw) : undefined;
     if (href !== undefined &&
         /^(https?|mailto|tel):/i.test(href.replace(/[\\u0000-\\u0020]+/g, ""))) {
       return { tag: "td", attrs: { class: cls }, children: [
