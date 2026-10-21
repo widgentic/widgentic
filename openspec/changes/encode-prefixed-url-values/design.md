@@ -11,7 +11,7 @@ See proposal.md for the motivation. Current state:
 ## Goals / Non-Goals
 
 **Goals:**
-- **Data never restructures a URL.** A bound value can't add parameters, a fragment or a path to the URL its author prefixed.
+- **Data never restructures a URL whose shape the author fixed.** Behind a query or path prefix, a bound value can't add parameters, a fragment or a path. Behind a bare `mailto:`/`tel:`, it can't add header fields or a fragment. A bare web prefix hands the value the URL on purpose.
 - **One rule on every path.** The template, the built-ins and the bridge preview all apply it.
 - **Stored widgets keep working.** Email addresses and `https:` remainders render byte for byte as before; a phone number's spaces become `%20`, which dialers decode to the same number.
 
@@ -32,7 +32,8 @@ So the prefix decides:
 
 | Prefix | The value is | Encoded | Kept |
 |---|---|---|---|
-| exactly `http:` / `https:` | the rest of a URL | whitespace, controls, `"` `<` `>` `\` `^` `` ` `` `{` `|` `}`, non-ASCII | everything else, `%` and the delimiters included |
+| exactly `http:` / `https:` / `http://` / `https://` | the rest of a URL | whitespace, controls, `"` `<` `>` `\` `^` `` ` `` `{` `|` `}`, non-ASCII | everything else, `%` and the delimiters included |
+| starts with `data:` | an image payload, kept as written | nothing (the image-source guard admits only base64) | everything |
 | another bare scheme (`mailto:`, `tel:`, `sms:`…) | the scheme's address | every character not kept: the above plus `%` `?` `#` `&` `[` `]` | letters, digits, `-._~@+:;,=!$'()*/` |
 | anything longer (`…?seed=`, `…/u/`) | one component | everything `encodeURIComponent` encodes | `A-Za-z0-9-_.!~*'()` |
 
@@ -41,6 +42,12 @@ So the prefix decides:
 **The web-scheme case keeps `%`.** A value that is the rest of a URL may carry its own escapes (`?q=a%20b`), and re-encoding them would double-encode. Since it keeps every delimiter, data can still restructure the URL behind a bare `https:`. That is inherent: such an author handed the value the whole URL, exactly as binding the URL whole does.
 
 **The address case encodes `%`.** An address carries no escapes of its own, so a literal `%` in data must not form one.
+
+**Revision after the PR review (2026-10-21).** Two findings were regressions compared with raw concatenation, and both cases were added.
+- **`https://`** is a web prefix too, as `https:` is. A component encoding of `example.com/a/b?c=1` turned it into one dead host (`example.com%2Fa%2Fb%3Fc%3D1`).
+- **A `data:` prefix keeps its value.** Component encoding turned the base64 `+ / =` into escapes, and the image-source guard then dropped the `src` without a diagnostic. Keeping the value raw is safe: the guard admits a `data:` source only when it is a base64 image, and a `data:` href never passes.
+
+The bridge copy gains the `//` case only, because a `data:` prefix never composes a link.
 
 ### D2. One core helper, mirrored in the bridge
 
@@ -52,7 +59,7 @@ So the prefix decides:
 
 ### D3. Steering says it once, where agents read it
 
-The guide's `ATTR PREFIX` line, in `guide.ts` and webmcp's copy, gains one clause: "the value is percent-encoded (a bare `mailto:`/`tel:` keeps the address; a bare `https:` keeps the URL)". The card and table `links` descriptor texts say "the value is encoded" beside "composes the href". The designer's prefix field title says the same, so the designer ships a patch too.
+The rule is stated once, as the exported core constant `PREFIX_ENCODING_RULE`, beside `LABEL_STYLE_RULE` and `FIELD_ORDER_RULE`. Four places derive from it: the guide's `ATTR PREFIX` line in `guide.ts` and in webmcp's copy (each guide's test checks for it), the card and table `links` descriptors, and the designer's prefix field title. Because of the designer title, the designer ships a patch too. The constant scopes the guarantee to each case: data cannot restructure a URL behind a query or path prefix, and cannot add fields behind a bare `mailto:`/`tel:`. Behind a web prefix the value chooses the URL.
 
 The corpus changes for `get_authoring_guide`, `list_widgets` and the app template, and gains prefix cases.
 
@@ -61,7 +68,7 @@ The corpus changes for `get_authoring_guide`, `list_widgets` and the app templat
 - **[A path value with `/` behind a path prefix becomes one segment (`a%2Fb`)]** → No stored widget has a path prefix. The docs say to bind the whole URL for multi-segment paths.
 - **[A pre-encoded value behind a query prefix is double-encoded]** → Data should be raw. The guide states the value is encoded, so agents pass raw values. The bare web-scheme case keeps `%` for whole-URL remainders.
 - **[Bridge drift]** → The agreement test (D2).
-- **[Template budget]** → The copy fits: 44,985 of 45,056 raw bytes (71 B left), 11,768 of 13,312 gzipped. The date change queued next adds bridge code, so it must revisit the raw budget with its own rationale.
+- **[Template budget]** → The copy fits: 44,992 of 45,056 raw bytes (64 B left), 11,774 of 13,312 gzipped. The date change queued next adds bridge code, so it must revisit the raw budget with its own rationale.
 
 ## Migration Plan
 

@@ -272,8 +272,8 @@ function interpretNode(
                   : "";
           } else if (typeof raw.prefix === "string") {
             // The prefix is never emitted alone: no dead mailto: hrefs.
-            // The value is encoded so it cannot restructure the author's
-            // URL; the composed value still faces the URL guard below.
+            // The value is composed by the URL-value rule; the composed
+            // value still faces the URL guard below.
             const text = formatValue(resolved);
             value = text === "" ? "" : composePrefixedUrl(raw.prefix, text);
           } else if (raw.format !== undefined) {

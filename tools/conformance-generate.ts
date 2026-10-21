@@ -160,7 +160,9 @@ const prefixesWidget = {
       { tag: "img", attrs: { src: { bind: "seed", prefix: "https://api.dicebear.com/9.x/initials/svg?seed=" }, alt: "seed" } },
       { tag: "a", attrs: { href: { bind: "email", prefix: "mailto:" } }, children: ["mail"] },
       { tag: "a", attrs: { href: { bind: "phone", prefix: "tel:" } }, children: ["call"] },
-      { tag: "img", attrs: { src: { bind: "rest", prefix: "https:" }, alt: "rest" } }
+      { tag: "img", attrs: { src: { bind: "rest", prefix: "https:" }, alt: "rest" } },
+      { tag: "a", attrs: { href: { bind: "site", prefix: "https://" } }, children: ["site"] },
+      { tag: "img", attrs: { src: { bind: "pixel", prefix: "data:image/png;base64," }, alt: "pixel" } }
     ]
   },
   descriptor: {
@@ -363,14 +365,21 @@ export function buildCorpus(): Corpus {
     });
   }
 
-  // The URL-value rule: a query prefix, a bare mailto:/tel:, a bare https: remainder, non-ASCII.
+  // The URL-value rule: a query prefix, a bare mailto:/tel:, an https: or https:// remainder, a data: value kept for the image guard, non-ASCII.
   render("prefixes template", {
     widget: "corpus-prefixes",
-    data: { seed: "Ada & Lin?x=1#y", email: "ada@example.org?subject=hi#x", phone: "+1 555-0100", rest: "//cdn.example.com/a b.png?w=1&h=2" }
+    data: {
+      seed: "Ada & Lin?x=1#y",
+      email: "ada@example.org?subject=hi#x",
+      phone: "+1 555-0100",
+      rest: "//cdn.example.com/a b.png?w=1&h=2",
+      site: "example.com/a b?c=1&d=2",
+      pixel: "iVBORw0KGgo+/AAA="
+    }
   });
   render("prefixes template non-ASCII", {
     widget: "corpus-prefixes",
-    data: { seed: "José \u{1F600}", email: "zoë@example.org", phone: "", rest: "//cdn.example.com/ü.png" }
+    data: { seed: "José \u{1F600}", email: "zoë@example.org", phone: "", rest: "//cdn.example.com/ü.png", site: "bücher.example/ü", pixel: "<svg onload=x>" }
   });
   render("prefixes links", {
     widget: "card",

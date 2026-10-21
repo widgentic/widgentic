@@ -73,13 +73,14 @@ A bound attribute value may carry one transform — `map`, `prefix` or `format`,
 { "tag": "a", "attrs": { "href": { "bind": "email", "prefix": "mailto:" } }, "children": [{ "bind": "email" }] }
 ```
 
-The value is percent-encoded so that data never restructures your URL. Your prefix decides how:
+The value is percent-encoded, and your prefix alone decides how:
 
 | Prefix | The value is | Example |
 |---|---|---|
-| Anything longer than a scheme (`https://api.dicebear.com/9.x/initials/svg?seed=`, `https://cdn.example.com/u/`) | one URI component, encoded as `encodeURIComponent` does | `Ada & Lin?x=1` → `…?seed=Ada%20%26%20Lin%3Fx%3D1` |
-| A bare scheme other than the web ones (`mailto:`, `tel:`) | the scheme's address: letters, digits and `-._~@+:;,=!$'()*/` stay, everything else is encoded | `ada@example.org` stays; `ada@example.org?subject=hi` → `ada@example.org%3Fsubject=hi`; `+1 555-0100` → `+1%20555-0100` |
-| Exactly `http:` or `https:` | the rest of a URL: only what a browser encodes in a whole URL (spaces, control characters, quotes, angle brackets, the backslash, caret, backtick, braces and vertical bar, non-ASCII) is encoded | `//cdn.example.com/a b.png?w=1&h=2` → `https://cdn.example.com/a%20b.png?w=1&h=2` |
+| Anything longer than a scheme (`https://api.dicebear.com/9.x/initials/svg?seed=`, `https://cdn.example.com/u/`) | one URI component, encoded as `encodeURIComponent` does, so it cannot add parameters, a fragment or a path segment | `Ada & Lin?x=1` → `…?seed=Ada%20%26%20Lin%3Fx%3D1` |
+| A bare scheme other than the web ones and `data:` (`mailto:`, `tel:`) | the scheme's address: letters, digits and `-._~@+:;,=!$'()*/` stay, everything else is encoded, so it cannot add header fields or a fragment | `ada@example.org` stays; `ada@example.org?subject=hi` → `ada@example.org%3Fsubject=hi`; `+1 555-0100` → `+1%20555-0100` |
+| Exactly `http:`, `https:`, `http://` or `https://` | the rest of a URL: spaces, control characters, double quotes, angle brackets, the backslash, caret, backtick, braces, the vertical bar and non-ASCII are encoded, and every delimiter stays, so the value chooses the host, path and query as a whole bound URL does | `//cdn.example.com/a b.png?w=1&h=2` behind `https:` → `https://cdn.example.com/a%20b.png?w=1&h=2` |
+| Starting with `data:` (`data:image/png;base64,`) | kept as written: the guard admits only a base64 image source | `iVBORw0KGgo=` → `data:image/png;base64,iVBORw0KGgo=` |
 
 Non-ASCII characters are encoded as UTF-8 (`José` → `Jos%C3%A9`). Pass raw values: an already-encoded value behind a component prefix is encoded again. A value with `/` behind a path prefix becomes one segment (`a/b` → `a%2Fb`); to compose several segments, bind the whole URL instead.
 
@@ -138,7 +139,7 @@ Bind properties your `dataSchema` declares. Schema-declared data is validated wi
 - **Run code.** There are no expressions, functions or scripts. Bound values are never parsed as HTML: a bound value of `<img onerror=x src=y>` renders as those literal characters, not as an element. The one bind that emits elements is a [Markdown text bind](#markdown-text-binds), and there the parser, not the value, chooses them: only `p`, `br`, `strong`, `em`, `code`, `a`, `ul`, `ol` and `li` inside one `div.wg-md`, links face the `href` scheme guard, and raw HTML in the value stays text.
 - **Attach handlers.** Attribute names matching `on*` fail validation with `FORBIDDEN_ATTRIBUTE`, as do `srcdoc` and the renderer-reserved `data-wg-*` names. They are skipped at render time as well.
 - **Embed active content.** `script`, `iframe`, `frame`, `frameset`, `object`, `embed`, `style`, `link`, `meta`, `base`, `template` and `noscript` fail with `FORBIDDEN_TAG`.
-- **Smuggle URL schemes.** On URL-bearing attributes (`href`, `src`, `action`, `formaction`, `xlink:href`, `data`, `poster`, `ping`) only `http`, `https`, `mailto`, `tel` and relative references survive; anything else, `javascript:` included, is dropped at render time. A `prefix` value runs the same guard, so `"prefix": "javascript:"` is dropped like a bound `javascript:` value, and the encoded value cannot add a scheme behind a scheme-less prefix (its `:` becomes `%3A`) or a query behind yours.
+- **Smuggle URL schemes.** On URL-bearing attributes (`href`, `src`, `action`, `formaction`, `xlink:href`, `data`, `poster`, `ping`) only `http`, `https`, `mailto`, `tel` and relative references survive; anything else, `javascript:` included, is dropped at render time. A `prefix` value runs the same guard, so `"prefix": "javascript:"` is dropped like a bound `javascript:` value, and behind a scheme-less prefix the encoded value cannot add a scheme (its `:` becomes `%3A`).
 - **Use `data:` URIs**, with one exception: an `img` element's `src` accepts base64 `data:image/*;base64,` URIs.
 - **Nest without limit or render without bound.** Validation rejects nesting past a fixed depth (`TEMPLATE_TOO_DEEP`); interpretation stops at a node budget and marks the render truncated, because `each` multiplies template nodes by agent-supplied data length and a Markdown bind emits nodes in proportion to its value. The numbers are in [Limits](/reference/limits).
 

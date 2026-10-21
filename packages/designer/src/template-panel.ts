@@ -26,7 +26,7 @@ import {
   isCurrencyDisplay,
   isFormatType
 } from "@widgentic/core";
-import { isPlainObject } from "@widgentic/core";
+import { PREFIX_ENCODING_RULE, isPlainObject } from "@widgentic/core";
 import type { WidgetTemplate } from "@widgentic/core";
 import type { ActionBinding, StoredAction } from "@widgentic/core";
 import { createBindingEditor } from "./action-editor.js";
@@ -906,7 +906,7 @@ export function mountTemplatePanel(
             "wgd-input wgd-attr-prefix"
           );
           prefixInput.placeholder = "prefix";
-          prefixInput.title = "Literal prefix, e.g. mailto: — emitted only when the bound value is non-empty; the value is percent-encoded";
+          prefixInput.title = `Literal prefix, e.g. mailto: — emitted only when the bound value is non-empty. ${PREFIX_ENCODING_RULE}`;
           row.push(prefixInput);
         }
         if (showAddMap) {

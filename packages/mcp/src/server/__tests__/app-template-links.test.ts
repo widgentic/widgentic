@@ -17,16 +17,22 @@ function previewHrefs(root: HTMLElement, cells: string): (string | null)[] {
   return [...root.querySelectorAll(cells)].map((cell) => cell.querySelector("a")?.getAttribute("href") ?? null);
 }
 
-// Every case of the URL-value rule: a query prefix, a path prefix, bare
-// mail and phone schemes, a bare web scheme with its own escapes, a
-// scheme-less prefix that must not assemble one, non-ASCII, an astral
-// character, a lone surrogate, and an empty value.
+// Every case of the URL-value rule and of its prefix classification: a
+// query prefix, a path prefix, bare mail and phone schemes in either case,
+// a bare web scheme with its own escapes, `https://`, a bare scheme that
+// cannot link, a data: prefix, a scheme-less prefix that must not assemble
+// one, non-ASCII, an astral character, a lone surrogate, and an empty value.
 const values = {
   query: "Ada & Lin?x=1#y",
   path: "a/b%c",
   mail: "ada@example.org?subject=hi#x",
   phone: "+1 555-0100",
   dial: "100%[x]",
+  upper: "a&b@example.org",
+  slashes: "example.com/a b?c=1&d=2",
+  shout: "example.com/x?y=1",
+  ftp: "a b",
+  pixel: "iVBORw0KGgo+/AAA=",
   rest: "//cdn.example.com/a b.png?q=a%20b&h=2",
   sneak: "script:alert(1)",
   accent: "José",
@@ -41,6 +47,11 @@ const hints = {
     mail: "mailto:",
     phone: "tel:",
     dial: "tel:",
+    upper: "MAILTO:",
+    slashes: "https://",
+    shout: "HTTPS:",
+    ftp: "ftp:",
+    pixel: "data:image/png;base64,",
     rest: "https:",
     sneak: "java",
     accent: "https://example.com/u?n=",
@@ -63,7 +74,7 @@ describe("previews compose links as the result does", () => {
     t.dispatch(toolInputPartial({ widget: "card", data: payload.data, hints }));
     await settle();
     expect(previewHrefs(t.root(), "dd.wg-card-field-value")).toEqual(expected);
-    expect(expected.filter((href) => href !== null)).toHaveLength(9);
+    expect(expected.filter((href) => href !== null)).toHaveLength(12);
   });
 
   it("table cells link exactly the hrefs the renderer builds", async () => {
@@ -75,6 +86,8 @@ describe("previews compose links as the result does", () => {
     expect(previewHrefs(t.root(), "td.wg-table-cell")).toEqual(expected);
     expect(expected).toContain("tel:100%25%5Bx%5D");
     expect(expected).toContain("https://cdn.example.com/a%20b.png?q=a%20b&h=2");
+    expect(expected).toContain("MAILTO:a%26b@example.org");
+    expect(expected).toContain("https://example.com/a%20b?c=1&d=2");
   });
 
   it("a streamed table links the encoded href", async () => {

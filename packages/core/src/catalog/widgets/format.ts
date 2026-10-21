@@ -66,9 +66,9 @@ export function linkOrText(
   const hint = links?.[key];
   if (typeof raw !== "string" || raw === "") return display;
   // true: the value IS the URL. String: an author-supplied prefix composed
-  // with the encoded value (e.g. "mailto:") — the display stays the clean
-  // value, and the COMPOSED href faces the guard, so a hostile value can
-  // never smuggle a scheme or a query past an author prefix.
+  // with the value by the URL-value rule (e.g. "mailto:") — the display
+  // stays the clean value, and the COMPOSED href faces the guard, so a
+  // hostile value can never smuggle a scheme past an author prefix.
   const href =
     hint === true ? raw : typeof hint === "string" ? composePrefixedUrl(hint, raw) : undefined;
   if (href === undefined || !isLinkableUrl(href)) return display;

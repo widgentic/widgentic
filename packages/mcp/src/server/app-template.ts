@@ -488,9 +488,10 @@ function pattern(patternText, value) {
     ? patternText.split("{value}").join(value)
     : patternText + value;
 }
-// The URL-value rule, as core's composePrefixedUrl (pinned by an agreement test).
+// The URL-value rule, as core's composePrefixedUrl (pinned by an agreement
+// test). A data: prefix never composes a link, so the preview has no data case.
 function prefixed(prefix, value) {
-  const unsafe = /^https?:$/i.test(prefix) ? /[\\u0000-\\u0020\\u007f"<>\\\\^\\x60{|}]|[^\\u0000-\\u007f]/gu
+  const unsafe = /^https?:(\\/\\/)?$/i.test(prefix) ? /[\\u0000-\\u0020\\u007f"<>\\\\^\\x60{|}]|[^\\u0000-\\u007f]/gu
     : /^[a-z][a-z0-9+.-]*:$/i.test(prefix) ? /[^\\w\\-.~@+:;,=!$'()*\\/]/gu : /[^\\w\\-.!~*'()]/gu;
   return prefix + value.replace(unsafe, (c) => { try { return encodeURIComponent(c); } catch (e) { return "%EF%BF%BD"; } });
 }

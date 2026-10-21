@@ -272,6 +272,18 @@ describe("attr transforms", () => {
     expect(render(template, { rest: "//cdn.example.com/a b.png" })).toBe('<img src="https://cdn.example.com/a%20b.png">');
   });
 
+  it("a value behind a web scheme with slashes keeps its URL", () => {
+    expect(
+      render({ tag: "a", attrs: { href: { bind: "site", prefix: "https://" } } }, { site: "example.com/a/b?c=1" })
+    ).toBe('<a href="https://example.com/a/b?c=1"></a>');
+  });
+
+  it("a base64 value behind a data prefix stays an image source", () => {
+    const template: WidgetTemplate = { tag: "img", attrs: { src: { bind: "pixel", prefix: "data:image/png;base64," } } };
+    expect(render(template, { pixel: "iVBORw0KGgo+/AAA=" })).toBe('<img src="data:image/png;base64,iVBORw0KGgo+/AAA=">');
+    expect(render(template, { pixel: "<svg onload=x>" })).toBe("<img>");
+  });
+
   it("non-ASCII is encoded as UTF-8", () => {
     expect(
       render({ tag: "img", attrs: { src: { bind: "name", prefix: "https://example.com/u?n=" } } }, { name: "José" })

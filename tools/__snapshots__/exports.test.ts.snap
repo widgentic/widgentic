@@ -38,6 +38,7 @@ exports[`published export surfaces > @widgentic/core 1`] = `
   "PLURAL_CATEGORIES",
   "PLURAL_COUNT_PLACEHOLDER",
   "PLURAL_FORM_MAX",
+  "PREFIX_ENCODING_RULE",
   "PROMPT_TEXT_MAX",
   "PROPERTY_NAME",
   "REDACTED",
@@ -219,6 +220,7 @@ exports[`published export surfaces > @widgentic/core/catalog 1`] = `
 exports[`published export surfaces > @widgentic/core/contract 1`] = `
 [
   "ALLOWED_SCHEMES",
+  "PREFIX_ENCODING_RULE",
   "RESOURCE_DOMAIN_LIMIT",
   "RESOURCE_LIMIT",
   "isSafeImageSrc",

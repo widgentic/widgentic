@@ -19,7 +19,9 @@ describe("composePrefixedUrl", () => {
     expect(composePrefixedUrl("sms:", "100%[x]")).toBe("sms:100%25%5Bx%5D");
   });
 
-  it("reads the value behind a bare web scheme as the rest of a URL", () => {
+  it("reads the value behind a web scheme, with or without //, as the rest of a URL", () => {
+    expect(composePrefixedUrl("https://", "example.com/a/b?c=1&d=2#e")).toBe("https://example.com/a/b?c=1&d=2#e");
+    expect(composePrefixedUrl("HTTP://", "example.com/a b")).toBe("HTTP://example.com/a%20b");
     expect(composePrefixedUrl("https:", "//cdn.example.com/a.png?w=1&h=2#f")).toBe("https://cdn.example.com/a.png?w=1&h=2#f");
     expect(composePrefixedUrl("HTTP:", "//cdn.example.com/a b.png")).toBe("HTTP://cdn.example.com/a%20b.png");
     expect(composePrefixedUrl("https:", "//x.example/?q=a%20b")).toBe("https://x.example/?q=a%20b");
@@ -33,6 +35,16 @@ describe("composePrefixedUrl", () => {
     expect(composePrefixedUrl("mailto:", "zoë@example.org")).toBe("mailto:zo%C3%AB@example.org");
     expect(composePrefixedUrl("https://example.com/?q=", "😀")).toBe("https://example.com/?q=%F0%9F%98%80");
     expect(composePrefixedUrl("https://example.com/?q=", "a\ud800b")).toBe("https://example.com/?q=a%EF%BF%BDb");
+  });
+
+  it("keeps a value behind a data: prefix as written, for the image guard to judge", () => {
+    expect(composePrefixedUrl("data:image/png;base64,", "iVBORw0KGgo+/AAA=")).toBe("data:image/png;base64,iVBORw0KGgo+/AAA=");
+    expect(composePrefixedUrl("DATA:", "text/html,<b>")).toBe("DATA:text/html,<b>");
+  });
+
+  it("classifies only the exact web prefixes as web: a longer one is a component prefix", () => {
+    expect(composePrefixedUrl("https:///", "a/b")).toBe("https:///a%2Fb");
+    expect(composePrefixedUrl("ftp:", "a b?c")).toBe("ftp:a%20b%3Fc");
   });
 
   it("composes an empty value to the prefix alone (callers never emit it)", () => {
