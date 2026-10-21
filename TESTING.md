@@ -399,6 +399,7 @@ workspace and the sample first, then point at the built DLL):
     - Website: a whole URL with no prefix.
 
     Its example renders `seed=Zo%C3%AB%20O'Brien`, `tel:+1%20(555)%20010-0199`, `query=12%20Main%20St%20%26%205th%20Ave%2C%20Apt%20%234%2C%20Springfield`, and the website with `&amp;` in the HTML. On staging (`encode-prefixed-url-values-ac3df97`, revision `--0000034`), a keyed render of `Ada & Lin` carries the encoded URLs. The server-inlined DiceBear SVG reads `AL`, where the raw seed would have stopped at `Ada `.
+  - **Owner host check (2026-10-21).** The owner rendered `person-card-widget` in a fresh chat on staging and reports it working as expected: the avatar shows both initials, the address link opens Maps on the whole address, the phone link dials, and the website link opens with its full query.
   - **Gates.** Typecheck, 1,965 tests, build, `pack:check`, `docs:check`, OpenSpec strict and specs, and `dotnet test` (224) all pass.
 
 - **Stylesheet resources (2026-10-15, change `stylesheet-resources`, on `feature/stylesheet-resources`, core/designer/mcp minor pending release with the island)**: a person's stylesheets load in every frame of their widgets, behind their resource domains.

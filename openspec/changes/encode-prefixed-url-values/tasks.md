@@ -40,7 +40,7 @@
   The seed tests count 11 entries. The .NET sample seed is regenerated. The example README, the self-hosting page and the .NET README describe four widgets.
 
   Staging now runs `encode-prefixed-url-values-ac3df97` (ACR cj3y, revision `--0000034`). A keyed `list_widgets` names the card. A keyed `render_widget` of `Ada & Lin`, `Main St & 5th #2`, `+1 555-0100` and `https://example.com/?a=1&b=2` carries the encoded `seed`, `query` and `tel:` and the website with `&amp;`, in the result and in the `page` format. The server's inlined DiceBear SVG reads `AL`, so the service received the whole name.
-- [ ] 4.4 Owner leg: in a fresh chat on staging, render `person-card-widget` with a name like `Ada & Lin` and an address with `&` or `#`. Check that:
+- [x] 4.4 Owner leg (PASSED 2026-10-21, the owner reports all working as expected): in a fresh chat on staging, render `person-card-widget` with a name like `Ada & Lin` and an address with `&` or `#`. Check that:
   - the avatar shows both initials;
   - the address link opens Maps on the whole address;
   - the phone link dials the number;
