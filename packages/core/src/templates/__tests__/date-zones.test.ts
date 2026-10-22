@@ -47,8 +47,18 @@ describe("date zones", () => {
     );
     expect(render(template, { at: "soon" })).toBe("<p>soon</p>");
     expect(render(template, {})).toBe("<p></p>");
-    // An epoch beyond the Date range parses as a number but names no instant.
-    expect(render(template, { at: 1e300 })).not.toContain("<time");
+    // An epoch beyond the Date range names no instant: plain text, in every zone.
+    expect(render(template, { at: 1e300 })).toBe("<p>1e+300</p>");
+    expect(render(template, { at: 1.7e18 })).toBe("<p>1700000000000000000</p>");
+  });
+
+  it("an epoch beyond the Date range renders its plain value in every zone", () => {
+    for (const zone of DATE_ZONES) {
+      for (const at of [1e300, 8.64e15 + 1, -8.64e15 - 1, 1.7e18]) {
+        expect(formatBoundValue(at, { type: "date", pattern: "yyyy-MM-dd HH:mm", zone }), `${zone} ${at}`).toBe(String(at));
+      }
+      expect(formatBoundValue(8.64e15, { type: "date", pattern: "yyyy-MM-dd", zone })).toBe("275760-09-13");
+    }
   });
 
   it("a viewer-zone date's text equals the UTC rendering", () => {

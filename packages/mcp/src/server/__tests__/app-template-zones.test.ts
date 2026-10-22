@@ -100,6 +100,34 @@ describe("the frame shows viewer-zone dates in the viewer's zone", () => {
     expect(timeText(t)).toBe("01:30");
   });
 
+  it("agrees with the renderer's UTC text when the viewer's zone is UTC", async () => {
+    // The frame's token formatter is a copy of core's: in UTC both must read
+    // the same digits for every token, midnight and years 1 through 275760.
+    // Years before 1 differ (Intl counts eras), and a date there has no reader.
+    const values = [
+      "2026-10-21T09:30:05-07:00",
+      "2026-01-01T00:00:00Z",
+      "2026-12-31T23:59:59Z",
+      "0999-03-04T05:06:07Z",
+      "0001-01-01T00:00:00Z",
+      2.6e14,
+      8.64e15
+    ];
+    const patterns = ["yyyy", "MM", "dd", "HH", "mm", "ss", "yyyy-MM-dd HH:mm:ss", "dd/MM/yyyy, HH.mm"];
+    const t = await hostWith({ timeZone: "UTC" });
+    for (const pattern of patterns) {
+      for (const at of values) {
+        const tree = compileTemplate({
+          tag: "p",
+          children: [{ bind: "at", format: { type: "date", pattern, zone: "viewer" } }]
+        })({ kind: "x", data: { at } }) as { children: { children: string[] }[] };
+        const utc = tree.children[0]?.children[0];
+        t.dispatch(toolResult({ tree, css: "" }));
+        expect(timeText(t), `${pattern} ${String(at)}`).toBe(utc);
+      }
+    }
+  });
+
   it("localizes the tree the renderer emits, and leaves an unreadable instant in UTC", async () => {
     const t = await hostWith({ timeZone: "Asia/Kolkata" });
     const tree = compileTemplate({

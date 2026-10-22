@@ -100,16 +100,16 @@ The bridge cannot fit about 1 KiB into the 64 B left, and the feature lives only
 ### D8. Steering derives from two constants
 
 - **`DATE_ZONES`** is the tuple.
-- **`DATE_ZONE_RULE`** is one sentence: "zone: utc (default) shows the instant in UTC; value shows the time the value itself states (its own offset; an unzoned value as written); viewer shows the viewer's local time inside MCP Apps frames, falling back to UTC elsewhere, and is for text binds only."
+- **`DATE_ZONE_RULE`** is one sentence: "zone: utc (the default) shows the instant in UTC; value shows the time the value itself states (its own offset, an unzoned value as written, an epoch number in UTC); viewer shows the viewer's local time inside MCP Apps frames and UTC everywhere else, and is for text binds only."
 
-Five things derive from them: both guides' `FORMAT` line, the validator's zone messages, the designer's zone select labels and its title, and the docs. The `FORMAT` line's parenthesis "(an unzoned value is read as UTC and formatted in UTC, so every surface agrees)" is rewritten around the rule. The tests for both guides check for `DATE_ZONE_RULE`.
+These derive from them: both guides' `FORMAT` line, the validator's zone messages, and the designer's zone select options (`DATE_ZONES`) and title (`DATE_ZONE_RULE`). The select's labels are a designer-local map (D9), since they are presentation rather than rules. The `FORMAT` line's parenthesis "(an unzoned value is read as UTC and formatted in UTC, so every surface agrees)" is rewritten around the rule. The tests for both guides check for `DATE_ZONE_RULE`.
 
 ### D9. The designer: a zone select beside the pattern
 
-The date format reveals a select with:
-- **UTC** (default; the spec omits `zone`);
-- **The value's offset**;
-- **The viewer's zone**, on text rows only.
+The date format reveals a select whose options come from `DATE_ZONES` and whose labels come from the designer's `ZONE_LABELS` map:
+- `UTC` (the default; the spec omits `zone`);
+- `value's offset`;
+- `viewer's zone`, on text rows only.
 
 On an attribute row, a stored `viewer` cannot occur: the validator refuses it on import and the diagnostic shows. The island preview runs the app template, so it shows the designer user's own zone. The in-page fallback preview shows UTC.
 
@@ -121,6 +121,8 @@ On an attribute row, a stored `viewer` cannot occur: the validator refuses it on
 - **[An author's CSS targets the bind's parent's text]** → Only opted-in binds gain a `time` element, and it is inline.
 - **[Older renderers ignore `zone`]** → A template stored with `zone` renders UTC on an engine older than this release (forward compatibility). The apps adoption ships the new engine everywhere at once.
 - **[Template budget]** → D7, a reviewed raise.
+- **[The frame's token formatter is a copy of core's]** → An agreement test runs both over every token alone, midnight, and years 1 through 275760 (the Date range) with the viewer's zone set to UTC. They differ only before year 1, where `Intl` counts eras: no reader dates a meeting there.
+- **[An epoch beyond the Date range]** (revision after the PR review, 2026-10-22) → `readDate` range-checks epoch numbers (±8.64e15 ms), so a nanosecond epoch renders as its plain value in every zone instead of `NaN` digits. This also fixes the behavior inherited from UTC-only rendering.
 
 ## Migration Plan
 

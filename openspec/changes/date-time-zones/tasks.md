@@ -29,7 +29,7 @@
   - a zone change re-mounts through `patch`.
 
   Keep the served script comment-free and backtick-free.
-- [x] 3.2 Raise the raw budget to 46,080 in `app-template-size.test.ts` (D7), and record the measured size. Measured: 46,072 raw (8 B left) and 12,213 gzipped. Getting there took some tightening: `zoneOf` lets `Intl` resolve a missing zone, `mountTree` serves results and previews, and `rezone` keys on the attached root.
+- [x] 3.2 Raise the raw budget to 46,080 in `app-template-size.test.ts` (D7), and record the measured size. Measured: 46,072 raw (8 B left) and 12,213 gzipped; 46,069 (11 B left) and 12,207 after the review fix. Getting there took some tightening: `zoneOf` lets `Intl` resolve a missing zone, `mountTree` serves results and previews, and `rezone` keys on the attached root.
 - [x] 3.3 Tests through `bootTemplate()`, one per "The frame shows viewer-zone dates in the viewer's zone" scenario:
   - the host zone (`Asia/Tokyo` → `01:30`);
   - no zone, and `Mars/Base` (the frame default, computed in the test);

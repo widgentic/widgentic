@@ -246,6 +246,9 @@ function toFiniteNumber(value: unknown): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+/** ECMAScript's Date range: ±8.64e15 ms around the epoch. */
+const DATE_RANGE_MILLIS = 8.64e15;
+
 /**
  * The instant an ISO-8601 string or an epoch number names (seconds below
  * {@link EPOCH_SECONDS_BELOW}, milliseconds above), with the offset the
@@ -257,7 +260,10 @@ function toFiniteNumber(value: unknown): number | undefined {
 function readDate(value: unknown): { millis: number; offset: number } | undefined {
   if (typeof value === "number") {
     if (!Number.isFinite(value)) return undefined;
-    return { millis: Math.abs(value) < EPOCH_SECONDS_BELOW ? value * 1000 : value, offset: 0 };
+    const millis = Math.abs(value) < EPOCH_SECONDS_BELOW ? value * 1000 : value;
+    // Beyond the Date range (a nanosecond epoch is the usual data bug) there
+    // is no instant to show, so the value renders as plain text.
+    return Math.abs(millis) <= DATE_RANGE_MILLIS ? { millis, offset: 0 } : undefined;
   }
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
@@ -535,9 +541,11 @@ export function viewerDate(
   const parts = tokenizeDatePattern(parsed.pattern);
   const read = readDate(value);
   if (parts === undefined || read === undefined) return undefined;
-  const at = new Date(read.millis);
-  if (!Number.isFinite(at.getTime())) return undefined;
-  return { datetime: at.toISOString(), pattern: parsed.pattern, text: formatDate(read.millis, parts) };
+  return {
+    datetime: new Date(read.millis).toISOString(),
+    pattern: parsed.pattern,
+    text: formatDate(read.millis, parts)
+  };
 }
 
 /** Render `value` through `spec`, or as plain text when it cannot be parsed. */

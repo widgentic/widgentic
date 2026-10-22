@@ -215,7 +215,7 @@ function zonedText(iso, pattern) {
       day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" })
       .formatToParts(new Date(iso)).forEach((p) => (f[p.type] = p.value));
   } catch (e) { return undefined; }
-  const t = { yyyy: ("000" + f.year).slice(-4), MM: f.month, dd: f.day, HH: f.hour, mm: f.minute, ss: f.second };
+  const t = { yyyy: f.year.padStart(4, "0"), MM: f.month, dd: f.day, HH: f.hour, mm: f.minute, ss: f.second };
   return pattern.replace(/yyyy|MM|dd|HH|mm|ss/g, (k) => t[k]);
 }
 function zoned(node) {
