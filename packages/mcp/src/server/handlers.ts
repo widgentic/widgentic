@@ -493,7 +493,7 @@ function ownThemes(catalog: WidgetCatalog, widget: string, data: unknown, notes:
       notes.push(
         `group ${mode} theme: items name different themes (${named
           .map((entry) => `data.items[${entry.index}] '${entry.name}'`)
-          .join(", ")}); the default applies — pass 'theme' to choose one.`
+          .join(", ")}); the default applies — pass 'theme' to choose one`
       );
     }
   }
@@ -518,7 +518,7 @@ function renderThemes(
     const name = own?.names[mode];
     if (name === undefined) continue;
     if (registry.get(name) === undefined) {
-      notes.push(`${own?.naming ?? ""} ${mode} theme '${name}', which is not available; the default applies.`);
+      notes.push(`${own?.naming ?? ""} ${mode} theme '${name}', which is not available; the default applies`);
     } else {
       resolved[mode] = name;
     }

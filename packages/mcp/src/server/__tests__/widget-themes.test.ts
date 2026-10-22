@@ -152,8 +152,9 @@ describe("a widget's own themes take priority over the defaults", () => {
     expect(scoped(cssOf(result), LIGHT)).toContain("#bb0001");
     expect(cssOf(result)).not.toContain("#aa0001");
     expect(textOf(result)).toContain(
-      "Theme notes: group light theme: items name different themes (data.items[0] 'acme', data.items[1] 'ledger'); the default applies"
+      "Theme notes: group light theme: items name different themes (data.items[0] 'acme', data.items[1] 'ledger'); the default applies — pass 'theme' to choose one"
     );
+    expect(textOf(result)).not.toContain("one.");
     const html = textOf(handleRenderWidget(catalog, { ...input, format: "html" }, { themes }));
     expect(html).toContain("Theme notes:");
     const page = handleRenderWidget(catalog, { ...input, format: "page" }, { themes });
@@ -172,7 +173,7 @@ describe("a widget's own themes take priority over the defaults", () => {
     const result = handleRenderWidget(catalog, { widget: "promo", data }, { themes });
     expect(scoped(cssOf(result), LIGHT)).toContain("#bb0001");
     expect(textOf(result)).toContain(
-      "Theme notes: widget 'promo' names light theme 'acme', which is not available; the default applies."
+      "Theme notes: widget 'promo' names light theme 'acme', which is not available; the default applies"
     );
   });
 
