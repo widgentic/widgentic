@@ -402,6 +402,14 @@ workspace and the sample first, then point at the built DLL):
     - The project status names the built-ins, opting out of the Google defaults.
     - The person card gains an email, an optional title, an optional company block (name, industry, website) and optional tags (owner request). A name-only card renders just the header.
   - **Production scan** (read-only, counts only): 25 stored widgets, none with a `themes` key.
+  - **Staging** (`widget-themes-1597397`, revision `--0000038`), keyed renders of the seed:
+    - the person card wears `acme`/`acme-night`, and the inbox the Google defaults;
+    - the project status carries no token declarations (built-ins);
+    - a person card plus inbox group wears `acme` with no note;
+    - a person card plus project status group wears the defaults, with one note per mode;
+    - `list_widgets` shows `themes`.
+
+    The first staged build joined two notes as `one.; group dark`, so notes now end without a period, as hint notes do.
   - **Gates.** Typecheck, 2,043 tests, build, `pack:check`, `docs:check`, OpenSpec strict and specs, and `dotnet test` (240) all pass.
 
 - **Date time zones (2026-10-21, change `date-time-zones`, on `feature/date-time-zones`; core, designer and mcp minor and a webmcp patch pending release)**: the date format's `zone` shows UTC (the default), the value's own offset, or, in MCP Apps frames, the viewer's zone.

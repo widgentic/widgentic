@@ -71,9 +71,16 @@
 
 - [x] 6.1 Run the gates: typecheck, `npm test`, build, `pack:check`, `docs:check`, `openspec validate --strict widget-themes` and `--specs`, and `dotnet test`.
 - [x] 6.2 Read-only production scan (counts only): stored widget descriptors already carrying a `themes` key (expected 0). Result 2026-10-22: 25 widgets, 0 with `themes`.
-- [ ] 6.3 Deploy the branch to staging and check from the served bytes:
+- [x] 6.3 Deploy the branch to staging and check from the served bytes. Staging runs `widget-themes-1597397` (ACR cj43, revision `--0000038`); `4253eff` was checked first, then the note punctuation fix. Checked:
   - a keyed render of the person card carries `acme`'s light-scoped tokens and `acme-night`'s dark-scoped tokens;
   - the inbox carries the Google defaults;
   - a disagreeing group's text carries the theme note;
   - `list_widgets` shows `themes`.
+
+  Results:
+  - the person card wears `acme`/`acme-night`, and the inbox the Google pair;
+  - the project status carries no token declarations, since it opted out to the built-ins;
+  - a person card plus inbox group wears `acme` with no note;
+  - a person card plus project status group wears the Google defaults, with a note for each mode;
+  - `list_widgets` carries `themes`.
 - [ ] 6.4 Owner leg in each host (fresh chat), plus the designer and the app's refused theme deletion (Migration Plan 3).
