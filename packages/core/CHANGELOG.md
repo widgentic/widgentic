@@ -1,5 +1,32 @@
 # @widgentic/core
 
+## 0.15.0
+
+### Minor Changes
+
+- ed06286: The date format gains an optional `zone`: `{ type: "date", pattern, zone?: "utc" | "value" | "viewer" }`.
+  - **`utc`** (the default) is unchanged: the instant in UTC.
+  - **`value`** shows the time the value itself states. `2026-10-21T09:30:00-07:00` with `HH:mm` renders `09:30`; an unzoned value renders as written, and an epoch number in UTC. Every surface agrees.
+  - **`viewer`** shows the viewer's local time inside MCP Apps frames. On a text bind the renderer emits `<time datetime="<instant, ISO UTC>" data-wg-date="<pattern>">` around the UTC text, which the app template rewrites in the viewer's zone. Every surface without a viewer shows the UTC text. On an attribute value, `viewer` is refused with `INVALID_TEMPLATE_NODE`, since a frame rewrites text only.
+  
+  New exports: `DATE_ZONES`, `DATE_ZONE_RULE` (the rule text every guide and designer derives from), `isDateZone` and the `DateZone` type.
+- 181d2d9: A widget can name its own themes: `descriptor.themes: { light?, dark? }`, each a theme name (a built-in `light`/`dark` included). The catalog keeps them and returns them from `describe` and `list`. Whether a name exists is the caller's registry's business.
+  
+  New exports:
+  - `checkWidgetThemes`, the one runtime-neutral shape check that the store, the designers' import and the host bundle all use;
+  - `WIDGET_THEMES_RULE`, the rule text every guide and designer derives from;
+  - the `WidgetThemes` type.
+
+### Patch Changes
+
+- fc662ed: A value composed behind an author's URL prefix is now percent-encoded, so data can no longer restructure a URL whose shape the prefix fixes. This applies to a template `{ bind, prefix }` and to a `hints.links` prefix string on cards and tables. The prefix decides how:
+  - **Anything longer than a scheme** (`https://api.dicebear.com/9.x/initials/svg?seed=`): the value is one URI component, encoded as `encodeURIComponent` does. `Ada & Lin?x=1` becomes `Ada%20%26%20Lin%3Fx%3D1`; before, its `&` started a new query parameter.
+  - **A bare `mailto:` or `tel:`** (any bare scheme other than the web ones): the value is the address. `ada@example.org` and `+15551234` are unchanged, a space becomes `%20`, and `?`, `#`, `&` and `%` are encoded, so a value cannot add `?subject=`.
+  - **Exactly `http:`, `https:`, `http://` or `https://`**: the value is the rest of a URL. Spaces, control characters, quotes, `<>\^`, backtick, braces, `|` and non-ASCII are encoded, and its delimiters and escapes are kept.
+  - **A `data:` prefix**: the value is kept as written. The image-source guard admits only base64.
+  
+  Non-ASCII characters are encoded as UTF-8. The new constant `PREFIX_ENCODING_RULE` states the rule, and every surface that documents a prefix derives from it. The `hints.links` analyzer checks the encoded href. Whole URLs bound with no prefix are unchanged.
+
 ## 0.14.0
 
 ### Minor Changes
