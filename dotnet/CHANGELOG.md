@@ -3,6 +3,26 @@
 Versions share their major.minor with the `@widgentic/mcp` release whose host bundle they embed:
 `Widgentic.Mcp` X.Y.* runs `@widgentic/mcp` X.Y.*. The patch moves on its own for .NET-only fixes.
 
+## 0.15.0
+
+Embeds the `@widgentic/mcp` 0.15.0 host bundle. No .NET API changes; the behavior arrives through the bundle and the served app template.
+
+- **Encoded prefix values.** A value composed behind an author's URL prefix is encoded by the prefix's shape. This covers a template `{ bind, prefix }`, a card or table `hints.links` prefix, and the app template's preview of them.
+  - **A query or path prefix:** the value is one URI component.
+  - **A bare `mailto:`/`tel:`:** the value stays an address. A phone number's spaces become `%20`.
+  - **`http(s):`:** the value is the rest of a URL.
+  - **A `data:` prefix:** the value is kept as written.
+- **Date zones.** A template date format may carry `zone`:
+  - `utc` is the default and is unchanged;
+  - `value` shows the time the value states;
+  - `viewer` shows the viewer's local time in MCP Apps frames. The app template that `WithWidgentic` serves rewrites it in the host's `timeZone`, or else in the frame's own zone.
+
+  `viewer` is refused on an attribute value.
+- **A widget's own themes.** A widget's `descriptor.themes: { light?, dark? }` names the themes it wears ahead of the settings defaults. The order is an explicit render `theme`, then the widget's, then the default from `UseSettings` or a principal's record, then the built-in.
+  - **At startup,** a malformed `themes` refuses the widget at the door.
+  - **At render time,** a name the composed themes lack falls back to the default, with a `Theme notes:` line in the text result.
+  - **Groups** wear the theme their naming items agree on per mode, and otherwise the default with a note.
+
 ## 0.14.0
 
 Embeds the `@widgentic/mcp` 0.14.0 host bundle.
