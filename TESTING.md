@@ -382,6 +382,28 @@ workspace and the sample first, then point at the built DLL):
 
 ## Verification log
 
+- **Widget themes (2026-10-22, change `widget-themes`, on `feature/widget-themes`; core, designer and mcp minor and a webmcp patch pending release)**: a widget names its own light and dark themes, ahead of the Settings defaults.
+  - **Core** (`widget-themes.test.ts`, 3 tests). `descriptor.themes` registers and lists unchanged. `checkWidgetThemes` accepts a single mode or a built-in, and refuses a number, an unknown mode, an empty name, a name with a space, and a non-object, each naming `descriptor.themes`.
+  - **Store** (the shared contract on memory, SQLite and the Cosmos fake; the file store is read-only).
+    - `putWidget` refuses an unknown name with `UNKNOWN_THEME`, naming the mode and the theme. It stores a saved theme or a built-in, and refuses malformed shapes with `INVALID_SHAPE`.
+    - `removeTheme` answers `THEME_IN_USE` while widgets name the theme, with one message naming widgets and defaults ("default light theme and is named by widgets promo, report"). It succeeds once no widget names the theme.
+    - SQLite raw entries: a widget the validator refuses today still protects its theme, and a malformed `themes` is skipped on read with a diagnostic.
+  - **Rendering** (`widget-themes.test.ts` in mcp, 11 tests).
+    - Precedence: per mode, a widget naming one mode keeps the other default, a built-in opts out, one theme for both modes equals an explicit theme, and an explicit `theme` wins.
+    - Previews, an action re-render (through `handleExecuteAction`) and page documents follow the widget.
+    - Groups: agreeing items lend their theme with no note. Disagreeing items give the default and a `Theme notes:` line naming the items, in the default and `html` texts and never in a page document.
+    - A missing name falls back with a note.
+    - `list_widgets` shows `themes`, and the `theme` field steers.
+    - Widgets without themes render as before, and the corpus for existing cases did not change.
+  - **Corpus** (`widget themes` configuration). It covers both modes, light only, a built-in opt-out, explicit wins, a page, a preview, agreeing and disagreeing groups, a missing name, the listing and a widget page. The .NET suite runs it (240 tests).
+  - **Designer** (`widget-themes.test.ts`, 4 tests). Selects edit `descriptor.themes`, and choosing a supplied light theme also selects it as the preview theme, with its styles. Settings default omits the mode, a missing name is kept and marked, the export carries `themes`, and import refuses a malformed field.
+  - **Demo seed** (13 entries).
+    - A new Acme Outfitters pair, `acme` (light, with a `.wg-card` accent rule) and `acme-night`, which the person card names.
+    - The project status names the built-ins, opting out of the Google defaults.
+    - The person card gains an email, an optional title, an optional company block (name, industry, website) and optional tags (owner request). A name-only card renders just the header.
+  - **Production scan** (read-only, counts only): 25 stored widgets, none with a `themes` key.
+  - **Gates.** Typecheck, 2,043 tests, build, `pack:check`, `docs:check`, OpenSpec strict and specs, and `dotnet test` (240) all pass.
+
 - **Date time zones (2026-10-21, change `date-time-zones`, on `feature/date-time-zones`; core, designer and mcp minor and a webmcp patch pending release)**: the date format's `zone` shows UTC (the default), the value's own offset, or, in MCP Apps frames, the viewer's zone.
   - **The format** (`date-zones.test.ts`, 8 tests).
     - `value` reads `Z`, `±HH:MM`, `±HHMM`, fractions, unzoned values, date-only values and epochs. `2026-10-21T09:30:00-07:00` with `HH:mm` gives `09:30` under `value` and `16:30` under `utc`.

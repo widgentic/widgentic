@@ -242,9 +242,11 @@ export const RENDER_WIDGET_TOOL: McpToolDefinition = {
           "drifts the moment they edit it). Inline maps are for one-off, " +
           "unsaved styling. Discover tokens, defaults, and presets with " +
           "list_theme_tokens; author extras as 'x-<name>' custom " +
-          "variables. Leave this out to use the user's default themes for " +
-          "light and dark hosts (list_themes shows them); a theme you pass " +
-          "replaces those defaults in both modes. Applied to 'page' output " +
+          "variables. Leave this out to use the widget's own themes " +
+          "(descriptor.themes in list_widgets) or else the user's default " +
+          "themes for light and dark hosts (list_themes shows them); a theme " +
+          "you pass replaces both in both modes, so pass one only when the " +
+          "user asks for a different look. Applied to 'page' output " +
           "and embedded in the widget payload for native hosts on every format."
       }
     },

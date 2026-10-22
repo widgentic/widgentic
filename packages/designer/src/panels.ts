@@ -6,7 +6,7 @@
  * DOM is a projection.
  */
 import { errorMessage } from "./internal.js";
-import { isPlainObject } from "@widgentic/core";
+import { isPlainObject, WIDGET_THEMES_RULE } from "@widgentic/core";
 import type { DataSchema } from "@widgentic/core";
 import type { ThemeEntry } from "@widgentic/core";
 import { diagnosticLine, h, section, tabs, textArea, textField, requireChild } from "./dom.js";
@@ -126,6 +126,54 @@ export function mountPanels(
   );
   refreshers.push((draft) => hintsEditor.setValue(draft.descriptor.hints));
   const dataShapeDiag = diagnosticLine(undefined);
+
+  // --- Widget themes: the look this widget wears per mode ---------------
+  // "Settings default" omits the mode; a name matching no option stays,
+  // marked missing, until the person changes it.
+  function widgetThemeSelect(mode: "light" | "dark", label: string): HTMLElement {
+    const names = ["light", "dark", ...themes.map((entry) => entry.name).filter((name) => name !== "light" && name !== "dark")];
+    const select = h("select", { class: `wgd-select wgd-widget-theme wgd-widget-theme-${mode}`, title: WIDGET_THEMES_RULE }, [
+      h("option", { value: "" }, ["Settings default"]),
+      ...names.map((name) => h("option", { value: name }, [themes.find((entry) => entry.name === name)?.label ?? name]))
+    ]);
+    const show = (draft: WidgetDraft): void => {
+      const current = draft.descriptor.themes?.[mode];
+      const missing = select.querySelector(".wgd-widget-theme-missing");
+      if (current !== undefined && !names.includes(current)) {
+        if (missing?.getAttribute("value") !== current) {
+          missing?.remove();
+          select.append(h("option", { value: current, class: "wgd-widget-theme-missing" }, [`${current} (missing)`]));
+        }
+      } else {
+        missing?.remove();
+      }
+      select.value = current ?? "";
+    };
+    show(store.get());
+    refreshers.push(show);
+    select.addEventListener("change", () => {
+      const name = select.value;
+      store.update((draft) => {
+        const { [mode]: _gone, ...others } = draft.descriptor.themes ?? {};
+        const next = name === "" ? others : { ...others, [mode]: name };
+        const { themes: _themes, ...rest } = draft.descriptor;
+        const descriptor = Object.keys(next).length === 0 ? rest : { ...rest, themes: next };
+        // Choosing a supplied light theme previews it: the person picked this look.
+        const entry = mode === "light" ? themes.find((candidate) => candidate.name === name) : undefined;
+        if (entry === undefined) return { ...draft, descriptor };
+        const { theme: _theme, themeStyles: _styles, previewTheme: _name, ...base } = draft;
+        return {
+          ...base,
+          descriptor,
+          theme: entry.tokens,
+          previewTheme: entry.name,
+          ...(entry.styles === undefined ? {} : { themeStyles: entry.styles })
+        };
+      });
+    });
+    return h("label", { class: "wgd-field" }, [h("span", { class: "wgd-field-label" }, [label]), select]);
+  }
+
   const generalPanel = section("General", [
     bindText("Kind (id)", (d) => d.kind, (d, v) => ({ ...d, kind: v })),
     kindDiag,
@@ -140,6 +188,8 @@ export function mountPanels(
       (d, v) => ({ ...d, descriptor: { ...d.descriptor, dataShape: v } })
     ),
     dataShapeDiag,
+    widgetThemeSelect("light", "Light theme"),
+    widgetThemeSelect("dark", "Dark theme"),
     h("div", { class: "wgd-field" }, [
       h("span", { class: "wgd-field-label" }, ["Hints"]),
       tabs([

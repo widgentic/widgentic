@@ -173,7 +173,9 @@ file is logged too; the service starts either way. Keys and secrets are never
 seeded, and multi-user mode ignores the seed.
 
 `seed/demo.json` ships in the image as a starting point: two shared schemas,
-two themes (set as the default light and dark themes), four widgets (an
+four themes (two Google-inspired ones set as the default light and dark
+themes, and the Acme Outfitters brand pair the person card names as its own
+themes), four widgets (an
 appointment agenda and an email inbox built on the schemas, plus a project
 status widget and a person card that need no shared schema), four resource domains
 (`api.dicebear.com` and `*.pravatar.cc`, avatar services, DiceBear drawing the person

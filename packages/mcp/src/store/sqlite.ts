@@ -42,7 +42,9 @@ import {
   looseWidget,
   referencesToSecret,
   widgetsLoadingAction,
-  widgetsReferencingAction
+  refuseUnknownWidgetThemes,
+  widgetsReferencingAction,
+  widgetsUsingTheme
 } from "./refs.js";
 import type {
   CreatedKey,
@@ -484,6 +486,7 @@ export function createSqliteStore(
         if (ref !== undefined && !entryExists(principalId, "schema", ref)) {
           throw new StoreRejectionError("UNKNOWN_SCHEMA", `widget references missing schema '${ref}'.`);
         }
+        refuseUnknownWidgetThemes(widget, (name) => entryExists(principalId, "theme", name));
         // A `load` through a shared action needs that action to be a GET now;
         // a dangling ref stays non-fatal (it renders disabled).
         const loadRef = loadRefOf(widget);
@@ -574,7 +577,11 @@ export function createSqliteStore(
       tx(() => {
         // Same transaction as the delete: a default set concurrently cannot
         // slip past the check.
-        refuseThemeInUse(rawEntry(principalId, "settings", SETTINGS_ROW), name);
+        refuseThemeInUse(
+          rawEntry(principalId, "settings", SETTINGS_ROW),
+          name,
+          widgetsUsingTheme(scanWidgets(principalId), name)
+        );
         db.prepare("DELETE FROM entries WHERE principal_id = ? AND kind = 'theme' AND name = ?").run(principalId, name);
       });
     },

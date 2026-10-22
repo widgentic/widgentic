@@ -271,7 +271,8 @@ describe("agents see theme styles and defaults", () => {
     expect(LIST_THEMES_TOOL.description).toContain("defaults");
     expect(LIST_THEMES_TOOL.description).toContain("styles");
     const themeParam = (RENDER_WIDGET_TOOL.inputSchema.properties as Record<string, { description?: string }>).theme;
-    expect(themeParam?.description).toContain("Leave this out to use the user's default themes");
+    expect(themeParam?.description).toContain("Leave this out to use the widget's own themes");
+    expect(themeParam?.description).toContain("or else the user's default themes for light and dark hosts");
   });
 
   it("the guide teaches theme styles from the shared constants, and its drafts import cleanly", () => {

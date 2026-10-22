@@ -25,6 +25,7 @@ import {
   JOIN_DEFAULT_SEPARATOR,
   JOIN_SEPARATOR_MAX,
   LABEL_STYLE_RULE,
+  WIDGET_THEMES_RULE,
   PREFIX_ENCODING_RULE,
   MARKDOWN_SOURCE_MAX,
   MARKDOWN_TAGS,
@@ -120,7 +121,8 @@ export function buildDesignerGuide(prefix: string): Record<string, unknown> {
             "Use it when the person names a saved schema; the server resolves it at render time, so one shared schema serves every widget that references it.",
           hints: "OPTIONAL record documenting supported hint keys.",
           styles: "OPTIONAL nested record: selector → { cssProperty: value } (NOT css strings — no ';' anywhere; see rules.styles).",
-          dataSchema: "OPTIONAL structural schema (see rules.dataSchema)."
+          dataSchema: "OPTIONAL structural schema (see rules.dataSchema).",
+          themes: WIDGET_THEMES_RULE
         }
       },
       reservedKinds: createCatalog().kinds(),

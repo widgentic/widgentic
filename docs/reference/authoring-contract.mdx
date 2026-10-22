@@ -38,6 +38,7 @@ A widget is one JSON object: \{ kind, template, descriptor \}.
 | `hints` | OPTIONAL record documenting supported hint keys. |
 | `styles` | OPTIONAL nested record: selector → \{ cssProperty: value \} (NOT css strings — no ';' anywhere; see rules.styles). |
 | `dataSchema` | OPTIONAL structural schema (see rules.dataSchema). |
+| `themes` | OPTIONAL \{ light?, dark? \} — the names of the themes this widget wears on light and dark hosts when a render passes no theme, ahead of the user's default themes. Each name is a built-in (light, dark) or one of the user's saved themes (list\_themes); a mode left out takes the user's default. |
 
 ### Reserved kinds
 
