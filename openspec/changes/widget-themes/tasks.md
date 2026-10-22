@@ -80,7 +80,7 @@
 
 - [x] 6.1 Run the gates: typecheck, `npm test`, build, `pack:check`, `docs:check`, `openspec validate --strict widget-themes` and `--specs`, and `dotnet test`.
 - [x] 6.2 Read-only production scan (counts only): stored widget descriptors already carrying a `themes` key (expected 0). Result 2026-10-22: 25 widgets, 0 with `themes`.
-- [x] 6.3 Deploy the branch to staging and check from the served bytes. Staging runs `widget-themes-1597397` (ACR cj43, revision `--0000038`); `4253eff` was checked first, then the note punctuation fix. Checked:
+- [x] 6.3 Deploy the branch to staging and check from the served bytes. Staging ran `widget-themes-1597397` (ACR cj43, revision `--0000038`); `4253eff` was checked first, then the note punctuation fix. After the owner's designer finding (D10) it runs `widget-themes-34e1813` (ACR cj44, revision `--0000039`), and the served `/app.bundle.js` carries `defaultPreviewTheme`. Checked:
   - a keyed render of the person card carries `acme`'s light-scoped tokens and `acme-night`'s dark-scoped tokens;
   - the inbox carries the Google defaults;
   - a disagreeing group's text carries the theme note;

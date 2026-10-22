@@ -410,7 +410,7 @@ workspace and the sample first, then point at the built DLL):
     - a person card plus project status group wears the defaults, with one note per mode;
     - `list_widgets` shows `themes`.
 
-    The first staged build joined two notes as `one.; group dark`, so notes now end without a period, as hint notes do.
+    The first staged build joined two notes as `one.; group dark`, so notes now end without a period, as hint notes do. After the designer finding, staging runs `widget-themes-34e1813` (revision `--0000039`), and its served `/app.bundle.js` carries the new preview selection.
   - **Gates.** Typecheck, 2,048 tests, build, `pack:check`, `docs:check`, OpenSpec strict and specs, and `dotnet test` (240) all pass.
 
 - **Date time zones (2026-10-21, change `date-time-zones`, on `feature/date-time-zones`; core, designer and mcp minor and a webmcp patch pending release)**: the date format's `zone` shows UTC (the default), the value's own offset, or, in MCP Apps frames, the viewer's zone.
