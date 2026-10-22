@@ -92,4 +92,10 @@
   - a person card plus inbox group wears `acme` with no note;
   - a person card plus project status group wears the Google defaults, with a note for each mode;
   - `list_widgets` carries `themes`.
-- [ ] 6.4 Owner leg in each host (fresh chat), plus the designer and the app's refused theme deletion (Migration Plan 3).
+- [x] 6.4 Owner leg in each host (fresh chat), plus the designer and the app's refused theme deletion (Migration Plan 3). PASSED 2026-10-22. The owner confirmed, with screenshots:
+  - the person card in Acme (dark), the inbox in Google, the project status in the built-ins;
+  - the agreeing group in Acme, and the disagreeing group in the Google defaults with the note;
+  - the designer previewing every widget in its own theme;
+  - `THEME_IN_USE` naming `person-card-widget` when deleting `acme-night`.
+
+  Follow-up: the group note now also advises rendering the items separately (design D6).

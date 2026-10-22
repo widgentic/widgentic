@@ -152,13 +152,26 @@ describe("a widget's own themes take priority over the defaults", () => {
     expect(scoped(cssOf(result), LIGHT)).toContain("#bb0001");
     expect(cssOf(result)).not.toContain("#aa0001");
     expect(textOf(result)).toContain(
-      "Theme notes: group light theme: items name different themes (data.items[0] 'acme', data.items[1] 'ledger'); the default applies — pass 'theme' to choose one"
+      "Theme notes: group light theme: items name different themes (data.items[0] 'acme', data.items[1] 'ledger'); the default applies; pass 'theme' to choose one look for the whole group, or, when the user wants each widget in its own theme, render them as separate widgets instead of one group"
     );
     expect(textOf(result)).not.toContain("one.");
     const html = textOf(handleRenderWidget(catalog, { ...input, format: "html" }, { themes }));
     expect(html).toContain("Theme notes:");
     const page = handleRenderWidget(catalog, { ...input, format: "page" }, { themes });
     expect(String(page.content[0]?.type === "text" ? page.content[0].text : "")).not.toContain("Theme notes");
+  });
+
+  it("a group disagreeing in both modes notes each mode and advises once", async () => {
+    const { catalog, themes } = await rig([
+      widgetNaming("promo", { light: "acme", dark: "acme-night" }),
+      widgetNaming("report", { light: "light", dark: "dark" })
+    ]);
+    const text = textOf(
+      handleRenderWidget(catalog, { widget: "group", data: { items: [{ kind: "promo", data }, { kind: "report", data }] } }, { themes })
+    );
+    expect(text).toContain("group light theme: items name different themes (data.items[0] 'acme', data.items[1] 'light'); the default applies");
+    expect(text).toContain("group dark theme: items name different themes (data.items[0] 'acme-night', data.items[1] 'dark'); the default applies");
+    expect(text.split("render them as separate widgets").length - 1).toBe(1);
   });
 
   it("a missing theme falls back with a note", async () => {

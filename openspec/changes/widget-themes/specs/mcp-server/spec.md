@@ -49,7 +49,7 @@ When a render, a preview, an action's re-render or a widget page names no `theme
   - one theme for both modes is emitted as an explicit theme is;
   - documents wear the light mode's theme.
 - **A missing theme.** A name the caller's registry does not hold SHALL fall back to that mode's default, and the text result SHALL carry a `Theme notes:` line naming the widget, the mode and the missing theme.
-- **Groups.** For a `group`, each mode SHALL wear the theme that every item naming a theme for that mode names, when they all name the same one. When items disagree, that mode SHALL wear the default, and the `Theme notes:` line SHALL name each item index with its theme.
+- **Groups.** For a `group`, each mode SHALL wear the theme that every item naming a theme for that mode names, when they all name the same one. When items disagree, that mode SHALL wear the default, and the `Theme notes:` line SHALL name each item index with its theme. It SHALL then advise once that the agent can pass `theme` for one look across the group, or render the items as separate widgets when the user wants each widget in its own theme, since one frame wears one theme per mode.
 - **Notes never change markup.** They are absent when nothing disagrees or is missing. They ride the text result exactly where hint notes do, and never enter a `page` document, which is browser-facing.
 - **Discovery.** `list_widgets` SHALL show `themes` in each descriptor that names them. The `render_widget` `theme` field description SHALL say that a widget naming its own themes wears them, and that `theme` is for when the user asks for another look.
 
@@ -80,6 +80,7 @@ When a render, a preview, an action's re-render or a widget page names no `theme
 #### Scenario: A group whose items disagree wears the defaults and says so
 - **WHEN** a `group` holds `promo` (light `acme`) and `report` (light `ledger`)
 - **THEN** the light mode SHALL wear the light default, and the text result SHALL carry a `Theme notes:` line naming `data.items[0]` with `acme` and `data.items[1]` with `ledger`
+- **AND** the line SHALL advise, once, passing `theme` or rendering the items as separate widgets so each wears its own themes
 - **AND** a `format: "page"` document SHALL carry no note
 
 #### Scenario: A missing theme falls back with a note

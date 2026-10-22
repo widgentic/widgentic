@@ -93,7 +93,7 @@ The render's `Theme notes:` line and the designer's marked "missing" option are 
 
 For each mode, take the names that the items' descriptors give for that mode, ignoring items that name none:
 - **One distinct name:** the group's widget theme for that mode is that name.
-- **Two or more distinct names:** that mode uses the default, and a note lists the item indices with their names: "group light theme: items name different themes (data.items[0] 'acme', data.items[1] 'ledger'); the default applies — pass 'theme' to choose one".
+- **Two or more distinct names:** that mode uses the default, and a note lists the item indices with their names: "group light theme: items name different themes (data.items[0] 'acme', data.items[1] 'ledger'); the default applies". One closing note then advises, once for both modes: "pass 'theme' to choose one look for the whole group, or, when the user wants each widget in its own theme, render them as separate widgets instead of one group". This is the owner's addition from the staging check (2026-10-22): one frame wears one theme per mode, so separate renders are the only way each widget keeps its own look.
 
 The group kind itself never names themes; it is a built-in.
 

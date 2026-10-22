@@ -481,6 +481,7 @@ function ownThemes(catalog: WidgetCatalog, widget: string, data: unknown, notes:
   }
   const items = isPlainObject(data) && Array.isArray(data.items) ? data.items : [];
   const names: WidgetThemes = {};
+  let disagreed = false;
   for (const mode of MODES) {
     const named = items.flatMap((item, index) => {
       const name = isPlainObject(item) && typeof item.kind === "string" ? catalog.describe(item.kind)?.themes?.[mode] : undefined;
@@ -490,12 +491,19 @@ function ownThemes(catalog: WidgetCatalog, widget: string, data: unknown, notes:
     const [agreed] = distinct;
     if (distinct.length === 1 && agreed !== undefined) names[mode] = agreed;
     else if (distinct.length > 1) {
+      disagreed = true;
       notes.push(
         `group ${mode} theme: items name different themes (${named
           .map((entry) => `data.items[${entry.index}] '${entry.name}'`)
-          .join(", ")}); the default applies — pass 'theme' to choose one`
+          .join(", ")}); the default applies`
       );
     }
+  }
+  // One frame wears one theme per mode, so a group cannot dress items apart.
+  if (disagreed) {
+    notes.push(
+      "pass 'theme' to choose one look for the whole group, or, when the user wants each widget in its own theme, render them as separate widgets instead of one group"
+    );
   }
   return { names, naming: "the group's items name" };
 }

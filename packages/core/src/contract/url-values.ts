@@ -32,7 +32,7 @@ export const PREFIX_ENCODING_RULE =
 const WEB_SCHEME = /^https?:(\/\/)?$/i;
 const DATA_SCHEME = /^data:/i;
 const BARE_SCHEME = /^[a-z][a-z0-9+.-]*:$/i;
-const URL_UNSAFE = /[\u0000- \u007f"<>\\^`{|}]|[^\u0000-\u007f]/gu;
+const URL_UNSAFE = /[\u0000-\u0020\u007f"<>\\^`{|}]|[^\u0000-\u007f]/gu;
 const ADDRESS_UNSAFE = /[^A-Za-z0-9\-._~@+:;,=!$'()*/]/gu;
 const COMPONENT_UNSAFE = /[^A-Za-z0-9\-_.!~*'()]/gu;
 
