@@ -402,6 +402,10 @@ workspace and the sample first, then point at the built DLL):
     - A keyed agenda render carries 4 `time` elements: `09:15-05:00` becomes `datetime="2026-09-03T14:15:30.000Z"` over the UTC text `2026-09-03 14:15`.
     - The inbox renders `09:15` and `08:30` as written.
     - The served template carries the zone walker, and the probe is gone.
+  - **Owner host check (2026-10-22).** In fresh chats in claude.ai, ChatGPT and VS Code Copilot, and in the staging designer, everything worked as specified:
+    - the agenda showed its times in the viewer's local time (Bogota);
+    - the inbox showed the times as written;
+    - the designer's island preview showed local times.
 
 - **Encoded prefix values (2026-10-21, change `encode-prefixed-url-values`, on `bug/encode-prefixed-url-values`, core/designer/mcp/webmcp patch pending release)**: a value composed behind an author's URL prefix is percent-encoded, so data cannot restructure the URL.
   - **The report, reproduced on 0.14.0.** A `src` with prefix `https://api.dicebear.com/9.x/initials/svg?seed=` over `Ada & Lin?x=1#y` rendered the value raw, so the service received `seed=Ada `. A `hints.links` prefix and the app template's streamed preview did the same. Whole URLs bound with no prefix were already correct.

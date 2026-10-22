@@ -64,7 +64,7 @@
   - the served template carries the localizing bridge.
 
   Result: a keyed render of the agenda example carries 4 `time` elements (for example `datetime="2026-09-03T14:15:30.000Z"` over UTC text `2026-09-03 14:15`) in both the tree and the HTML. The inbox shows `09:15` and `08:30` as written. The template carries `zonedText` and `rezone`, and no probe.
-- [ ] 6.3 Owner leg, in a fresh chat on each host:
+- [x] 6.3 Owner leg, in a fresh chat on each host. PASSED 2026-10-22: the owner reports all working fine.
   - the agenda's times show in the viewer's local time;
   - the inbox shows the times as the values state them;
   - the designer island preview shows the local time.
