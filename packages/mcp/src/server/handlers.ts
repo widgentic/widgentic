@@ -234,8 +234,9 @@ export function handleListThemes(registry: ThemeRegistry, resources: readonly Re
       "shown for reference; a token map may still be passed inline. A " +
       "theme's 'styles' define shared .wg- classes (a .wg-btn, say) that " +
       "any widget rendered under it can use in its template. 'defaults' " +
-      "names the theme each host mode uses when a render names none — the " +
-      "user chooses them in Settings. A new theme the user wants to keep " +
+      "names the theme each host mode uses when a render names none and the " +
+      "widget names none of its own (descriptor.themes) — the user chooses " +
+      "them in Settings. A new theme the user wants to keep " +
       "belongs in the designer: deliver it as " +
       "{ name, label?, description?, tokens, styles? } for Import at widgentic.dev " +
       "(see get_authoring_guide)." +
@@ -443,9 +444,10 @@ interface ResolvedTheme {
 
 /**
  * What a render dresses itself with: the explicit `theme` input, or —
- * when there is none — the registry's default per mode. A default that is
- * the built-in is left out, so the template's own behavior for that mode
- * stands and output without chosen defaults stays byte-identical.
+ * when there is none — per mode the widget's own theme, else the
+ * registry's default. A mode resolving to its built-in is left out, so the
+ * template's own behavior for that mode stands and output without chosen
+ * themes stays byte-identical.
  */
 interface RenderThemes {
   explicit?: ResolvedTheme;

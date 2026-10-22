@@ -388,7 +388,7 @@ workspace and the sample first, then point at the built DLL):
     - `putWidget` refuses an unknown name with `UNKNOWN_THEME`, naming the mode and the theme. It stores a saved theme or a built-in, and refuses malformed shapes with `INVALID_SHAPE`.
     - `removeTheme` answers `THEME_IN_USE` while widgets name the theme, with one message naming widgets and defaults ("default light theme and is named by widgets promo, report"). It succeeds once no widget names the theme.
     - SQLite raw entries: a widget the validator refuses today still protects its theme, and a malformed `themes` is skipped on read with a diagnostic.
-  - **Rendering** (`widget-themes.test.ts` in mcp, 11 tests).
+  - **Rendering** (`widget-themes.test.ts` in mcp, 12 tests).
     - Precedence: per mode, a widget naming one mode keeps the other default, a built-in opts out, one theme for both modes equals an explicit theme, and an explicit `theme` wins.
     - Previews, an action re-render (through `handleExecuteAction`) and page documents follow the widget.
     - Groups: agreeing items lend their theme with no note. Disagreeing items give the default and a `Theme notes:` line naming the items, in the default and `html` texts and never in a page document.

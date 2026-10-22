@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
 import { invoiceWidget } from "@widgentic-examples/mcp-server/widgets";
-import { DATE_ZONE_RULE, LABEL_STYLE_RULE, PREFIX_ENCODING_RULE, TOKEN_SPECS, createCatalog } from "@widgentic/core";
+import { DATE_ZONE_RULE, LABEL_STYLE_RULE, PREFIX_ENCODING_RULE, TOKEN_SPECS, WIDGET_THEMES_RULE, createCatalog } from "@widgentic/core";
 import { importWidgetJson } from "@widgentic/designer";
 import { designerTools } from "../index.js";
 import { run } from "./helpers.js";
@@ -22,6 +22,8 @@ describe("the authoring guide tool", () => {
     expect(guide.workflow.summary).toContain("widgentic_widget_draft_load");
     expect(guide.workflow.boundary).toMatch(/No tool here saves/);
     expect(guide.widget.reservedKinds).toEqual(createCatalog().kinds());
+    // descriptor.themes is core's rule, verbatim, as in the MCP server's guide.
+    expect((guide.widget as unknown as { shape: { descriptor: Record<string, string> } }).shape.descriptor.themes).toBe(WIDGET_THEMES_RULE);
     // The label style is core's rule, verbatim, as in the MCP server's guide.
     expect((guide.rules.template as unknown as { labels: string }).labels).toContain(LABEL_STYLE_RULE);
     expect(guide.theme.tokens.map((t) => t.name).sort()).toEqual(Object.keys(TOKEN_SPECS).sort());

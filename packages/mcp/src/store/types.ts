@@ -156,13 +156,19 @@ export interface CreatedKey {
 
 /** A store that also accepts writes (the app's path, not the MCP surface). */
 export interface WritableWidgetStore extends WidgetStore {
+  /**
+   * Store a widget. Refused with `UNKNOWN_SCHEMA` for a `dataSchemaRef`
+   * naming no stored schema, and with `UNKNOWN_THEME` for a
+   * `descriptor.themes` name that is neither a built-in nor a stored theme.
+   */
   putWidget(principalId: string, widget: StoredWidget): Promise<void>;
   putTheme(principalId: string, theme: ThemeEntry): Promise<void>;
   putSchema(principalId: string, schema: StoredSchema): Promise<void>;
   removeWidget(principalId: string, kind: string): Promise<void>;
   /**
    * Remove a theme. Refused with `THEME_IN_USE` while the principal's
-   * settings name it as a default.
+   * settings name it as a default or a stored widget's `descriptor.themes`
+   * names it.
    */
   removeTheme(principalId: string, name: string): Promise<void>;
   /**

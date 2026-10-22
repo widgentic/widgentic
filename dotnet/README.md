@@ -105,8 +105,9 @@ and then silently missing.
 
 ## Default themes
 
-A render that names no theme takes the default theme for the host's colour scheme: the
-built-in `light` and `dark`, unless a settings record chooses others. The record has the
+A render that names no theme takes, for the host's colour scheme, the theme the widget's
+`descriptor.themes` names, else the default theme: the built-in `light` and `dark`, unless a
+settings record chooses others. The record has the
 widgentic store's shape:
 
 ```json

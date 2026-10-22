@@ -159,7 +159,8 @@ export const LIST_THEMES_TOOL: McpToolDefinition = {
     "List the themes registered on this server — name, label, description, " +
     "token map and shared styles for each — and 'defaults', the theme the " +
     "user chose for light and for dark hosts. Leave render_widget's 'theme' " +
-    "out to use those defaults; pass a listed name only when the user asks " +
+    "out to use the widget's own themes (descriptor.themes in list_widgets) " +
+    "or else those defaults; pass a listed name only when the user asks " +
     "for a different theme. A theme's 'styles' define .wg- classes (a " +
     ".wg-btn, say) that widgets rendered under it can use in their templates.",
   inputSchema: {

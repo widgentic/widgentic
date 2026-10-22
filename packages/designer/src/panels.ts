@@ -6,7 +6,7 @@
  * DOM is a projection.
  */
 import { errorMessage } from "./internal.js";
-import { isPlainObject, WIDGET_THEMES_RULE } from "@widgentic/core";
+import { isPlainObject } from "@widgentic/core";
 import type { DataSchema } from "@widgentic/core";
 import type { ThemeEntry } from "@widgentic/core";
 import { diagnosticLine, h, section, tabs, textArea, textField, requireChild } from "./dom.js";
@@ -132,7 +132,9 @@ export function mountPanels(
   // marked missing, until the person changes it.
   function widgetThemeSelect(mode: "light" | "dark", label: string): HTMLElement {
     const names = ["light", "dark", ...themes.map((entry) => entry.name).filter((name) => name !== "light" && name !== "dark")];
-    const select = h("select", { class: `wgd-select wgd-widget-theme wgd-widget-theme-${mode}`, title: WIDGET_THEMES_RULE }, [
+    // Person-facing wording: WIDGET_THEMES_RULE speaks to agents (list_themes).
+    const title = `The theme this widget wears on ${mode} hosts when a render names none, ahead of your default ${mode} theme. "Settings default" leaves it to your default.`;
+    const select = h("select", { class: `wgd-select wgd-widget-theme wgd-widget-theme-${mode}`, title }, [
       h("option", { value: "" }, ["Settings default"]),
       ...names.map((name) => h("option", { value: name }, [themes.find((entry) => entry.name === name)?.label ?? name]))
     ]);

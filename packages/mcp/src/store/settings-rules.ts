@@ -26,7 +26,7 @@ import type { Resource, ThemeMode } from "@widgentic/core";
 // A type literal, not an interface: it stays assignable to records with an
 // index signature (the designer's pass-through settings record).
 export type PrincipalSettings = {
-  /** The theme each host mode uses when a render names none. */
+  /** The theme each host mode uses when a render names none and the widget names none of its own. */
   defaultThemes?: Partial<Record<ThemeMode, string>>;
   /** Canonical `https://` origins the app frame may load assets from directly. */
   resourceDomains?: string[];

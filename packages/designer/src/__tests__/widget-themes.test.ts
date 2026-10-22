@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from "vitest";
-import { WIDGET_THEMES_RULE } from "@widgentic/core";
 import type { ThemeEntry } from "@widgentic/core";
 import { createDesigner, exportWidgetJson, importWidgetJson } from "../index.js";
 
@@ -36,7 +35,8 @@ describe("the widget designer sets the widget's themes", () => {
     const designer = createDesigner(root, { initialWidget: widget(), themes });
     const light = selectFor(root, "light");
     expect([...light.options].map((option) => option.value)).toEqual(["", "light", "dark", "acme", "acme-night"]);
-    expect(light.title).toBe(WIDGET_THEMES_RULE);
+    expect(light.title).toContain("wears on light hosts when a render names none");
+    expect(light.title).not.toContain("list_themes");
     change(light, "acme");
     change(selectFor(root, "dark"), "dark");
     const draft = designer.getDraft();
