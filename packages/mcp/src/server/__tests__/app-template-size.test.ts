@@ -7,7 +7,7 @@ import { buildAppTemplate } from "../index.js";
  * is a reviewed number: raising a budget is a deliberate edit here, never a
  * side effect of a feature.
  */
-const RAW_BUDGET = 45_056; // 44 KiB
+const RAW_BUDGET = 46_080; // 45 KiB
 const GZIP_BUDGET = 13_312; // 13 KiB, gzip level 9
 
 function overBudget(measure: string, measured: number, budget: number): string | undefined {

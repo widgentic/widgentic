@@ -382,6 +382,33 @@ workspace and the sample first, then point at the built DLL):
 
 ## Verification log
 
+- **Date time zones (2026-10-21, change `date-time-zones`, on `feature/date-time-zones`; core, designer and mcp minor and a webmcp patch pending release)**: the date format's `zone` shows UTC (the default), the value's own offset, or, in MCP Apps frames, the viewer's zone.
+  - **The format** (`date-zones.test.ts`, 8 tests).
+    - `value` reads `Z`, `±HH:MM`, `±HHMM`, fractions, unzoned values, date-only values and epochs. `2026-10-21T09:30:00-07:00` with `HH:mm` gives `09:30` under `value` and `16:30` under `utc`.
+    - `viewer` emits `<time datetime="2026-10-21T16:30:00.000Z" data-wg-date="dd-MM HH:mm">21-10 16:30</time>`, whose text equals the UTC rendering. `soon` stays plain text.
+    - An epoch beyond the Date range (`1e300`, `±8.64e15 ± 1`, a nanosecond `1.7e18`) renders its plain value in every zone, where it previously rendered `NaN` digits. `8.64e15` itself renders `275760-09-13`.
+    - Validation refuses an unknown zone, and refuses `viewer` on an attribute value with `INVALID_TEMPLATE_NODE`, naming `format.zone` and the two zones that work there.
+  - **The frame** (`app-template-zones.test.ts`, 8 tests through `bootTemplate()`).
+    - With the viewer's zone set to UTC, the frame's localized text equals the renderer's UTC text. This covers 8 patterns, including every token alone, over midnight and the years 999, 1, 10209 and 275760.
+    - The host's `Asia/Tokyo` gives `01:30`, and every token reads a 24-hour clock (`America/New_York` → `2026-10-21 12:30:00`).
+    - With no host zone, `Mars/Base`, `""` or a number, the frame's own zone applies. The test sets the process zone to `Asia/Kolkata` (`22:00`), so the case is not vacuous.
+    - A `host-context-changed` to New York re-renders `12:30` in the same `time` node, and a theme-only change leaves the zone.
+    - A server preview localizes. A repeated result patches with node and text identity kept. A renderer-built tree localizes, and an unreadable instant keeps its UTC text.
+  - **Host probe** (staging `date-time-zones-probe-e4d7b28`, a never-merged branch). claude.ai sends `timeZone="America/Bogota"` (locale `es-419`). ChatGPT sends `America/Bogota` (locale `en-US`). VS Code Copilot sends no zone (locale `en-us`). Every frame's own zone is `America/Bogota` (GMT-0500), so the host value and the fallback both give the viewer's zone.
+  - **Budget.** The raw budget rises to 46,080. The template measures 46,069 raw (11 B left) and 12,207 of 13,312 gzipped.
+  - **Steering and the designer.** `DATE_ZONES`, `DATE_ZONE_RULE` and `isDateZone` are exported (exports snapshot). Both guides' `FORMAT` line derives from the rule, and each guide's test checks it. The designer's zone select offers `viewer` on text rows only and omits `zone` for UTC (`editors.test.ts`).
+  - **Corpus** (`corpus-dates`). It covers an offset, an unzoned value, an epoch and `soon` across the three zones and a `value`-zone `title`, plus a `page` render showing the viewer zone's UTC text. The .NET suite runs it (229 tests).
+  - **Demo seed.** The agenda's `startsAt`/`endsAt` use `viewer`, and the inbox's `receivedAt` uses `value`. Their examples carry `-05:00`.
+  - **Gates.** Typecheck, 1,996 tests, build, `pack:check`, `docs:check`, OpenSpec strict and specs, and `dotnet test` (229) all pass.
+  - **Staging** (`date-time-zones-a853bb4`, revision `--0000036`).
+    - A keyed agenda render carries 4 `time` elements: `09:15-05:00` becomes `datetime="2026-09-03T14:15:30.000Z"` over the UTC text `2026-09-03 14:15`.
+    - The inbox renders `09:15` and `08:30` as written.
+    - The served template carries the zone walker, and the probe is gone.
+  - **Owner host check (2026-10-22).** In fresh chats in claude.ai, ChatGPT and VS Code Copilot, and in the staging designer, everything worked as specified:
+    - the agenda showed its times in the viewer's local time (Bogota);
+    - the inbox showed the times as written;
+    - the designer's island preview showed local times.
+
 - **Encoded prefix values (2026-10-21, change `encode-prefixed-url-values`, on `bug/encode-prefixed-url-values`, core/designer/mcp/webmcp patch pending release)**: a value composed behind an author's URL prefix is percent-encoded, so data cannot restructure the URL.
   - **The report, reproduced on 0.14.0.** A `src` with prefix `https://api.dicebear.com/9.x/initials/svg?seed=` over `Ada & Lin?x=1#y` rendered the value raw, so the service received `seed=Ada `. A `hints.links` prefix and the app template's streamed preview did the same. Whole URLs bound with no prefix were already correct.
   - **The rule** (`url-values.test.ts`, 7 tests). A query or path prefix encodes one component. A bare `mailto:`/`tel:`/`sms:` keeps the address and encodes `% ? # & [ ]` and spaces. `http:`/`https:`, with or without `//`, keeps the URL's delimiters and escapes. A `data:` prefix keeps its value. `https:///` and `ftp:` are classified as component and address prefixes. Non-ASCII is UTF-8, an astral character encodes whole, and a lone surrogate becomes `%EF%BF%BD`.

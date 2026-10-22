@@ -361,7 +361,7 @@ A bind-mode ATTRIBUTE row SHALL offer all three value transforms — a literal `
 mirroring the validator's mutual exclusion. A TEXT bind row SHALL offer `format`, `map` (with its `default`) and a Markdown toggle, hiding the others once one is set; it SHALL NOT offer `prefix`, an attribute-value transform the renderer ignores in a text position. The format control SHALL offer every type the validator accepts. Choosing a type SHALL commit a complete, valid spec, and each type SHALL reveal its own fields:
 - currency: code, decimals and display;
 - number: decimals;
-- date: the pattern;
+- date: the pattern and a zone: UTC (the default), the value's own offset, and — on a text bind only — the viewer's zone;
 - count: no field;
 - join: separator, last separator and item field;
 - truncate: length and ellipsis;
@@ -406,6 +406,11 @@ push another out of reach.
 #### Scenario: Editing plural forms keeps the categories the row does not show
 - **WHEN** a bind whose format is `{ type: "pluralize", locale: "pl", forms: { one: "{count} plik", few: "{count} pliki", many: "{count} plików", other: "{count} pliku" } }` has its `one` form edited in the row
 - **THEN** the committed spec SHALL still carry `few`, `many` and `locale` unchanged
+
+#### Scenario: The viewer zone is offered on text binds only
+- **WHEN** a date format is chosen on a text bind row and on an attribute row
+- **THEN** the text row's zone control SHALL offer UTC, the value's offset and the viewer's zone, and the attribute row's SHALL offer UTC and the value's offset only
+- **AND** choosing a zone SHALL commit it in the spec, and choosing UTC SHALL omit `zone`
 
 ### Requirement: Action binding in the widget designer
 The widget designer SHALL let the person bind a `button` or `a` element to an action — the add menu SHALL offer `action` on those elements only, while an existing binding on any element stays editable — (none, a shared action chosen from `options.actions`, or an inline definition edited in place), edit the binding's input mapping (one row per input-schema field, each a template path or a constant, with `$root`, `$parent` and `$index` completions inside `each`), choose the output mode with its `path`/`map` — the `map` editor SHALL offer target paths from the widget's effective data schema (relative to the `patch` path when that mode is chosen), source paths from the action's output schema, and SHALL flag a source/target type mismatch in place; when either schema is an ARRAY the editor SHALL offer that side's ITEM properties (the per-item projection's vocabulary), a `"."` row's source SHALL complete from the response root while the other rows complete from the SELECTED value's item schema, and the mismatch check SHALL compare the item types of two array sides rather than passing every array-to-array pair — and declare the widget-level `load` binding for http GET actions. Path completions throughout the template panel SHALL resolve a shared `dataSchemaRef` exactly as an inline `dataSchema`. The draft SHALL serialize bindings in the template's `action` form and the widget's `load` field; validation errors (`INVALID_ACTION`, `CONFLICTING_ATTRIBUTES`) SHALL surface in place at the offending node. The live preview SHALL render bound elements with an inert `wg-designer-action` badge and never execute anything. Editors SHALL read the live binding on every commit (a URL typed before a method change survives; two mapping fields set in sequence both persist); new header/query/projection rows SHALL stay editor-local until they have a name (never committing `""` keys); path helpers SHALL be offered as complete paths (`$index`, `$root`, `$parent`), never as dangling prefixes; unknown shared-action references SHALL surface at the referencing node, not only in the Load section; and a binding editor SHALL be constructed only for elements that carry a binding.

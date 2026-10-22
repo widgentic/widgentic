@@ -4,7 +4,7 @@
  * taught, and — the test the change exists for — an "agent" that follows
  * ONLY the guide produces a widget and theme that import cleanly.
  */
-import { LABEL_STYLE_RULE, PREFIX_ENCODING_RULE } from "@widgentic/core";
+import { DATE_ZONE_RULE, LABEL_STYLE_RULE, PREFIX_ENCODING_RULE } from "@widgentic/core";
 import { describe, expect, it } from "vitest";
 import {
   PATTERN_MAX_LENGTH,
@@ -368,6 +368,8 @@ describe("a guide-only agent using the attr transforms", () => {
     expect(forms).toContain("mailto:");
     expect(forms).toMatch(/ATTR PREFIX[^\n]*percent-encoded[^\n]*bare mailto:\/tel: it stays an address/);
     expect(forms).toContain(PREFIX_ENCODING_RULE);
+    expect(forms).toMatch(/FORMAT[^\n]*date also takes an optional zone: utc/);
+    expect(forms).toContain(DATE_ZONE_RULE);
     // the mutual-exclusion rule states itself, rather than riding on the
     // ACTION line's unrelated "never both href and action"
     expect(forms).toContain("ONE TRANSFORM PER VALUE");

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from "vitest";
 import { createDesigner } from "../index.js";
-import { FORMAT_TYPES, validateTemplate } from "@widgentic/core";
+import { DATE_ZONE_RULE, FORMAT_TYPES, validateTemplate } from "@widgentic/core";
 import { createJsonTreeEditor } from "../json-tree-editor.js";
 import { createSchemaBuilder } from "../schema-builder.js";
 import { createSchemaForm } from "../schema-form.js";
@@ -902,6 +902,44 @@ describe("bind format editor", () => {
     pattern.value = "dd-MM-yyyy HH:mm";
     pattern.dispatchEvent(new Event("change"));
     expect(container.textContent).toContain("01-09-2026 02:04");
+    designer.dispose();
+  });
+
+  it("the viewer zone is offered on text binds only", () => {
+    const { container, designer } = tickerDesigner({
+      each: ".",
+      template: { tag: "li", attrs: { title: { bind: "date" } }, children: [{ bind: "date" }] }
+    });
+    const textRow = (): HTMLElement =>
+      [...container.querySelectorAll(".wgd-node-row")].find((row) => row.querySelector(".wgd-attr-prefix") === null && row.querySelector(".wgd-format-type") !== null) as HTMLElement;
+    const attrRow = (): HTMLElement => container.querySelector(".wgd-attr-row") as HTMLElement;
+    for (const row of [textRow, attrRow]) {
+      const type = row().querySelector(".wgd-format-type") as HTMLSelectElement;
+      type.value = "date";
+      type.dispatchEvent(new Event("change"));
+    }
+    const zones = (row: HTMLElement) =>
+      [...(row.querySelector(".wgd-format-zone") as HTMLSelectElement).options].map((option) => option.value);
+    expect(zones(textRow())).toEqual(["utc", "value", "viewer"]);
+    expect(zones(attrRow())).toEqual(["utc", "value"]);
+    expect((attrRow().querySelector(".wgd-format-zone") as HTMLSelectElement).title).toBe(DATE_ZONE_RULE);
+
+    const draft = () =>
+      (designer.getDraft().template as unknown as {
+        template: { attrs: { title: Record<string, unknown> }; children: { format?: Record<string, unknown> }[] };
+      }).template;
+    const zone = textRow().querySelector(".wgd-format-zone") as HTMLSelectElement;
+    zone.value = "viewer";
+    zone.dispatchEvent(new Event("change"));
+    expect(draft().children[0]?.format).toEqual({ type: "date", pattern: "yyyy-MM-dd", zone: "viewer" });
+    const attrZone = attrRow().querySelector(".wgd-format-zone") as HTMLSelectElement;
+    attrZone.value = "value";
+    attrZone.dispatchEvent(new Event("change"));
+    expect(draft().attrs.title.format).toEqual({ type: "date", pattern: "yyyy-MM-dd", zone: "value" });
+    const back = textRow().querySelector(".wgd-format-zone") as HTMLSelectElement;
+    back.value = "utc";
+    back.dispatchEvent(new Event("change"));
+    expect(draft().children[0]?.format).toEqual({ type: "date", pattern: "yyyy-MM-dd" });
     designer.dispose();
   });
 

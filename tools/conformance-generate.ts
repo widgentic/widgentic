@@ -150,6 +150,28 @@ const linksWidget = {
   }
 };
 
+/** Date zones: UTC, the value's own offset, and the viewer's zone the frame rewrites. */
+const datesWidget = {
+  kind: "corpus-dates",
+  template: {
+    tag: "div",
+    attrs: { class: "wg-corpus-dates" },
+    children: [
+      { tag: "p", children: [{ bind: "at", format: { type: "date", pattern: "yyyy-MM-dd HH:mm" } }] },
+      {
+        tag: "p",
+        attrs: { title: { bind: "at", format: { type: "date", pattern: "HH:mm", zone: "value" } } },
+        children: [{ bind: "at", format: { type: "date", pattern: "yyyy-MM-dd HH:mm", zone: "value" } }]
+      },
+      { tag: "p", children: [{ bind: "at", format: { type: "date", pattern: "dd-MM-yyyy HH:mm:ss", zone: "viewer" } }] }
+    ]
+  },
+  descriptor: {
+    description: "Corpus: date zones.",
+    dataExample: { at: "2026-10-21T09:30:00-07:00" }
+  }
+};
+
 /** Values behind author prefixes: one component, an address, a URL remainder. */
 const prefixesWidget = {
   kind: "corpus-prefixes",
@@ -183,7 +205,7 @@ const schemaWidget = {
 };
 
 const config = {
-  widgets: [...customWidgets.map(exportShape), formatsWidget, textWidget, linksWidget, prefixesWidget, schemaWidget],
+  widgets: [...customWidgets.map(exportShape), formatsWidget, textWidget, linksWidget, prefixesWidget, datesWidget, schemaWidget],
   themes: [
     { name: "corpus-brand", label: "Corpus brand", tokens: { accent: "#0b6e4f" } },
     {
@@ -391,6 +413,12 @@ export function buildCorpus(): Corpus {
     data: [{ q: "a&b" }, { q: "c d" }, { q: "100%" }],
     hints: { links: { q: "https://search.example.com/?q=" } }
   });
+
+  // Date zones: an offset, an unzoned value, an epoch and an unparseable value; the page shows the viewer zone's UTC text.
+  for (const at of ["2026-10-21T09:30:00-07:00", "2026-10-21T09:30:00", 1700000000, "soon"]) {
+    render(`dates ${JSON.stringify(at)}`, { widget: "corpus-dates", data: { at } });
+  }
+  render("dates as a page", { widget: "corpus-dates", data: { at: "2026-10-21T09:30:00+05:30" }, format: "page" });
 
   for (const amount of [1234.5, "1234.5", -0.5, 0, 1e21, "n/a"]) {
     render(`formats ${JSON.stringify(amount)}`, {

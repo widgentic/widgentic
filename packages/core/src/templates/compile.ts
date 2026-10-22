@@ -27,7 +27,7 @@ import { parsePath } from "./paths.js";
 import { composePrefixedUrl } from "../contract/url-values.js";
 import { InvalidTemplateError, validateTemplate } from "./validate.js";
 import { formatValue } from "../catalog/widgets/format.js";
-import { formatBoundValue } from "../catalog/widgets/value-format.js";
+import { formatBoundValue, viewerDate } from "../catalog/widgets/value-format.js";
 import { parseMarkdown } from "./markdown.js";
 import { isPlainObject } from "../shared/plain-object.js";
 
@@ -199,6 +199,19 @@ function interpretNode(
       const key = formatValue(resolved);
       const hit = Object.prototype.hasOwnProperty.call(node.map, key) ? node.map[key] : undefined;
       return [typeof hit === "string" ? hit : typeof node.default === "string" ? node.default : ""];
+    }
+    // A viewer-zone date carries its instant for the frame, which rewrites
+    // the UTC text in the viewer's zone; every other surface shows UTC.
+    const zoned = viewerDate(resolved, node.format);
+    if (zoned !== undefined) {
+      budget.remaining--;
+      return [
+        {
+          tag: "time",
+          attrs: { datetime: zoned.datetime, "data-wg-date": zoned.pattern },
+          children: [zoned.text]
+        }
+      ];
     }
     // The payload keeps the typed value; only the render gets the unit.
     // (`prefix` is an attribute-value transform and is ignored here.)
