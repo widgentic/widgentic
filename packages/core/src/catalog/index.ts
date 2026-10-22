@@ -7,8 +7,8 @@ export type {
 export { el } from "./node.js";
 export { createCatalog, DuplicateKindError } from "./registry.js";
 export type { WidgetCatalog, RenderOptions, RenderResult } from "./registry.js";
-export type { WidgetDescriptor, WidgetDescriptorInput } from "./descriptors.js";
-export { FIELD_ORDER_RULE, LABEL_STYLE_RULE } from "./descriptors.js";
+export type { WidgetDescriptor, WidgetDescriptorInput, WidgetThemes } from "./descriptors.js";
+export { FIELD_ORDER_RULE, LABEL_STYLE_RULE, WIDGET_THEMES_RULE, checkWidgetThemes } from "./descriptors.js";
 export { validateDataAgainstSchema, auditDataSchema, DATA_SCHEMA_TYPES, PATTERN_MAX_LENGTH } from "./schema.js";
 export type { DataSchema } from "./schema.js";
 export { widgetStylesToCss, isStyleMap, UNSAFE, UNSAFE_FUNCTIONS, PROPERTY_NAME } from "./styles.js";
@@ -28,6 +28,9 @@ export {
   DATE_TOKENS,
   DATE_PATTERN_SEPARATORS,
   DATE_PATTERN_MAX,
+  DATE_ZONES,
+  DATE_ZONE_RULE,
+  isDateZone,
   DEFAULT_FORMAT_LOCALE,
   JOIN_SEPARATOR_MAX,
   JOIN_DEFAULT_SEPARATOR,
@@ -57,6 +60,7 @@ export type {
   NumberFormatSpec,
   CurrencyFormatSpec,
   DateFormatSpec,
+  DateZone,
   CountFormatSpec,
   JoinFormatSpec,
   TruncateFormatSpec,

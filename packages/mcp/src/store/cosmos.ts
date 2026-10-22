@@ -52,7 +52,9 @@ import {
   looseWidget,
   referencesToSecret,
   widgetsLoadingAction,
-  widgetsReferencingAction
+  refuseUnknownWidgetThemes,
+  widgetsReferencingAction,
+  widgetsUsingTheme
 } from "./refs.js";
 import type {
   CreatedKey,
@@ -508,6 +510,13 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
           );
         }
       }
+      // Theme names: a point read each (at most two) on the same partition.
+      const stored = new Set<string>();
+      for (const name of new Set(Object.values(widget.descriptor.themes ?? {}))) {
+        const { statusCode: themeStatus } = await data.item(`theme:${name}`, principalId).read();
+        if (themeStatus !== 404) stored.add(name);
+      }
+      refuseUnknownWidgetThemes(widget, (name) => stored.has(name));
       // A `load` through a shared action needs that action to be a GET now;
       // a dangling ref stays non-fatal (it renders disabled).
       const loadRef = loadRefOf(widget);
@@ -778,13 +787,16 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
     },
 
     async removeTheme(principalId, name) {
+      // Widgets are separate documents, so this scan cannot join the batch:
+      // a widget saved meanwhile is the out-of-band case the render absorbs.
+      const naming = widgetsUsingTheme(await rawWidgets(principalId), name);
       if (data.items.batch !== undefined) {
         // Atomic with the in-use check: the delete commits only if the
         // settings document is still the one checked. Without one, the
         // guard creates an empty record — it reads as no settings.
         for (let attempt = 0; attempt < BATCH_ATTEMPTS; attempt++) {
           const current = await settingsDoc(principalId);
-          refuseThemeInUse(current.settings, name);
+          refuseThemeInUse(current.settings, name, naming);
           const body = { id: "settings", principalId, settings: current.settings ?? {} };
           const guard: CosmosBatchOperation = current.etag === undefined
             ? { operationType: "Create", resourceBody: body }
@@ -796,7 +808,7 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
         }
         throw new StoreRejectionError("STORE_ERROR", "removeTheme: the settings kept changing; try again.");
       }
-      refuseThemeInUse(await rawSettings(principalId), name);
+      refuseThemeInUse(await rawSettings(principalId), name, naming);
       try {
         await data.item(`theme:${name}`, principalId).delete();
       } catch (error) {

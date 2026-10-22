@@ -1,0 +1,22 @@
+{
+  "name": "acme",
+  "label": "Acme Outfitters",
+  "description": "A warm brand theme for Acme Outfitters: ember orange on cream, with a serif voice.",
+  "tokens": {
+    "accent": "#c2410c",
+    "accent-fg": "#ffffff",
+    "bg": "#fffbf5",
+    "surface": "#ffffff",
+    "fg": "#292524",
+    "muted": "#78716c",
+    "border": "#e7e5e4",
+    "radius": "10px",
+    "font-family": "Georgia, 'Times New Roman', serif",
+    "font-weight-bold": "700"
+  },
+  "styles": {
+    ".wg-card": {
+      "border-top": "4px solid var(--wg-accent)"
+    }
+  }
+}

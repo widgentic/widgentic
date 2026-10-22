@@ -73,6 +73,17 @@ A bound attribute value may carry one transform — `map`, `prefix` or `format`,
 { "tag": "a", "attrs": { "href": { "bind": "email", "prefix": "mailto:" } }, "children": [{ "bind": "email" }] }
 ```
 
+The value is percent-encoded, and your prefix alone decides how:
+
+| Prefix | The value is | Example |
+|---|---|---|
+| Anything longer than a scheme (`https://api.dicebear.com/9.x/initials/svg?seed=`, `https://cdn.example.com/u/`) | one URI component, encoded as `encodeURIComponent` does, so it cannot add parameters, a fragment or a path segment | `Ada & Lin?x=1` → `…?seed=Ada%20%26%20Lin%3Fx%3D1` |
+| A bare scheme other than the web ones and `data:` (`mailto:`, `tel:`) | the scheme's address: letters, digits and `-._~@+:;,=!$'()*/` stay, everything else is encoded, so it cannot add header fields or a fragment | `ada@example.org` stays; `ada@example.org?subject=hi` → `ada@example.org%3Fsubject=hi`; `+1 555-0100` → `+1%20555-0100` |
+| Exactly `http:`, `https:`, `http://` or `https://` | the rest of a URL: spaces, control characters, double quotes, angle brackets, the backslash, caret, backtick, braces, the vertical bar and non-ASCII are encoded, and every delimiter stays, so the value chooses the host, path and query as a whole bound URL does | `//cdn.example.com/a b.png?w=1&h=2` behind `https:` → `https://cdn.example.com/a%20b.png?w=1&h=2` |
+| Starting with `data:` (`data:image/png;base64,`) | kept as written: the guard admits only a base64 image source | `iVBORw0KGgo=` → `data:image/png;base64,iVBORw0KGgo=` |
+
+Non-ASCII characters are encoded as UTF-8 (`José` → `Jos%C3%A9`). Pass raw values: an already-encoded value behind a component prefix is encoded again. A value with `/` behind a path prefix becomes one segment (`a/b` → `a%2Fb`); to compose several segments, bind the whole URL instead.
+
 `format` presents a value at render time while the payload keeps its typed value — the same placement rule the built-ins' `hints.fieldFormat` follows. The vocabulary is closed and data-only: `number` and `currency` (bounded decimals, an ISO-4217 code, an optional `currencyDisplay` and `locale`), `date` (a pattern of the tokens `yyyy MM dd HH mm ss` plus separators) and the text formats below. Numeric strings parse, so the ten-decimal price strings a JSON API returns present as money; a value the format cannot parse renders raw, so a format never hides data.
 
 ```json
@@ -86,7 +97,17 @@ A bound attribute value may carry one transform — `map`, `prefix` or `format`,
 }
 ```
 
-Against `{ "ask": "3206.9905920000", "date": "2026-09-01T02:04:47.257871358" }` that renders `$3,207 @ 01-09-2026 02:04`. An unzoned timestamp is read as UTC and formatted in UTC, and the default locale is fixed at `en-US`, so a server render, a designer preview and an action's re-render agree byte for byte — anything else would make the in-place patcher see phantom text changes.
+Against `{ "ask": "3206.9905920000", "date": "2026-09-01T02:04:47.257871358" }` that renders `$3,207 @ 01-09-2026 02:04`. An unzoned timestamp is read as UTC, and the default locale is fixed at `en-US`, so a server render, a designer preview and an action's re-render agree byte for byte — anything else would make the in-place patcher see phantom text changes.
+
+A date format's optional `zone` chooses the clock its tokens read:
+
+| `zone` | Shows | `2026-10-21T09:30:00-07:00` with `HH:mm` |
+|---|---|---|
+| `utc` (the default) | the instant in UTC | `16:30` |
+| `value` | the time the value itself states: its own offset, an unzoned value as written, an epoch number in UTC | `09:30` |
+| `viewer` | the viewer's local time, inside MCP Apps frames | `01:30` for a viewer in Tokyo |
+
+`utc` and `value` are computed by the renderer, so every surface agrees. `viewer` needs a viewer: the renderer wraps the text in `<time datetime="2026-10-21T16:30:00.000Z" data-wg-date="HH:mm">16:30</time>`, and the app template rewrites it in the host's `timeZone` when the host sends one, or else in the frame's own zone, which is the viewer's device zone. HTML fragments, `page` documents and text output have no viewer, so they show the UTC text. A frame can rewrite only text, so `viewer` is for text binds: on an attribute value it is refused with `INVALID_TEMPLATE_NODE`.
 
 The text formats present lists and text under the same rules. `count` renders an array's length, grouped (`1,234`). `join` joins an array's items with `separator` (default `", "`), puts the optional `last` before the final item, and with `field`, a plain dotted path such as `owner.name`, reads that path in each item; null and empty items are skipped. `truncate` keeps `length` code points (1 to 1000) and appends `ellipsis` (default `…`) when it cuts. `pluralize` picks one of its `forms`, keyed by plural category (`zero`, `one`, `two`, `few`, `many`, `other`; `other` is required), and replaces `{count}` with the grouped number. It reads a number, a numeric string or an array's length, uses a `zero` form for exactly 0, and otherwise follows the locale's plural rules. `count` and `pluralize` take an optional `locale`.
 
@@ -128,7 +149,7 @@ Bind properties your `dataSchema` declares. Schema-declared data is validated wi
 - **Run code.** There are no expressions, functions or scripts. Bound values are never parsed as HTML: a bound value of `<img onerror=x src=y>` renders as those literal characters, not as an element. The one bind that emits elements is a [Markdown text bind](#markdown-text-binds), and there the parser, not the value, chooses them: only `p`, `br`, `strong`, `em`, `code`, `a`, `ul`, `ol` and `li` inside one `div.wg-md`, links face the `href` scheme guard, and raw HTML in the value stays text.
 - **Attach handlers.** Attribute names matching `on*` fail validation with `FORBIDDEN_ATTRIBUTE`, as do `srcdoc` and the renderer-reserved `data-wg-*` names. They are skipped at render time as well.
 - **Embed active content.** `script`, `iframe`, `frame`, `frameset`, `object`, `embed`, `style`, `link`, `meta`, `base`, `template` and `noscript` fail with `FORBIDDEN_TAG`.
-- **Smuggle URL schemes.** On URL-bearing attributes (`href`, `src`, `action`, `formaction`, `xlink:href`, `data`, `poster`, `ping`) only `http`, `https`, `mailto`, `tel` and relative references survive; anything else, `javascript:` included, is dropped at render time. A `prefix` value runs the same guard, so `"prefix": "javascript:"` is dropped like a bound `javascript:` value.
+- **Smuggle URL schemes.** On URL-bearing attributes (`href`, `src`, `action`, `formaction`, `xlink:href`, `data`, `poster`, `ping`) only `http`, `https`, `mailto`, `tel` and relative references survive; anything else, `javascript:` included, is dropped at render time. A `prefix` value runs the same guard, so `"prefix": "javascript:"` is dropped like a bound `javascript:` value, and behind a scheme-less prefix the encoded value cannot add a scheme (its `:` becomes `%3A`).
 - **Use `data:` URIs**, with one exception: an `img` element's `src` accepts base64 `data:image/*;base64,` URIs.
 - **Nest without limit or render without bound.** Validation rejects nesting past a fixed depth (`TEMPLATE_TOO_DEEP`); interpretation stops at a node budget and marks the render truncated, because `each` multiplies template nodes by agent-supplied data length and a Markdown bind emits nodes in proportion to its value. The numbers are in [Limits](/reference/limits).
 

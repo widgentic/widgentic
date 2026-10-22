@@ -255,6 +255,30 @@ describe("sqlite adapter", () => {
     reopened.close();
   });
 
+  it("widget themes: a raw widget protects its theme, and a malformed one is skipped on read", async () => {
+    const path = freshPath();
+    const store = open(path);
+    const p = await store.ensurePrincipal("sqlite:widget-themes");
+    await store.putTheme(p.id, { name: "acme", tokens: {} });
+    await store.putWidget(p.id, widget("old"));
+    store.close();
+    // Out of band: a widget the validator refuses today still names acme,
+    // and another carries a malformed themes field.
+    const raw = new DatabaseSync(path);
+    const insert = raw.prepare("INSERT INTO entries (principal_id, kind, name, json) VALUES (?, 'widget', ?, ?)");
+    insert.run(p.id, "evil", JSON.stringify({ kind: "evil", template: { tag: "script" }, descriptor: { description: "x", dataShape: "{}", themes: { light: "acme" } } }));
+    insert.run(p.id, "odd", JSON.stringify({ kind: "odd", template: { tag: "p" }, descriptor: { description: "x", dataShape: "{}", themes: { sepia: "acme" } } }));
+    raw.close();
+    const diagnostics: string[] = [];
+    const reopened = createSqliteStore(path, { limits: LIMITS, cipher: createLocalCipher(KEK), onDiagnostic: (m) => diagnostics.push(m) });
+    await expect(reopened.removeTheme(p.id, "acme")).rejects.toThrow(/named by widget evil/);
+    const listed = await reopened.widgets(p.id);
+    expect(listed.map((w) => w.kind)).toEqual(["old"]);
+    expect(listed[0]?.descriptor).not.toHaveProperty("themes");
+    expect(diagnostics.join("\n")).toContain("descriptor.themes.sepia");
+    reopened.close();
+  });
+
   it("an unreadable action is skipped on read, so listings serve the rest", async () => {
     const path = freshPath();
     const store = open(path);

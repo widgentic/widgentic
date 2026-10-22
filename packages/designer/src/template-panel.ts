@@ -11,6 +11,8 @@ import { collectActionRefs } from "@widgentic/core";
 import {
   CURRENCY_DISPLAYS,
   DATE_TOKENS,
+  DATE_ZONES,
+  DATE_ZONE_RULE,
   FORMAT_DECIMALS_MAX,
   FORMAT_DECIMALS_MIN,
   FORMAT_TYPES,
@@ -24,10 +26,11 @@ import {
   TRUNCATE_LENGTH_MIN,
   activeTransform,
   isCurrencyDisplay,
+  isDateZone,
   isFormatType
 } from "@widgentic/core";
-import { isPlainObject } from "@widgentic/core";
-import type { WidgetTemplate } from "@widgentic/core";
+import { PREFIX_ENCODING_RULE, isPlainObject } from "@widgentic/core";
+import type { DateZone, WidgetTemplate } from "@widgentic/core";
 import type { ActionBinding, StoredAction } from "@widgentic/core";
 import { createBindingEditor } from "./action-editor.js";
 import type { SchemaEntry } from "./schema-designer.js";
@@ -88,6 +91,9 @@ function itemScope(scope: unknown, eachPath: string): unknown {
 }
 
 const REMOVE = Symbol("remove");
+
+/** How the date format's zone select names each zone. */
+const ZONE_LABELS: Record<DateZone, string> = { utc: "UTC", value: "value's offset", viewer: "viewer's zone" };
 
 function pathString(path: Path): string {
   let out = "";
@@ -263,6 +269,7 @@ export function mountTemplatePanel(
    */
   function formatEditor(
     spec: Record<string, unknown> | undefined,
+    position: "text" | "attribute",
     onCommit: (next: Record<string, unknown> | undefined) => void
   ): HTMLElement[] {
     const active = spec !== undefined && isFormatType(spec.type) ? spec : undefined;
@@ -399,7 +406,21 @@ export function mountTemplatePanel(
     );
     pattern.placeholder = "pattern";
     pattern.title = `Date pattern from ${DATE_TOKENS.join(" ")} plus separators, e.g. dd-MM-yyyy HH:mm`;
-    return [typeSelect, pattern];
+    // The frame rewrites text only, so the viewer's zone is a text-bind choice.
+    const zone = select(
+      DATE_ZONES.filter((value) => value !== "viewer" || position === "text").map((value) => ({
+        value,
+        label: ZONE_LABELS[value]
+      })),
+      isDateZone(active.zone) ? active.zone : "utc",
+      "wgd-select wgd-format-zone",
+      (next) => {
+        const { zone: _gone, ...rest } = active;
+        onCommit(next === "utc" ? rest : { ...rest, zone: next });
+      },
+      DATE_ZONE_RULE
+    );
+    return [typeSelect, pattern, zone];
   }
 
 
@@ -704,7 +725,7 @@ export function mountTemplatePanel(
       ];
       if (transform === undefined || transform === "format") {
         inline.push(
-          ...formatEditor(bindFormat, (next) => commitAt(path, next === undefined ? { bind } : withBind({ format: next })))
+          ...formatEditor(bindFormat, "text", (next) => commitAt(path, next === undefined ? { bind } : withBind({ format: next })))
         );
       }
       if (markdown) {
@@ -897,7 +918,7 @@ export function mountTemplatePanel(
         const showPrefix = isBind && (transform === undefined || transform === "prefix");
         const showAddMap = isBind && transform === undefined;
         if (showFormat) {
-          row.push(...formatEditor(attrFormat, (next) => setAttr(rebuild({ ...bound, format: next }))));
+          row.push(...formatEditor(attrFormat, "attribute", (next) => setAttr(rebuild({ ...bound, format: next }))));
         }
         if (showPrefix) {
           const prefixInput = changeInput(
@@ -906,7 +927,7 @@ export function mountTemplatePanel(
             "wgd-input wgd-attr-prefix"
           );
           prefixInput.placeholder = "prefix";
-          prefixInput.title = "Literal prefix, e.g. mailto: — emitted only when the bound value is non-empty";
+          prefixInput.title = `Literal prefix, e.g. mailto: — emitted only when the bound value is non-empty. ${PREFIX_ENCODING_RULE}`;
           row.push(prefixInput);
         }
         if (showAddMap) {

@@ -79,6 +79,11 @@ function request(method, params, timeoutMs) {
 }
 function applyHostContext(ctx) {
   if (!ctx) return;
+  // A partial context (host-context-changed) leaves the zone as it was.
+  if ("timeZone" in ctx && zoneOf(ctx) !== viewerZone) {
+    viewerZone = zoneOf(ctx);
+    rezone();
+  }
   if (ctx.theme === "light" || ctx.theme === "dark") {
     document.documentElement.setAttribute("data-theme", ctx.theme);
     document.documentElement.style.colorScheme = ctx.theme;
@@ -192,6 +197,50 @@ function patch(prev, next, dom) {
 }
 let mountedTree;
 let mountedRoot;
+// Viewer-zone dates: the renderer marks a date with its instant (datetime)
+// and pattern (data-wg-date) over UTC text. Every tree is mounted zoned, so
+// the patcher compares like with like; the raw tree is kept for a zone
+// change. The zone is the host's when Intl accepts it, else the frame's own
+// (Intl resolves a missing zone to the default and refuses an unknown one).
+let rawTree;
+let viewerZone;
+function zoneOf(ctx) {
+  try { return new Intl.DateTimeFormat("en-US", { timeZone: ctx.timeZone }).resolvedOptions().timeZone; } catch (e) { return undefined; }
+}
+// An instant that does not parse makes formatToParts throw: the UTC text stays.
+function zonedText(iso, pattern) {
+  const f = {};
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: viewerZone, hourCycle: "h23", year: "numeric", month: "2-digit",
+      day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" })
+      .formatToParts(new Date(iso)).forEach((p) => (f[p.type] = p.value));
+  } catch (e) { return undefined; }
+  const t = { yyyy: f.year.padStart(4, "0"), MM: f.month, dd: f.day, HH: f.hour, mm: f.minute, ss: f.second };
+  return pattern.replace(/yyyy|MM|dd|HH|mm|ss/g, (k) => t[k]);
+}
+function zoned(node) {
+  if (!isElement(node)) return node;
+  const a = node.attrs;
+  if (node.tag === "time" && a && typeof a.datetime === "string" && typeof a["data-wg-date"] === "string") {
+    const text = zonedText(a.datetime, a["data-wg-date"]);
+    if (text !== undefined) return Object.assign({}, node, { children: [text] });
+  }
+  return Array.isArray(node.children) ? Object.assign({}, node, { children: node.children.map(zoned) }) : node;
+}
+function mountTree(tree) {
+  rawTree = tree;
+  const next = zoned(tree);
+  if (mountedTree !== undefined && mountedRoot && mountedRoot.parentNode === root) {
+    mountedRoot = patch(mountedTree, next, mountedRoot);
+  } else {
+    root.replaceChildren(mountedRoot = build(next));
+  }
+  mountedTree = next;
+}
+// Every reset clears mountedRoot with mountedTree, so an attached root means a mounted tree.
+function rezone() {
+  if (mountedRoot && mountedRoot.parentNode === root) mountTree(rawTree);
+}
 let resultRendered = false;
 function mountResult(sc) {
   resultRendered = true;
@@ -199,14 +248,7 @@ function mountResult(sc) {
   if (typeof sc.css === "string") dynamicCss.textContent = sc.css;
   applyResources(sc.resources);
   if (sc.tree !== undefined && sc.tree !== null) {
-    if (mountedTree !== undefined && mountedRoot && mountedRoot.parentNode === root) {
-      mountedRoot = patch(mountedTree, sc.tree, mountedRoot);
-    } else {
-      const built = build(sc.tree);
-      root.replaceChildren(built);
-      mountedRoot = built;
-    }
-    mountedTree = sc.tree;
+    mountTree(sc.tree);
     return;
   }
   // Fallback projection for results that predate the tree.
@@ -488,6 +530,13 @@ function pattern(patternText, value) {
     ? patternText.split("{value}").join(value)
     : patternText + value;
 }
+// The URL-value rule, as core's composePrefixedUrl (pinned by an agreement
+// test). A data: prefix never composes a link, so the preview has no data case.
+function prefixed(prefix, value) {
+  const unsafe = /^https?:(\\/\\/)?$/i.test(prefix) ? /[\\u0000-\\u0020\\u007f"<>\\\\^\\x60{|}]|[^\\u0000-\\u007f]/gu
+    : /^[a-z][a-z0-9+.-]*:$/i.test(prefix) ? /[^\\w\\-.~@+:;,=!$'()*\\/]/gu : /[^\\w\\-.!~*'()]/gu;
+  return prefix + value.replace(unsafe, (c) => { try { return encodeURIComponent(c); } catch (e) { return "%EF%BF%BD"; } });
+}
 function cellNode(key, raw, hints, cls) {
   let text = fmt(raw);
   const formats = isObj(hints) && isObj(hints.fieldFormat) ? hints.fieldFormat : undefined;
@@ -495,7 +544,7 @@ function cellNode(key, raw, hints, cls) {
   const links = isObj(hints) && isObj(hints.links) ? hints.links : undefined;
   const hint = links ? links[key] : undefined;
   if (typeof raw === "string" && raw !== "" && hint !== undefined && hint !== false) {
-    const href = hint === true ? raw : typeof hint === "string" ? hint + raw : undefined;
+    const href = hint === true ? raw : typeof hint === "string" ? prefixed(hint, raw) : undefined;
     if (href !== undefined &&
         /^(https?|mailto|tel):/i.test(href.replace(/[\\u0000-\\u0020]+/g, ""))) {
       return { tag: "td", attrs: { class: cls }, children: [
@@ -793,16 +842,6 @@ let previewQueued = false;
 const scheduleFrame = typeof window.requestAnimationFrame === "function"
   ? window.requestAnimationFrame.bind(window)
   : function (fn) { setTimeout(fn, 16); };
-function mountPreviewTree(tree) {
-  if (mountedTree !== undefined && mountedRoot && mountedRoot.parentNode === root) {
-    mountedRoot = patch(mountedTree, tree, mountedRoot);
-  } else {
-    const built = build(tree);
-    root.replaceChildren(built);
-    mountedRoot = built;
-  }
-  mountedTree = tree;
-}
 // Server previews: kinds the frame cannot build (stored templates live on
 // the server) are rendered by the app-only preview_widget tool. One request
 // in flight; snapshots arriving meanwhile overwrite one pending slot. Any
@@ -848,7 +887,7 @@ function requestServerPreview(args) {
       if (typeof sc.css === "string") dynamicCss.textContent = sc.css;
       applyResources(sc.resources);
       root.setAttribute("data-wgd-preview", "true");
-      mountPreviewTree(state.tree);
+      mountTree(state.tree);
     },
     function () { state.stopped = true; }
   ).then(function () {
@@ -911,7 +950,7 @@ function applyPreview() {
   if (!settled(args, "widget", previewComplete)) {
     // Input is arriving but the widget is not named yet (agents may write
     // the data first): show that something is coming, naming nothing.
-    mountPreviewTree(skeletonTree());
+    mountTree(skeletonTree());
     return;
   }
   const widget = args.widget;
@@ -922,7 +961,7 @@ function applyPreview() {
     if (serverPreview.tree !== undefined) return;
   }
   const tree = previewFor(widget, coerceData(args.data), args.hints, args.meta);
-  mountPreviewTree(tree !== undefined ? tree : skeletonTree(widget));
+  mountTree(tree !== undefined ? tree : skeletonTree(widget));
   if (BUILT_INS.indexOf(widget) !== -1 && !needsServer(args)) requestThemeCss(widget, args);
 }
 function onToolInput(params, complete) {

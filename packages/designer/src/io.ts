@@ -6,7 +6,7 @@
  * never touches the current draft.
  */
 import { errorMessage } from "./internal.js";
-import { isPlainObject, SAFE_IDENTIFIER } from "@widgentic/core";
+import { checkWidgetThemes, isPlainObject, SAFE_IDENTIFIER } from "@widgentic/core";
 import { parsePath, validateTemplate } from "@widgentic/core";
 import { validateLoadBinding } from "@widgentic/core";
 import type { ActionBinding } from "@widgentic/core";
@@ -57,6 +57,8 @@ export function checkDefinition(definition: unknown, currentKind?: string): stri
     } else if (dataSchemaRef !== undefined && (typeof dataSchemaRef !== "string" || !SAFE_IDENTIFIER.test(dataSchemaRef))) {
       errors.push("descriptor: INVALID_SHAPE — 'dataSchemaRef' must be a valid schema name: letters, digits, '.', '_' or '-'.");
     }
+    const themes = definition.descriptor.themes === undefined ? undefined : checkWidgetThemes(definition.descriptor.themes);
+    if (themes !== undefined) errors.push(`descriptor: INVALID_SHAPE — ${themes}`);
   }
   if (definition.load !== undefined) {
     const problem = validateLoadBinding(definition.load, "load", {

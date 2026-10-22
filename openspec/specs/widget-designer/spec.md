@@ -224,7 +224,7 @@ The standalone theme designer SHALL edit a named theme entry — identity (`name
 - **THEN** the Styles section SHALL flag that entry exactly as the widget designer flags it, and the preview SHALL not apply it
 
 ### Requirement: Preview theme selection in the widget designer
-The widget designer SHALL accept `options.themes` — a list of named theme entries — and offer them as the preview theme through a selector (including a "none" choice for the built-in defaults), applying the chosen entry's tokens to the live preview. A host SHALL be able to name one of those entries as `options.previewTheme`: the designer SHALL open with it selected and applied — its tokens and its styles — and a name matching no supplied entry SHALL be ignored, leaving "none". Loading a widget definition SHALL keep the selected preview theme, tokens and styles alike, and loading a bare token map through `loadTheme` SHALL layer it over the selected entry: the selection and the entry's styles stay, the map's tokens win over the entry's, and each load replaces the previous layer, so `{}` returns to the entry exactly; with no entry selected the map is the whole preview theme. Only the person's choice in the selector changes the selection — a token map never selects an entry by its content — and choosing an entry, or none, replaces any layered tokens. The preview SHALL render the draft widget only — there is no kind selector; previewing arbitrary catalog kinds under a theme belongs to the standalone theme designer. Beside the theme selection, the designer SHALL show a compact read-only listing of the effective preview tokens — the selected entry merged over the defaults — with each token's name, its effective value, and a color swatch for `color`-typed tokens (type read from the registry's metadata, never inferred), so style authoring can reference `var(--wg-…)` by sight. The widget designer SHALL NOT edit theme tokens; theme authoring belongs to the standalone theme designer. The draft's theme selection SHALL NOT affect the exported widget definition, which stays `{ kind, template, descriptor }`.
+The widget designer SHALL accept `options.themes` — a list of named theme entries — and offer them as the preview theme through a selector (including a "none" choice for the built-in defaults), applying the chosen entry's tokens to the live preview. A host SHALL be able to name one of those entries as `options.previewTheme`, the person's own pick (a remounted draft keeps it): the designer SHALL open with it selected and applied — its tokens and its styles — and a name matching no supplied entry SHALL be ignored, leaving "none". Without such a pick, the designer SHALL open on the theme the draft's `descriptor.themes` names for the scheme the designer shows (its pinned appearance, else the page's, else the system's) when that name is a supplied entry, and otherwise on `options.defaultPreviewTheme`, the host's fallback (its Settings default for that scheme), under the same matching rule. Loading a widget definition whose `descriptor.themes` names a supplied entry for the designer's scheme SHALL select that entry, tokens and styles, since the definition chooses its own look; loading one that names none for the scheme SHALL keep the selected preview theme, tokens and styles alike, and loading a bare token map through `loadTheme` SHALL layer it over the selected entry: the selection and the entry's styles stay, the map's tokens win over the entry's, and each load replaces the previous layer, so `{}` returns to the entry exactly; with no entry selected the map is the whole preview theme. Only the person's choice in the selector changes the selection — a token map never selects an entry by its content — and choosing an entry, or none, replaces any layered tokens. The preview SHALL render the draft widget only — there is no kind selector; previewing arbitrary catalog kinds under a theme belongs to the standalone theme designer. Beside the theme selection, the designer SHALL show a compact read-only listing of the effective preview tokens — the selected entry merged over the defaults — with each token's name, its effective value, and a color swatch for `color`-typed tokens (type read from the registry's metadata, never inferred), so style authoring can reference `var(--wg-…)` by sight. The widget designer SHALL NOT edit theme tokens; theme authoring belongs to the standalone theme designer. The draft's theme selection SHALL NOT affect the exported widget definition, which stays `{ kind, template, descriptor }`.
 
 #### Scenario: Supplied themes are selectable and applied
 - **WHEN** a designer is created with `options.themes` containing a `dark` entry and that entry is selected
@@ -259,8 +259,17 @@ The widget designer SHALL accept `options.themes` — a list of named theme entr
 - **THEN** the preview tokens SHALL equal `tide`'s exactly
 
 #### Scenario: Loading a widget keeps the preview theme
-- **WHEN** `brand` is the selected preview theme and the host loads another widget definition
+- **WHEN** `brand` is the selected preview theme and the host loads another widget definition that names no theme for the designer's scheme
 - **THEN** the preview SHALL still carry `brand`'s tokens and styles
+
+#### Scenario: A widget's own theme opens as the preview theme
+- **WHEN** a light-scheme designer is created with `options.themes` holding `brand` and `acme`, `options.defaultPreviewTheme: "brand"`, and an `initialWidget` whose `descriptor.themes` is `{ light: "acme" }`
+- **THEN** the selector SHALL show `acme` and the preview SHALL carry its tokens and styles
+- **AND** the same designer with an `initialWidget` naming no theme SHALL open on `brand`, and with `options.previewTheme: "brand"` beside the widget's `acme` SHALL open on `brand`, the person's pick
+
+#### Scenario: Loading a widget switches to its own theme
+- **WHEN** `brand` is the selected preview theme and the host loads a definition whose `descriptor.themes` is `{ light: "acme", dark: "acme-night" }` in a dark-scheme designer
+- **THEN** the selector SHALL show `acme-night` and the preview SHALL carry its tokens
 
 #### Scenario: An empty token map is not a named theme
 - **WHEN** the designer was given the built-in `light` entry (whose token map is empty), no entry is selected, and the host calls `loadTheme({})`
@@ -361,7 +370,7 @@ A bind-mode ATTRIBUTE row SHALL offer all three value transforms — a literal `
 mirroring the validator's mutual exclusion. A TEXT bind row SHALL offer `format`, `map` (with its `default`) and a Markdown toggle, hiding the others once one is set; it SHALL NOT offer `prefix`, an attribute-value transform the renderer ignores in a text position. The format control SHALL offer every type the validator accepts. Choosing a type SHALL commit a complete, valid spec, and each type SHALL reveal its own fields:
 - currency: code, decimals and display;
 - number: decimals;
-- date: the pattern;
+- date: the pattern and a zone: UTC (the default), the value's own offset, and — on a text bind only — the viewer's zone;
 - count: no field;
 - join: separator, last separator and item field;
 - truncate: length and ellipsis;
@@ -406,6 +415,11 @@ push another out of reach.
 #### Scenario: Editing plural forms keeps the categories the row does not show
 - **WHEN** a bind whose format is `{ type: "pluralize", locale: "pl", forms: { one: "{count} plik", few: "{count} pliki", many: "{count} plików", other: "{count} pliku" } }` has its `one` form edited in the row
 - **THEN** the committed spec SHALL still carry `few`, `many` and `locale` unchanged
+
+#### Scenario: The viewer zone is offered on text binds only
+- **WHEN** a date format is chosen on a text bind row and on an attribute row
+- **THEN** the text row's zone control SHALL offer UTC, the value's offset and the viewer's zone, and the attribute row's SHALL offer UTC and the value's offset only
+- **AND** choosing a zone SHALL commit it in the spec, and choosing UTC SHALL omit `zone`
 
 ### Requirement: Action binding in the widget designer
 The widget designer SHALL let the person bind a `button` or `a` element to an action — the add menu SHALL offer `action` on those elements only, while an existing binding on any element stays editable — (none, a shared action chosen from `options.actions`, or an inline definition edited in place), edit the binding's input mapping (one row per input-schema field, each a template path or a constant, with `$root`, `$parent` and `$index` completions inside `each`), choose the output mode with its `path`/`map` — the `map` editor SHALL offer target paths from the widget's effective data schema (relative to the `patch` path when that mode is chosen), source paths from the action's output schema, and SHALL flag a source/target type mismatch in place; when either schema is an ARRAY the editor SHALL offer that side's ITEM properties (the per-item projection's vocabulary), a `"."` row's source SHALL complete from the response root while the other rows complete from the SELECTED value's item schema, and the mismatch check SHALL compare the item types of two array sides rather than passing every array-to-array pair — and declare the widget-level `load` binding for http GET actions. Path completions throughout the template panel SHALL resolve a shared `dataSchemaRef` exactly as an inline `dataSchema`. The draft SHALL serialize bindings in the template's `action` form and the widget's `load` field; validation errors (`INVALID_ACTION`, `CONFLICTING_ATTRIBUTES`) SHALL surface in place at the offending node. The live preview SHALL render bound elements with an inert `wg-designer-action` badge and never execute anything. Editors SHALL read the live binding on every commit (a URL typed before a method change survives; two mapping fields set in sequence both persist); new header/query/projection rows SHALL stay editor-local until they have a name (never committing `""` keys); path helpers SHALL be offered as complete paths (`$index`, `$root`, `$parent`), never as dangling prefixes; unknown shared-action references SHALL surface at the referencing node, not only in the Load section; and a binding editor SHALL be constructed only for elements that carry a binding.
@@ -728,3 +742,23 @@ The widget and theme designers SHALL accept `resources`: stylesheet entries in t
 #### Scenario: The page never links them
 - **WHEN** a widget designer without `previewFrame` is created with the same `resources`
 - **THEN** the page SHALL hold no stylesheet link the designer added
+
+### Requirement: The widget designer sets the widget's themes
+The widget designer SHALL offer two selects, light and dark, that edit the draft's `descriptor.themes`. Each SHALL offer:
+- "Settings default", which omits that mode, and omits `themes` entirely once both modes are omitted;
+- the built-ins `light` and `dark`;
+- every entry of `options.themes`.
+
+Loading a widget SHALL show its `themes`. A name matching no option SHALL stay selected as a marked "missing" option, so it is visible rather than silently dropped. Choosing a supplied entry for the light mode SHALL also make that entry the preview theme, a choice the person made, so the preview shows the look they picked. Export SHALL carry `themes` inside `descriptor`, keeping the exported keys `kind`, `template` and `descriptor`.
+
+#### Scenario: Choosing themes edits the descriptor
+- **WHEN** a designer created with `options.themes` holding `acme` sets light to `acme` and dark to the built-in `dark`
+- **THEN** the draft's `descriptor.themes` SHALL be `{ light: "acme", dark: "dark" }`, the preview theme selector SHALL show `acme`, and the export's `descriptor.themes` SHALL match
+
+#### Scenario: Settings default omits the mode
+- **WHEN** both selects are set back to "Settings default"
+- **THEN** the draft's descriptor SHALL carry no `themes` key
+
+#### Scenario: A missing theme stays visible
+- **WHEN** a widget naming `light: "ghost"` is loaded and no supplied entry is `ghost`
+- **THEN** the light select SHALL show `ghost` marked missing, and the draft SHALL keep the name until the person changes it

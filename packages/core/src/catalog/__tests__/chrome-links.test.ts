@@ -232,6 +232,29 @@ describe("prefix links: clean display, composed href", () => {
     expect(out).not.toContain("<a ");
   });
 
+  it("a link prefix encodes the value it composes", () => {
+    const out = html({
+      kind: "card",
+      data: { fields: { place: "Main St & 5th #2" } },
+      hints: { links: { place: "https://maps.example.com/?q=" } }
+    });
+    expect(out).toContain(
+      '<a class="wg-link" href="https://maps.example.com/?q=Main%20St%20%26%205th%20%232" rel="noopener noreferrer">Main St &amp; 5th #2</a>'
+    );
+  });
+
+  it("a link prefix encodes each cell it composes", () => {
+    const out = html({
+      kind: "table",
+      data: [{ q: "a&b" }, { q: "c d" }],
+      hints: { links: { q: "https://search.example.com/?q=" } }
+    });
+    expect(out).toContain('href="https://search.example.com/?q=a%26b"');
+    expect(out).toContain('href="https://search.example.com/?q=c%20d"');
+    expect(out).toContain(">a&amp;b</a>");
+    expect(out).toContain(">c d</a>");
+  });
+
   it("a prefix that does not form an allowed scheme stays text", () => {
     const out = html({
       kind: "table",

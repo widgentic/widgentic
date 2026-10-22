@@ -4,7 +4,7 @@
  * taught, and — the test the change exists for — an "agent" that follows
  * ONLY the guide produces a widget and theme that import cleanly.
  */
-import { LABEL_STYLE_RULE } from "@widgentic/core";
+import { DATE_ZONE_RULE, LABEL_STYLE_RULE, PREFIX_ENCODING_RULE, WIDGET_THEMES_RULE } from "@widgentic/core";
 import { describe, expect, it } from "vitest";
 import {
   PATTERN_MAX_LENGTH,
@@ -245,6 +245,7 @@ describe("guide teaches shared-schema references", () => {
       rules: { template: { dataModeling: string } };
       workflow: { related: string };
     };
+    expect(guide.widget.shape.descriptor.themes).toBe(WIDGET_THEMES_RULE);
     const ref = guide.widget.shape.descriptor.dataSchemaRef ?? "";
     expect(ref).toContain("list_schemas");
     expect(ref).toContain("IN PLACE of");
@@ -355,7 +356,7 @@ describe("a guide-only agent using the attr transforms", () => {
     const html = renderToHtml(rendered.node);
     expect(html).toContain('class="wg-status wg-status-danger"');
     expect(html).toContain('href="mailto:m.oyelaran@example.org"');
-    expect(html).toContain('href="tel:+1 250-555-0163"');
+    expect(html).toContain('href="tel:+1%20250-555-0163"');
   });
 
   it("the guide's form lines actually teach the transforms", () => {
@@ -366,6 +367,10 @@ describe("a guide-only agent using the attr transforms", () => {
     expect(forms).toContain("ATTR MAP");
     expect(forms).toContain("ATTR PREFIX");
     expect(forms).toContain("mailto:");
+    expect(forms).toMatch(/ATTR PREFIX[^\n]*percent-encoded[^\n]*bare mailto:\/tel: it stays an address/);
+    expect(forms).toContain(PREFIX_ENCODING_RULE);
+    expect(forms).toMatch(/FORMAT[^\n]*date also takes an optional zone: utc/);
+    expect(forms).toContain(DATE_ZONE_RULE);
     // the mutual-exclusion rule states itself, rather than riding on the
     // ACTION line's unrelated "never both href and action"
     expect(forms).toContain("ONE TRANSFORM PER VALUE");

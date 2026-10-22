@@ -159,7 +159,8 @@ export const LIST_THEMES_TOOL: McpToolDefinition = {
     "List the themes registered on this server — name, label, description, " +
     "token map and shared styles for each — and 'defaults', the theme the " +
     "user chose for light and for dark hosts. Leave render_widget's 'theme' " +
-    "out to use those defaults; pass a listed name only when the user asks " +
+    "out to use the widget's own themes (descriptor.themes in list_widgets) " +
+    "or else those defaults; pass a listed name only when the user asks " +
     "for a different theme. A theme's 'styles' define .wg- classes (a " +
     ".wg-btn, say) that widgets rendered under it can use in their templates.",
   inputSchema: {
@@ -242,9 +243,11 @@ export const RENDER_WIDGET_TOOL: McpToolDefinition = {
           "drifts the moment they edit it). Inline maps are for one-off, " +
           "unsaved styling. Discover tokens, defaults, and presets with " +
           "list_theme_tokens; author extras as 'x-<name>' custom " +
-          "variables. Leave this out to use the user's default themes for " +
-          "light and dark hosts (list_themes shows them); a theme you pass " +
-          "replaces those defaults in both modes. Applied to 'page' output " +
+          "variables. Leave this out to use the widget's own themes " +
+          "(descriptor.themes in list_widgets) or else the user's default " +
+          "themes for light and dark hosts (list_themes shows them); a theme " +
+          "you pass replaces both in both modes, so pass one only when the " +
+          "user asks for a different look. Applied to 'page' output " +
           "and embedded in the widget payload for native hosts on every format."
       }
     },

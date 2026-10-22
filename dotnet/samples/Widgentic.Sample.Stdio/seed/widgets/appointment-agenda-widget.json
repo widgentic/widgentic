@@ -123,7 +123,8 @@
                   "bind": "startsAt",
                   "format": {
                     "type": "date",
-                    "pattern": "yyyy-MM-dd HH:mm"
+                    "pattern": "yyyy-MM-dd HH:mm",
+                    "zone": "viewer"
                   }
                 },
                 " — ",
@@ -131,7 +132,8 @@
                   "bind": "endsAt",
                   "format": {
                     "type": "date",
-                    "pattern": "HH:mm"
+                    "pattern": "HH:mm",
+                    "zone": "viewer"
                   }
                 }
               ]
@@ -240,11 +242,11 @@
               "response": "tentative"
             }
           ],
-          "endsAt": "2026-09-03T10:00:45",
+          "endsAt": "2026-09-03T10:00:45-05:00",
           "id": "a-101",
           "location": "Conference Room A",
           "meetingUrl": "https://meet.example.com/product-planning",
-          "startsAt": "2026-09-03T09:15:30",
+          "startsAt": "2026-09-03T09:15:30-05:00",
           "status": "confirmed",
           "title": "Product planning"
         },
@@ -256,10 +258,10 @@
               "response": "accepted"
             }
           ],
-          "endsAt": "2026-09-03T14:50:20",
+          "endsAt": "2026-09-03T14:50:20-05:00",
           "id": "a-102",
           "location": "Studio 3",
-          "startsAt": "2026-09-03T14:05:00",
+          "startsAt": "2026-09-03T14:05:00-05:00",
           "status": "tentative",
           "title": "Design review"
         }

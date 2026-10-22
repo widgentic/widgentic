@@ -105,8 +105,9 @@ and then silently missing.
 
 ## Default themes
 
-A render that names no theme takes the default theme for the host's colour scheme: the
-built-in `light` and `dark`, unless a settings record chooses others. The record has the
+A render that names no theme takes, for the host's colour scheme, the theme the widget's
+`descriptor.themes` names, else the default theme: the built-in `light` and `dark`, unless a
+settings record chooses others. The record has the
 widgentic store's shape:
 
 ```json
@@ -261,8 +262,8 @@ asks the source on `resources/list` and `resources/read` (above).
 ## Sample
 
 [`samples/Widgentic.Sample.Stdio`](samples/Widgentic.Sample.Stdio) serves the docker example's demo
-seed (an appointment agenda, an email inbox and a project status widget, two Google-style themes
-as the light and dark defaults, two resource domains, and the shared schemas the agenda and inbox
+seed (an appointment agenda, an email inbox, a project status widget and a person card, two Google-style themes
+as the light and dark defaults and the brand pair the person card names, four resource domains, the Material Icons stylesheet, and the shared schemas the agenda and inbox
 reference) plus one host tool, over stdio by default or over Streamable HTTP with
 `--http`. The seed files under `seed/` are generated from `examples/docker/seed/demo.json` by
 `npm run conformance:generate`:

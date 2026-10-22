@@ -150,6 +150,49 @@ const linksWidget = {
   }
 };
 
+/** Date zones: UTC, the value's own offset, and the viewer's zone the frame rewrites. */
+const datesWidget = {
+  kind: "corpus-dates",
+  template: {
+    tag: "div",
+    attrs: { class: "wg-corpus-dates" },
+    children: [
+      { tag: "p", children: [{ bind: "at", format: { type: "date", pattern: "yyyy-MM-dd HH:mm" } }] },
+      {
+        tag: "p",
+        attrs: { title: { bind: "at", format: { type: "date", pattern: "HH:mm", zone: "value" } } },
+        children: [{ bind: "at", format: { type: "date", pattern: "yyyy-MM-dd HH:mm", zone: "value" } }]
+      },
+      { tag: "p", children: [{ bind: "at", format: { type: "date", pattern: "dd-MM-yyyy HH:mm:ss", zone: "viewer" } }] }
+    ]
+  },
+  descriptor: {
+    description: "Corpus: date zones.",
+    dataExample: { at: "2026-10-21T09:30:00-07:00" }
+  }
+};
+
+/** Values behind author prefixes: one component, an address, a URL remainder. */
+const prefixesWidget = {
+  kind: "corpus-prefixes",
+  template: {
+    tag: "div",
+    attrs: { class: "wg-corpus-prefixes" },
+    children: [
+      { tag: "img", attrs: { src: { bind: "seed", prefix: "https://api.dicebear.com/9.x/initials/svg?seed=" }, alt: "seed" } },
+      { tag: "a", attrs: { href: { bind: "email", prefix: "mailto:" } }, children: ["mail"] },
+      { tag: "a", attrs: { href: { bind: "phone", prefix: "tel:" } }, children: ["call"] },
+      { tag: "img", attrs: { src: { bind: "rest", prefix: "https:" }, alt: "rest" } },
+      { tag: "a", attrs: { href: { bind: "site", prefix: "https://" } }, children: ["site"] },
+      { tag: "img", attrs: { src: { bind: "pixel", prefix: "data:image/png;base64," }, alt: "pixel" } }
+    ]
+  },
+  descriptor: {
+    description: "Corpus: values composed behind URL prefixes.",
+    dataExample: { seed: "Ada", email: "ada@example.org", phone: "+15551234", rest: "//cdn.example.com/a.png" }
+  }
+};
+
 /** A widget whose data schema is a shared-schema reference, resolved at composition. */
 const schemaWidget = {
   kind: "corpus-person",
@@ -162,7 +205,7 @@ const schemaWidget = {
 };
 
 const config = {
-  widgets: [...customWidgets.map(exportShape), formatsWidget, textWidget, linksWidget, schemaWidget],
+  widgets: [...customWidgets.map(exportShape), formatsWidget, textWidget, linksWidget, prefixesWidget, datesWidget, schemaWidget],
   themes: [
     { name: "corpus-brand", label: "Corpus brand", tokens: { accent: "#0b6e4f" } },
     {
@@ -344,6 +387,39 @@ export function buildCorpus(): Corpus {
     });
   }
 
+  // The URL-value rule: a query prefix, a bare mailto:/tel:, an https: or https:// remainder, a data: value kept for the image guard, non-ASCII.
+  render("prefixes template", {
+    widget: "corpus-prefixes",
+    data: {
+      seed: "Ada & Lin?x=1#y",
+      email: "ada@example.org?subject=hi#x",
+      phone: "+1 555-0100",
+      rest: "//cdn.example.com/a b.png?w=1&h=2",
+      site: "example.com/a b?c=1&d=2",
+      pixel: "iVBORw0KGgo+/AAA="
+    }
+  });
+  render("prefixes template non-ASCII", {
+    widget: "corpus-prefixes",
+    data: { seed: "José \u{1F600}", email: "zoë@example.org", phone: "", rest: "//cdn.example.com/ü.png", site: "bücher.example/ü", pixel: "<svg onload=x>" }
+  });
+  render("prefixes links", {
+    widget: "card",
+    data: { fields: { place: "Main St & 5th #2", email: "a&b@example.org" } },
+    hints: { links: { place: "https://maps.example.com/?q=", email: "mailto:" } }
+  });
+  render("prefixes links table", {
+    widget: "table",
+    data: [{ q: "a&b" }, { q: "c d" }, { q: "100%" }],
+    hints: { links: { q: "https://search.example.com/?q=" } }
+  });
+
+  // Date zones: an offset, an unzoned value, an epoch and an unparseable value; the page shows the viewer zone's UTC text.
+  for (const at of ["2026-10-21T09:30:00-07:00", "2026-10-21T09:30:00", 1700000000, "soon"]) {
+    render(`dates ${JSON.stringify(at)}`, { widget: "corpus-dates", data: { at } });
+  }
+  render("dates as a page", { widget: "corpus-dates", data: { at: "2026-10-21T09:30:00+05:30" }, format: "page" });
+
   for (const amount of [1234.5, "1234.5", -0.5, 0, 1e21, "n/a"]) {
     render(`formats ${JSON.stringify(amount)}`, {
       widget: "corpus-formats",
@@ -417,6 +493,49 @@ export function buildCorpus(): Corpus {
     run("explicit theme wins", "render_widget", { widget: "card", data: card, theme: "corpus-brand" });
     run("listing", "list_themes", {});
     cases.push({ config: label, name: `${label}: widget page`, op: "widgetPage", kind: "card", output: settingsHost.widgetPage("card") });
+  }
+
+  // Widget themes: a widget's own themes ahead of the settings defaults, per mode;
+  // a built-in opt-out, one mode, groups that agree and disagree, a missing name.
+  {
+    const label = "widget themes";
+    const named = (kind: string, themes: Record<string, string>) => ({
+      kind,
+      template: { tag: "p", attrs: { class: "wg-corpus-named" }, children: [{ bind: "title" }] },
+      descriptor: { description: `Corpus: a widget naming ${JSON.stringify(themes)}.`, dataShape: "{ title }", themes }
+    });
+    const json = JSON.stringify({
+      themes: SETTINGS_THEMES,
+      settings: { defaultThemes: { light: "corpus-brand", dark: "corpus-night" } },
+      widgets: [
+        named("corpus-own", { light: "corpus-styled", dark: "corpus-styled" }),
+        named("corpus-own-light", { light: "corpus-styled" }),
+        named("corpus-opt-out", { light: "light" }),
+        named("corpus-own-other", { light: "corpus-night" }),
+        named("corpus-own-missing", { light: "ghost" })
+      ]
+    });
+    const themedHost = createWidgenticHost(json);
+    if (themedHost.problems() !== "[]") {
+      throw new Error(`the '${label}' configuration must compose cleanly: ${themedHost.problems()}`);
+    }
+    configs[label] = json;
+    const run = (name: string, tool: string, args: unknown): void => {
+      const argsJson = JSON.stringify(args);
+      cases.push({ config: label, name: `${label}: ${name}`, op: "call", tool, args: argsJson, slim: false, output: themedHost.call(tool, argsJson, false) });
+    };
+    const title = { title: "T" };
+    run("one theme for both modes", "render_widget", { widget: "corpus-own", data: title });
+    run("light only", "render_widget", { widget: "corpus-own-light", data: title });
+    run("built-in opt-out", "render_widget", { widget: "corpus-opt-out", data: title });
+    run("explicit theme wins", "render_widget", { widget: "corpus-own", data: title, theme: "dark" });
+    run("page", "render_widget", { widget: "corpus-own-light", data: title, format: "page" });
+    run("preview", "preview_widget", { widget: "corpus-own-light", data: title });
+    run("group agrees", "render_widget", { widget: "group", data: { items: [{ kind: "corpus-own-light", data: title }, { kind: "card", data: title }] } });
+    run("group disagrees", "render_widget", { widget: "group", data: { items: [{ kind: "corpus-own-light", data: title }, { kind: "corpus-own-other", data: title }] } });
+    run("missing name", "render_widget", { widget: "corpus-own-missing", data: title });
+    run("listing", "list_widgets", {});
+    cases.push({ config: label, name: `${label}: widget page`, op: "widgetPage", kind: "corpus-own-light", output: themedHost.widgetPage("corpus-own-light") });
   }
 
   // Resource domains: the embedding server's own, a settings section, and both, as `resources()` declares them.

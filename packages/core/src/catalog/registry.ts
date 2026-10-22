@@ -117,7 +117,8 @@ export function createCatalog(): WidgetCatalog {
           : {}),
         ...(descriptor?.hints ? { hints: descriptor.hints } : {}),
         ...(descriptor?.dataSchema ? { dataSchema: descriptor.dataSchema } : {}),
-        ...(descriptor?.styles ? { styles: descriptor.styles } : {})
+        ...(descriptor?.styles ? { styles: descriptor.styles } : {}),
+        ...(descriptor?.themes ? { themes: descriptor.themes } : {})
       });
     },
     has: (kind) => renderers.has(kind),

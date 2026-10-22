@@ -95,9 +95,13 @@ The preview renders the draft — and only the draft — against `dataExample` o
 
 In the app the preview runs in a frame: the same document MCP Apps hosts mount, under the policy your resource domains set. An image from a domain in **Settings** loads there and one from anywhere else is blocked, as in a conversation; the stylesheets in Settings load there too, so an icon font previews as it renders, and the app's own styles never reach the widget. The frame follows the app's light or dark mode.
 
+### Widget themes
+
+**Light theme** and **Dark theme** name the themes this widget wears when a render names none, ahead of your default themes (see [A widget's own themes](/design/themes#a-widgets-own-themes)). Each offers **Settings default**, which leaves the mode to your defaults, the built-ins and your saved themes. A name the designer was not given stays selected, marked "missing", until you change it. Choosing a light theme also selects it as the preview theme, so the preview shows the look you picked. The choices travel in the export as `descriptor.themes`.
+
 ### Preview theme and token reference
 
-A selector offers your saved themes plus a **none** choice for the built-in defaults. Beside it, a read-only listing shows the effective tokens — name, value, and a swatch for color-typed tokens — so styles can reach for `var(--wg-…)` by sight. The widget designer does not edit tokens (that is the [theme designer](/design/themes)), and the selected theme never leaks into the export.
+A selector offers your saved themes plus a **none** choice for the built-in defaults. Opening a widget that names its own theme for the designer's light or dark scheme selects that theme; other widgets open on your default for the scheme, and a theme you pick stays picked when the designer remounts. Loading a widget that names its own theme switches the preview to it. Beside it, a read-only listing shows the effective tokens — name, value, and a swatch for color-typed tokens — so styles can reach for `var(--wg-…)` by sight. The widget designer does not edit tokens (that is the [theme designer](/design/themes)), and the selected theme never leaks into the export.
 
 ## Import, export and copy as TypeScript
 

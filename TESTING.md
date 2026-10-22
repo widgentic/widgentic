@@ -382,6 +382,85 @@ workspace and the sample first, then point at the built DLL):
 
 ## Verification log
 
+- **Widget themes (2026-10-22, change `widget-themes`, on `feature/widget-themes`; core, designer and mcp minor and a webmcp patch pending release)**: a widget names its own light and dark themes, ahead of the Settings defaults.
+  - **Core** (`widget-themes.test.ts`, 3 tests). `descriptor.themes` registers and lists unchanged. `checkWidgetThemes` accepts a single mode or a built-in, and refuses a number, an unknown mode, an empty name, a name with a space, and a non-object, each naming `descriptor.themes`.
+  - **Store** (the shared contract on memory, SQLite and the Cosmos fake; the file store is read-only).
+    - `putWidget` refuses an unknown name with `UNKNOWN_THEME`, naming the mode and the theme. It stores a saved theme or a built-in, and refuses malformed shapes with `INVALID_SHAPE`.
+    - `removeTheme` answers `THEME_IN_USE` while widgets name the theme, with one message naming widgets and defaults ("default light theme and is named by widgets promo, report"). It succeeds once no widget names the theme.
+    - SQLite raw entries: a widget the validator refuses today still protects its theme, and a malformed `themes` is skipped on read with a diagnostic.
+  - **Rendering** (`widget-themes.test.ts` in mcp, 12 tests).
+    - Precedence: per mode, a widget naming one mode keeps the other default, a built-in opts out, one theme for both modes equals an explicit theme, and an explicit `theme` wins.
+    - Previews, an action re-render (through `handleExecuteAction`) and page documents follow the widget.
+    - Groups: agreeing items lend their theme with no note. Disagreeing items give the default and a `Theme notes:` line naming the items, in the default and `html` texts and never in a page document.
+    - A missing name falls back with a note.
+    - `list_widgets` shows `themes`, and the `theme` field steers.
+    - Widgets without themes render as before, and the corpus for existing cases did not change.
+  - **Corpus** (`widget themes` configuration). It covers both modes, light only, a built-in opt-out, explicit wins, a page, a preview, agreeing and disagreeing groups, a missing name, the listing and a widget page. The .NET suite runs it (240 tests).
+  - **Designer** (`widget-themes.test.ts`, 4 tests). Selects edit `descriptor.themes`, and choosing a supplied light theme also selects it as the preview theme, with its styles. Settings default omits the mode, a missing name is kept and marked, the export carries `themes`, and import refuses a malformed field.
+  - **Owner finding on staging (design D10).** Opening a widget that names its themes still previewed it in the Settings default, because the app passed that default as the person's pick. The designer now has `defaultPreviewTheme` (one name or per scheme). On open, the person's pick comes first, then the widget's own theme for the designer's scheme, then the fallback, and `loadWidget` switches to a definition's own theme. Tests: 3 more in the designer's `widget-themes.test.ts`. The app's `app-widget-themes.test.ts` checks that the person card opens on `acme`, a plain widget on the Google default, and a pick survives a remount.
+  - **Demo seed** (13 entries).
+    - A new Acme Outfitters pair, `acme` (light, with a `.wg-card` accent rule) and `acme-night`, which the person card names.
+    - The project status names the built-ins, opting out of the Google defaults.
+    - The person card gains an email, an optional title, an optional company block (name, industry, website) and optional tags (owner request). A name-only card renders just the header.
+  - **Production scan** (read-only, counts only): 25 stored widgets, none with a `themes` key.
+  - **Staging** (`widget-themes-1597397`, revision `--0000038`), keyed renders of the seed:
+    - the person card wears `acme`/`acme-night`, and the inbox the Google defaults;
+    - the project status carries no token declarations (built-ins);
+    - a person card plus inbox group wears `acme` with no note;
+    - a person card plus project status group wears the defaults, with one note per mode;
+    - `list_widgets` shows `themes`.
+
+    The first staged build joined two notes as `one.; group dark`, so notes now end without a period, as hint notes do. After the owner's check, the group note closes with one piece of advice: pass `theme`, or render the items as separate widgets when each should keep its own theme. It appears once even when both modes disagree. After the designer finding, staging runs `widget-themes-34e1813` (revision `--0000039`), and its served `/app.bundle.js` carries the new preview selection.
+  - **Gates.** Typecheck, 2,049 tests, build, `pack:check`, `docs:check`, OpenSpec strict and specs, and `dotnet test` (240) all pass.
+
+- **Date time zones (2026-10-21, change `date-time-zones`, on `feature/date-time-zones`; core, designer and mcp minor and a webmcp patch pending release)**: the date format's `zone` shows UTC (the default), the value's own offset, or, in MCP Apps frames, the viewer's zone.
+  - **The format** (`date-zones.test.ts`, 8 tests).
+    - `value` reads `Z`, `±HH:MM`, `±HHMM`, fractions, unzoned values, date-only values and epochs. `2026-10-21T09:30:00-07:00` with `HH:mm` gives `09:30` under `value` and `16:30` under `utc`.
+    - `viewer` emits `<time datetime="2026-10-21T16:30:00.000Z" data-wg-date="dd-MM HH:mm">21-10 16:30</time>`, whose text equals the UTC rendering. `soon` stays plain text.
+    - An epoch beyond the Date range (`1e300`, `±8.64e15 ± 1`, a nanosecond `1.7e18`) renders its plain value in every zone, where it previously rendered `NaN` digits. `8.64e15` itself renders `275760-09-13`.
+    - Validation refuses an unknown zone, and refuses `viewer` on an attribute value with `INVALID_TEMPLATE_NODE`, naming `format.zone` and the two zones that work there.
+  - **The frame** (`app-template-zones.test.ts`, 8 tests through `bootTemplate()`).
+    - With the viewer's zone set to UTC, the frame's localized text equals the renderer's UTC text. This covers 8 patterns, including every token alone, over midnight and the years 999, 1, 10209 and 275760.
+    - The host's `Asia/Tokyo` gives `01:30`, and every token reads a 24-hour clock (`America/New_York` → `2026-10-21 12:30:00`).
+    - With no host zone, `Mars/Base`, `""` or a number, the frame's own zone applies. The test sets the process zone to `Asia/Kolkata` (`22:00`), so the case is not vacuous.
+    - A `host-context-changed` to New York re-renders `12:30` in the same `time` node, and a theme-only change leaves the zone.
+    - A server preview localizes. A repeated result patches with node and text identity kept. A renderer-built tree localizes, and an unreadable instant keeps its UTC text.
+  - **Host probe** (staging `date-time-zones-probe-e4d7b28`, a never-merged branch). claude.ai sends `timeZone="America/Bogota"` (locale `es-419`). ChatGPT sends `America/Bogota` (locale `en-US`). VS Code Copilot sends no zone (locale `en-us`). Every frame's own zone is `America/Bogota` (GMT-0500), so the host value and the fallback both give the viewer's zone.
+  - **Budget.** The raw budget rises to 46,080. The template measures 46,069 raw (11 B left) and 12,207 of 13,312 gzipped.
+  - **Steering and the designer.** `DATE_ZONES`, `DATE_ZONE_RULE` and `isDateZone` are exported (exports snapshot). Both guides' `FORMAT` line derives from the rule, and each guide's test checks it. The designer's zone select offers `viewer` on text rows only and omits `zone` for UTC (`editors.test.ts`).
+  - **Corpus** (`corpus-dates`). It covers an offset, an unzoned value, an epoch and `soon` across the three zones and a `value`-zone `title`, plus a `page` render showing the viewer zone's UTC text. The .NET suite runs it (229 tests).
+  - **Demo seed.** The agenda's `startsAt`/`endsAt` use `viewer`, and the inbox's `receivedAt` uses `value`. Their examples carry `-05:00`.
+  - **Gates.** Typecheck, 1,996 tests, build, `pack:check`, `docs:check`, OpenSpec strict and specs, and `dotnet test` (229) all pass.
+  - **Staging** (`date-time-zones-a853bb4`, revision `--0000036`).
+    - A keyed agenda render carries 4 `time` elements: `09:15-05:00` becomes `datetime="2026-09-03T14:15:30.000Z"` over the UTC text `2026-09-03 14:15`.
+    - The inbox renders `09:15` and `08:30` as written.
+    - The served template carries the zone walker, and the probe is gone.
+  - **Owner host check (2026-10-22).** In fresh chats in claude.ai, ChatGPT and VS Code Copilot, and in the staging designer, everything worked as specified:
+    - the agenda showed its times in the viewer's local time (Bogota);
+    - the inbox showed the times as written;
+    - the designer's island preview showed local times.
+
+- **Encoded prefix values (2026-10-21, change `encode-prefixed-url-values`, on `bug/encode-prefixed-url-values`, core/designer/mcp/webmcp patch pending release)**: a value composed behind an author's URL prefix is percent-encoded, so data cannot restructure the URL.
+  - **The report, reproduced on 0.14.0.** A `src` with prefix `https://api.dicebear.com/9.x/initials/svg?seed=` over `Ada & Lin?x=1#y` rendered the value raw, so the service received `seed=Ada `. A `hints.links` prefix and the app template's streamed preview did the same. Whole URLs bound with no prefix were already correct.
+  - **The rule** (`url-values.test.ts`, 7 tests). A query or path prefix encodes one component. A bare `mailto:`/`tel:`/`sms:` keeps the address and encodes `% ? # & [ ]` and spaces. `http:`/`https:`, with or without `//`, keeps the URL's delimiters and escapes. A `data:` prefix keeps its value. `https:///` and `ftp:` are classified as component and address prefixes. Non-ASCII is UTF-8, an astral character encodes whole, and a lone surrogate becomes `%EF%BF%BD`.
+  - **The renderers.**
+    - Template: 7 new scenario tests in `compile.test.ts`. They include a scheme-less prefix that can no longer assemble `javascript:` (its `:` becomes `%3A`), an `https://` prefix that keeps `example.com/a/b?c=1`, and a base64 value behind `data:image/png;base64,` that stays an image source, where `<svg onload=x>` is dropped.
+    - Built-ins: 2 new tests in `chrome-links.test.ts` (card and table `hints.links`). The analyzer checks the encoded href.
+    - Existing tests updated: a phone with spaces now links `tel:+1%20250-555-0163`.
+  - **The preview** (`app-template-links.test.ts`, 3 tests). Card fields and table cells streamed through `bootTemplate()` link exactly the hrefs the renderer builds over 16 cases (12 linked). The prefixes vary as well: `MAILTO:`, `HTTPS:`, `https://`, `ftp:` and `data:`. A streamed table links `?q=a%26b%20c`. Template 44,992 / 45,056 raw (64 B left), 11,774 / 13,312 gzipped.
+  - **Steering.** The new core constant `PREFIX_ENCODING_RULE` states the rule. Every surface derives from it: the `ATTR PREFIX` guide line (server and webmcp, each pinned by its guide test), the card and table `links` descriptors, and the designer's prefix field. The exports snapshot gains the constant. The corpus gained 4 prefix cases, the `corpus-prefixes` widget covering `https://` and `data:` too.
+  - **PR review (#63) revision.** An `https://` prefix and a `data:` prefix were regressions compared with raw concatenation, and both are now cases of the rule. The guarantee is scoped per case in code comments, docs and the rule text. The bridge agreement test varies the prefixes.
+  - **Stored data** (read-only production scan, counts only). 11 `prefix` transforms in 7 of 25 widgets: 5 `mailto:` and 5 `tel:` on `href`, 1 `https:` on `src`. Emails and the `https:` remainder render byte for byte as before. Spaces in phone numbers become `%20`.
+  - **The demo seed** gains `person-card-widget` (11 entries written).
+    - Avatar: a DiceBear initials `src` behind a query prefix.
+    - Phone: a `tel:` address.
+    - Address: a Google Maps query prefix.
+    - Website: a whole URL with no prefix.
+
+    Its example renders `seed=Zo%C3%AB%20O'Brien`, `tel:+1%20(555)%20010-0199`, `query=12%20Main%20St%20%26%205th%20Ave%2C%20Apt%20%234%2C%20Springfield`, and the website with `&amp;` in the HTML. On staging (`encode-prefixed-url-values-ac3df97`, revision `--0000034`), a keyed render of `Ada & Lin` carries the encoded URLs. The server-inlined DiceBear SVG reads `AL`, where the raw seed would have stopped at `Ada `.
+  - **Owner host check (2026-10-21).** The owner rendered `person-card-widget` in a fresh chat on staging and reports it working as expected: the avatar shows both initials, the address link opens Maps on the whole address, the phone link dials, and the website link opens with its full query.
+  - **Gates.** Typecheck, 1,969 tests, build, `pack:check`, `docs:check`, OpenSpec strict and specs, and `dotnet test` (224) all pass.
+
 - **Stylesheet resources (2026-10-15, change `stylesheet-resources`, on `feature/stylesheet-resources`, core/designer/mcp minor pending release with the island)**: a person's stylesheets load in every frame of their widgets, behind their resource domains.
   - **The rule** (`resources.test.ts`, 8 tests).
     - Accepted: `https://` addresses, host lowercased, path, query and fragment kept.

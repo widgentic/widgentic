@@ -5,7 +5,7 @@
  * input like any other.
  */
 import { createCatalog } from "@widgentic/core";
-import { countTemplateNodes, validateTemplate, parsePath } from "@widgentic/core";
+import { checkWidgetThemes, countTemplateNodes, validateTemplate, parsePath } from "@widgentic/core";
 import { ACTION_NAME, validateActionDefinition, validateLoadBinding } from "@widgentic/core";
 import { createThemeRegistry, isSafeTokenValue, isStyleMap, validateTheme } from "@widgentic/core";
 import type { ThemeEntry } from "@widgentic/core";
@@ -118,6 +118,10 @@ export function checkStoredWidget(
       };
     }
   }
+  if (entry.descriptor.themes !== undefined) {
+    const themes = checkWidgetThemes(entry.descriptor.themes);
+    if (themes !== undefined) return { code: "INVALID_SHAPE", message: themes };
+  }
   const template = validateTemplate(entry.template);
   if (!template.ok) {
     return {
@@ -153,6 +157,11 @@ export function checkStoredWidget(
     };
   }
   return undefined;
+}
+
+/** Whether `name` is a theme the registry pre-registers (`light`, `dark`). */
+export function isBuiltinTheme(name: string): boolean {
+  return BUILTIN_THEMES.has(name);
 }
 
 /** A raw theme entry's name for a diagnostic, whatever shape it arrived in. */

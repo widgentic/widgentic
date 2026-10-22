@@ -241,7 +241,60 @@ describe("attr transforms", () => {
     });
     const out = render({ kind: "x", data: { phone: "+1 250-555-0163" } });
     expect((out as { attrs?: { href?: string } }).attrs?.href).toBe(
-      "tel:+1 250-555-0163"
+      "tel:+1%20250-555-0163"
     );
+  });
+
+  it("a value behind a query prefix is one encoded component", () => {
+    const html = render(
+      { tag: "img", attrs: { src: { bind: "name", prefix: "https://api.dicebear.com/9.x/initials/svg?seed=" } } },
+      { name: "Ada & Lin?x=1#y" }
+    );
+    expect(html).toBe('<img src="https://api.dicebear.com/9.x/initials/svg?seed=Ada%20%26%20Lin%3Fx%3D1%23y">');
+  });
+
+  it("a value behind a bare mail or phone scheme stays an address", () => {
+    const mail = compileTemplate({ tag: "a", attrs: { href: { bind: "email", prefix: "mailto:" } } });
+    const phone = compileTemplate({ tag: "a", attrs: { href: { bind: "phone", prefix: "tel:" } } });
+    const href = (node: unknown) => (node as { attrs?: { href?: string } }).attrs?.href;
+    expect(href(mail({ kind: "x", data: { email: "ada@example.org" } }))).toBe("mailto:ada@example.org");
+    expect(href(mail({ kind: "x", data: { email: "ada@example.org?subject=hi#x" } }))).toBe(
+      "mailto:ada@example.org%3Fsubject=hi%23x"
+    );
+    expect(href(phone({ kind: "x", data: { phone: "+1 555-0100" } }))).toBe("tel:+1%20555-0100");
+  });
+
+  it("a value behind a bare web scheme keeps its URL structure", () => {
+    const template: WidgetTemplate = { tag: "img", attrs: { src: { bind: "rest", prefix: "https:" } } };
+    expect(render(template, { rest: "//cdn.example.com/a.png?w=1&h=2" })).toBe(
+      '<img src="https://cdn.example.com/a.png?w=1&amp;h=2">'
+    );
+    expect(render(template, { rest: "//cdn.example.com/a b.png" })).toBe('<img src="https://cdn.example.com/a%20b.png">');
+  });
+
+  it("a value behind a web scheme with slashes keeps its URL", () => {
+    expect(
+      render({ tag: "a", attrs: { href: { bind: "site", prefix: "https://" } } }, { site: "example.com/a/b?c=1" })
+    ).toBe('<a href="https://example.com/a/b?c=1"></a>');
+  });
+
+  it("a base64 value behind a data prefix stays an image source", () => {
+    const template: WidgetTemplate = { tag: "img", attrs: { src: { bind: "pixel", prefix: "data:image/png;base64," } } };
+    expect(render(template, { pixel: "iVBORw0KGgo+/AAA=" })).toBe('<img src="data:image/png;base64,iVBORw0KGgo+/AAA=">');
+    expect(render(template, { pixel: "<svg onload=x>" })).toBe("<img>");
+  });
+
+  it("non-ASCII is encoded as UTF-8", () => {
+    expect(
+      render({ tag: "img", attrs: { src: { bind: "name", prefix: "https://example.com/u?n=" } } }, { name: "José" })
+    ).toBe('<img src="https://example.com/u?n=Jos%C3%A9">');
+  });
+
+  it("an encoded value cannot assemble a scheme behind a scheme-less prefix", () => {
+    const out = compileTemplate({ tag: "a", attrs: { href: { bind: "rest", prefix: "java" } } })({
+      kind: "x",
+      data: { rest: "script:alert(1)" }
+    });
+    expect((out as { attrs?: { href?: string } }).attrs?.href).toBe("javascript%3Aalert(1)");
   });
 });

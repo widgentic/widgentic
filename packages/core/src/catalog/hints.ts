@@ -7,6 +7,7 @@
  * never fail or alter a render, and renderers never call this.
  */
 import { isLinkableUrl, isSafeImageSrc } from "../contract/urls.js";
+import { composePrefixedUrl } from "../contract/url-values.js";
 import type { WidgetDescriptor, WidgetDescriptorInput } from "./descriptors.js";
 import { isPlainObject } from "./widgets/format.js";
 
@@ -324,7 +325,7 @@ export function analyzeHints(
           typeof target === "string" && target !== ""
             ? flag === true
               ? target
-              : flag + target
+              : composePrefixedUrl(flag, target)
             : undefined;
         if (href === undefined || !isLinkableUrl(href)) {
           diagnostics.push({

@@ -58,7 +58,7 @@ export function rejectionStatus(code: string): number {
   if (code === "TOO_MANY_WIDGETS" || code === "TOO_MANY_THEMES" || code === "TOO_MANY_SCHEMAS") return 409;
   if (code === "TOO_MANY_ACTIONS" || code === "TOO_MANY_SECRETS") return 409;
   if (code === "SCHEMA_IN_USE" || code === "ACTION_IN_USE" || code === "SECRET_IN_USE") return 409; // conflict: re-point first
-  if (code === "THEME_IN_USE") return 409; // conflict: choose another default first
+  if (code === "THEME_IN_USE") return 409; // conflict: choose another default or widget theme first
   if (code === "NO_CIPHER") return 503; // the deployment cannot hold secrets
   if (code === "FORBIDDEN") return 403;
   if (code === "STORE_ERROR") return 502;

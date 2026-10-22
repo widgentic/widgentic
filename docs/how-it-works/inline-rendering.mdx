@@ -25,7 +25,7 @@ Every successful `render_widget` result, whatever `format` was requested, carrie
 ```
 
 - `tree` is the render tree and `html` its serialization: two projections of one render, never divergent.
-- `css` holds the theme's shared styles, then the registered styles of the kind (for a `group`, every item kind's styles exactly once), then the theme's token declarations. When no `theme` is named, the caller's [default themes](/design/themes#default-themes) take its place, scoped per mode.
+- `css` holds the theme's shared styles, then the registered styles of the kind (for a `group`, every item kind's styles exactly once), then the theme's token declarations. When no `theme` is named, the widget's [own themes](/design/themes#a-widgets-own-themes) take its place, else the caller's [default themes](/design/themes#default-themes), scoped per mode.
 - `payload` is the validated payload, carrying the resolved `theme` as a top-level field when one was given.
 - `diagnostics` appears only when hint analysis found something; `load` (or `loads` for a group) appears only when the kind declares a load binding and the caller holds the `execute` scope.
 

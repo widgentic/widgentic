@@ -1,0 +1,424 @@
+{
+  "kind": "person-card-widget",
+  "template": {
+    "tag": "div",
+    "attrs": {
+      "class": "wg-card wg-person"
+    },
+    "children": [
+      {
+        "tag": "header",
+        "attrs": {
+          "class": "wg-person-head"
+        },
+        "children": [
+          {
+            "tag": "img",
+            "attrs": {
+              "class": "wg-img wg-img-avatar",
+              "src": {
+                "bind": "name",
+                "prefix": "https://api.dicebear.com/9.x/initials/svg?seed="
+              },
+              "alt": {
+                "bind": "name"
+              }
+            }
+          },
+          {
+            "tag": "div",
+            "children": [
+              {
+                "tag": "div",
+                "attrs": {
+                  "class": "wg-card-title"
+                },
+                "children": [
+                  {
+                    "bind": "name"
+                  }
+                ]
+              },
+              {
+                "when": "title",
+                "template": {
+                  "tag": "div",
+                  "attrs": {
+                    "class": "wg-card-subtitle"
+                  },
+                  "children": [
+                    {
+                      "bind": "title"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "tag": "dl",
+        "attrs": {
+          "class": "wg-card-fields"
+        },
+        "children": [
+          {
+            "when": "email",
+            "template": {
+              "tag": "div",
+              "attrs": {
+                "class": "wg-card-field"
+              },
+              "children": [
+                {
+                  "tag": "dt",
+                  "attrs": {
+                    "class": "wg-card-field-key"
+                  },
+                  "children": [
+                    "Email"
+                  ]
+                },
+                {
+                  "tag": "dd",
+                  "attrs": {
+                    "class": "wg-card-field-value"
+                  },
+                  "children": [
+                    {
+                      "tag": "a",
+                      "attrs": {
+                        "class": "wg-link",
+                        "href": {
+                          "bind": "email",
+                          "prefix": "mailto:"
+                        }
+                      },
+                      "children": [
+                        {
+                          "bind": "email"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "when": "phone",
+            "template": {
+              "tag": "div",
+              "attrs": {
+                "class": "wg-card-field"
+              },
+              "children": [
+                {
+                  "tag": "dt",
+                  "attrs": {
+                    "class": "wg-card-field-key"
+                  },
+                  "children": [
+                    "Phone"
+                  ]
+                },
+                {
+                  "tag": "dd",
+                  "attrs": {
+                    "class": "wg-card-field-value"
+                  },
+                  "children": [
+                    {
+                      "tag": "a",
+                      "attrs": {
+                        "class": "wg-link",
+                        "href": {
+                          "bind": "phone",
+                          "prefix": "tel:"
+                        }
+                      },
+                      "children": [
+                        {
+                          "bind": "phone"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "when": "address",
+            "template": {
+              "tag": "div",
+              "attrs": {
+                "class": "wg-card-field"
+              },
+              "children": [
+                {
+                  "tag": "dt",
+                  "attrs": {
+                    "class": "wg-card-field-key"
+                  },
+                  "children": [
+                    "Address"
+                  ]
+                },
+                {
+                  "tag": "dd",
+                  "attrs": {
+                    "class": "wg-card-field-value"
+                  },
+                  "children": [
+                    {
+                      "tag": "a",
+                      "attrs": {
+                        "class": "wg-link",
+                        "href": {
+                          "bind": "address",
+                          "prefix": "https://www.google.com/maps/search/?api=1&query="
+                        }
+                      },
+                      "children": [
+                        {
+                          "bind": "address"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "when": "website",
+            "template": {
+              "tag": "div",
+              "attrs": {
+                "class": "wg-card-field"
+              },
+              "children": [
+                {
+                  "tag": "dt",
+                  "attrs": {
+                    "class": "wg-card-field-key"
+                  },
+                  "children": [
+                    "Website"
+                  ]
+                },
+                {
+                  "tag": "dd",
+                  "attrs": {
+                    "class": "wg-card-field-value"
+                  },
+                  "children": [
+                    {
+                      "tag": "a",
+                      "attrs": {
+                        "class": "wg-link",
+                        "href": {
+                          "bind": "website"
+                        }
+                      },
+                      "children": [
+                        {
+                          "bind": "website"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "when": "company",
+        "template": {
+          "tag": "section",
+          "attrs": {
+            "class": "wg-person-company"
+          },
+          "children": [
+            {
+              "tag": "div",
+              "attrs": {
+                "class": "wg-person-company-name"
+              },
+              "children": [
+                {
+                  "bind": "company.name"
+                }
+              ]
+            },
+            {
+              "when": "company.industry",
+              "template": {
+                "tag": "div",
+                "attrs": {
+                  "class": "wg-muted"
+                },
+                "children": [
+                  {
+                    "bind": "company.industry"
+                  }
+                ]
+              }
+            },
+            {
+              "when": "company.website",
+              "template": {
+                "tag": "a",
+                "attrs": {
+                  "class": "wg-link",
+                  "href": {
+                    "bind": "company.website"
+                  }
+                },
+                "children": [
+                  {
+                    "bind": "company.website"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "when": "tags",
+        "template": {
+          "tag": "ul",
+          "attrs": {
+            "class": "wg-person-tags"
+          },
+          "children": [
+            {
+              "each": "tags",
+              "template": {
+                "tag": "li",
+                "attrs": {
+                  "class": "wg-person-tag"
+                },
+                "children": [
+                  {
+                    "bind": "."
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "descriptor": {
+    "description": "Shows a person's contact card in the Acme Outfitters brand: an initials avatar drawn from the name, an optional title, the email, phone, address and website as links that write, call, open a map and open the site, an optional company block and optional tags.",
+    "dataShape": "{ name, title?, email?, phone?, address?, website?, company?: { name, industry?, website? }, tags?: [string] }",
+    "dataSchema": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "phone": {
+          "type": "string"
+        },
+        "address": {
+          "type": "string"
+        },
+        "website": {
+          "type": "string"
+        },
+        "company": {
+          "type": "object",
+          "required": [
+            "name"
+          ],
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "industry": {
+              "type": "string"
+            },
+            "website": {
+              "type": "string"
+            }
+          }
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "dataExample": {
+      "name": "Zoë O'Brien",
+      "title": "Head of Partnerships",
+      "email": "zoe.obrien@example.com",
+      "phone": "+1 (555) 010-0199",
+      "address": "12 Main St & 5th Ave, Apt #4, Springfield",
+      "website": "https://example.com/team/zoe?ref=card&lang=en",
+      "company": {
+        "name": "Acme Outfitters",
+        "industry": "Outdoor retail",
+        "website": "https://acme.example.com"
+      },
+      "tags": [
+        "partner",
+        "west region"
+      ]
+    },
+    "styles": {
+      ".wg-person-head": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "var(--wg-spacing)",
+        "margin-bottom": "var(--wg-spacing)"
+      },
+      ".wg-person-company": {
+        "margin-top": "var(--wg-spacing)",
+        "padding-top": "var(--wg-spacing)",
+        "border-top": "var(--wg-border-width) solid var(--wg-border)"
+      },
+      ".wg-person-company-name": {
+        "font-weight": "var(--wg-font-weight-bold)"
+      },
+      ".wg-person-tags": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "gap": "var(--wg-spacing-sm)",
+        "list-style": "none",
+        "padding": "0",
+        "margin": "var(--wg-spacing) 0 0"
+      },
+      ".wg-person-tag": {
+        "padding": "2px var(--wg-spacing)",
+        "border-radius": "var(--wg-radius-lg)",
+        "background": "var(--wg-accent)",
+        "color": "var(--wg-accent-fg)",
+        "font-size": "var(--wg-font-size-sm)"
+      }
+    },
+    "themes": {
+      "light": "acme",
+      "dark": "acme-night"
+    }
+  }
+}
