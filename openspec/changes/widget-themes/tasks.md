@@ -98,4 +98,4 @@
   - the designer previewing every widget in its own theme;
   - `THEME_IN_USE` naming `person-card-widget` when deleting `acme-night`.
 
-  Follow-up: the group note now also advises rendering the items separately (design D6).
+  Follow-up: the group note now also advises rendering the items separately (design D6). It is restaged as `widget-themes-d86c8fd` (ACR cj45, revision `--0000040`), and the served note closes with that advice once.
