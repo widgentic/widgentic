@@ -44,6 +44,15 @@
   The designers' import runs `checkWidgetThemes`.
 - [x] 4.2 Tests: the three "The widget designer sets the widget's themes" scenarios, and an export carrying `descriptor.themes`.
 
+- [x] 4.3 The preview opens on the widget's own theme (D10):
+  - `defaultPreviewTheme` option;
+  - initial selection order: `previewTheme`, then the draft's own theme for the scheme, then `defaultPreviewTheme`;
+  - `loadWidget` switches to the definition's own theme.
+- [x] 4.4 Tests:
+  - the modified "Preview theme selection in the widget designer" scenarios ("A widget's own theme opens as the preview theme", "Loading a widget switches to its own theme", "Loading a widget keeps the preview theme");
+  - the self-host app opening the seeded person card on `acme` while other widgets open on the light default.
+- [x] 4.5 The self-host app (`examples/docker/main.ts`) passes the Settings light default as `defaultPreviewTheme`, and the person's remount pick as `previewTheme`. Note for the apps adoption: the same switch.
+
 ## 5. Docs, seed and release notes
 
 - [x] 5.1 Docs:

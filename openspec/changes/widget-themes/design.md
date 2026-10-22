@@ -112,6 +112,21 @@ The widget designer's descriptor section gains "Light theme" and "Dark theme" se
 - **Edits:** they write `descriptor.themes`, and omit it when both selects are on "Settings default".
 - **Preview:** choosing a supplied entry for light also selects it in the preview-theme selector. This is a person's choice, consistent with "Only the person's choice in the selector changes the selection" (choosing in the light-theme select is choosing). The island and the in-page preview then show it.
 
+### D10. The preview opens on the widget's own theme (owner finding, 2026-10-22)
+
+The owner checked staging: opening a widget that names its themes still previewed it in the Settings default. The self-host app passes the Settings light default as `previewTheme` for every widget, and the designer kept that pick, as its spec said.
+
+**The fix separates the person's pick from the host's fallback.** The new option `defaultPreviewTheme` carries the fallback, and `previewTheme` stays the person's pick. On open, the preview selects the first that applies:
+1. the person's pick (`previewTheme`, which a remount carries);
+2. the theme the draft names for the designer's scheme (its pinned appearance, else the page's, else the system's);
+3. `defaultPreviewTheme`.
+
+Each must be a supplied entry. `loadWidget` switches to the definition's own theme for the scheme when it names one, and otherwise keeps the selection as before.
+
+**Why this split.** If the designer always preferred the widget's theme, a remount (Edit from read-only) would undo a pick the person had just made. A designer that preferred it only when the host passed nothing would push the decision back onto every host.
+
+**Hosts.** The self-host app moves the Settings default to `defaultPreviewTheme`. The apps repo does the same at adoption, and until it does, it keeps today's behavior.
+
 ### D9. Release and adoption
 
 Core, designer and mcp get a minor release (a new descriptor field, render behavior, new exports); webmcp gets a patch (its guide copy). `Widgentic.Mcp` follows the pin. The .NET host composes through the bundle, so a widget JSON naming themes works there with no .NET code. The apps adoption bumps the ranges, and its scan confirms that no stored descriptor carries `themes` before the deploy.

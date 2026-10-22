@@ -79,3 +79,60 @@ describe("the widget designer sets the widget's themes", () => {
     expect(importWidgetJson(JSON.stringify(widget({ themes: { dark: "dark" } }))).ok).toBe(true);
   });
 });
+
+describe("the preview opens on the widget's own theme", () => {
+  const brand: ThemeEntry = { name: "brand", tokens: { accent: "#bb0001" } };
+  const all = [brand, ...themes];
+  const shown = (root: Element) => (root.querySelector(".wgd-theme-select") as HTMLSelectElement).value;
+
+  it("a widget's own theme opens as the preview theme", () => {
+    const own = createDesigner(host(), {
+      appearance: "light",
+      initialWidget: widget({ themes: { light: "acme" } }),
+      themes: all,
+      defaultPreviewTheme: "brand"
+    });
+    expect(own.getDraft().previewTheme).toBe("acme");
+    expect(own.getDraft().themeStyles).toEqual({ ".wg-btn": { color: "rgb(1, 2, 3)" } });
+
+    const root = host();
+    createDesigner(root, { appearance: "light", initialWidget: widget(), themes: all, defaultPreviewTheme: "brand" });
+    expect(shown(root)).toBe("brand");
+
+    const picked = createDesigner(host(), {
+      appearance: "light",
+      initialWidget: widget({ themes: { light: "acme" } }),
+      themes: all,
+      previewTheme: "brand",
+      defaultPreviewTheme: "brand"
+    });
+    expect(picked.getDraft().previewTheme).toBe("brand");
+
+    // A widget naming only the other scheme's theme opens on the fallback.
+    const dark = createDesigner(host(), {
+      appearance: "light",
+      initialWidget: widget({ themes: { dark: "acme-night" } }),
+      themes: all,
+      defaultPreviewTheme: "brand"
+    });
+    expect(dark.getDraft().previewTheme).toBe("brand");
+  });
+
+  it("loading a widget switches to its own theme", () => {
+    const root = host();
+    const designer = createDesigner(root, { appearance: "dark", themes: all, previewTheme: "brand" });
+    expect(shown(root)).toBe("brand");
+    expect(designer.loadWidget(widget({ themes: { light: "acme", dark: "acme-night" } })).ok).toBe(true);
+    expect(shown(root)).toBe("acme-night");
+    expect(designer.getDraft().theme).toEqual({ accent: "#aa0002" });
+  });
+
+  it("loading a widget that names no theme for the scheme keeps the preview theme", () => {
+    const root = host();
+    const designer = createDesigner(root, { appearance: "dark", themes: all, previewTheme: "brand" });
+    expect(designer.loadWidget(widget({ themes: { light: "acme" } })).ok).toBe(true);
+    expect(shown(root)).toBe("brand");
+    expect(designer.loadWidget(widget()).ok).toBe(true);
+    expect(designer.getDraft().theme).toEqual({ accent: "#bb0001" });
+  });
+});

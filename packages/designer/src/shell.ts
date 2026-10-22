@@ -6,6 +6,7 @@
  */
 import { validateTheme } from "@widgentic/core";
 import type { ThemeEntry, WidgetTheme } from "@widgentic/core";
+import { isPlainObject } from "@widgentic/core";
 import { applyChrome, h, injectDesignerStyles } from "./dom.js";
 import type { ChromeOptions } from "./dom.js";
 import { applyDefinition, checkDefinition } from "./io.js";
@@ -31,10 +32,18 @@ export interface DesignerOptions {
   themes?: ThemeEntry[];
   /**
    * The name of one of `themes` to open with as the preview theme — its
-   * tokens and styles applied — e.g. the person's light default. A name
-   * that matches no supplied entry is ignored. Wins over `initialTheme`.
+   * tokens and styles applied — the person's own pick, e.g. carried across
+   * a remount. A name that matches no supplied entry is ignored. Wins over
+   * the draft's own theme, `defaultPreviewTheme` and `initialTheme`.
    */
   previewTheme?: string;
+  /**
+   * The host's fallback preview theme — one name, or one per scheme such as
+   * the person's Settings defaults: used when there is no `previewTheme` and
+   * the draft's `descriptor.themes` names no supplied entry for the
+   * designer's scheme.
+   */
+  defaultPreviewTheme?: string | { light?: string; dark?: string };
   /**
    * The URL of a preview frame — an authoring surface's `/preview-frame` —
    * to preview in an isolated island under the frame policy MCP Apps hosts
@@ -117,7 +126,26 @@ export function createDesigner(
   const base: WidgetDraft = options.initialWidget
     ? cloneDraft({ ...options.initialWidget })
     : starterDraft();
-  const preselected = options.themes?.find((entry) => entry.name === options.previewTheme);
+  // The person's pick, then the draft's own theme for the scheme the
+  // designer shows, then the host's fallback; each a supplied entry.
+  const supplied = (name: string | undefined): ThemeEntry | undefined =>
+    name === undefined ? undefined : options.themes?.find((entry) => entry.name === name);
+  const scheme = (): "light" | "dark" => {
+    if (options.appearance === "light" || options.appearance === "dark") return options.appearance;
+    const page = document.documentElement.getAttribute("data-theme");
+    if (page === "light" || page === "dark") return page;
+    return typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark"
+      : "light";
+  };
+  const ownTheme = (descriptor: unknown): ThemeEntry | undefined => {
+    const themes = isPlainObject(descriptor) && isPlainObject(descriptor.themes) ? descriptor.themes : undefined;
+    const name = themes?.[scheme()];
+    return typeof name === "string" ? supplied(name) : undefined;
+  };
+  const fallback =
+    typeof options.defaultPreviewTheme === "string" ? options.defaultPreviewTheme : options.defaultPreviewTheme?.[scheme()];
+  const preselected = supplied(options.previewTheme) ?? ownTheme(base.descriptor) ?? supplied(fallback);
   const initial: WidgetDraft =
     preselected !== undefined
       ? {
@@ -211,6 +239,20 @@ export function createDesigner(
       const errors = checkDefinition(definition, store.get().kind);
       if (errors.length > 0) return { ok: false, errors };
       applyDefinition(store, definition as unknown as WidgetDefinition);
+      // A definition naming its own theme for the scheme chooses its look;
+      // one naming none keeps the person's selection.
+      const own = ownTheme((definition as unknown as WidgetDefinition).descriptor);
+      if (own !== undefined) {
+        store.update((draft) => {
+          const { theme: _theme, themeStyles: _styles, previewTheme: _name, ...rest } = draft;
+          return {
+            ...rest,
+            theme: own.tokens,
+            previewTheme: own.name,
+            ...(own.styles === undefined ? {} : { themeStyles: own.styles })
+          };
+        });
+      }
       return { ok: true };
     },
     checkWidget(definition) {

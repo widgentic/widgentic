@@ -101,7 +101,7 @@ In the app the preview runs in a frame: the same document MCP Apps hosts mount, 
 
 ### Preview theme and token reference
 
-A selector offers your saved themes plus a **none** choice for the built-in defaults. Beside it, a read-only listing shows the effective tokens — name, value, and a swatch for color-typed tokens — so styles can reach for `var(--wg-…)` by sight. The widget designer does not edit tokens (that is the [theme designer](/design/themes)), and the selected theme never leaks into the export.
+A selector offers your saved themes plus a **none** choice for the built-in defaults. Opening a widget that names its own theme for the designer's light or dark scheme selects that theme; other widgets open on your default for the scheme, and a theme you pick stays picked when the designer remounts. Loading a widget that names its own theme switches the preview to it. Beside it, a read-only listing shows the effective tokens — name, value, and a swatch for color-typed tokens — so styles can reach for `var(--wg-…)` by sight. The widget designer does not edit tokens (that is the [theme designer](/design/themes)), and the selected theme never leaks into the export.
 
 ## Import, export and copy as TypeScript
 

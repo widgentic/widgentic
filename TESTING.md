@@ -397,6 +397,7 @@ workspace and the sample first, then point at the built DLL):
     - Widgets without themes render as before, and the corpus for existing cases did not change.
   - **Corpus** (`widget themes` configuration). It covers both modes, light only, a built-in opt-out, explicit wins, a page, a preview, agreeing and disagreeing groups, a missing name, the listing and a widget page. The .NET suite runs it (240 tests).
   - **Designer** (`widget-themes.test.ts`, 4 tests). Selects edit `descriptor.themes`, and choosing a supplied light theme also selects it as the preview theme, with its styles. Settings default omits the mode, a missing name is kept and marked, the export carries `themes`, and import refuses a malformed field.
+  - **Owner finding on staging (design D10).** Opening a widget that names its themes still previewed it in the Settings default, because the app passed that default as the person's pick. The designer now has `defaultPreviewTheme` (one name or per scheme). On open, the person's pick comes first, then the widget's own theme for the designer's scheme, then the fallback, and `loadWidget` switches to a definition's own theme. Tests: 3 more in the designer's `widget-themes.test.ts`. The app's `app-widget-themes.test.ts` checks that the person card opens on `acme`, a plain widget on the Google default, and a pick survives a remount.
   - **Demo seed** (13 entries).
     - A new Acme Outfitters pair, `acme` (light, with a `.wg-card` accent rule) and `acme-night`, which the person card names.
     - The project status names the built-ins, opting out of the Google defaults.
@@ -410,7 +411,7 @@ workspace and the sample first, then point at the built DLL):
     - `list_widgets` shows `themes`.
 
     The first staged build joined two notes as `one.; group dark`, so notes now end without a period, as hint notes do.
-  - **Gates.** Typecheck, 2,043 tests, build, `pack:check`, `docs:check`, OpenSpec strict and specs, and `dotnet test` (240) all pass.
+  - **Gates.** Typecheck, 2,048 tests, build, `pack:check`, `docs:check`, OpenSpec strict and specs, and `dotnet test` (240) all pass.
 
 - **Date time zones (2026-10-21, change `date-time-zones`, on `feature/date-time-zones`; core, designer and mcp minor and a webmcp patch pending release)**: the date format's `zone` shows UTC (the default), the value's own offset, or, in MCP Apps frames, the viewer's zone.
   - **The format** (`date-zones.test.ts`, 8 tests).
