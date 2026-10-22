@@ -157,9 +157,12 @@ export interface CreatedKey {
 /** A store that also accepts writes (the app's path, not the MCP surface). */
 export interface WritableWidgetStore extends WidgetStore {
   /**
-   * Store a widget. Refused with `UNKNOWN_SCHEMA` for a `dataSchemaRef`
-   * naming no stored schema, and with `UNKNOWN_THEME` for a
-   * `descriptor.themes` name that is neither a built-in nor a stored theme.
+   * Store a widget. Besides the entry's own validation codes, refused with
+   * `TOO_MANY_WIDGETS` at the principal's limit, `UNKNOWN_SCHEMA` for a
+   * `dataSchemaRef` naming no stored schema, `UNKNOWN_THEME` for a
+   * `descriptor.themes` name that is neither a built-in nor a stored theme,
+   * and `INVALID_ACTION` for a `load` through a shared action that is not
+   * an http GET.
    */
   putWidget(principalId: string, widget: StoredWidget): Promise<void>;
   putTheme(principalId: string, theme: ThemeEntry): Promise<void>;
