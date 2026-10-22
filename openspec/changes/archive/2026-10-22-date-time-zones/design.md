@@ -63,7 +63,7 @@ The frame rewrites text nodes, not attributes. If `viewer` were accepted on a `t
 
 A function `zoned(tree)` returns a copy of the tree in which every `time` node carrying both `datetime` and `data-wg-date` has its children replaced by the instant formatted in the current zone.
 
-- **Where it runs.** `mountResult` and `mountPreviewTree` keep the raw tree (`rawTree`) and mount `zoned(rawTree)`. The patcher therefore compares localized trees, and no phantom text change can occur.
+- **Where it runs.** One `mountTree`, which serves tool results (from `mountResult`) and every preview, keeps the raw tree (`rawTree`) and builds or patches `zoned(rawTree)`. The patcher therefore compares localized trees, and no phantom text change can occur.
 - **Zone changes.** When `host-context-changed` changes the zone, the bridge re-mounts `zoned(rawTree)` through the same patch, so node identity is kept.
 
 **The formatter** is compact:
@@ -78,7 +78,12 @@ Written in the bridge's style, it costs about 1 KiB raw.
 
 ### D6. The zone: the host's if usable, else the frame's own
 
-`zoneOf(ctx)` returns `ctx.timeZone` when it is a non-empty string that `new Intl.DateTimeFormat("en-US", { timeZone })` accepts, and otherwise `undefined`, which means the frame's default zone. Both name the viewer's zone, because the frame runs on the viewer's device; the host value matters only when a person has set a zone in the host that differs from the device.
+`zoneOf(ctx)` returns `new Intl.DateTimeFormat("en-US", { timeZone: ctx.timeZone }).resolvedOptions().timeZone`:
+- a zone `Intl` accepts comes back canonical;
+- a missing zone comes back as the frame's default zone;
+- one `Intl` refuses (`""`, `"Mars/Base"`) throws, so `zoneOf` returns `undefined`, which formats in the default zone.
+
+This replaced an explicit string check to fit the budget, and it behaves the same. Both name the viewer's zone, because the frame runs on the viewer's device; the host value matters only when a person has set a zone in the host that differs from the device.
 
 `applyHostContext` stores the zone, and a change re-renders (D5). A host that sends nothing costs nothing.
 
