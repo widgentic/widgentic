@@ -96,13 +96,26 @@ export function modesUsingTheme(raw: unknown, theme: string): ThemeMode[] {
   return THEME_MODES.filter((mode) => themes[mode] === theme);
 }
 
-/** Throw `THEME_IN_USE` when a default names `theme`. */
-export function refuseThemeInUse(raw: unknown, theme: string): void {
+/** Throw `THEME_IN_USE` when a default or a widget (by kind) names `theme`. */
+export function refuseThemeInUse(raw: unknown, theme: string, widgets: readonly string[] = []): void {
   const modes = modesUsingTheme(raw, theme);
-  if (modes.length > 0) {
+  const named = widgets.length === 0 ? "" : `named by ${widgets.length === 1 ? "widget" : "widgets"} ${widgets.join(", ")}`;
+  if (modes.length > 0 && named === "") {
     throw new StoreRejectionError(
       "THEME_IN_USE",
       `'${theme}' is your default ${modes.join(" and ")} theme — choose another in Settings first.`
+    );
+  }
+  if (modes.length > 0) {
+    throw new StoreRejectionError(
+      "THEME_IN_USE",
+      `'${theme}' is your default ${modes.join(" and ")} theme and is ${named} — choose others in Settings and in those widgets first.`
+    );
+  }
+  if (named !== "") {
+    throw new StoreRejectionError(
+      "THEME_IN_USE",
+      `'${theme}' is ${named} — choose another theme in ${widgets.length === 1 ? "that widget" : "those widgets"} first.`
     );
   }
 }

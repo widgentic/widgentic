@@ -10,6 +10,8 @@ import { collectSecretRefs } from "@widgentic/core";
 import { collectActionRefs, collectInlineActions } from "@widgentic/core";
 import { isPlainObject } from "@widgentic/core";
 import type { StoredWidget } from "./types.js";
+import { StoreRejectionError } from "./types.js";
+import { isBuiltinTheme } from "./validate.js";
 
 /** Loose narrowing for scans: a kind and a template object, nothing more. */
 export function looseWidget(value: unknown): StoredWidget | undefined {
@@ -44,6 +46,33 @@ export function widgetsReferencingAction(widgets: Iterable<StoredWidget>, name: 
 /** Widgets whose `load` is a `ref` to the named shared action. */
 export function widgetsLoadingAction(widgets: Iterable<StoredWidget>, name: string): string[] {
   return [...widgets].filter((w) => loadRefOf(w) === name).map((w) => w.kind);
+}
+
+/**
+ * Refuse a widget naming a theme that is neither built-in nor one the
+ * principal stores (`isStored`). Refusing at the door keeps a dangling
+ * name an out-of-band-only condition, as it does for schema refs.
+ */
+export function refuseUnknownWidgetThemes(widget: StoredWidget, isStored: (name: string) => boolean): void {
+  for (const mode of ["light", "dark"] as const) {
+    const name = widget.descriptor.themes?.[mode];
+    if (name !== undefined && !isBuiltinTheme(name) && !isStored(name)) {
+      throw new StoreRejectionError(
+        "UNKNOWN_THEME",
+        `widget names ${mode} theme '${name}', which is neither built-in nor one of your themes.`
+      );
+    }
+  }
+}
+
+/** Widgets naming the theme in either mode, for the `THEME_IN_USE` refusal. */
+export function widgetsUsingTheme(widgets: Iterable<StoredWidget>, name: string): string[] {
+  return [...widgets]
+    .filter((w) => {
+      const themes: unknown = isPlainObject(w.descriptor) ? w.descriptor.themes : undefined;
+      return isPlainObject(themes) && (themes.light === name || themes.dark === name);
+    })
+    .map((w) => w.kind);
 }
 
 /** Actions (shared, or inline in widgets) referencing the named secret. */

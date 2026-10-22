@@ -39,6 +39,8 @@ Group hints select from fixed presets; item data never contributes class charact
 - `gap`: `none`, `sm`, `md` (default) or `lg`
 - `columns`: 1 to 4, grid only
 
+A group wears one theme per host mode. If every item that names a theme for a mode (see [A widget's own themes](/design/themes#a-widgets-own-themes)) names the same one, the group wears it; items that name none accept it. If the items name different themes, the group wears your default for that mode, and the text result carries a `Theme notes:` line naming each item with its theme, so the agent can pass `theme` to choose one.
+
 Two limits: groups do not nest (an item of kind `group` fails at `data.items[<index>].kind`), and a group holds at most 20 items. An item that fails its own kind's validation fails the render with the underlying code at a path prefixed `data.items[<index>]`. Items bound to actions keep working inside a group; see [Actions and secrets](/design/actions-and-secrets).
 
 ## Hints

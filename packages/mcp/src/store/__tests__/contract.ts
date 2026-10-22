@@ -422,6 +422,48 @@ export function describeStoreContract(
       expect(await store.themes(p.id)).toEqual([]);
     });
 
+    it("widget themes: an unknown theme is refused, a stored or built-in one is kept", async () => {
+      const { store } = await factory();
+      const p = await store.ensurePrincipal("contract:widget-themes");
+      const promo = (themes: unknown): StoredWidget =>
+        ({ ...widget("promo"), descriptor: { ...widget("promo").descriptor, themes } }) as StoredWidget;
+      const refusal = store.putWidget(p.id, promo({ light: "acme" }));
+      await expect(refusal).rejects.toMatchObject({ code: "UNKNOWN_THEME" });
+      await expect(refusal).rejects.toThrow(/light theme 'acme'/);
+      expect(await store.widgets(p.id)).toEqual([]);
+      await store.putTheme(p.id, { name: "acme", tokens: {} });
+      await store.putWidget(p.id, promo({ light: "acme" }));
+      await store.putWidget(p.id, { ...promo({ dark: "dark" }), kind: "plain" });
+      const listed = (await store.widgets(p.id)).map((w) => [w.kind, w.descriptor.themes]);
+      expect(listed.sort((a, b) => String(a[0]).localeCompare(String(b[0])))).toEqual([
+        ["plain", { dark: "dark" }],
+        ["promo", { light: "acme" }]
+      ]);
+      for (const bad of [{ light: 5 }, { sepia: "acme" }, { light: "" }, "acme"]) {
+        await expect(store.putWidget(p.id, promo(bad)), JSON.stringify(bad)).rejects.toMatchObject({ code: "INVALID_SHAPE" });
+      }
+    });
+
+    it("widget themes: a theme a widget names cannot be removed until the widget lets go", async () => {
+      const { store } = await factory();
+      const p = await store.ensurePrincipal("contract:widget-theme-in-use");
+      await store.putTheme(p.id, { name: "acme", tokens: {} });
+      const promo: StoredWidget = { ...widget("promo"), descriptor: { ...widget("promo").descriptor, themes: { light: "acme", dark: "acme" } } };
+      await store.putWidget(p.id, promo);
+      await store.putWidget(p.id, { ...promo, kind: "report" });
+      const refusal = store.removeTheme(p.id, "acme");
+      await expect(refusal).rejects.toMatchObject({ code: "THEME_IN_USE" });
+      await expect(refusal).rejects.toThrow(/named by widgets promo, report/);
+      await store.putSettings(p.id, { defaultThemes: { light: "acme" } });
+      await expect(store.removeTheme(p.id, "acme")).rejects.toThrow(/default light theme and is named by widgets promo, report/);
+      await store.putSettings(p.id, { defaultThemes: null });
+      await store.removeWidget(p.id, "report");
+      await expect(store.removeTheme(p.id, "acme")).rejects.toThrow(/named by widget promo —/);
+      await store.putWidget(p.id, widget("promo"));
+      await store.removeTheme(p.id, "acme");
+      expect(await store.themes(p.id)).toEqual([]);
+    });
+
     it("settings never cross principals and leave entry listings alone", async () => {
       const { store } = await factory();
       const a = await store.ensurePrincipal("contract:settings-a");

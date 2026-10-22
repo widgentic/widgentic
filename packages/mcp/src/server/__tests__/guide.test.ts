@@ -4,7 +4,7 @@
  * taught, and — the test the change exists for — an "agent" that follows
  * ONLY the guide produces a widget and theme that import cleanly.
  */
-import { DATE_ZONE_RULE, LABEL_STYLE_RULE, PREFIX_ENCODING_RULE } from "@widgentic/core";
+import { DATE_ZONE_RULE, LABEL_STYLE_RULE, PREFIX_ENCODING_RULE, WIDGET_THEMES_RULE } from "@widgentic/core";
 import { describe, expect, it } from "vitest";
 import {
   PATTERN_MAX_LENGTH,
@@ -245,6 +245,7 @@ describe("guide teaches shared-schema references", () => {
       rules: { template: { dataModeling: string } };
       workflow: { related: string };
     };
+    expect(guide.widget.shape.descriptor.themes).toBe(WIDGET_THEMES_RULE);
     const ref = guide.widget.shape.descriptor.dataSchemaRef ?? "";
     expect(ref).toContain("list_schemas");
     expect(ref).toContain("IN PLACE of");

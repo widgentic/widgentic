@@ -16,7 +16,9 @@ import {
   loadRefOf,
   referencesToSecret,
   widgetsLoadingAction,
-  widgetsReferencingAction
+  refuseUnknownWidgetThemes,
+  widgetsReferencingAction,
+  widgetsUsingTheme
 } from "./refs.js";
 import type {
   CreatedKey,
@@ -183,6 +185,10 @@ export function createMemoryStore(
       }
       created.themes.set(theme.name, clone(theme));
     }
+    // Themes seed after widgets, so the widgets' theme names check here.
+    for (const widget of created.widgets.values()) {
+      refuseUnknownWidgetThemes(widget, (name) => created.themes.has(name));
+    }
     if (entry.settings !== undefined) {
       const next = applySettingsUpdate(undefined, entry.settings, new Set(created.themes.keys()));
       if (next !== undefined) created.settings = next;
@@ -258,6 +264,7 @@ export function createMemoryStore(
           `widget references missing schema '${ref}'.`
         );
       }
+      refuseUnknownWidgetThemes(widget, (name) => target.themes.has(name));
       // A `load` through a shared action needs that action to be a GET now;
       // a dangling ref stays non-fatal (it renders disabled).
       const loadRef = loadRefOf(widget);
@@ -350,7 +357,7 @@ export function createMemoryStore(
     async removeTheme(principalId, name) {
       const target = record(principalId);
       if (target === undefined) return;
-      refuseThemeInUse(target.settings, name);
+      refuseThemeInUse(target.settings, name, widgetsUsingTheme(target.widgets.values(), name));
       target.themes.delete(name);
     },
     async settings(principalId) {

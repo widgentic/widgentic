@@ -133,13 +133,14 @@ function openWidgetDesigner(widget?: unknown, readOnly = false): void {
   // would refuse, and it must survive (the designer flags the kind).
   const initial = draftDefinition(widget);
   // A remounted draft keeps the person's preview pick; anything else opens
-  // on their light default (built-in when unset).
+  // on the widget's own theme, else on their default for the scheme.
   const picked = isPlainObject(widget) && typeof widget.previewTheme === "string" ? widget.previewTheme : undefined;
-  const previewTheme = picked ?? mySettings?.defaultThemes?.light;
+  const defaults = mySettings?.defaultThemes;
   widgetDesigner = mountWidget($("widget-designer"), widgetDesigner, {
     ...(initial === undefined ? {} : { initialWidget: initial }),
     themes: previewThemes(myThemes),
-    ...(previewTheme === undefined ? {} : { previewTheme }),
+    ...(picked === undefined ? {} : { previewTheme: picked }),
+    ...(defaults === undefined ? {} : { defaultPreviewTheme: defaults }),
     schemas: mySchemas,
     actions: myActions,
     secretNames: mySecrets.map((s) => s.name),

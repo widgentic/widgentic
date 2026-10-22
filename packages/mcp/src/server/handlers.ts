@@ -1,5 +1,5 @@
 import { isPlainObject } from "@widgentic/core";
-import type { DataSchema, HintDiagnostic, WidgetCatalog } from "@widgentic/core";
+import type { DataSchema, HintDiagnostic, WidgetCatalog, WidgetThemes } from "@widgentic/core";
 import { analyzeHints, renderToHtml, widgetStylesToCss } from "@widgentic/core";
 import type { WidgetContractError } from "@widgentic/core";
 import type { McpToolResult, McpContentBlock } from "../output/index.js";
@@ -234,8 +234,9 @@ export function handleListThemes(registry: ThemeRegistry, resources: readonly Re
       "shown for reference; a token map may still be passed inline. A " +
       "theme's 'styles' define shared .wg- classes (a .wg-btn, say) that " +
       "any widget rendered under it can use in its template. 'defaults' " +
-      "names the theme each host mode uses when a render names none — the " +
-      "user chooses them in Settings. A new theme the user wants to keep " +
+      "names the theme each host mode uses when a render names none and the " +
+      "widget names none of its own (descriptor.themes) — the user chooses " +
+      "them in Settings. A new theme the user wants to keep " +
       "belongs in the designer: deliver it as " +
       "{ name, label?, description?, tokens, styles? } for Import at widgentic.dev " +
       "(see get_authoring_guide)." +
@@ -443,9 +444,10 @@ interface ResolvedTheme {
 
 /**
  * What a render dresses itself with: the explicit `theme` input, or —
- * when there is none — the registry's default per mode. A default that is
- * the built-in is left out, so the template's own behavior for that mode
- * stands and output without chosen defaults stays byte-identical.
+ * when there is none — per mode the widget's own theme, else the
+ * registry's default. A mode resolving to its built-in is left out, so the
+ * template's own behavior for that mode stands and output without chosen
+ * themes stays byte-identical.
  */
 interface RenderThemes {
   explicit?: ResolvedTheme;
@@ -460,15 +462,84 @@ function fromEntry(entry: ThemeEntry): ResolvedTheme {
   return entry.styles === undefined ? { tokens: entry.tokens } : { tokens: entry.tokens, styles: entry.styles };
 }
 
-function renderThemes(explicit: ResolvedTheme | undefined, registry: ThemeRegistry | undefined): RenderThemes {
+const MODES = ["light", "dark"] as const;
+
+/**
+ * The themes the rendered widget names per mode, with who names them for a
+ * note. A group's are those its naming items agree on, mode by mode; items
+ * naming none accept the look their siblings chose, and a disagreement
+ * leaves that mode to the default with a note.
+ */
+interface OwnThemes {
+  names: WidgetThemes;
+  /** "widget 'promo' names" or "the group's items name", for a note. */
+  naming: string;
+}
+
+function ownThemes(catalog: WidgetCatalog, widget: string, data: unknown, notes: string[]): OwnThemes | undefined {
+  if (widget !== "group") {
+    const names = catalog.describe(widget)?.themes;
+    return names === undefined ? undefined : { names, naming: `widget '${widget}' names` };
+  }
+  const items = isPlainObject(data) && Array.isArray(data.items) ? data.items : [];
+  const names: WidgetThemes = {};
+  let disagreed = false;
+  for (const mode of MODES) {
+    const named = items.flatMap((item, index) => {
+      const name = isPlainObject(item) && typeof item.kind === "string" ? catalog.describe(item.kind)?.themes?.[mode] : undefined;
+      return name === undefined ? [] : [{ index, name }];
+    });
+    const distinct = [...new Set(named.map((entry) => entry.name))];
+    const [agreed] = distinct;
+    if (distinct.length === 1 && agreed !== undefined) names[mode] = agreed;
+    else if (distinct.length > 1) {
+      disagreed = true;
+      notes.push(
+        `group ${mode} theme: items name different themes (${named
+          .map((entry) => `data.items[${entry.index}] '${entry.name}'`)
+          .join(", ")}); the default applies`
+      );
+    }
+  }
+  // One frame wears one theme per mode, so a group cannot dress items apart.
+  if (disagreed) {
+    notes.push(
+      "pass 'theme' to choose one look for the whole group, or, when the user wants each widget in its own theme, render them as separate widgets instead of one group"
+    );
+  }
+  return { names, naming: "the group's items name" };
+}
+
+/**
+ * Per mode: the explicit theme, else the widget's own, else the registry's
+ * default; a mode resolving to its built-in contributes nothing. A widget
+ * name the registry lacks falls back to the default with a note.
+ */
+function renderThemes(
+  explicit: ResolvedTheme | undefined,
+  registry: ThemeRegistry | undefined,
+  own?: OwnThemes,
+  notes: string[] = []
+): RenderThemes {
   if (explicit !== undefined) return { explicit };
   if (registry === undefined) return {};
-  const defaults = registry.defaults();
+  const resolved = registry.defaults();
+  for (const mode of MODES) {
+    const name = own?.names[mode];
+    if (name === undefined) continue;
+    if (registry.get(name) === undefined) {
+      notes.push(`${own?.naming ?? ""} ${mode} theme '${name}', which is not available; the default applies`);
+    } else {
+      resolved[mode] = name;
+    }
+  }
   const out: RenderThemes = {};
-  if (defaults.light !== "light") out.light = fromEntry(registry.getDefault("light"));
-  if (defaults.dark !== "dark") out.dark = fromEntry(registry.getDefault("dark"));
+  const light = resolved.light === "light" ? undefined : registry.get(resolved.light);
+  const dark = resolved.dark === "dark" ? undefined : registry.get(resolved.dark);
+  if (light !== undefined) out.light = fromEntry(light);
+  if (dark !== undefined) out.dark = fromEntry(dark);
   // One theme for both modes is emitted as an explicit theme is.
-  if (out.light !== undefined && defaults.light === defaults.dark) return { explicit: out.light };
+  if (out.light !== undefined && resolved.light === resolved.dark) return { explicit: out.light };
   return out;
 }
 
@@ -618,7 +689,7 @@ export function handlePreviewWidget(
   // the defaults: switching from the default to the named theme mid-stream
   // would flash a look the result never has.
   const themes = input.theme === undefined
-    ? renderThemes(undefined, options.themes)
+    ? renderThemes(undefined, options.themes, ownThemes(catalog, widget, payload.data, []))
     : resolvedTheme.ok
       ? renderThemes(resolvedTheme.theme, options.themes)
       : {};
@@ -680,7 +751,6 @@ export function handleRenderWidget(
 
   const resolvedTheme = resolveThemeInput(input.theme, options?.themes);
   if (!resolvedTheme.ok) return errorResult(resolvedTheme.error);
-  const themes = renderThemes(resolvedTheme.theme, options?.themes);
 
   // Schema-aware marshalling: kinds declaring string-typed data receive the
   // string verbatim — literal JSON-shaped text stays expressible for them.
@@ -691,6 +761,14 @@ export function handleRenderWidget(
   };
   if ("hints" in input && input.hints !== undefined) payload.hints = input.hints;
   if ("meta" in input && input.meta !== undefined) payload.meta = input.meta;
+  // A widget's own themes stand in for the defaults, mode by mode.
+  const themeNotes: string[] = [];
+  const themes = renderThemes(
+    resolvedTheme.theme,
+    options?.themes,
+    resolvedTheme.theme === undefined ? ownThemes(catalog, widget, payload.data, themeNotes) : undefined,
+    themeNotes
+  );
   // The theme rides the payload as an unknown-field passthrough, so hosts
   // that mount the widget natively can honor it (advisory, any format).
   if (resolvedTheme.theme !== undefined) payload.theme = resolvedTheme.theme.tokens;
@@ -824,7 +902,9 @@ export function handleRenderWidget(
       ? `\n\nHint notes: ${diagnostics
           .map((d) => `${d.hint}: ${d.message}`)
           .join("; ")}`
-      : "") + actionNotes(rendered.node, structuredContent.load !== undefined || structuredContent.loads !== undefined);
+      : "") +
+    (themeNotes.length > 0 ? `\n\nTheme notes: ${themeNotes.join("; ")}` : "") +
+    actionNotes(rendered.node, structuredContent.load !== undefined || structuredContent.loads !== undefined);
 
   switch (format as RenderFormat) {
     case "html":

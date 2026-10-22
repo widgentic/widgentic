@@ -14,6 +14,7 @@
 import {
   DATA_SCHEMA_TYPES,
   LABEL_STYLE_RULE,
+  WIDGET_THEMES_RULE,
   PREFIX_ENCODING_RULE,
   PATTERN_MAX_LENGTH,
   STYLE_RULES,
@@ -116,7 +117,8 @@ export function buildAuthoringGuide(): Record<string, unknown> {
           styles:
             "OPTIONAL nested record: selector → { cssProperty: value } " +
             "(NOT css strings — no ';' anywhere; see rules.styles).",
-          dataSchema: "OPTIONAL structural schema (see rules.dataSchema)."
+          dataSchema: "OPTIONAL structural schema (see rules.dataSchema).",
+          themes: WIDGET_THEMES_RULE
         }
       },
       reservedKinds: createCatalog().kinds(),

@@ -1,4 +1,5 @@
 import type { WidgetKind } from "../contract/types.js";
+import { SAFE_IDENTIFIER } from "./identifiers.js";
 import { PREFIX_ENCODING_RULE } from "../contract/url-values.js";
 import type { DataSchema } from "./schema.js";
 import type { WidgetStyles } from "./styles.js";
@@ -30,6 +31,47 @@ export interface WidgetDescriptor {
    * Included in `page` output and exposable by hosts; guarded like themes.
    */
   styles?: WidgetStyles;
+  /**
+   * The themes the widget wears per mode when a render names none, ahead
+   * of the caller's defaults. Names only: whether one exists belongs to
+   * the caller's registry. See {@link checkWidgetThemes}.
+   */
+  themes?: WidgetThemes;
+}
+
+/** What `descriptor.themes` means, derived by every surface that documents it. */
+export const WIDGET_THEMES_RULE =
+  "OPTIONAL { light?, dark? } — the names of the themes this widget wears on light and dark hosts " +
+  "when a render passes no theme, ahead of the user's default themes. Each name is a built-in " +
+  "(light, dark) or one of the user's saved themes (list_themes); a mode left out takes the user's default.";
+
+/** A widget's own theme per mode, by name; a built-in (`light`, `dark`) is a valid name. */
+export interface WidgetThemes {
+  light?: string;
+  dark?: string;
+}
+
+const THEME_MODE_KEYS = new Set(["light", "dark"]);
+
+/**
+ * The shape check for `descriptor.themes`, shared by the store (on write
+ * and read), the designers' import and the host bundle: the keys `light`
+ * and `dark` only, each a theme name. Returns why it is refused, or
+ * `undefined` when it is acceptable.
+ */
+export function checkWidgetThemes(value: unknown): string | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return "'descriptor.themes' must be an object of { light?, dark? } theme names.";
+  }
+  for (const [mode, name] of Object.entries(value)) {
+    if (!THEME_MODE_KEYS.has(mode)) {
+      return `'descriptor.themes.${mode}' is not a mode: use light and dark.`;
+    }
+    if (typeof name !== "string" || !SAFE_IDENTIFIER.test(name)) {
+      return `'descriptor.themes.${mode}' must be a theme name (letters, digits, '.', '_' or '-').`;
+    }
+  }
+  return undefined;
 }
 
 /** Descriptor as supplied at registration; `kind` is filled by the catalog. */

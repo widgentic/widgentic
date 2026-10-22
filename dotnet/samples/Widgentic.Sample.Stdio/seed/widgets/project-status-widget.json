@@ -167,6 +167,10 @@
       ".wg-project-notes": {
         "margin-top": "var(--wg-spacing)"
       }
+    },
+    "themes": {
+      "light": "light",
+      "dark": "dark"
     }
   }
 }

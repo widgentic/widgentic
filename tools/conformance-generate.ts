@@ -495,6 +495,49 @@ export function buildCorpus(): Corpus {
     cases.push({ config: label, name: `${label}: widget page`, op: "widgetPage", kind: "card", output: settingsHost.widgetPage("card") });
   }
 
+  // Widget themes: a widget's own themes ahead of the settings defaults, per mode;
+  // a built-in opt-out, one mode, groups that agree and disagree, a missing name.
+  {
+    const label = "widget themes";
+    const named = (kind: string, themes: Record<string, string>) => ({
+      kind,
+      template: { tag: "p", attrs: { class: "wg-corpus-named" }, children: [{ bind: "title" }] },
+      descriptor: { description: `Corpus: a widget naming ${JSON.stringify(themes)}.`, dataShape: "{ title }", themes }
+    });
+    const json = JSON.stringify({
+      themes: SETTINGS_THEMES,
+      settings: { defaultThemes: { light: "corpus-brand", dark: "corpus-night" } },
+      widgets: [
+        named("corpus-own", { light: "corpus-styled", dark: "corpus-styled" }),
+        named("corpus-own-light", { light: "corpus-styled" }),
+        named("corpus-opt-out", { light: "light" }),
+        named("corpus-own-other", { light: "corpus-night" }),
+        named("corpus-own-missing", { light: "ghost" })
+      ]
+    });
+    const themedHost = createWidgenticHost(json);
+    if (themedHost.problems() !== "[]") {
+      throw new Error(`the '${label}' configuration must compose cleanly: ${themedHost.problems()}`);
+    }
+    configs[label] = json;
+    const run = (name: string, tool: string, args: unknown): void => {
+      const argsJson = JSON.stringify(args);
+      cases.push({ config: label, name: `${label}: ${name}`, op: "call", tool, args: argsJson, slim: false, output: themedHost.call(tool, argsJson, false) });
+    };
+    const title = { title: "T" };
+    run("one theme for both modes", "render_widget", { widget: "corpus-own", data: title });
+    run("light only", "render_widget", { widget: "corpus-own-light", data: title });
+    run("built-in opt-out", "render_widget", { widget: "corpus-opt-out", data: title });
+    run("explicit theme wins", "render_widget", { widget: "corpus-own", data: title, theme: "dark" });
+    run("page", "render_widget", { widget: "corpus-own-light", data: title, format: "page" });
+    run("preview", "preview_widget", { widget: "corpus-own-light", data: title });
+    run("group agrees", "render_widget", { widget: "group", data: { items: [{ kind: "corpus-own-light", data: title }, { kind: "card", data: title }] } });
+    run("group disagrees", "render_widget", { widget: "group", data: { items: [{ kind: "corpus-own-light", data: title }, { kind: "corpus-own-other", data: title }] } });
+    run("missing name", "render_widget", { widget: "corpus-own-missing", data: title });
+    run("listing", "list_widgets", {});
+    cases.push({ config: label, name: `${label}: widget page`, op: "widgetPage", kind: "corpus-own-light", output: themedHost.widgetPage("corpus-own-light") });
+  }
+
   // Resource domains: the embedding server's own, a settings section, and both, as `resources()` declares them.
   for (const [label, domains] of Object.entries(DOMAIN_CONFIGS)) {
     const json = JSON.stringify(domains);
