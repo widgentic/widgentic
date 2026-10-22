@@ -61,7 +61,7 @@ None.
   - `server/handlers.ts`: `renderThemes` takes the widget's names, plus the group agreement and the notes.
   - `server/definitions.ts`: the `theme` field steering.
   - `server/guide.ts`.
-  - `store/validate.ts`, `store/refs.ts`, and the four adapters' `putWidget`/`removeTheme`.
+  - `store/validate.ts`, `store/refs.ts`, and the writable adapters' `putWidget`/`removeTheme` (memory, SQLite, Cosmos; the file store is read-only).
   - `authoring/handler.ts` (the status mapping).
   - `store/compose.ts`: a composition note for a widget naming an unavailable theme.
   - The host bundle, through the shared composition.

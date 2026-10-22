@@ -51,9 +51,11 @@ Existence is a principal fact, so the store checks it on write:
 - the name must be `light`, `dark` or a stored theme of that principal;
 - otherwise the write fails with `UNKNOWN_THEME`, naming the mode and the theme.
 
+**Where the write refusal lives (revision during apply).** `refuseUnknownWidgetThemes` sits in `store/refs.ts`, beside the reference scans, not in `store/validate.ts`. It throws `StoreRejectionError`, which comes from `types.ts`, and `types.ts` imports `node:crypto`. `validate.ts` is in the host bundle's static graph, which must stay free of `node:` at any depth; the bare-realm test caught the leak. `validate.ts` keeps only the pure `isBuiltinTheme`.
+
 ### D3. Delete guard: `THEME_IN_USE` names widgets too
 
-`refs.ts` gains `widgetsUsingTheme(widgets, name)` over raw entries. `removeTheme` in all four adapters refuses while either settings defaults or widgets name the theme, and one message names both: "'acme' is your default light theme and is named by widgets promo, report — …". The authoring handler already maps `THEME_IN_USE` to 409, and `UNKNOWN_THEME` on a widget save maps to 422, as for settings.
+`refs.ts` gains `widgetsUsingTheme(widgets, name)` over raw entries. `removeTheme` in the three writable adapters (memory, SQLite, Cosmos; the file store is read-only) refuses while either settings defaults or widgets name the theme, and one message names both: "'acme' is your default light theme and is named by widgets promo, report — …". The authoring handler already maps `THEME_IN_USE` to 409, and `UNKNOWN_THEME` on a widget save maps to 422, as for settings.
 
 **Cosmos.** The existing theme-delete path reads settings in the same partition, and the widget scan reads the principal's widgets the same way. A race between a widget save and a theme delete is the "arrives by other means" case: composition reports it and the render falls back (D5).
 
