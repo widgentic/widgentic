@@ -1,5 +1,27 @@
 # @widgentic/mcp
 
+## 0.15.0
+
+### Minor Changes
+
+- ed06286: The app template shows viewer-zone dates in the viewer's zone. Before mounting or patching any tree (a tool result, a server preview or an action's re-render), it rewrites each `time` element the renderer marked with `datetime` and `data-wg-date`, using the host context's `timeZone` when `Intl` accepts it and the frame's own zone otherwise. A `host-context-changed` that changes the zone re-renders in place.
+  
+  The template's raw size budget rises from 44 KiB to 45 KiB (46,080 bytes); the gzipped budget stays at 13 KiB. The authoring guide's `FORMAT` line derives its zone clause from `DATE_ZONE_RULE`.
+- 181d2d9: A widget's own themes take priority over the Settings defaults.
+  - **Precedence per mode.** With no `theme` input, each host mode wears the theme the widget's `descriptor.themes` names, else the caller's default, else the built-in. This applies to renders in every format, previews, action re-renders and widget pages.
+  - **Groups.** A group wears the theme its naming items agree on per mode. When they disagree, it wears the default and adds a `Theme notes:` line.
+  - **Missing names.** A name the registry lacks falls back to the default, with a note.
+  - **Store.** `putWidget` refuses an unknown theme name with `UNKNOWN_THEME`. `removeTheme` refuses with `THEME_IN_USE` while a widget names the theme, naming the widgets.
+  - **Steering.** The `render_widget` `theme` description and the authoring guide describe the precedence.
+
+### Patch Changes
+
+- fc662ed: The app template's streamed card and table previews encode a `hints.links` prefix value as the renderer does, so a preview links the same href its tool result carries. The authoring guide's `ATTR PREFIX` line now says the value is percent-encoded and that agents should pass raw values.
+- Updated dependencies [ed06286]
+- Updated dependencies [fc662ed]
+- Updated dependencies [181d2d9]
+  - @widgentic/core@0.15.0
+
 ## 0.14.0
 
 ### Minor Changes

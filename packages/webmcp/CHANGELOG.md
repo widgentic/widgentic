@@ -1,5 +1,21 @@
 # @widgentic/webmcp
 
+## 0.2.7
+
+### Patch Changes
+
+- ed06286: The `authoring_guide` tool's `FORMAT` line describes the date format's `zone`, derived from `DATE_ZONE_RULE` as in the server guide.
+- fc662ed: The `authoring_guide` tool's `ATTR PREFIX` line now says a value behind a prefix is percent-encoded, matching the server guide.
+- 181d2d9: The `authoring_guide` tool's descriptor field list includes `themes`, derived from `WIDGET_THEMES_RULE` as in the server guide.
+- Updated dependencies [ed06286]
+- Updated dependencies [ed06286]
+- Updated dependencies [fc662ed]
+- Updated dependencies [fc662ed]
+- Updated dependencies [181d2d9]
+- Updated dependencies [181d2d9]
+  - @widgentic/core@0.15.0
+  - @widgentic/designer@0.15.0
+
 ## 0.2.6
 
 ### Patch Changes
