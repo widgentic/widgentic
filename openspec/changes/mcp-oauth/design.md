@@ -125,6 +125,9 @@ A selected key would otherwise give no sign that a host is using it, and revokin
 
 - **Hosted-facing docs wait for the hosted server.** The docs site also describes mcp.widgentic.dev, which keeps serving keyless requests until the apps repository adopts this release. Those four pages are updated with that deploy (task 8.3), so the site never describes behavior that is not live.
 
+- **One staging round instead of two.** The stub probe of D12 was deployed first (`mcp-oauth-probe-b134322`, revision `--0000042`) and no host had reached it by the time the surface was written. Staging was then moved to the real flow with the same logging on top (`feature/mcp-oauth-flow-probe`, never merged; image `mcp-oauth-flow-probe-ad2cb8a`, revision `--0000043`, ACR run `cj49`), so the owner's host session answers D12's five questions and the host legs together. The one thing the stub tested that the real flow does not is a 600-character client id: a real sealed id for a typical registration is about 150–250 characters. D7's fallback (stored clients) stays the answer if a host mangles it.
+- **Staging needs its public origin.** The example derives the issuer and the resource from `WIDGENTIC_PUBLIC_URL`; the staging template (apps repository, `infra/selfhost.bicep`) gained a `publicUrl` parameter that sets it on both containers, with `https://demo.widgentic.dev` in the params template. That edit sits uncommitted on the apps branch `feature/selfhost-public-url` and belongs to the apps adoption change.
+
 ## Risks / Trade-offs
 
 - **A host does not react to `401` on an existing connector** → people see a broken connector. Mitigation: D12 measures it; the error body names the fix; the hosted rollout is announced and the app's connect page shows the two URLs.
