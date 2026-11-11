@@ -24,6 +24,13 @@
  *     and the digest is both id and partition key. The database compares
  *     digests as opaque keys, so lookup timing reveals nothing about the
  *     key material itself.
+ *     Access tokens, refresh tokens and authorization codes live here too,
+ *     as { digest, type, …record, ttl } — the same point read resolves a
+ *     token. A key document has no `type`; every key query excludes those
+ *     that do. `ttl` only tidies (it needs the container's time-to-live
+ *     enabled); expiry is always decided from the record.
+ *   - a grant is `grant:<id>` in its principal's `data` partition and names
+ *     the digests of its current tokens, so ending it is point operations.
  *
  * Management-plane operations (`listKeys`, `revokeKey`) query the small
  * `keys` container across partitions; they are user-driven and rare, and
@@ -44,6 +51,8 @@ import type { StoredAction } from "@widgentic/core";
 import { checkSecretName, decryptSecret, encryptSecret } from "../secrets/index.js";
 import type { EnvelopeRecord, SecretCipher } from "../secrets/index.js";
 import { asStoreRejection } from "./errors.js";
+import { createGrantOperations, isGrantCredential } from "./grants.js";
+import type { GrantRecord, GrantTokenRecord, WritableAccessGrantStore } from "./grants.js";
 import { generateKey, hashKey } from "./keys.js";
 import {
   isGetHttp,
@@ -98,7 +107,7 @@ export interface CosmosQueryOptions {
 
 export interface CosmosItemLike {
   read(): Promise<{ statusCode: number; resource?: unknown }>;
-  replace(doc: unknown): Promise<unknown>;
+  replace(doc: unknown, options?: { accessCondition?: { type: "IfMatch"; condition: string } }): Promise<unknown>;
   delete(): Promise<unknown>;
 }
 
@@ -158,6 +167,8 @@ export interface CosmosStoreOptions {
   cipher?: SecretCipher;
   /** Diagnostics sink; never receives key material. Default: stderr. */
   log?: (line: string) => void;
+  /** Epoch milliseconds for grant lifetimes; injected by tests. */
+  now?: () => number;
 }
 
 interface ProfileDoc {
@@ -271,7 +282,7 @@ function operationError(operation: string, error: unknown): StoreRejectionError 
   return new StoreRejectionError("STORE_ERROR", `${operation} failed (service code ${code}).`);
 }
 
-export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetStore {
+export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetStore & WritableAccessGrantStore {
   const limits = options.limits ?? DEFAULT_LIMITS;
   const log = options.log ?? ((line: string) => console.error(line));
 
@@ -430,9 +441,127 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
     return out;
   }
 
-  const store: WritableWidgetStore = {
+  /** A key document, never a token or code sharing the container. */
+  function isKeyDoc(doc: unknown): doc is KeyDoc {
+    return typeof doc === "object" && doc !== null && (doc as { type?: unknown }).type === undefined;
+  }
+
+  const clock = options.now ?? Date.now;
+
+  /** The record without the service's own fields. */
+  function tokenRecord(resource: unknown): GrantTokenRecord | undefined {
+    if (typeof resource !== "object" || resource === null) return undefined;
+    const doc = resource as GrantTokenRecord & { type?: unknown };
+    if (doc.type !== "access" && doc.type !== "refresh" && doc.type !== "code") return undefined;
+    return {
+      digest: doc.digest,
+      type: doc.type,
+      principalId: doc.principalId,
+      grantId: doc.grantId,
+      keyId: doc.keyId,
+      clientId: doc.clientId,
+      clientName: doc.clientName,
+      resource: doc.resource,
+      scopes: doc.scopes,
+      expiresAt: doc.expiresAt,
+      ...(doc.redirectUri === undefined ? {} : { redirectUri: doc.redirectUri }),
+      ...(doc.codeChallenge === undefined ? {} : { codeChallenge: doc.codeChallenge }),
+      ...(doc.usedAt === undefined ? {} : { usedAt: doc.usedAt }),
+      ...(doc.rotatedAt === undefined ? {} : { rotatedAt: doc.rotatedAt })
+    };
+  }
+
+  function tokenDoc(entry: GrantTokenRecord): Record<string, unknown> {
+    const seconds = Math.ceil((Date.parse(entry.expiresAt) - clock()) / 1000);
+    return { ...entry, id: entry.digest, ttl: Math.max(1, seconds) };
+  }
+
+  async function ignoreMissing(operation: string, work: () => Promise<unknown>): Promise<void> {
+    try {
+      await work();
+    } catch (error) {
+      if (isServiceError(error) && String(error.code) === "404") return;
+      throw operationError(operation, error);
+    }
+  }
+
+  const { revokeGrantsForKey, ...grantStore } = createGrantOperations(
+    {
+      async readToken(digest) {
+        // The one read token resolution makes: id and partition are the digest.
+        const { resource } = await keys.item(digest, digest).read();
+        return tokenRecord(resource);
+      },
+      async writeToken(entry) {
+        try {
+          await keys.items.upsert(tokenDoc(entry));
+        } catch (error) {
+          throw operationError("writeToken", error);
+        }
+      },
+      async removeToken(digest) {
+        await ignoreMissing("removeToken", () => keys.item(digest, digest).delete());
+      },
+      async claimCode(digest, usedAt) {
+        const { resource } = await keys.item(digest, digest).read();
+        const entry = tokenRecord(resource);
+        const etag = (resource as { _etag?: unknown } | undefined)?._etag;
+        if (entry === undefined || entry.usedAt !== undefined || typeof etag !== "string") return false;
+        try {
+          // Conditional on the version read: a concurrent exchange loses with 412.
+          await keys
+            .item(digest, digest)
+            .replace(tokenDoc({ ...entry, usedAt }), { accessCondition: { type: "IfMatch", condition: etag } });
+          return true;
+        } catch (error) {
+          if (isServiceError(error) && ["412", "404"].includes(String(error.code))) return false;
+          throw operationError("claimCode", error);
+        }
+      },
+      async readGrant(principalId, grantId) {
+        const { resource } = await data.item(`grant:${grantId}`, principalId).read();
+        return (resource as { grant?: GrantRecord } | undefined)?.grant;
+      },
+      async writeGrant(grant) {
+        try {
+          await data.items.upsert({ id: `grant:${grant.id}`, principalId: grant.principalId, grant });
+        } catch (error) {
+          throw operationError("writeGrant", error);
+        }
+      },
+      async removeGrant(principalId, grantId) {
+        await ignoreMissing("removeGrant", () => data.item(`grant:${grantId}`, principalId).delete());
+      },
+      async grants(principalId) {
+        const out: GrantRecord[] = [];
+        for (const raw of await listByPrefix(principalId, "grant:")) {
+          const grant = (raw as { grant?: GrantRecord }).grant;
+          if (grant !== undefined) out.push(grant);
+        }
+        return out;
+      },
+      async keyScopes(principalId, keyId) {
+        const { resources } = await keys.items
+          .query({
+            query: "SELECT * FROM c WHERE c.principalId = @p AND c.keyId = @k AND NOT IS_DEFINED(c.type)",
+            parameters: [
+              { name: "@p", value: principalId },
+              { name: "@k", value: keyId }
+            ]
+          })
+          .fetchAll();
+        const doc = resources.find(isKeyDoc);
+        return doc === undefined || doc.revokedAt !== undefined ? undefined : doc.scopes;
+      }
+    },
+    { ...(limits.maxGrants === undefined ? {} : { maxGrants: limits.maxGrants }), now: clock }
+  );
+
+  const store: WritableWidgetStore & WritableAccessGrantStore = {
+    ...grantStore,
+
     async resolvePrincipal(apiKey) {
-      if (typeof apiKey !== "string" || apiKey === "") return undefined;
+      if (typeof apiKey !== "string" || apiKey === "" || isGrantCredential(apiKey)) return undefined;
       const digest = hashKey(apiKey);
       let resource: unknown;
       try {
@@ -444,7 +573,8 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
         return undefined;
       }
       if (resource === undefined) return undefined;
-      const doc = resource as KeyDoc;
+      if (!isKeyDoc(resource)) return undefined;
+      const doc = resource;
       if (doc.revokedAt !== undefined) return undefined;
       return { id: doc.principalId, scopes: doc.scopes };
     },
@@ -988,24 +1118,24 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
       // path is resolvePrincipal's point read, and this one is rare.
       const { resources } = await keys.items
         .query({
-          query: "SELECT * FROM c WHERE c.principalId = @p",
+          query: "SELECT * FROM c WHERE c.principalId = @p AND NOT IS_DEFINED(c.type)",
           parameters: [{ name: "@p", value: principalId }]
         })
         .fetchAll();
-      return (resources as KeyDoc[]).map(publicKey);
+      return resources.filter(isKeyDoc).map(publicKey);
     },
 
     async revokeKey(principalId, keyId) {
       const { resources } = await keys.items
         .query({
-          query: "SELECT * FROM c WHERE c.principalId = @p AND c.keyId = @k",
+          query: "SELECT * FROM c WHERE c.principalId = @p AND c.keyId = @k AND NOT IS_DEFINED(c.type)",
           parameters: [
             { name: "@p", value: principalId },
             { name: "@k", value: keyId }
           ]
         })
         .fetchAll();
-      const doc = resources[0] as KeyDoc | undefined;
+      const doc = resources.find(isKeyDoc);
       if (doc === undefined) throw new StoreRejectionError("UNKNOWN_KEY", keyId);
       if (doc.revokedAt !== undefined) return;
       try {
@@ -1015,6 +1145,8 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
       } catch (error) {
         throw operationError("revokeKey", error);
       }
+      // A grant lives exactly as long as the key it is bound to.
+      await revokeGrantsForKey(principalId, keyId);
     },
 
     async linkSubject(principalId, subject, label) {

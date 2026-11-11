@@ -458,7 +458,7 @@ function showKeys(): void {
   if (myKeys.length === 0) {
     const empty = document.createElement("p");
     empty.className = "muted";
-    empty.textContent = "No keys yet — create one and add it to your MCP host.";
+    empty.textContent = "No keys yet — create one and add it to your MCP host, or add the endpoint to a host that supports sign-in and create the key there.";
     list.append(empty);
     return;
   }
@@ -468,6 +468,15 @@ function showKeys(): void {
     const label = document.createElement("span");
     label.className = "name";
     label.textContent = `${key.name} · ${key.scopes.join(", ")} · ${key.digestPreview}…${key.revokedAt !== undefined ? " · revoked" : ""}`;
+    const connections = key.connections ?? [];
+    if (connections.length > 0) {
+      // The names are the applications' own; they are shown as text, and said to be theirs.
+      const used = document.createElement("span");
+      used.className = "muted connections";
+      used.title = "Names are reported by the applications themselves. Revoking the key disconnects them.";
+      used.textContent = ` — used by ${connections.map((connection) => connection.clientName).join(", ")} (as reported by the application; revoking the key disconnects ${connections.length === 1 ? "it" : "them"})`;
+      label.append(used);
+    }
     row.append(label);
     if (key.revokedAt === undefined) {
       const revoke = document.createElement("button");
@@ -511,10 +520,12 @@ function renderConnectHint(): void {
   const code = (text: string): void => { const c = document.createElement("code"); c.textContent = text; el.append(c); };
   add("Connect a host to ");
   code(url);
-  add(" — hosts that send headers: ");
+  add(" — a host that supports sign-in opens this app so you can choose or create its key; hosts that send headers: ");
   code("x-api-key: <your key>");
   add("; connectors that take only a URL: ");
   code(`${url}?key=<your key>`);
+  add(". The built-in widgets need no key at ");
+  code(`${url.replace(/\/+$/, "")}/public`);
   add(".");
 }
 

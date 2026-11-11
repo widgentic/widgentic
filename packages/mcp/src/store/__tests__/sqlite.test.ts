@@ -6,7 +6,7 @@
  * writes, digests-and-ciphertext-only content, and the schema-version
  * refusal.
  */
-import { mkdtempSync, readdirSync, readFileSync } from "node:fs";
+import { copyFileSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -16,6 +16,7 @@ import { createSqliteStore } from "../sqlite.js";
 import { DEFAULT_LIMITS, StoreRejectionError } from "../types.js";
 import type { StoredWidget } from "../types.js";
 import { describeStoreContract } from "./contract.js";
+import { describeGrantContract } from "./grant-contract.js";
 import { composeThemes } from "../compose.js";
 
 const KEK = generateLocalKek();
@@ -40,6 +41,90 @@ function widget(kind: string): StoredWidget {
 describeStoreContract("sqlite", async () => {
   const path = freshPath();
   return { store: open(path), maxWidgets: LIMITS.maxWidgets, reopen: () => open(path) };
+});
+
+describeGrantContract("sqlite", async (options) => {
+  const path = freshPath();
+  const clock = { now: Date.parse("2026-11-01T00:00:00Z") };
+  const store = createSqliteStore(path, {
+    limits: { ...LIMITS, ...(options?.maxGrants === undefined ? {} : { maxGrants: options.maxGrants }) },
+    onDiagnostic: () => {},
+    now: () => clock.now
+  });
+  return {
+    store,
+    advance: (seconds) => {
+      clock.now += seconds * 1000;
+    },
+    // Every file beside the database (the WAL included), as bytes.
+    dump: async () =>
+      readdirSync(join(path, "..")).map((file) => readFileSync(join(path, "..", file), "latin1")).join("\n")
+  };
+});
+
+describe("a database written before grants existed", () => {
+  // Written by @widgentic/mcp 0.15.0 (one principal, a schema, a theme, a
+  // widget, settings, two live keys and a revoked one). The keys open
+  // nothing but this fixture.
+  const fixture = join(import.meta.dirname, "fixtures", "store-0.15.0.db");
+  const known = JSON.parse(readFileSync(join(import.meta.dirname, "fixtures", "store-0.15.0.keys.json"), "utf8")) as {
+    principalId: string;
+    laptop: string;
+    ops: string;
+    opsId: string;
+    retired: string;
+  };
+  const OLD_TABLES = ["principals", "subjects", "entries", "keys"];
+
+  function rows(path: string): string {
+    const db = new DatabaseSync(path);
+    try {
+      return JSON.stringify(OLD_TABLES.map((table) => db.prepare(`SELECT * FROM ${table} ORDER BY 1, 2, 3`).all()));
+    } finally {
+      db.close();
+    }
+  }
+
+  it("opens and serves exactly as before", async () => {
+    const path = freshPath();
+    copyFileSync(fixture, path);
+    const store = open(path);
+    expect((await store.resolvePrincipal(known.laptop))?.scopes).toEqual(["read"]);
+    expect((await store.resolvePrincipal(known.ops))?.scopes).toEqual(["read", "execute"]);
+    expect(await store.resolvePrincipal(known.retired)).toBeUndefined();
+    expect((await store.widgets(known.principalId)).map((w) => w.kind)).toEqual(["report"]);
+    expect((await store.themes(known.principalId)).map((t) => t.name)).toEqual(["brand"]);
+    expect((await store.schemas(known.principalId)).map((s) => s.name)).toEqual(["person"]);
+    expect(await store.settings(known.principalId)).toEqual({ defaultThemes: { light: "brand" } });
+    expect((await store.listKeys(known.principalId)).map((k) => k.name)).toEqual(["laptop", "ops", "retired"]);
+    expect(await store.listGrants(known.principalId)).toEqual([]);
+    store.close();
+  });
+
+  it("accepts a first grant and leaves the old records untouched", async () => {
+    const path = freshPath();
+    copyFileSync(fixture, path);
+    const before = rows(path);
+    const store = open(path);
+    const code = await store.createAuthorizationCode(known.principalId, {
+      keyId: known.opsId,
+      clientId: "client-a",
+      clientName: "Client A",
+      resource: "https://mcp.example/mcp",
+      redirectUri: "https://host.example/cb",
+      codeChallenge: "challenge"
+    });
+    const exchange = await store.exchangeAuthorizationCode(code, () => true);
+    if (exchange.status !== "issued") throw new Error("exchange failed");
+    const resolved = await store.resolveAccessToken(exchange.tokens.accessToken, { resource: "https://mcp.example/mcp" });
+    expect(resolved).toEqual({ id: known.principalId, scopes: ["read", "execute"] });
+    store.close();
+    expect(rows(path)).toBe(before);
+    // The version that wrote the file can still open it: nothing it knows changed.
+    const db = new DatabaseSync(path);
+    expect((db.prepare("PRAGMA user_version").get() as { user_version: number }).user_version).toBe(1);
+    db.close();
+  });
 });
 
 describe("sqlite adapter", () => {

@@ -10,6 +10,8 @@ import type { StoredAction } from "@widgentic/core";
 import { checkSecretName, decryptSecret, encryptSecret } from "../secrets/index.js";
 import type { EnvelopeRecord, SecretCipher } from "../secrets/index.js";
 import { asStoreRejection } from "./errors.js";
+import { createGrantOperations, isGrantCredential } from "./grants.js";
+import type { GrantRecord, GrantTokenRecord, WritableAccessGrantStore } from "./grants.js";
 import { findByKey, generateKey, hashKey } from "./keys.js";
 import {
   isGetHttp,
@@ -63,6 +65,8 @@ export interface MemorySeedPrincipal {
 export interface MemoryStoreOptions {
   /** Enables `putSecret`/`secretValue`; without it both are refused. */
   cipher?: SecretCipher;
+  /** Epoch milliseconds for grant lifetimes; injected by tests. */
+  now?: () => number;
 }
 
 interface KeyRecord extends StoredKey {
@@ -83,7 +87,7 @@ interface Record_ {
   settings?: Record<string, unknown>;
 }
 
-export interface MemoryStore extends WritableWidgetStore {
+export interface MemoryStore extends WritableWidgetStore, WritableAccessGrantStore {
   /** Serializable snapshot — digests and ciphertext only, never key material or values. */
   snapshot(): unknown;
 }
@@ -195,9 +199,55 @@ export function createMemoryStore(
     }
   }
 
+  // Grants: token and code records by digest, grant records per principal.
+  const tokens = new Map<string, GrantTokenRecord>();
+  const grantRecords = new Map<string, Map<string, GrantRecord>>();
+  const grants = createGrantOperations(
+    {
+      async readToken(digest) {
+        const found = tokens.get(digest);
+        return found === undefined ? undefined : clone(found);
+      },
+      async writeToken(entry) {
+        tokens.set(entry.digest, clone(entry));
+      },
+      async removeToken(digest) {
+        tokens.delete(digest);
+      },
+      async claimCode(digest, usedAt) {
+        const code = tokens.get(digest);
+        if (code === undefined || code.usedAt !== undefined) return false;
+        code.usedAt = usedAt;
+        return true;
+      },
+      async readGrant(principalId, grantId) {
+        const found = grantRecords.get(principalId)?.get(grantId);
+        return found === undefined ? undefined : clone(found);
+      },
+      async writeGrant(grant) {
+        const own = grantRecords.get(grant.principalId) ?? new Map<string, GrantRecord>();
+        own.set(grant.id, clone(grant));
+        grantRecords.set(grant.principalId, own);
+      },
+      async removeGrant(principalId, grantId) {
+        grantRecords.get(principalId)?.delete(grantId);
+      },
+      async grants(principalId) {
+        return [...(grantRecords.get(principalId)?.values() ?? [])].map(clone);
+      },
+      async keyScopes(principalId, keyId) {
+        const key = record(principalId)?.keys.find((k) => k.id === keyId && k.revokedAt === undefined);
+        return key === undefined ? undefined : [...key.scopes];
+      }
+    },
+    { ...(limits.maxGrants === undefined ? {} : { maxGrants: limits.maxGrants }), ...(options.now === undefined ? {} : { now: options.now }) }
+  );
+  const { revokeGrantsForKey, ...grantStore } = grants;
+
   return {
+    ...grantStore,
     async resolvePrincipal(apiKey) {
-      if (typeof apiKey !== "string" || apiKey === "") return undefined;
+      if (typeof apiKey !== "string" || apiKey === "" || isGrantCredential(apiKey)) return undefined;
       // Every live key of every principal is a candidate; comparison work
       // is independent of which (if any) matches. Revoked keys are not
       // candidates — a revoked key is exactly an unknown one. The match
@@ -530,6 +580,8 @@ export function createMemoryStore(
         throw new StoreRejectionError("UNKNOWN_KEY", keyId);
       }
       if (key.revokedAt === undefined) key.revokedAt = new Date().toISOString();
+      // A grant lives exactly as long as the key it is bound to.
+      await revokeGrantsForKey(principalId, keyId);
     },
     snapshot() {
       return clone(
@@ -540,7 +592,9 @@ export function createMemoryStore(
           themes: [...r.themes.values()],
           schemas: [...r.schemas.values()],
           actions: [...r.actions.values()],
-          secrets: [...r.secrets.values()]
+          secrets: [...r.secrets.values()],
+          grants: [...(grantRecords.get(r.principal.id)?.values() ?? [])],
+          tokens: [...tokens.values()].filter((entry) => entry.principalId === r.principal.id)
         }))
       );
     }

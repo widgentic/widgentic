@@ -23,6 +23,8 @@ import type { StoredAction } from "@widgentic/core";
 import { checkSecretName, decryptSecret } from "../secrets/index.js";
 import type { SecretCipher } from "../secrets/index.js";
 import { asStoreRejection } from "./errors.js";
+import { isGrantCredential, resolveAccessTokenWith } from "./grants.js";
+import type { AccessGrantStore } from "./grants.js";
 import { findByKey } from "./keys.js";
 import type {
   Principal,
@@ -85,7 +87,7 @@ export interface FileStoreOptions {
 export function createFileStore(
   dir: string,
   options: FileStoreOptions = {}
-): WidgetStore & { seedPrincipal(row: PrincipalRow): Promise<void> } {
+): WidgetStore & AccessGrantStore & { seedPrincipal(row: PrincipalRow): Promise<void> } {
   const limits = options.limits ?? DEFAULT_LIMITS;
   const report =
     options.onDiagnostic ??
@@ -109,8 +111,13 @@ export function createFileStore(
   }
 
   return {
+    // Read-only and grant-less: only the anonymous form resolves here.
+    resolveAccessToken(token, { resource }) {
+      return resolveAccessTokenWith(async () => undefined, token, resource, Date.now());
+    },
+
     async resolvePrincipal(apiKey) {
-      if (typeof apiKey !== "string" || apiKey === "") return undefined;
+      if (typeof apiKey !== "string" || apiKey === "" || isGrantCredential(apiKey)) return undefined;
       const row = findByKey(apiKey, await principals());
       if (row === undefined) return undefined;
       const { keyDigest: _digest, ...principal } = row;

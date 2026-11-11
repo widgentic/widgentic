@@ -12,15 +12,25 @@ npm install @widgentic/mcp
 ```
 
 ```ts
-import { ANONYMOUS_PRINCIPAL } from "@widgentic/mcp/store";
+import { ACCESS_TOKEN_PREFIX } from "@widgentic/mcp/store";
 ```
 
 ## Runtime exports
 
+- `ACCESS_TOKEN_PREFIX`
+- `ACCESS_TOKEN_SECONDS`
 - `ANONYMOUS_PRINCIPAL`
+- `ANONYMOUS_TOKEN_PREFIX`
+- `AUTHORIZATION_CODE_PREFIX`
+- `AUTHORIZATION_CODE_SECONDS`
+- `CLIENT_NAME_MAX_LENGTH`
 - `DEFAULT_LIMITS`
+- `DEFAULT_MAX_GRANTS`
 - `KEY_PREFIX`
 - `KEY_SCOPES`
+- `REFRESH_GRACE_SECONDS`
+- `REFRESH_TOKEN_PREFIX`
+- `REFRESH_TOKEN_SECONDS`
 - `SAFE_IDENTIFIER`
 - `StoreRejectionError`
 - `checkStoredAction`
@@ -34,8 +44,10 @@ import { ANONYMOUS_PRINCIPAL } from "@widgentic/mcp/store";
 - `createFileStore`
 - `createMemoryStore`
 - `findByKey`
+- `generateAnonymousToken`
 - `generateKey`
 - `hashKey`
+- `isAnonymousAccessToken`
 - `normalizeKeyScopes`
 - `normalizeStoredTheme`
 - `principalIdForSubject`

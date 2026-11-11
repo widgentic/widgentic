@@ -21,6 +21,15 @@ Everything needed to host the widgentic engine over MCP:
   never authorizes authoring. `GET /preview-frame` serves the designers'
   preview frame: the app template under the policy hosts apply for the
   operator's domains (`resourceDomains` in the deps) and the principal's.
+- `@widgentic/mcp/oauth` — signing MCP hosts in. The resource side
+  (`protectedResourceMetadata`, `bearerChallenge`, `resolveCredential`): what
+  a protected MCP endpoint serves and answers so a host knows where to sign
+  in. The authorization surface (`createAuthorizationHttpHandler`): metadata,
+  client registration, authorize and consent, tokens with PKCE and rotating
+  refresh, revocation — a pure request handler plus a `node:http` adapter.
+  The host says who is signed in; the person selects or creates the API key
+  the connecting application is bound to, and revoking that key ends the
+  connection. Nothing an unauthenticated visitor does is stored.
 - `@widgentic/mcp/store` — the per-principal store port with memory and file
   implementations, composition and validation, including each principal's
   settings record (default themes; the `resourceDomains` a principal's

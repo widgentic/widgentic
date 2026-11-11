@@ -125,6 +125,7 @@
               "develop/embed-the-designers",
               "develop/co-author-with-an-agent",
               "develop/run-your-own-server",
+      "develop/sign-hosts-in",
               "develop/self-hosting"
             ]
           },
@@ -171,6 +172,7 @@
               "reference/api/mcp-sdk",
               "reference/api/mcp-host",
               "reference/api/mcp-authoring",
+              "reference/api/mcp-oauth",
               "reference/api/mcp-store",
               "reference/api/mcp-store-sqlite",
               "reference/api/mcp-store-cosmos",

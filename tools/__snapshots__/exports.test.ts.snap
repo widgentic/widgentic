@@ -419,6 +419,26 @@ exports[`published export surfaces > @widgentic/mcp/host 1`] = `
 ]
 `;
 
+exports[`published export surfaces > @widgentic/mcp/oauth 1`] = `
+[
+  "ANONYMOUS_CODE_PREFIX",
+  "AUTHORIZATION_PATHS",
+  "DECISION_SECONDS",
+  "MAX_REDIRECT_URIS",
+  "OAUTH_SCOPES",
+  "REGISTERED_CLIENT_PREFIX",
+  "authorizationServerMetadata",
+  "bearerChallenge",
+  "createAuthorizationHttpHandler",
+  "createAuthorizationSurface",
+  "protectedResourceMetadata",
+  "protectedResourceMetadataPaths",
+  "protectedResourceMetadataUrl",
+  "readBearerToken",
+  "resolveCredential",
+]
+`;
+
 exports[`published export surfaces > @widgentic/mcp/sdk 1`] = `
 [
   "createWidgenticServer",
@@ -449,10 +469,20 @@ exports[`published export surfaces > @widgentic/mcp/secrets/keyvault 1`] = `
 
 exports[`published export surfaces > @widgentic/mcp/store 1`] = `
 [
+  "ACCESS_TOKEN_PREFIX",
+  "ACCESS_TOKEN_SECONDS",
   "ANONYMOUS_PRINCIPAL",
+  "ANONYMOUS_TOKEN_PREFIX",
+  "AUTHORIZATION_CODE_PREFIX",
+  "AUTHORIZATION_CODE_SECONDS",
+  "CLIENT_NAME_MAX_LENGTH",
   "DEFAULT_LIMITS",
+  "DEFAULT_MAX_GRANTS",
   "KEY_PREFIX",
   "KEY_SCOPES",
+  "REFRESH_GRACE_SECONDS",
+  "REFRESH_TOKEN_PREFIX",
+  "REFRESH_TOKEN_SECONDS",
   "SAFE_IDENTIFIER",
   "StoreRejectionError",
   "checkStoredAction",
@@ -466,8 +496,10 @@ exports[`published export surfaces > @widgentic/mcp/store 1`] = `
   "createFileStore",
   "createMemoryStore",
   "findByKey",
+  "generateAnonymousToken",
   "generateKey",
   "hashKey",
+  "isAnonymousAccessToken",
   "normalizeKeyScopes",
   "normalizeStoredTheme",
   "principalIdForSubject",

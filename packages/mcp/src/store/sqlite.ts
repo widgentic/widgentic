@@ -13,6 +13,13 @@
  *     records only); kind `settings`, name `principal` holds the settings
  *     record, which entry listings and limits never count
  *   keys(digest PK, principal_id, key_id, name, scopes, created_at, revoked_at)
+ *   grant_tokens(digest PK, principal_id, expires_at, used_at, json)  — access
+ *     tokens, refresh tokens and authorization codes, digests only
+ *   grants(principal_id, id, json)                  — PK(principal_id, id)
+ *
+ * The two grant tables are created on every open, beside whatever the file
+ * already holds, so a database written before grants existed needs no
+ * migration and still opens in the version that wrote it.
  *
  * Composition reads one principal's entries as a single indexed range scan —
  * the same access shape as the Cosmos single-partition query — and key
@@ -34,6 +41,8 @@ import type { StoredAction } from "@widgentic/core";
 import { checkSecretName, decryptSecret, encryptSecret } from "../secrets/index.js";
 import type { EnvelopeRecord, SecretCipher } from "../secrets/index.js";
 import { asStoreRejection } from "./errors.js";
+import { createGrantOperations, isGrantCredential } from "./grants.js";
+import type { GrantRecord, GrantTokenRecord, WritableAccessGrantStore } from "./grants.js";
 import { generateKey, hashKey } from "./keys.js";
 import {
   isGetHttp,
@@ -88,6 +97,8 @@ export interface SqliteStoreOptions {
   onDiagnostic?: (message: string) => void;
   /** Enables secrets; without it `putSecret`/`secretValue` refuse with `NO_CIPHER`. */
   cipher?: SecretCipher;
+  /** Epoch milliseconds for grant lifetimes; injected by tests. */
+  now?: () => number;
 }
 
 interface PrincipalRow {
@@ -136,7 +147,7 @@ function rowPrincipal(row: PrincipalRow): Principal {
 export function createSqliteStore(
   path: string,
   options: SqliteStoreOptions = {}
-): WritableWidgetStore & { close(): void } {
+): WritableWidgetStore & WritableAccessGrantStore & { close(): void } {
   const limits = options.limits ?? DEFAULT_LIMITS;
   const cipher = options.cipher;
   const report =
@@ -200,6 +211,23 @@ export function createSqliteStore(
       `widgentic sqlite store: '${path}' has schema version ${version}, this adapter knows ${SCHEMA_VERSION} — it was written by a newer package.`
     );
   }
+
+  // Additive and idempotent: nothing an older file holds is touched.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS grant_tokens (
+      digest TEXT PRIMARY KEY,
+      principal_id TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      used_at TEXT,
+      json TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS grants (
+      principal_id TEXT NOT NULL,
+      id TEXT NOT NULL,
+      json TEXT NOT NULL,
+      PRIMARY KEY (principal_id, id)
+    );
+  `);
 
   /**
    * One transaction per write: committed whole or not at all (design D5).
@@ -353,13 +381,92 @@ export function createSqliteStore(
     };
   }
 
+  /** A grant write outside `tx`: one statement, the same refusal mapping. */
+  function write(work: () => void): void {
+    try {
+      work();
+    } catch (error) {
+      throw asStoreRejection(error, "write failed.");
+    }
+  }
+
+  const clock = options.now ?? Date.now;
+  const { revokeGrantsForKey, ...grantStore } = createGrantOperations(
+    {
+      async readToken(digest) {
+        const row = db.prepare("SELECT json, used_at FROM grant_tokens WHERE digest = ?").get(digest) as
+          | { json: string; used_at: string | null }
+          | undefined;
+        if (row === undefined) return undefined;
+        const entry = JSON.parse(row.json) as GrantTokenRecord;
+        return row.used_at === null ? entry : { ...entry, usedAt: row.used_at };
+      },
+      async writeToken(entry) {
+        write(() => {
+          // Expired records are swept on write; reads never rely on it.
+          db.prepare("DELETE FROM grant_tokens WHERE expires_at < ?").run(new Date(clock()).toISOString());
+          db.prepare(
+            "INSERT INTO grant_tokens (digest, principal_id, expires_at, used_at, json) VALUES (?, ?, ?, ?, ?) ON CONFLICT(digest) DO UPDATE SET expires_at = excluded.expires_at, json = excluded.json"
+          ).run(entry.digest, entry.principalId, entry.expiresAt, entry.usedAt ?? null, JSON.stringify(entry));
+        });
+      },
+      async removeToken(digest) {
+        write(() => db.prepare("DELETE FROM grant_tokens WHERE digest = ?").run(digest));
+      },
+      async claimCode(digest, usedAt) {
+        let claimed = false;
+        write(() => {
+          // One conditional statement: of two exchanges exactly one changes a row.
+          const result = db
+            .prepare("UPDATE grant_tokens SET used_at = ? WHERE digest = ? AND used_at IS NULL")
+            .run(usedAt, digest);
+          claimed = Number(result.changes) === 1;
+        });
+        return claimed;
+      },
+      async readGrant(principalId, grantId) {
+        const row = db.prepare("SELECT json FROM grants WHERE principal_id = ? AND id = ?").get(principalId, grantId) as
+          | { json: string }
+          | undefined;
+        return row === undefined ? undefined : (JSON.parse(row.json) as GrantRecord);
+      },
+      async writeGrant(grant) {
+        write(() =>
+          db
+            .prepare(
+              "INSERT INTO grants (principal_id, id, json) VALUES (?, ?, ?) ON CONFLICT(principal_id, id) DO UPDATE SET json = excluded.json"
+            )
+            .run(grant.principalId, grant.id, JSON.stringify(grant))
+        );
+      },
+      async removeGrant(principalId, grantId) {
+        write(() => db.prepare("DELETE FROM grants WHERE principal_id = ? AND id = ?").run(principalId, grantId));
+      },
+      async grants(principalId) {
+        const rows = db.prepare("SELECT json FROM grants WHERE principal_id = ?").all(principalId) as Array<{
+          json: string;
+        }>;
+        return rows.map((row) => JSON.parse(row.json) as GrantRecord);
+      },
+      async keyScopes(principalId, keyId) {
+        const row = db
+          .prepare("SELECT scopes FROM keys WHERE principal_id = ? AND key_id = ? AND revoked_at IS NULL")
+          .get(principalId, keyId) as { scopes: string } | undefined;
+        return row === undefined ? undefined : keyScopesFrom(row.scopes);
+      }
+    },
+    { ...(limits.maxGrants === undefined ? {} : { maxGrants: limits.maxGrants }), now: clock }
+  );
+
   return {
+    ...grantStore,
+
     close() {
       db.close();
     },
 
     async resolvePrincipal(apiKey) {
-      if (typeof apiKey !== "string" || apiKey === "") return undefined;
+      if (typeof apiKey !== "string" || apiKey === "" || isGrantCredential(apiKey)) return undefined;
       // One indexed lookup on the digest: the presented key is hashed and
       // the digest is the primary key, compared by the database as an
       // opaque string — lookup timing reveals nothing about key material.
@@ -776,6 +883,8 @@ export function createSqliteStore(
           db.prepare("UPDATE keys SET revoked_at = ? WHERE digest = ?").run(new Date().toISOString(), row.digest);
         }
       });
+      // A grant lives exactly as long as the key it is bound to.
+      await revokeGrantsForKey(principalId, keyId);
     }
   };
 }

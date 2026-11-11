@@ -289,7 +289,20 @@ export async function handleAuthoringRequest(
 
     if (resource === "keys") {
       if (method === "GET" && id === "") {
-        return ok(200, { keys: await store.listKeys(principalId) });
+        const keys = await store.listKeys(principalId);
+        if (deps.grants === undefined) return ok(200, { keys });
+        // Which applications are connected through each key: the client's
+        // own name and two timestamps, and nothing a connection could be
+        // resumed with.
+        const grants = await deps.grants.listGrants(principalId);
+        return ok(200, {
+          keys: keys.map((key) => ({
+            ...key,
+            connections: grants
+              .filter((grant) => grant.keyId === key.id)
+              .map((grant) => ({ clientName: grant.clientName, createdAt: grant.createdAt, lastUsedAt: grant.lastUsedAt }))
+          }))
+        });
       }
       if (method === "POST" && id === "") {
         const given = body as { name?: unknown; scopes?: unknown } | undefined;

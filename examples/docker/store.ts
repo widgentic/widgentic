@@ -14,10 +14,10 @@ import { dirname } from "node:path";
 import { createLocalCipher } from "@widgentic/mcp/secrets";
 import type { SecretCipher } from "@widgentic/mcp/secrets";
 import { createSqliteStore } from "@widgentic/mcp/store/sqlite";
-import type { WritableWidgetStore } from "@widgentic/mcp/store";
+import type { WritableAccessGrantStore, WritableWidgetStore } from "@widgentic/mcp/store";
 
 export interface Deployment {
-  store: WritableWidgetStore & { close(): void };
+  store: WritableWidgetStore & WritableAccessGrantStore & { close(): void };
   secretsEnabled: boolean;
 }
 

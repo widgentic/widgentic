@@ -1,6 +1,6 @@
 /**
  * widgentic/store — per-principal widgets, themes, schemas, shared actions,
- * secrets (ciphertext) and API keys.
+ * secrets (ciphertext), API keys and the access grants bound to them.
  *
  * The port plus two reference implementations; the Cosmos adapter ships
  * from `@widgentic/mcp/store/cosmos`. Composition builds a request-scoped
@@ -35,6 +35,30 @@ export {
   StoreRejectionError
 } from "./types.js";
 export { hashKey, verifyKey, generateKey, findByKey, KEY_PREFIX } from "./keys.js";
+export {
+  ACCESS_TOKEN_PREFIX,
+  ACCESS_TOKEN_SECONDS,
+  ANONYMOUS_TOKEN_PREFIX,
+  AUTHORIZATION_CODE_PREFIX,
+  AUTHORIZATION_CODE_SECONDS,
+  CLIENT_NAME_MAX_LENGTH,
+  DEFAULT_MAX_GRANTS,
+  REFRESH_GRACE_SECONDS,
+  REFRESH_TOKEN_PREFIX,
+  REFRESH_TOKEN_SECONDS,
+  generateAnonymousToken,
+  isAnonymousAccessToken
+} from "./grants.js";
+export type {
+  AccessGrantStore,
+  AuthorizationCodeBinding,
+  AuthorizationCodeRequest,
+  CodeExchange,
+  GrantRotation,
+  IssuedTokens,
+  StoredGrant,
+  WritableAccessGrantStore
+} from "./grants.js";
 export {
   checkStoredWidget,
   checkStoredTheme,

@@ -23,6 +23,7 @@ const ENTRIES = [
   "@widgentic/mcp/sdk",
   "@widgentic/mcp/host",
   "@widgentic/mcp/authoring",
+  "@widgentic/mcp/oauth",
   "@widgentic/mcp/store",
   "@widgentic/mcp/store/sqlite",
   "@widgentic/mcp/store/cosmos",

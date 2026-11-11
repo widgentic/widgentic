@@ -39,7 +39,7 @@ describe("docs generator", () => {
         "reference/api/mcp-secrets-keyvault.mdx"
       ])
     );
-    expect(first.size).toBe(26);
+    expect(first.size).toBe(27);
     // No unescaped math delimiter in PROSE: the renderer typesets `$...$`
     // spans as KaTeX, and the DSL's own $-prefixed tokens must stay text.
     // Code spans and fences are exempt — math is never parsed inside them.

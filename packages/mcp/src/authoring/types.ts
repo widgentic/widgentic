@@ -9,6 +9,7 @@
  */
 import type { IncomingMessage } from "node:http";
 import type { ExecutionLimiter, GuardedFetchDeps } from "../server/index.js";
+import type { WritableAccessGrantStore } from "../store/grants.js";
 import type { WritableWidgetStore } from "../store/types.js";
 
 /** The host's answer to "who is asking" — resolved before the surface runs. */
@@ -57,6 +58,12 @@ export interface AuthoringResponse {
 
 export interface AuthoringDeps {
   store: WritableWidgetStore;
+  /**
+   * The store's access grants, when it has them (usually the same object as
+   * `store`). With it, the key listing names the applications connected
+   * through each key; without it the listing is keys alone.
+   */
+  grants?: Pick<WritableAccessGrantStore, "listGrants">;
   /** Whether the store holds a secret cipher (the secrets surface is off otherwise). */
   secretsEnabled?: boolean;
   /** Execution budget shared with the MCP edge; test calls draw from the same bucket. */
