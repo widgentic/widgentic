@@ -271,6 +271,13 @@ and the NuGet version in one commit.
   reliable gate; app-side `tools/list` is -32601 everywhere; partial tool
   input is size-gated by the host; claude.ai mounts a fresh iframe per render;
   the sandbox CSP blocks external images (hence server-side inlining).
+- MCP hosts signing in: claude.ai probes the URL when a connector is added
+  and preselects the sign-in mode from the `401`; by default it presents a
+  client metadata document (`https://claude.ai/oauth/mcp-oauth-client-metadata`,
+  redirect `https://claude.ai/api/mcp/auth_callback`) and never calls
+  registration; it sends `resource` on authorize and token requests and asks
+  for every scope in `scopes_supported`. A revoked grant shows "Reconnect" and
+  widgets in existing chats stop rendering until then.
 - CSS: an author `display` rule defeats `[hidden]`; `var()` fallbacks fire
   only when the property is UNSET (defining `:root` defaults severed
   `surface → bg`; fallbacks resolve at theme-application time); headless

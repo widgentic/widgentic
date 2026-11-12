@@ -128,6 +128,16 @@ A selected key would otherwise give no sign that a host is using it, and revokin
 - **One staging round instead of two.** The stub probe of D12 was deployed first (`mcp-oauth-probe-b134322`, revision `--0000042`) and no host had reached it by the time the surface was written. Staging was then moved to the real flow with the same logging on top (`feature/mcp-oauth-flow-probe`, never merged; image `mcp-oauth-flow-probe-ad2cb8a`, revision `--0000043`, ACR run `cj49`), so the owner's host session answers D12's five questions and the host legs together. The one thing the stub tested that the real flow does not is a 600-character client id: a real sealed id for a typical registration is about 150–250 characters. D7's fallback (stored clients) stays the answer if a host mangles it.
 - **Staging needs its public origin.** The example derives the issuer and the resource from `WIDGENTIC_PUBLIC_URL`; the staging template (apps repository, `infra/selfhost.bicep`) gained a `publicUrl` parameter that sets it on both containers, with `https://demo.widgentic.dev` in the params template. That edit sits uncommitted on the apps branch `feature/selfhost-public-url` and belongs to the apps adoption change.
 
+### D12 results — claude.ai (2026-11-12, staging `--0000043`, owner's session plus the staging log)
+
+1. **A `401` is detected at add time.** The connector dialog probes the URL and preselects "sign in now" for `/mcp` and "no sign-in" for `/mcp/public`. It also offers "sign in when needed" (connect without credentials, sign in when the server asks), which a server that challenges every request never reaches.
+2. **Client metadata document, not registration.** The default is Claude's published identity: `client_id` `https://claude.ai/oauth/mcp-oauth-client-metadata`, redirect `https://claude.ai/api/mcp/auth_callback`. The registration route was never called. The dialog offers registration and a pre-registered client as alternatives.
+3. **Client id length** is therefore 49 characters; the sealed-id question does not arise on this host's default path.
+4. **`resource` is sent** on the authorize request and again on both token requests. The path form of the protected-resource metadata is read first, then the authorization-server metadata. It asks for every scope in `scopes_supported` (`read execute`).
+5. **No fallback.** After the key was revoked the next call presented the access token (`401 invalid_token`), tried the refresh token (`invalid_grant`) and the connector showed "Reconnect"; widgets in existing conversations stop rendering until it is reconnected, as their frames are read through the connector.
+
+Nothing here contradicts D7 or the specs. ChatGPT and VS Code Copilot are still to be run.
+
 ## Risks / Trade-offs
 
 - **A host does not react to `401` on an existing connector** → people see a broken connector. Mitigation: D12 measures it; the error body names the fix; the hosted rollout is announced and the app's connect page shows the two URLs.
