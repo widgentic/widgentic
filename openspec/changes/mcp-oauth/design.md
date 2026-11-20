@@ -136,7 +136,19 @@ A selected key would otherwise give no sign that a host is using it, and revokin
 4. **`resource` is sent** on the authorize request and again on both token requests. The path form of the protected-resource metadata is read first, then the authorization-server metadata. It asks for every scope in `scopes_supported` (`read execute`).
 5. **No fallback.** After the key was revoked the next call presented the access token (`401 invalid_token`), tried the refresh token (`invalid_grant`) and the connector showed "Reconnect"; widgets in existing conversations stop rendering until it is reconnected, as their frames are read through the connector.
 
-Nothing here contradicts D7 or the specs. ChatGPT and VS Code Copilot are still to be run.
+Nothing here contradicts D7 or the specs.
+
+### D12 results — ChatGPT desktop (2026-11-20, staging `--0000043`, owner's session plus the staging log)
+
+The client is `codex-mcp-client` (0.169.1, then 0.171.0-alpha.13).
+
+1. **Sign-in works from the bare URL.** Every connection starts with an unauthenticated `GET /mcp` (protocol 2024-11-05), which is challenged, followed by the path-form metadata and the authorization-server metadata.
+2. **Client metadata document, not registration**: `client_id` `https://chatgpt.com/oauth/codex/client.json`, with a loopback redirect on a fresh port each time (`http://127.0.0.1:<port>/callback`) — the loopback port rule is what admits it. Registration was never called.
+3. **Client id length** 43.
+4. **`resource` is sent** on authorize and on both token requests; it asks for `read execute`, and repeats `scope` on the refresh.
+5. **A revoked grant is not surfaced to the person.** After the key was revoked the refresh was answered `invalid_grant` and every later call `401 invalid_token`; the server served nothing until the person signed in again (no `served` line in that window). The host neither prompted nor reported the failure: in a new conversation the model answered a "list widgets" request from other knowledge, citing a web page, and it read like a built-in catalog. Signing in again from the connector's settings restored the person's widgets. This is host behavior; the server cannot make the host prompt.
+
+Nothing here contradicts D7 or the specs. VS Code Copilot is still to be run.
 
 ## Risks / Trade-offs
 

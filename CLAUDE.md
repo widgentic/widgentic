@@ -277,7 +277,12 @@ and the NuGet version in one commit.
   redirect `https://claude.ai/api/mcp/auth_callback`) and never calls
   registration; it sends `resource` on authorize and token requests and asks
   for every scope in `scopes_supported`. A revoked grant shows "Reconnect" and
-  widgets in existing chats stop rendering until then.
+  widgets in existing chats stop rendering until then. ChatGPT desktop
+  (`codex-mcp-client`) also presents a metadata document
+  (`https://chatgpt.com/oauth/codex/client.json`) with a loopback redirect on
+  a fresh port; after a revoked grant it gets `401` but does NOT prompt — the
+  model answers from other knowledge, which can read like the built-in
+  catalog. Check the server log before believing a host "fell back".
 - CSS: an author `display` rule defeats `[hidden]`; `var()` fallbacks fire
   only when the property is UNSET (defining `:root` defaults severed
   `surface → bg`; fallbacks resolve at theme-application time); headless
