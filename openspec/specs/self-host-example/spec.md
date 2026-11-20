@@ -6,11 +6,11 @@ A runnable self-hosted widgentic: one container image whose two services — an 
 ## Requirements
 
 ### Requirement: One image, two services, one store
-The example SHALL ship a single container image that runs either host, selected by the command, and a compose file that starts both against one shared data volume: an authoring app and a Streamable HTTP MCP endpoint. The MCP service SHALL hold a read-only handle on the store and SHALL expose no write path; the authoring app SHALL be the only writer. Both services SHALL read the same store with no cache between them, so an entry the app saves is served on the MCP endpoint's next tool call without a restart or an eviction step. All persistent state SHALL live on the mounted volume, so recreating the containers SHALL NOT lose a principal, an entry, a key digest or a secret record. Neither service SHALL require a cloud account, a managed identity or a network dependency beyond the store file. When the environment names an MCP upstream (`WIDGENTIC_MCP_UPSTREAM`, an http origin), the authoring app SHALL additionally forward requests under `/mcp` to that upstream unchanged — method, headers, body and streamed response — so one public origin can serve both surfaces behind one certificate; with the variable unset the app SHALL serve no `/mcp` route. The proxy SHALL add no authorization of its own: keys are resolved by the MCP service exactly as when it is reached directly.
+The example SHALL ship a single container image that runs either host, selected by the command, and a compose file that starts both against one shared data volume: an authoring app and a Streamable HTTP MCP endpoint. The MCP service SHALL hold a read-only handle on the store and SHALL expose no write path; the authoring app SHALL be the only writer. Both services SHALL read the same store with no cache between them, so an entry the app saves is served on the MCP endpoint's next tool call without a restart or an eviction step. All persistent state SHALL live on the mounted volume, so recreating the containers SHALL NOT lose a principal, an entry, a key digest or a secret record. Neither service SHALL require a cloud account, a managed identity or a network dependency beyond the store file. When the environment names an MCP upstream (`WIDGENTIC_MCP_UPSTREAM`, an http origin), the authoring app SHALL additionally forward requests under `/mcp`, and requests for the protected-resource metadata under `/.well-known/oauth-protected-resource`, to that upstream unchanged — method, headers, body and streamed response — so one public origin can serve both surfaces behind one certificate; with the variable unset the app SHALL serve no `/mcp` route and no protected-resource metadata. The proxy SHALL add no authorization of its own: keys and access tokens are resolved, and challenges are issued, by the MCP service exactly as when it is reached directly.
 
 #### Scenario: Both surfaces answer after one command
 - **WHEN** the compose stack is started with no configuration beyond the KEK
-- **THEN** the app SHALL serve its authoring shell and the MCP endpoint SHALL complete `initialize` and `tools/list`, each on its own port
+- **THEN** the app SHALL serve its authoring shell and the MCP service SHALL complete `initialize` and `tools/list` on its public endpoint, each on its own port
 
 #### Scenario: An entry saved in the app is in the next tool call
 - **WHEN** a widget is saved in the app and `list_widgets` is called on the MCP endpoint with a key of the same principal
@@ -27,6 +27,7 @@ The example SHALL ship a single container image that runs either host, selected 
 #### Scenario: One origin serves both surfaces
 - **WHEN** the app runs with `WIDGENTIC_MCP_UPSTREAM=http://localhost:8081` and a client posts an MCP `initialize` to the app's `/mcp` with an `x-api-key` header
 - **THEN** the response SHALL be the MCP service's response for that key, streamed as the service sent it
+- **AND** a request with no credential to the app's `/mcp` SHALL be answered with the MCP service's `401` challenge, and the app's `/.well-known/oauth-protected-resource/mcp` SHALL answer the MCP service's metadata
 - **AND WHEN** the variable is unset
 - **THEN** `/mcp` on the app SHALL answer 404
 
@@ -181,7 +182,7 @@ The MCP service SHALL accept one operator-supplied API key — from a mounted fi
 
 #### Scenario: Other keys resolve as before
 - **WHEN** a deployment key is configured and a different key is presented
-- **THEN** the presented key SHALL resolve through the store, or to the anonymous catalog when the store does not know it
+- **THEN** the presented key SHALL resolve through the store, and SHALL be answered with the endpoint's challenge when the store does not know it
 
 ### Requirement: The app has a Settings section
 The example SHALL offer a Settings section beside its Widgets, Themes, Data schemas, Actions and Keys sections, mounting the published settings designer with the principal's stored themes as its choices and the stored settings as its record, and saving it through the authoring surface's settings route; a refusal SHALL be shown to the person with its code and message. The Themes section's list SHALL show which themes are a default, and a theme deletion refused with `THEME_IN_USE` SHALL be shown with the refusal's message, leaving the theme listed. The widget designer SHALL open with the light default theme preselected as its preview theme; returning to the Widgets section SHALL keep the person's preview pick across the remount, and showing the section already shown — what an agent's tool call does — SHALL NOT remount it. The page's own element rules (its `header`, `nav`, `button`, `input` rules) SHALL be fenced out of the designers' preview (`:where(:not(.wgd-preview *))`), so the preview shows a widget as an MCP Apps host does. The WebMCP definition check SHALL read the widget designer only while the Widgets section is shown, so while the person is in another section a schema saved there is never reported as unknown; back in Widgets, a designer opened on a stored widget (View or Edit) keeps the shared entries it was opened with, as it always has. When the settings cannot be read, the Settings section SHALL open read-only with no Save, and once a later read succeeds it SHALL open the stored record rather than the read-only placeholder, so an empty record is never saved over the stored one.
@@ -251,3 +252,32 @@ The example's MCP endpoint SHALL compose the caller's `resources` on every reque
 #### Scenario: The designers preview with it
 - **WHEN** that person opens the Widgets section after saving
 - **THEN** the widget designer's preview SHALL carry the stylesheet in its `resources`
+
+### Requirement: Hosts sign in through the authoring app
+The MCP service SHALL protect `/mcp` and SHALL serve the built-in catalog on `/mcp/public`, as the `mcp-server` capability specifies, and its documentation SHALL state both URLs and that a host given the bare `/mcp` URL is sent to sign in. The authoring app SHALL mount the published authorization surface over the deployment's store, resolving the signed-in principal through the deployment's own identity mode and adding no authorization logic of its own: in single-principal mode the fixed principal SHALL be the signed-in one and the consent page SHALL be the first page a person sees; in trusted-header mode the header's subject SHALL be, and a request without it SHALL be offered only the anonymous choice. The issuer and the MCP resource SHALL come from the deployment's public origins (`WIDGENTIC_PUBLIC_URL` for the app, `WIDGENTIC_MCP_PUBLIC_URL` for the MCP endpoint, the latter defaulting to the former's `/mcp`); with no public origin configured the stack SHALL derive both from its default local ports. The signing secret SHALL come from a mounted file or a variable and SHALL be derived from the deployment's key-encryption key when neither is set, so tokens and client registrations survive a restart with no extra configuration. The MCP service SHALL keep its read-only store handle: resolving an access token SHALL require no write. The app's Keys section SHALL show, beside each key, the names of the applications connected through it as the authoring surface lists them, marked as reported by the application, and SHALL say that revoking the key disconnects them.
+
+#### Scenario: Adding the bare URL signs the host in
+- **WHEN** the stack runs in single-principal mode and an MCP client that implements the authorization flow is given the `/mcp` URL with no key
+- **THEN** it SHALL be challenged, discover the app as the authorization server, reach the consent page with no sign-in step, and — once a key is selected or created — list the principal's widgets with that key's scopes
+
+#### Scenario: The public URL needs nothing
+- **WHEN** a client is given the `/mcp/public` URL
+- **THEN** it SHALL complete `initialize` and list the built-in kinds with no challenge and no key
+
+#### Scenario: A proxied identity consents for its own account
+- **WHEN** trusted-header mode is on and two people complete the flow with different header values
+- **THEN** each client SHALL see only its own principal's widgets
+- **AND WHEN** an authorize request arrives without the header
+- **THEN** the page SHALL offer only the anonymous choice and no principal SHALL be served
+
+#### Scenario: The Keys section names what uses a key
+- **WHEN** a host registered as `Claude` completes the flow with key `ops` and the Keys section is opened
+- **THEN** the row for `ops` SHALL show `Claude` as a connected application, and a key no host is connected through SHALL show none
+
+#### Scenario: Connections survive a restart
+- **WHEN** both containers are recreated over the same volume with the same key-encryption key
+- **THEN** a client's refresh token SHALL still yield a token pair and its registered client id SHALL still be recognised
+
+#### Scenario: The MCP service still cannot write
+- **WHEN** an access token is resolved on the MCP service
+- **THEN** the store handle it used SHALL be the read-only port and no write SHALL have occurred
