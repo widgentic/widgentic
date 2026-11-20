@@ -163,6 +163,23 @@ Nothing here contradicts D7 or the specs.
 
 All three hosts complete the flow from the bare URL, and all three present a client metadata document: dynamic registration and the sealed client id (D7) were exercised only by the tests and by the scripted staging run, never by a host. Both stay — the MCP specification still names registration, and other clients use it — and no host finding called for a change to the specs or the code. The hosts differ only in what they do with a revoked grant: claude.ai offers "Reconnect", VS Code prompts again, ChatGPT stays silent.
 
+### D15 — Review findings (PR #70, 2026-11-20)
+
+An independent review found no critical issue and ten findings; nine were fixed and one is recorded.
+
+- **A failed `revokeKey` could not be finished** (Cosmos returned early on an already revoked key). The fan-out now runs every time.
+- **Rotation did not look at the key.** It does now, and ends the grant when the key is no longer live, so a grant that a failed or racing revocation left behind ends at its next refresh.
+- **A refresh token superseded two rotations ago was `unknown`, not a replay**, because only the last superseded record was kept. Superseded records now stay until their own expiry (at most one per rotation, swept by expiry in every adapter); `endGrant` still removes the grant's current and previous ones, and an older one whose grant is gone resolves to `unknown`.
+- **Parallel rotations could strand an access token** that no later revocation would find. The grant is now replaced conditionally (`replaceGrant`: a compare in memory, one transaction in SQLite, `IfMatch` in Cosmos); the loser removes what it minted and starts over, and the old access token is removed before the new pair is issued, so a failure part-way costs a refresh and never leaves a token nothing can end.
+- **A used code could end its grant forever, from anyone who later learned it.** Expiry is now checked first: past sixty seconds a code is `unknown` and ends nothing.
+- **A second exchange racing the first could not end a grant that was not written yet.** The loser marks the code; the winner re-reads it after writing and ends its own grant. Under a race both callers may therefore be refused — the right outcome for a code presented twice.
+- **The surface logged a failing component's message verbatim**, and the test that claimed to cover it read the wrong log. Failures are logged by kind; the Cosmos grant-path reads go through the same error mapping as the writes; the test reads the failing surface's own log.
+- **`OPTIONS` on a path the surface does not own was answered `405`** when the core was mounted ahead of a host's routes. It answers nothing for any path that is not its own.
+- **The memory adapter never dropped expired token records.** It sweeps on write, like SQLite.
+- **Automatic error redirects made the origin an open redirector** (anyone can register a client, then link a victim to a failing authorize request). Validation failures are now an error page with a link back, labelled unverified; nothing redirects before a person acts. This revises the requirement "The authorize step validates before it shows anything". Hosts lose the automatic error callback for a malformed request, which none of the three hosts sends.
+
+Recorded, not changed: a Cosmos container without time-to-live keeps expired token and code records until someone enables it. The hosted deployment's `keys` container gets time-to-live in the apps change; the adapter never relies on it.
+
 ## Risks / Trade-offs
 
 - **A host does not react to `401` on an existing connector** → people see a broken connector. Mitigation: D12 measures it; the error body names the fix; the hosted rollout is announced and the app's connect page shows the two URLs.

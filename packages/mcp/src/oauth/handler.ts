@@ -4,10 +4,11 @@
  * decoded requests. It stores nothing an unauthenticated visitor causes —
  * client ids, decision tokens and anonymous codes are sealed, not saved —
  * and it never learns who a person is: the host says who is signed in.
+ * Anyone can register a client, so nothing here sends a browser to a
+ * client's address until a person has acted on a page.
  */
 import { createHash, timingSafeEqual } from "node:crypto";
 import { isPlainObject } from "@widgentic/core";
-import { errorMessage } from "../internal.js";
 import { AUTHORIZATION_CODE_SECONDS, generateAnonymousToken, StoreRejectionError } from "../store/index.js";
 import type { IssuedTokens, Scope } from "../store/index.js";
 import { clientKey, redirectMatches, registerClient, resolveClient } from "./clients.js";
@@ -175,6 +176,9 @@ export function createAuthorizationSurface(deps: AuthorizationDeps): Authorizati
     pageResponse(status, (deps.renderPage ?? defaultPage)(page));
   const metadata = JSON.stringify(authorizationServerMetadata(issuer));
 
+  const paths: readonly string[] = Object.values(AUTHORIZATION_PATHS);
+  const owns = (path: string): boolean => paths.includes(path);
+
   function json(status: number, body: unknown): AuthorizationResponse {
     return {
       status,
@@ -234,8 +238,19 @@ export function createAuthorizationSurface(deps: AuthorizationDeps): Authorizati
       return errorPage(400, "This request cannot be completed", "The application asked to return to an address it did not register.");
     }
     const state = query.state;
+    // A page, not a redirect: registration is open, so an automatic redirect
+    // would let any link to this origin land on an address of the linker's
+    // choosing. The person may follow the link back; nothing follows it for them.
     const refuse = (error: string, description: string): AuthorizationResponse =>
-      redirect(presented, { error, error_description: description, state });
+      render(400, {
+        kind: "error",
+        title: "This request cannot be completed",
+        message: description,
+        back: {
+          href: redirect(presented, { error, error_description: description, state }).headers.Location ?? presented,
+          host: redirectHost(presented)
+        }
+      });
 
     if (query.response_type !== "code") return refuse("unsupported_response_type", "Only the code response type is supported.");
     const challenge = query.code_challenge;
@@ -396,6 +411,7 @@ export function createAuthorizationSurface(deps: AuthorizationDeps): Authorizati
 
   async function route(request: AuthorizationRequest): Promise<AuthorizationResponse | undefined> {
     const { path } = request;
+    if (!owns(path)) return undefined;
     const method = request.method.toUpperCase();
     const cors = CORS_ROUTES.includes(path);
     if (method === "OPTIONS") {
@@ -438,7 +454,6 @@ export function createAuthorizationSurface(deps: AuthorizationDeps): Authorizati
     return undefined;
   }
 
-  const paths: readonly string[] = Object.values(AUTHORIZATION_PATHS);
   const needsPrincipal = (path: string): boolean =>
     path === AUTHORIZATION_PATHS.authorize || path === AUTHORIZATION_PATHS.decision;
   // Says nothing about what failed: a page for the browser routes, an OAuth error for the rest.
@@ -448,15 +463,16 @@ export function createAuthorizationSurface(deps: AuthorizationDeps): Authorizati
       : oauthError(500, "server_error", "The request could not be completed.");
   return {
     failure,
-    owns: (path) => paths.includes(path),
+    owns,
     needsPrincipal,
     async handle(request) {
       try {
         return await route(request);
       } catch (error) {
-        // The failure is the store's or the host's; its text may name
-        // neither a token nor a code, but the client still learns nothing.
-        log(`widgentic oauth: ${request.method} ${request.path} failed — ${errorMessage(error)}`);
+        // Which kind of failure, never its text: a store's or a driver's
+        // message can carry the very code or digest it failed on.
+        const kind = error instanceof StoreRejectionError ? error.code : error instanceof Error ? error.name : "unknown";
+        log(`widgentic oauth: ${request.method} ${request.path} failed (${kind}).`);
         return failure(request.path);
       }
     }

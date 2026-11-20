@@ -40,20 +40,40 @@ Resolving an access token SHALL return `undefined` — never an error and never 
 - **THEN** both results SHALL be `undefined`
 
 ### Requirement: Codes are single-use and grants rotate
-An authorization code SHALL be consumable once and only within sixty seconds of being stored; consuming SHALL be atomic, so two concurrent exchanges yield one success. A second attempt to consume a code SHALL report the grant the first produced, so the caller can end it. Rotating a grant SHALL issue a new access token (one hour) and a new refresh token (thirty days from this use) and SHALL make the previous access token unresolvable at once; the previous refresh token SHALL be honored for sixty seconds after its rotation, and presenting it later SHALL be reported as a replay. Revoking a grant SHALL make every token of it unresolvable. `revokeKey` SHALL revoke every grant bound to that key in the same operation, and a principal's other keys and their grants SHALL be untouched.
+An authorization code SHALL be consumable once and only within sixty seconds of being stored; claiming it SHALL be atomic, so two exchanges never both succeed. A second attempt within the code's lifetime SHALL report the grant the first produced, so the caller can end it, and SHALL mark the code so that a first exchange still in flight ends its own grant; past its lifetime a code, used or not, SHALL be reported as unknown and SHALL end nothing. Rotating a grant SHALL issue a new access token (one hour) and a new refresh token (thirty days from this use) and SHALL make the previous access token unresolvable at once; a superseded refresh token SHALL be honored for sixty seconds after its rotation, and presenting it later — however many rotations ago it was superseded, until its own expiry — SHALL be reported as a replay. Rotation SHALL replace the grant conditionally, so of parallel rotations each caller receives a pair but only one pair is the grant's, and no token of the others SHALL remain resolvable. Rotation SHALL refuse, and end the grant, when the key it is bound to is no longer live. Revoking a grant SHALL make every token of it unresolvable. `revokeKey` SHALL revoke every grant bound to that key in the same operation — also when the key is already revoked, so repeating a revocation that failed part-way finishes it — and a principal's other keys and their grants SHALL be untouched.
 
 #### Scenario: Two exchanges, one success
-- **WHEN** the same code is consumed twice, concurrently or in sequence
+- **WHEN** the same code is consumed twice in sequence
 - **THEN** exactly one call SHALL succeed, and the other SHALL report the code as used together with the grant the first produced
+- **AND WHEN** the two arrive concurrently
+- **THEN** at most one SHALL succeed, at least one SHALL report the code as used, and no token issued for that code SHALL resolve once the caller has ended the reported grant
 
 #### Scenario: A late code is refused
 - **WHEN** a code is consumed more than sixty seconds after it was stored
 - **THEN** the call SHALL report it as unknown and no grant SHALL be created
+- **AND WHEN** a code that was exchanged in time is presented again after those sixty seconds
+- **THEN** the call SHALL report it as unknown and the grant it produced SHALL keep working
 
 #### Scenario: Rotation supersedes the old pair
 - **WHEN** a grant is rotated with its current refresh token
 - **THEN** the new access token SHALL resolve and the previous one SHALL NOT
 - **AND** the previous refresh token SHALL rotate again within sixty seconds and SHALL be reported as a replay after that
+
+#### Scenario: An old refresh token is still a replay
+- **WHEN** a grant has been rotated twice and its first refresh token is presented after the grace
+- **THEN** the call SHALL report a replay and every token of the grant SHALL stop resolving
+
+#### Scenario: Parallel rotations leave nothing behind
+- **WHEN** one refresh token is rotated by three callers at once and the grant's key is then revoked
+- **THEN** each caller SHALL have received a pair, exactly one access token SHALL have resolved before the revocation, and none SHALL resolve after it
+
+#### Scenario: A stranded grant ends at its next refresh
+- **WHEN** a key is revoked but one of its grants was not ended, and that grant's refresh token is presented
+- **THEN** the call SHALL issue nothing and the grant's access token SHALL stop resolving
+
+#### Scenario: A failed revocation is finished by repeating it
+- **WHEN** `revokeKey` stamps the key and then fails before every grant is ended, and is called again
+- **THEN** the second call SHALL end the remaining grants
 
 #### Scenario: Revoking a key ends its grants only
 - **WHEN** a principal holds grants through keys `laptop` and `ops`, and `ops` is revoked

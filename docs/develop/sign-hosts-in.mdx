@@ -122,6 +122,11 @@ it, and it appears in the key list by name so it can be revoked.
 The host receives a token that resolves to the anonymous principal — the
 built-in catalog, `read` only — and nothing is stored.
 
+**A request the surface refuses.** An error page, never an automatic redirect:
+anyone can register a client, so a link to your origin must not be able to
+send a browser on to an address of the linker's choosing. The page offers a
+link back to the application, marked unverified.
+
 The pages load no script and no external resource, cannot be framed and are
 never cached. Pass `renderPage` to supply your own markup; inline `<style>`
 blocks are allowed.
@@ -139,7 +144,9 @@ blocks are allowed.
 Lifetimes: an access token lasts one hour, a refresh token thirty days from
 its last use, an authorization code sixty seconds and one use. Refreshing
 rotates both tokens; a refresh token presented more than sixty seconds after
-it was rotated ends the grant. Revoking the key ends every grant bound to it.
+it was rotated ends the grant, and so does a code presented twice. Revoking
+the key ends every grant bound to it, and a grant whose key is gone ends at
+its next refresh in any case.
 
 Rotating `secret` invalidates client registrations; hosts register again.
 

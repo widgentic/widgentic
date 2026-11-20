@@ -171,7 +171,10 @@ pack:check`, `openspec validate` — all green; plus `dotnet test` when `dotnet/
   and the grant lives exactly as long as that key. Tokens are digests, token
   resolution is one read (the MCP service stays read-only), and nothing an
   unauthenticated visitor does is stored (client ids, the consent form and
-  anonymous codes are sealed, not saved).
+  anonymous codes are sealed, not saved). Anyone can register a client, so
+  the surface never sends a browser to a client's address before a person
+  has acted on a page: a refused authorize request is an error page with a
+  link, not a redirect.
 - Server assembly lives behind `@widgentic/mcp/sdk`; store and secrets are
   subpaths of `@widgentic/mcp`.
 - Exactly two repositories: this public one holds every package, every

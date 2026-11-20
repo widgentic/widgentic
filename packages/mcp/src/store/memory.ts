@@ -209,6 +209,11 @@ export function createMemoryStore(
         return found === undefined ? undefined : clone(found);
       },
       async writeToken(entry) {
+        // Expired records are swept on write; reads never rely on it.
+        const at = (options.now ?? Date.now)();
+        for (const [digest, held] of tokens) {
+          if (!(Date.parse(held.expiresAt) > at)) tokens.delete(digest);
+        }
         tokens.set(entry.digest, clone(entry));
       },
       async removeToken(digest) {
@@ -228,6 +233,12 @@ export function createMemoryStore(
         const own = grantRecords.get(grant.principalId) ?? new Map<string, GrantRecord>();
         own.set(grant.id, clone(grant));
         grantRecords.set(grant.principalId, own);
+      },
+      async replaceGrant(grant, expectedRefreshDigest) {
+        const own = grantRecords.get(grant.principalId);
+        if (own?.get(grant.id)?.refreshDigest !== expectedRefreshDigest) return false;
+        own.set(grant.id, clone(grant));
+        return true;
       },
       async removeGrant(principalId, grantId) {
         grantRecords.get(principalId)?.delete(grantId);

@@ -439,6 +439,21 @@ export function createSqliteStore(
             .run(grant.principalId, grant.id, JSON.stringify(grant))
         );
       },
+      async replaceGrant(grant, expectedRefreshDigest) {
+        // Read, compare and write under one write lock: of two rotations one replaces.
+        return tx(() => {
+          const row = db.prepare("SELECT json FROM grants WHERE principal_id = ? AND id = ?").get(grant.principalId, grant.id) as
+            | { json: string }
+            | undefined;
+          if (row === undefined || (JSON.parse(row.json) as GrantRecord).refreshDigest !== expectedRefreshDigest) return false;
+          db.prepare("UPDATE grants SET json = ? WHERE principal_id = ? AND id = ?").run(
+            JSON.stringify(grant),
+            grant.principalId,
+            grant.id
+          );
+          return true;
+        });
+      },
       async removeGrant(principalId, grantId) {
         write(() => db.prepare("DELETE FROM grants WHERE principal_id = ? AND id = ?").run(principalId, grantId));
       },

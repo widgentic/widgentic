@@ -398,6 +398,16 @@ describe("clients register without the server storing them", () => {
 });
 
 describe("the authorize step validates before it shows anything", () => {
+  /** The link an error page offers back to the client; the page itself never redirects. */
+  function backLink(response: AuthorizationResponse): URL {
+    expect(response.status).toBe(400);
+    expect(response.headers.Location).toBeUndefined();
+    expect(response.headers["Content-Type"]).toContain("text/html");
+    const link = parse(response.body).querySelector("a.button");
+    expect(link?.textContent).toBe("Return to host.example");
+    return new URL(link?.getAttribute("href") ?? "");
+  }
+
   it("a request without PKCE is refused to the client", async () => {
     const h = harness();
     const id = await clientId(h);
@@ -407,15 +417,35 @@ describe("the authorize step validates before it shows anything", () => {
       { code_challenge_method: undefined },
       { code_challenge: "short" }
     ]) {
-      const back = location(await authorize(h, id, undefined, extra));
+      const back = backLink(await authorize(h, id, undefined, extra));
       expect(back.origin + back.pathname).toBe(REDIRECT);
       expect(back.searchParams.get("error")).toBe("invalid_request");
       expect(back.searchParams.get("state")).toBe("state-1");
       expect(back.searchParams.get("iss")).toBe(ISSUER);
       expect(back.searchParams.get("code")).toBeNull();
     }
-    const wrongType = location(await authorize(h, id, undefined, { response_type: "token" }));
+    const wrongType = backLink(await authorize(h, id, undefined, { response_type: "token" }));
     expect(wrongType.searchParams.get("error")).toBe("unsupported_response_type");
+  });
+
+  it("a refused request never sends the browser to the client by itself", async () => {
+    // Registration is open: a link to this origin must not become a
+    // redirect to an address of the linker's choosing.
+    const h = harness();
+    const evil = String(
+      (await register(h, { client_name: "Totally Legit", redirect_uris: ["https://evil.example/landing"] })).body.client_id
+    );
+    const response = await call(h, {
+      method: "GET",
+      path: AUTHORIZATION_PATHS.authorize,
+      query: { client_id: evil, response_type: "code" }
+    });
+    expect(response.status).toBe(400);
+    expect(response.headers.Location).toBeUndefined();
+    const doc = parse(response.body);
+    expect(doc.querySelector("meta[http-equiv]")).toBeNull();
+    expect(doc.querySelector("a.button")?.textContent).toBe("Return to evil.example");
+    expect(doc.querySelector(".note")?.textContent).toContain("not verified");
   });
 
   it("an unknown resource is refused, and an absent one defaults to the first", async () => {
@@ -423,7 +453,7 @@ describe("the authorize step validates before it shows anything", () => {
     const person = await signedIn(h);
     const key = await h.store.createKey(person.principalId, "ops");
     const id = await clientId(h);
-    const back = location(await authorize(h, id, person, { resource: "https://elsewhere.example/mcp" }));
+    const back = backLink(await authorize(h, id, person, { resource: "https://elsewhere.example/mcp" }));
     expect(back.searchParams.get("error")).toBe("invalid_target");
     expect(back.searchParams.get("state")).toBe("state-1");
 
@@ -867,6 +897,11 @@ describe("the token endpoint exchanges codes and rotates refresh tokens", () => 
     expect(exploded.response.status).toBe(500);
     expect(exploded.body.error).toBe("server_error");
     expect(exploded.response.body).not.toContain("exploded");
+    // The failing surface's OWN log: the store's message named the code, the log line must not.
+    expect(failing.logs).toHaveLength(1);
+    expect(failing.logs[0]).toContain("failed (Error)");
+    expect(failing.logs.join("\n")).not.toMatch(/wgc_/);
+    expect(failing.logs.join("\n")).not.toContain("exploded");
 
     const secrets = [
       first.code,
@@ -938,6 +973,9 @@ describe("routing", () => {
     const h = harness();
     expect(await h.surface.handle({ method: "GET", path: "/oauth/unknown" })).toBeUndefined();
     expect(await h.surface.handle({ method: "GET", path: "/" })).toBeUndefined();
+    // Another route's preflight is that route's to answer.
+    expect(await h.surface.handle({ method: "OPTIONS", path: "/api/widgets" })).toBeUndefined();
+    expect(await h.surface.handle({ method: "POST", path: "/api/keys" })).toBeUndefined();
     expect(h.surface.owns("/api/keys")).toBe(false);
     expect((await call(h, { method: "POST", path: AUTHORIZATION_PATHS.metadata })).status).toBe(405);
     expect((await call(h, { method: "GET", path: AUTHORIZATION_PATHS.token })).status).toBe(405);

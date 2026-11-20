@@ -58,7 +58,18 @@ describeGrantContract("sqlite", async (options) => {
     },
     // Every file beside the database (the WAL included), as bytes.
     dump: async () =>
-      readdirSync(join(path, "..")).map((file) => readFileSync(join(path, "..", file), "latin1")).join("\n")
+      readdirSync(join(path, "..")).map((file) => readFileSync(join(path, "..", file), "latin1")).join("\n"),
+    // A second connection, as another process would hold: the key is
+    // stamped revoked and the adapter's fan-out never runs.
+    strandGrant: async (principalId, keyId) => {
+      const db = new DatabaseSync(path);
+      db.prepare("UPDATE keys SET revoked_at = ? WHERE principal_id = ? AND key_id = ?").run(
+        new Date(clock.now).toISOString(),
+        principalId,
+        keyId
+      );
+      db.close();
+    }
   };
 });
 

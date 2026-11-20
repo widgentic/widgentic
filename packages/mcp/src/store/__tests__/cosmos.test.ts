@@ -263,7 +263,15 @@ describeGrantContract("cosmos (structural fake)", async (options) => {
     advance: (seconds) => {
       clock.now += seconds * 1000;
     },
-    dump: async () => data.dump() + keys.dump()
+    dump: async () => data.dump() + keys.dump(),
+    strandGrant: async (principalId, keyId) => {
+      const doc = (JSON.parse(keys.dump()) as Doc[]).find(
+        (candidate) => candidate.principalId === principalId && candidate.keyId === keyId && candidate.type === undefined
+      );
+      if (doc === undefined) throw new Error("no such key document");
+      const { _etag: _etag, ...rest } = doc;
+      keys.seed({ ...rest, revokedAt: new Date(clock.now).toISOString() });
+    }
   };
 });
 
@@ -325,6 +333,58 @@ describe("cosmos adapter query shapes", () => {
     expect(await store.resolveAccessToken(exchange.tokens.accessToken, { resource })).toBeUndefined();
     expect(pointOps.filter((op) => op.op !== "read")).toEqual([]);
     expect(JSON.parse(keys.dump()).some((doc: { id: string }) => doc.id === digest)).toBe(true);
+  });
+
+  it("repeating a revocation that failed part-way finishes it", async () => {
+    const { client, keys } = fakeCosmos();
+    const store = createCosmosStore({ client, log: () => {} });
+    const p = await store.ensurePrincipal("shape:partial-revoke");
+    const key = await store.createKey(p.id, "ops");
+    const resource = "https://mcp.example/mcp";
+    const connect = async (clientName: string) => {
+      const code = await store.createAuthorizationCode(p.id, {
+        keyId: key.entry.id,
+        clientId: "client-a",
+        clientName,
+        resource,
+        redirectUri: "https://host.example/cb",
+        codeChallenge: "challenge"
+      });
+      const exchange = await store.exchangeAuthorizationCode(code, () => true);
+      if (exchange.status !== "issued") throw new Error("exchange failed");
+      return exchange.tokens;
+    };
+    const grants = [await connect("One"), await connect("Two"), await connect("Three")];
+
+    // The key document is stamped, then the service starts refusing deletes.
+    keys.failWith = { code: 429, ops: ["delete"] };
+    await expect(store.revokeKey(p.id, key.entry.id)).rejects.toMatchObject({ code: "STORE_ERROR" });
+    expect(await store.resolvePrincipal(key.key)).toBeUndefined();
+    const stillResolving = [];
+    for (const tokens of grants) {
+      if ((await store.resolveAccessToken(tokens.accessToken, { resource })) !== undefined) stillResolving.push(tokens);
+    }
+    expect(stillResolving.length).toBeGreaterThan(0);
+
+    // The person retries: the key is already revoked, and the grants end now.
+    keys.failWith = undefined;
+    await store.revokeKey(p.id, key.entry.id);
+    for (const tokens of grants) {
+      expect(await store.resolveAccessToken(tokens.accessToken, { resource })).toBeUndefined();
+      expect(await store.rotateGrant(tokens.refreshToken, "client-a")).toEqual({ status: "unknown" });
+    }
+    expect(await store.listGrants(p.id)).toEqual([]);
+  });
+
+  it("a grant-path failure carries no service text", async () => {
+    const { client, data } = fakeCosmos();
+    const store = createCosmosStore({ client, log: () => {} });
+    const p = await store.ensurePrincipal("shape:grant-read");
+    data.failWith = { code: 503, ops: ["read"] };
+    await expect(store.revokeGrant(p.id, "grant_x")).rejects.toMatchObject({
+      code: "STORE_ERROR",
+      detail: "readGrant failed (service code 503)."
+    });
   });
 
   it("the anonymous token touches no container, and an unreachable store resolves to nothing", async () => {

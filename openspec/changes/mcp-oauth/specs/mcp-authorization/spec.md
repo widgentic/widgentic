@@ -79,15 +79,19 @@ The surface SHALL accept two kinds of public client and SHALL store neither. A d
 - **AND** a registered `http://127.0.0.1/cb` SHALL match `http://127.0.0.1:53123/cb`
 
 ### Requirement: The authorize step validates before it shows anything
-The authorize route SHALL require `response_type=code`, a recognised client, a matching `redirect_uri`, a `code_challenge` with `code_challenge_method=S256`, and a `resource` that is one of the surface's resources — defaulting to the first when the parameter is absent. A request whose client or redirect URI cannot be trusted SHALL be answered with an error page and SHALL never redirect. Every other failure SHALL redirect to the client's redirect URI with the OAuth error code and the request's `state`. A valid request with a signed-in principal SHALL be answered with the consent page; every page the surface serves SHALL forbid framing, SHALL load no script, style, font or image from another origin, and SHALL NOT be cacheable.
+The authorize route SHALL require `response_type=code`, a recognised client, a matching `redirect_uri`, a `code_challenge` with `code_challenge_method=S256`, and a `resource` that is one of the surface's resources — defaulting to the first when the parameter is absent. A request whose client or redirect URI cannot be trusted SHALL be answered with an error page that offers no way on. Every other failure SHALL be answered with an error page that states the failure and offers a link to the client's redirect URI carrying the OAuth error code, the request's `state` and `iss`. Because anyone can register a client, the surface SHALL NOT send a browser to a client's address — by redirect or by any automatic means — before a person has acted on a page it served. A valid request with a signed-in principal SHALL be answered with the consent page; every page the surface serves SHALL forbid framing, SHALL load no script, style, font or image from another origin, and SHALL NOT be cacheable.
 
 #### Scenario: A request without PKCE is refused to the client
 - **WHEN** an authorize request from a recognised client omits `code_challenge`, or names `plain`
-- **THEN** the response SHALL redirect to the client's redirect URI with `error=invalid_request` and the original `state`
+- **THEN** the response SHALL be an error page, not a redirect, whose link back to the client's redirect URI carries `error=invalid_request` and the original `state`
+
+#### Scenario: A link to this origin is never an automatic redirect elsewhere
+- **WHEN** a client registered with a redirect URI on another site is named in an authorize request that fails validation
+- **THEN** the response SHALL carry no `Location` and no automatic refresh, and SHALL name the other site's host as unverified beside the link
 
 #### Scenario: An unknown resource is refused
 - **WHEN** an authorize request names a `resource` the surface was not constructed with
-- **THEN** the response SHALL redirect with `error=invalid_target`
+- **THEN** the error page's link back SHALL carry `error=invalid_target`
 - **AND WHEN** the parameter is absent
 - **THEN** the request SHALL proceed for the surface's first resource
 
@@ -139,7 +143,7 @@ The sign-in choice page SHALL let a visitor continue without an account. That ch
 - **THEN** the token endpoint SHALL answer `invalid_grant`
 
 ### Requirement: The token endpoint exchanges codes and rotates refresh tokens
-The token endpoint SHALL accept `application/x-www-form-urlencoded` requests for `authorization_code` and `refresh_token`. A code SHALL be exchangeable once, within sixty seconds of issue, only by the client and redirect URI it was issued to and only with the verifier matching its S256 challenge; a second exchange of the same code SHALL be refused and SHALL revoke the grant the first exchange produced. A successful exchange SHALL return a bearer access token valid for one hour, a refresh token, `expires_in` and the granted `scope`. A refresh SHALL return a new access token and a new refresh token and SHALL invalidate the previous pair; a refresh token presented more than sixty seconds after it was rotated SHALL revoke the grant. A refresh token SHALL expire thirty days after it was last used. Every refusal SHALL be an OAuth error response (`invalid_grant`, `invalid_client`, `invalid_request`, `unsupported_grant_type`), every response SHALL carry `Cache-Control: no-store`, and no token, code or verifier SHALL be written to a log.
+The token endpoint SHALL accept `application/x-www-form-urlencoded` requests for `authorization_code` and `refresh_token`. A code SHALL be exchangeable once, within sixty seconds of issue, only by the client and redirect URI it was issued to and only with the verifier matching its S256 challenge; a second exchange of the same code within those sixty seconds SHALL be refused and SHALL revoke the grant the first exchange produced, also when the two arrive at once. After those sixty seconds a code SHALL be refused and SHALL revoke nothing. A successful exchange SHALL return a bearer access token valid for one hour, a refresh token, `expires_in` and the granted `scope`. A refresh SHALL return a new access token and a new refresh token and SHALL invalidate the previous pair; a refresh token presented more than sixty seconds after it was rotated SHALL revoke the grant. A refresh token SHALL expire thirty days after it was last used. Every refusal SHALL be an OAuth error response (`invalid_grant`, `invalid_client`, `invalid_request`, `unsupported_grant_type`), every response SHALL carry `Cache-Control: no-store`, and no token, code or verifier SHALL be written to a log — a failure SHALL be logged by its kind, never by the failing component's own message. The surface SHALL answer only its own routes: for any other path, whatever the method, it SHALL answer nothing and leave the request to the host.
 
 #### Scenario: A code becomes a token pair
 - **WHEN** the client exchanges a fresh code with the matching verifier, client id and redirect URI
@@ -166,6 +170,12 @@ The token endpoint SHALL accept `application/x-www-form-urlencoded` requests for
 #### Scenario: Nothing secret is logged
 - **WHEN** any token request succeeds or fails
 - **THEN** the log sink SHALL have received no code, verifier, access token or refresh token
+- **AND WHEN** the store fails with a message that names the code
+- **THEN** the log line SHALL name the kind of failure and SHALL NOT contain that message
+
+#### Scenario: Other routes are the host's
+- **WHEN** a preflight or a request for a path the surface does not own reaches it
+- **THEN** it SHALL answer nothing, so the host's own route handles it
 
 ### Requirement: Revocation ends a grant
 The revocation endpoint SHALL accept an access token or a refresh token and SHALL end the grant it belongs to, answering `200` whether or not the token was known. Revoking the API key a grant is bound to SHALL end the grant with no further step.

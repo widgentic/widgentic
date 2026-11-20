@@ -23,6 +23,12 @@ export interface GrantContractContext {
   advance(seconds: number): void;
   /** Everything the backing holds, serialized — for the "digests only" check. */
   dump(): Promise<string>;
+  /**
+   * Mark a key revoked in the backing WITHOUT ending its grants — the state
+   * a revocation that failed part-way leaves. Absent where the backing
+   * cannot be reached around the adapter.
+   */
+  strandGrant?(principalId: string, keyId: string): Promise<void>;
 }
 
 export interface GrantContractOptions {
@@ -159,28 +165,38 @@ export function describeGrantContract(
       expect((await store.listKeys(p.id)).map((entry) => entry.name)).toEqual(["ops"]);
     });
 
-    it("two exchanges of one code yield one success", async () => {
+    it("two exchanges of one code yield at most one success, and none that stands", async () => {
       const { store } = await factory();
       const p = await store.ensurePrincipal("grants:once");
       const key = await store.createKey(p.id, "ops");
+
+      // In sequence: the first is issued, the second names its grant.
       const code = await store.createAuthorizationCode(p.id, request(key.entry.id));
-      const [a, b] = await Promise.all([
-        store.exchangeAuthorizationCode(code, () => true),
-        store.exchangeAuthorizationCode(code, () => true)
-      ]);
-      const issued = [a, b].filter((result) => result.status === "issued");
-      const used = [a, b].filter((result) => result.status === "used");
-      expect(issued).toHaveLength(1);
-      expect(used).toHaveLength(1);
-      const first = issued[0];
-      const second = used[0];
-      if (first?.status !== "issued" || second?.status !== "used") throw new Error("unreachable");
-      expect(second.grantId).toBe(first.tokens.grantId);
-      // In sequence too, and the caller can end the grant it names.
-      const later = await store.exchangeAuthorizationCode(code, () => true);
-      expect(later).toEqual({ status: "used", principalId: p.id, grantId: first.tokens.grantId });
+      const first = await store.exchangeAuthorizationCode(code, () => true);
+      if (first.status !== "issued") throw new Error("exchange failed");
+      const second = await store.exchangeAuthorizationCode(code, () => true);
+      expect(second).toEqual({ status: "used", principalId: p.id, grantId: first.tokens.grantId });
+      // The caller can end the grant it names.
       await store.revokeGrant(p.id, first.tokens.grantId);
       expect(await store.resolveAccessToken(first.tokens.accessToken, { resource: RESOURCE })).toBeUndefined();
+
+      // Concurrently: the claim is atomic, so never two; and the one that
+      // was claimed does not survive the other's attempt.
+      const raced = await store.createAuthorizationCode(p.id, request(key.entry.id));
+      const results = await Promise.all([
+        store.exchangeAuthorizationCode(raced, () => true),
+        store.exchangeAuthorizationCode(raced, () => true)
+      ]);
+      const issued = results.flatMap((result) => (result.status === "issued" ? [result.tokens] : []));
+      expect(issued.length).toBeLessThanOrEqual(1);
+      expect(results.filter((result) => result.status === "used").length).toBeGreaterThanOrEqual(1);
+      for (const result of results) {
+        if (result.status === "used") await store.revokeGrant(result.principalId, result.grantId);
+      }
+      for (const tokens of issued) {
+        expect(await store.resolveAccessToken(tokens.accessToken, { resource: RESOURCE })).toBeUndefined();
+      }
+      expect(await store.listGrants(p.id)).toEqual([]);
     });
 
     it("a mismatched exchange does not consume the code", async () => {
@@ -328,6 +344,100 @@ export function describeGrantContract(
       expect(await store.resolveAccessToken(a.accessToken, { resource: RESOURCE })).toBeUndefined();
       await store.revokeGrantByToken(b.accessToken);
       expect(await store.rotateGrant(b.refreshToken, "client-a")).toEqual({ status: "unknown" });
+      expect(await store.listGrants(p.id)).toEqual([]);
+    });
+
+    it("a superseded refresh token is a replay however many rotations ago", async () => {
+      const { store, advance } = await factory();
+      const p = await store.ensurePrincipal("grants:old-replay");
+      const key = await store.createKey(p.id, "ops");
+      const first = await connect(store, p.id, key.entry.id);
+      // Whoever took the first refresh token rotates twice, seconds apart.
+      const second = await store.rotateGrant(first.refreshToken, "client-a");
+      if (second.status !== "issued") throw new Error("rotation failed");
+      advance(5);
+      const third = await store.rotateGrant(second.tokens.refreshToken, "client-a");
+      if (third.status !== "issued") throw new Error("rotation failed");
+      // The rightful client presents the first one after the grace: the grant ends.
+      advance(REFRESH_GRACE_SECONDS + 30);
+      expect(await store.rotateGrant(first.refreshToken, "client-a")).toEqual({ status: "replay" });
+      expect(await store.resolveAccessToken(third.tokens.accessToken, { resource: RESOURCE })).toBeUndefined();
+      expect(await store.rotateGrant(third.tokens.refreshToken, "client-a")).toEqual({ status: "unknown" });
+      expect(await store.listGrants(p.id)).toEqual([]);
+    });
+
+    it("parallel rotations leave no token that outlives the grant", async () => {
+      const { store } = await factory();
+      const p = await store.ensurePrincipal("grants:parallel");
+      const key = await store.createKey(p.id, "ops");
+      const first = await connect(store, p.id, key.entry.id);
+      const results = await Promise.all([
+        store.rotateGrant(first.refreshToken, "client-a"),
+        store.rotateGrant(first.refreshToken, "client-a"),
+        store.rotateGrant(first.refreshToken, "client-a")
+      ]);
+      const issued = results.flatMap((result) => (result.status === "issued" ? [result.tokens] : []));
+      // Tabs and retries are expected: each caller gets a pair (the grace).
+      expect(issued).toHaveLength(3);
+      // Exactly one of them is the grant's current pair.
+      const resolving = [];
+      for (const tokens of issued) {
+        if ((await store.resolveAccessToken(tokens.accessToken, { resource: RESOURCE })) !== undefined) resolving.push(tokens);
+      }
+      expect(resolving).toHaveLength(1);
+      expect(await store.listGrants(p.id)).toHaveLength(1);
+      // And ending the grant ends every one of them.
+      await store.revokeKey(p.id, key.entry.id);
+      for (const tokens of [first, ...issued]) {
+        expect(await store.resolveAccessToken(tokens.accessToken, { resource: RESOURCE })).toBeUndefined();
+        expect((await store.rotateGrant(tokens.refreshToken, "client-a")).status).not.toBe("issued");
+      }
+    });
+
+    it("a used code past its lifetime is nothing, and cannot end the connection", async () => {
+      const { store, advance } = await factory();
+      const p = await store.ensurePrincipal("grants:leaked-code");
+      const key = await store.createKey(p.id, "ops");
+      const code = await store.createAuthorizationCode(p.id, request(key.entry.id));
+      const exchange = await store.exchangeAuthorizationCode(code, () => true);
+      if (exchange.status !== "issued") throw new Error("exchange failed");
+      advance(AUTHORIZATION_CODE_SECONDS + 1);
+      expect(await store.exchangeAuthorizationCode(code, () => false)).toEqual({ status: "unknown" });
+      expect((await store.resolveAccessToken(exchange.tokens.accessToken, { resource: RESOURCE }))?.id).toBe(p.id);
+    });
+
+    it("a second exchange that races the first still ends the grant", async () => {
+      const { store } = await factory();
+      const p = await store.ensurePrincipal("grants:race");
+      const key = await store.createKey(p.id, "ops");
+      const code = await store.createAuthorizationCode(p.id, request(key.entry.id));
+      // The loser acts on "used" at once, as the token endpoint does —
+      // possibly before the winner has written its grant.
+      const attempt = async () => {
+        const result = await store.exchangeAuthorizationCode(code, () => true);
+        if (result.status === "used") await store.revokeGrant(result.principalId, result.grantId);
+        return result;
+      };
+      const results = await Promise.all([attempt(), attempt()]);
+      expect(results.filter((result) => result.status === "used").length).toBeGreaterThanOrEqual(1);
+      for (const result of results) {
+        if (result.status === "issued") {
+          expect(await store.resolveAccessToken(result.tokens.accessToken, { resource: RESOURCE })).toBeUndefined();
+        }
+      }
+      expect(await store.listGrants(p.id)).toEqual([]);
+    });
+
+    it("a grant whose key is revoked ends at its next refresh, whatever the fan-out did", async () => {
+      const { store, strandGrant } = await factory();
+      if (strandGrant === undefined) return;
+      const p = await store.ensurePrincipal("grants:stranded");
+      const key = await store.createKey(p.id, "ops");
+      const tokens = await connect(store, p.id, key.entry.id);
+      // The key is revoked but its grant was left behind (a fan-out that failed).
+      await strandGrant(p.id, key.entry.id);
+      expect(await store.rotateGrant(tokens.refreshToken, "client-a")).toEqual({ status: "unknown" });
+      expect(await store.resolveAccessToken(tokens.accessToken, { resource: RESOURCE })).toBeUndefined();
       expect(await store.listGrants(p.id)).toEqual([]);
     });
   });

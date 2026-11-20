@@ -73,7 +73,13 @@ export type AuthorizationPage =
       decisionPath: string;
       decisionToken: string;
     }
-  | { kind: "error"; title: string; message: string };
+  | {
+      kind: "error";
+      title: string;
+      message: string;
+      /** A link back to the application, carrying the error — followed only if the person chooses to. */
+      back?: { href: string; host: string };
+    };
 
 export interface AuthorizationDeps {
   /** This deployment's issuer: an origin with no path, e.g. `https://example.com`. */

@@ -467,7 +467,8 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
       ...(doc.redirectUri === undefined ? {} : { redirectUri: doc.redirectUri }),
       ...(doc.codeChallenge === undefined ? {} : { codeChallenge: doc.codeChallenge }),
       ...(doc.usedAt === undefined ? {} : { usedAt: doc.usedAt }),
-      ...(doc.rotatedAt === undefined ? {} : { rotatedAt: doc.rotatedAt })
+      ...(doc.rotatedAt === undefined ? {} : { rotatedAt: doc.rotatedAt }),
+      ...(doc.replayedAt === undefined ? {} : { replayedAt: doc.replayedAt })
     };
   }
 
@@ -485,11 +486,20 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
     }
   }
 
+  /** A grant-path read: a service failure leaves here without the service's own text. */
+  async function read<T>(operation: string, work: () => Promise<T>): Promise<T> {
+    try {
+      return await work();
+    } catch (error) {
+      throw operationError(operation, error);
+    }
+  }
+
   const { revokeGrantsForKey, ...grantStore } = createGrantOperations(
     {
       async readToken(digest) {
         // The one read token resolution makes: id and partition are the digest.
-        const { resource } = await keys.item(digest, digest).read();
+        const { resource } = await read("readToken", () => keys.item(digest, digest).read());
         return tokenRecord(resource);
       },
       async writeToken(entry) {
@@ -503,7 +513,7 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
         await ignoreMissing("removeToken", () => keys.item(digest, digest).delete());
       },
       async claimCode(digest, usedAt) {
-        const { resource } = await keys.item(digest, digest).read();
+        const { resource } = await read("claimCode", () => keys.item(digest, digest).read());
         const entry = tokenRecord(resource);
         const etag = (resource as { _etag?: unknown } | undefined)?._etag;
         if (entry === undefined || entry.usedAt !== undefined || typeof etag !== "string") return false;
@@ -519,7 +529,7 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
         }
       },
       async readGrant(principalId, grantId) {
-        const { resource } = await data.item(`grant:${grantId}`, principalId).read();
+        const { resource } = await read("readGrant", () => data.item(`grant:${grantId}`, principalId).read());
         return (resource as { grant?: GrantRecord } | undefined)?.grant;
       },
       async writeGrant(grant) {
@@ -529,12 +539,30 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
           throw operationError("writeGrant", error);
         }
       },
+      async replaceGrant(grant, expectedRefreshDigest) {
+        const { resource } = await read("replaceGrant", () => data.item(`grant:${grant.id}`, grant.principalId).read());
+        const current = resource as { grant?: GrantRecord; _etag?: unknown } | undefined;
+        if (current?.grant?.refreshDigest !== expectedRefreshDigest || typeof current._etag !== "string") return false;
+        try {
+          // Conditional on the version read: a parallel rotation loses with 412.
+          await data
+            .item(`grant:${grant.id}`, grant.principalId)
+            .replace(
+              { id: `grant:${grant.id}`, principalId: grant.principalId, grant },
+              { accessCondition: { type: "IfMatch", condition: current._etag } }
+            );
+          return true;
+        } catch (error) {
+          if (isServiceError(error) && ["412", "404"].includes(String(error.code))) return false;
+          throw operationError("replaceGrant", error);
+        }
+      },
       async removeGrant(principalId, grantId) {
         await ignoreMissing("removeGrant", () => data.item(`grant:${grantId}`, principalId).delete());
       },
       async grants(principalId) {
         const out: GrantRecord[] = [];
-        for (const raw of await listByPrefix(principalId, "grant:")) {
+        for (const raw of await read("grants", () => listByPrefix(principalId, "grant:"))) {
           const grant = (raw as { grant?: GrantRecord }).grant;
           if (grant !== undefined) out.push(grant);
         }
@@ -1137,15 +1165,18 @@ export function createCosmosStore(options: CosmosStoreOptions): WritableWidgetSt
         .fetchAll();
       const doc = resources.find(isKeyDoc);
       if (doc === undefined) throw new StoreRejectionError("UNKNOWN_KEY", keyId);
-      if (doc.revokedAt !== undefined) return;
-      try {
-        await keys
-          .item(doc.id, doc.digest)
-          .replace({ ...doc, revokedAt: new Date().toISOString() });
-      } catch (error) {
-        throw operationError("revokeKey", error);
+      if (doc.revokedAt === undefined) {
+        try {
+          await keys
+            .item(doc.id, doc.digest)
+            .replace({ ...doc, revokedAt: new Date().toISOString() });
+        } catch (error) {
+          throw operationError("revokeKey", error);
+        }
       }
-      // A grant lives exactly as long as the key it is bound to.
+      // A grant lives exactly as long as the key it is bound to. This runs
+      // for an already revoked key too, so repeating a revocation that
+      // failed part-way finishes it.
       await revokeGrantsForKey(principalId, keyId);
     },
 

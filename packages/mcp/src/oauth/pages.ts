@@ -61,7 +61,12 @@ function hidden(name: string, value: string): string {
 /** The built-in markup for a page. */
 export function defaultPage(page: AuthorizationPage): string {
   if (page.kind === "error") {
-    return document(page.title, `<h1>${escapeHtml(page.title)}</h1><p>${escapeHtml(page.message)}</p>`);
+    const back =
+      page.back === undefined
+        ? ""
+        : `<div class="actions"><a class="button" href="${escapeHtml(page.back.href)}" rel="noreferrer">Return to ${escapeHtml(page.back.host)}</a></div>` +
+          `<p class="note">That address was supplied by the application and is not verified.</p>`;
+    return document(page.title, `<h1>${escapeHtml(page.title)}</h1><p>${escapeHtml(page.message)}</p>${back}`);
   }
   if (page.kind === "sign-in") {
     const links = page.signIn

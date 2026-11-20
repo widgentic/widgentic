@@ -34,6 +34,9 @@ export const DEFAULT_MAX_GRANTS = 50;
 /** A client's self-reported name is display text; this bounds it. */
 export const CLIENT_NAME_MAX_LENGTH = 80;
 
+/** How often a rotation that lost the grant write to a parallel one starts over. */
+const ROTATION_ATTEMPTS = 4;
+
 const TOKEN_BODY = /^[0-9a-f]{64}$/;
 
 function mint(prefix: string): string {
@@ -174,6 +177,8 @@ export interface GrantTokenRecord {
   usedAt?: string;
   /** Refresh tokens only: when a rotation superseded it. */
   rotatedAt?: string;
+  /** Codes only: a second exchange was attempted; the grant it produced must not stand. */
+  replayedAt?: string;
 }
 
 /** A grant's record, in its principal's own space. */
@@ -196,6 +201,12 @@ export interface GrantBackend {
   claimCode(digest: string, usedAt: string): Promise<boolean>;
   readGrant(principalId: string, grantId: string): Promise<GrantRecord | undefined>;
   writeGrant(grant: GrantRecord): Promise<void>;
+  /**
+   * Replace a grant only while it still names `expectedRefreshDigest` as its
+   * current refresh token. False when another rotation got there first or
+   * the grant is gone — the caller then discards what it minted.
+   */
+  replaceGrant(grant: GrantRecord, expectedRefreshDigest: string): Promise<boolean>;
   removeGrant(principalId: string, grantId: string): Promise<void>;
   grants(principalId: string): Promise<GrantRecord[]>;
   /** The scopes of a LIVE key of the principal; `undefined` when unknown or revoked. */
@@ -263,8 +274,13 @@ export function createGrantOperations(backend: GrantBackend, options: GrantOpera
     await backend.removeGrant(grant.principalId, grant.id);
   }
 
-  /** Mint a pair, write its records, and point the grant at them. */
-  async function issue(grant: GrantRecord, at: number): Promise<IssuedTokens> {
+  /**
+   * Mint a pair, write its records, and point the grant at them. A rotation
+   * names the refresh token it supersedes: when another rotation replaced
+   * the grant first, the pair minted here is removed again and nothing is
+   * issued, so no token outlives the grant that would have to end it.
+   */
+  async function issue(grant: GrantRecord, at: number, supersedes?: string): Promise<IssuedTokens | undefined> {
     const accessToken = mint(ACCESS_TOKEN_PREFIX);
     const refreshToken = mint(REFRESH_TOKEN_PREFIX);
     const shared = {
@@ -283,7 +299,14 @@ export function createGrantOperations(backend: GrantBackend, options: GrantOpera
     // at a token that does not exist.
     await backend.writeToken({ ...shared, digest: accessDigest, type: "access", expiresAt: iso(at + ACCESS_TOKEN_SECONDS * 1000) });
     await backend.writeToken({ ...shared, digest: refreshDigest, type: "refresh", expiresAt: refreshExpiresAt });
-    await backend.writeGrant({ ...grant, accessDigest, refreshDigest, refreshExpiresAt, lastUsedAt: iso(at) });
+    const next: GrantRecord = { ...grant, accessDigest, refreshDigest, refreshExpiresAt, lastUsedAt: iso(at) };
+    if (supersedes === undefined) {
+      await backend.writeGrant(next);
+    } else if (!(await backend.replaceGrant(next, supersedes))) {
+      await backend.removeToken(accessDigest);
+      await backend.removeToken(refreshDigest);
+      return undefined;
+    }
     return {
       grantId: grant.id,
       accessToken,
@@ -335,9 +358,16 @@ export function createGrantOperations(backend: GrantBackend, options: GrantOpera
       const digest = hashKey(code);
       const record = await backend.readToken(digest);
       if (record === undefined || record.type !== "code") return { status: "unknown" };
-      if (record.usedAt !== undefined) return { status: "used", principalId: record.principalId, grantId: record.grantId };
       const at = now();
+      // Lifetime first: past its sixty seconds a code is nothing at all, so
+      // a code that leaked later cannot be used to end anyone's connection.
       if (!(Date.parse(record.expiresAt) > at)) return { status: "unknown" };
+      const replayed = async (): Promise<CodeExchange> => {
+        // Marked on the record, so an exchange still in flight sees it too.
+        await backend.writeToken({ ...record, usedAt: record.usedAt ?? iso(at), replayedAt: iso(at) });
+        return { status: "used", principalId: record.principalId, grantId: record.grantId };
+      };
+      if (record.usedAt !== undefined) return replayed();
       const binding: AuthorizationCodeBinding = {
         clientId: record.clientId,
         redirectUri: record.redirectUri ?? "",
@@ -345,9 +375,7 @@ export function createGrantOperations(backend: GrantBackend, options: GrantOpera
         resource: record.resource
       };
       if (!matches(binding)) return { status: "mismatch" };
-      if (!(await backend.claimCode(digest, iso(at)))) {
-        return { status: "used", principalId: record.principalId, grantId: record.grantId };
-      }
+      if (!(await backend.claimCode(digest, iso(at)))) return replayed();
       // The key may have been revoked between consent and exchange.
       if ((await backend.keyScopes(record.principalId, record.keyId)) === undefined) return { status: "unknown" };
 
@@ -375,6 +403,14 @@ export function createGrantOperations(backend: GrantBackend, options: GrantOpera
         },
         at
       );
+      if (tokens === undefined) return { status: "unknown" };
+      // A second exchange may have arrived while this one was writing; its
+      // caller could not end a grant that did not exist yet, so end it here.
+      if ((await backend.readToken(digest))?.replayedAt !== undefined) {
+        const written = await backend.readGrant(record.principalId, record.grantId);
+        if (written !== undefined) await endGrant(written);
+        return { status: "used", principalId: record.principalId, grantId: record.grantId };
+      }
       return { status: "issued", tokens };
     },
 
@@ -384,21 +420,39 @@ export function createGrantOperations(backend: GrantBackend, options: GrantOpera
       if (record === undefined || record.type !== "refresh" || record.clientId !== clientId) return { status: "unknown" };
       const at = now();
       if (!(Date.parse(record.expiresAt) > at)) return { status: "unknown" };
-      const grant = await backend.readGrant(record.principalId, record.grantId);
-      if (grant === undefined) return { status: "unknown" };
-      if (record.rotatedAt !== undefined && at - Date.parse(record.rotatedAt) > REFRESH_GRACE_SECONDS * 1000) {
-        await endGrant(grant);
-        return { status: "replay" };
+      // Parallel refreshes are expected (tabs, retries): the one that loses
+      // the grant write starts over from the grant as it now stands.
+      for (let attempt = 0; attempt < ROTATION_ATTEMPTS; attempt++) {
+        const grant = await backend.readGrant(record.principalId, record.grantId);
+        if (grant === undefined) return { status: "unknown" };
+        // The key decides here as well as at revocation: a grant that a
+        // failed or racing revocation left behind ends at its next refresh.
+        if ((await backend.keyScopes(grant.principalId, grant.keyId)) === undefined) {
+          await endGrant(grant);
+          return { status: "unknown" };
+        }
+        const presented = attempt === 0 ? record : await backend.readToken(record.digest);
+        if (presented === undefined) return { status: "unknown" };
+        if (presented.digest !== grant.refreshDigest) {
+          // Superseded. Every superseded refresh token stays on record until
+          // its own expiry, so this is recognised however many rotations ago.
+          const rotatedAt = presented.rotatedAt === undefined ? at : Date.parse(presented.rotatedAt);
+          if (at - rotatedAt > REFRESH_GRACE_SECONDS * 1000) {
+            await endGrant(grant);
+            return { status: "replay" };
+          }
+        }
+        const superseded = { access: grant.accessDigest, refresh: grant.refreshDigest };
+        // The old access token goes first: a failure after this point costs
+        // the client a refresh, never leaves a token nothing can end.
+        await backend.removeToken(superseded.access);
+        const tokens = await issue({ ...grant, previousRefreshDigest: superseded.refresh }, at, superseded.refresh);
+        if (tokens === undefined) continue;
+        const old = await backend.readToken(superseded.refresh);
+        if (old !== undefined && old.rotatedAt === undefined) await backend.writeToken({ ...old, rotatedAt: iso(at) });
+        return { status: "issued", tokens };
       }
-      const superseded = { access: grant.accessDigest, refresh: grant.refreshDigest, before: grant.previousRefreshDigest };
-      const tokens = await issue({ ...grant, previousRefreshDigest: superseded.refresh }, at);
-      // The superseded refresh token stays on record, stamped, so a later
-      // presentation is recognised as a replay instead of as unknown.
-      const old = await backend.readToken(superseded.refresh);
-      if (old !== undefined && old.rotatedAt === undefined) await backend.writeToken({ ...old, rotatedAt: iso(at) });
-      await backend.removeToken(superseded.access);
-      if (superseded.before !== undefined && superseded.before !== record.digest) await backend.removeToken(superseded.before);
-      return { status: "issued", tokens };
+      return { status: "unknown" };
     },
 
     async revokeGrant(principalId, grantId) {
