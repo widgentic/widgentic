@@ -3,6 +3,12 @@
 Versions share their major.minor with the `@widgentic/mcp` release whose host bundle they embed:
 `Widgentic.Mcp` X.Y.* runs `@widgentic/mcp` X.Y.*. The patch moves on its own for .NET-only fixes.
 
+## 0.16.0
+
+Embeds the `@widgentic/mcp` 0.16.0 host bundle, which differs from 0.15.0's only in the version it reports. No .NET API changes and no behavior changes; this release keeps the package on the same major.minor as the npm release it pins.
+
+`@widgentic/mcp` 0.16.0 adds signing MCP hosts in (`@widgentic/mcp/oauth`) for Node hosts. That is not part of the host bundle and not part of this package: an ASP.NET host uses its own authorization stack.
+
 ## 0.15.0
 
 Embeds the `@widgentic/mcp` 0.15.0 host bundle. No .NET API changes; the behavior arrives through the bundle and the served app template.
