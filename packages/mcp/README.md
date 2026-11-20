@@ -29,7 +29,9 @@ Everything needed to host the widgentic engine over MCP:
   refresh, revocation — a pure request handler plus a `node:http` adapter.
   The host says who is signed in; the person selects or creates the API key
   the connecting application is bound to, and revoking that key ends the
-  connection. Nothing an unauthenticated visitor does is stored.
+  connection. Nothing an unauthenticated visitor does is stored. A host that
+  renders the pages itself (`renderPage`) may let them load styles, fonts,
+  images and scripts from their own origin (`pageAssets`, each opt-in).
 - `@widgentic/mcp/store` — the per-principal store port with memory and file
   implementations, composition and validation, including each principal's
   settings record (default themes; the `resourceDomains` a principal's

@@ -35,11 +35,13 @@ export type { AuthorizationServerMetadata, AuthorizationSurface } from "./handle
 export { createAuthorizationHttpHandler } from "./node.js";
 export type { AuthorizationHttpOptions } from "./node.js";
 export { MAX_REDIRECT_URIS, REGISTERED_CLIENT_PREFIX } from "./clients.js";
+export { PAGE_ASSET_KINDS } from "./types.js";
 export type {
   AuthorizationDeps,
   AuthorizationPage,
   AuthorizationRequest,
   AuthorizationResponse,
+  PageAssetKind,
   ResolveSignedIn,
   SignInLink,
   SignedInPrincipal

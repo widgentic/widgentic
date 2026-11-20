@@ -49,6 +49,10 @@ export interface AuthorizationResponse {
   body: string;
 }
 
+/** The kinds of asset a host may let the surface's pages load from their own origin. */
+export const PAGE_ASSET_KINDS = ["style", "font", "img", "script"] as const;
+export type PageAssetKind = (typeof PAGE_ASSET_KINDS)[number];
+
 /** What a page shows; a host's `renderPage` receives exactly this. */
 export type AuthorizationPage =
   | {
@@ -105,8 +109,18 @@ export interface AuthorizationDeps {
   log?: (line: string) => void;
   /** Epoch milliseconds; injected by tests. */
   now?: () => number;
-  /** A host's own page markup. Inline `<style>` blocks are allowed; nothing external will load. */
+  /**
+   * A host's own page markup. Inline `<style>` blocks are admitted by hash;
+   * nothing else loads unless `pageAssets` admits it.
+   */
   renderPage?: (page: AuthorizationPage) => string;
+  /**
+   * The kinds of asset the pages may load from THEIR OWN ORIGIN — a host's
+   * stylesheet, font files, logo, or a script it already serves. Each kind
+   * is opt-in; none by default. No other origin, no inline script and no
+   * framing can be admitted this way.
+   */
+  pageAssets?: readonly PageAssetKind[];
 }
 
 /**

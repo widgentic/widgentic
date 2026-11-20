@@ -522,6 +522,80 @@ describe("the authorize step validates before it shows anything", () => {
   });
 });
 
+describe("a host may admit its own origin on the pages", () => {
+  const directives = (response: AuthorizationResponse): Record<string, string[]> =>
+    Object.fromEntries(
+      (response.headers["Content-Security-Policy"] ?? "").split(";").map((part) => {
+        const [name, ...values] = part.trim().split(/\s+/);
+        return [name, values];
+      })
+    ) as Record<string, string[]>;
+  const branded = (page: { kind: string }): string =>
+    `<!doctype html><title>${page.kind}</title><link rel="stylesheet" href="/assets/palette.css">` +
+    `<style>body{font-family:"Brand"}</style><script src="/assets/theme.js"></script><img src="/assets/logo.svg" alt="">`;
+  const inlineHash = `'sha256-${createHash("sha256").update('body{font-family:"Brand"}').digest("base64")}'`;
+
+  it("the default admits nothing", async () => {
+    const plain = harness();
+    const withEmpty = harness({ pageAssets: [] });
+    const a = await authorize(plain, await clientId(plain));
+    const b = await authorize(withEmpty, await clientId(withEmpty));
+    expect(b.headers["Content-Security-Policy"]).toBe(a.headers["Content-Security-Policy"]);
+    const policy = directives(a);
+    expect(Object.keys(policy).sort()).toEqual(["base-uri", "default-src", "frame-ancestors", "style-src"]);
+    expect(a.headers["Content-Security-Policy"]).not.toContain("'self'");
+    expect(policy["style-src"]?.every((source) => source.startsWith("'sha256-"))).toBe(true);
+  });
+
+  it("a host brands its pages from its own origin", async () => {
+    const h = harness({ renderPage: branded, pageAssets: ["style", "font", "img", "script"] });
+    for (const page of [await authorize(h, await clientId(h)), await authorize(h, "wgd_forged")]) {
+      const policy = directives(page);
+      expect(policy["default-src"]).toEqual(["'none'"]);
+      expect(policy["style-src"]).toEqual(["'self'", inlineHash]);
+      expect(policy["font-src"]).toEqual(["'self'"]);
+      expect(policy["img-src"]).toEqual(["'self'"]);
+      expect(policy["script-src"]).toEqual(["'self'"]);
+    }
+  });
+
+  it("only what was named", async () => {
+    const h = harness({ renderPage: branded, pageAssets: ["style", "font"] });
+    const policy = directives(await authorize(h, await clientId(h)));
+    expect(policy["style-src"]).toEqual(["'self'", inlineHash]);
+    expect(policy["font-src"]).toEqual(["'self'"]);
+    expect(policy["img-src"]).toBeUndefined();
+    expect(policy["script-src"]).toBeUndefined();
+  });
+
+  it("the rest of the policy does not move", async () => {
+    const h = harness({ renderPage: branded, pageAssets: ["style", "font", "img", "script"] });
+    const page = await authorize(h, await clientId(h));
+    const header = page.headers["Content-Security-Policy"] ?? "";
+    for (const forbidden of ["unsafe-inline", "unsafe-eval", "data:", "blob:", "https:", "http:", "*"]) {
+      expect(header, forbidden).not.toContain(forbidden);
+    }
+    const policy = directives(page);
+    expect(policy["frame-ancestors"]).toEqual(["'none'"]);
+    expect(policy["base-uri"]).toEqual(["'none'"]);
+    expect(page.headers["X-Frame-Options"]).toBe("DENY");
+    expect(page.headers["Cache-Control"]).toBe("no-store");
+  });
+
+  it("an unknown kind is refused", () => {
+    const store = createMemoryStore();
+    expect(() =>
+      createAuthorizationSurface({
+        issuer: ISSUER,
+        resources: [RESOURCE],
+        secret: SECRET,
+        store,
+        pageAssets: ["style", "connect" as "style"]
+      })
+    ).toThrow(/connect/);
+  });
+});
+
 describe("consent binds the host to an API key the person selects or creates", () => {
   it("the person selects an existing key", async () => {
     const h = harness();
