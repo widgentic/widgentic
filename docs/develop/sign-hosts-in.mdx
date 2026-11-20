@@ -129,7 +129,20 @@ link back to the application, marked unverified.
 
 The pages load no script and no external resource, cannot be framed and are
 never cached. Pass `renderPage` to supply your own markup; inline `<style>`
-blocks are allowed.
+blocks are admitted by hash.
+
+To give them your brand, name the kinds of asset they may load **from their
+own origin** — your stylesheet, font files, logo, a script you already serve:
+
+```ts
+createAuthorizationHttpHandler(
+  { /* … */ renderPage: brandedPage, pageAssets: ["style", "font", "img", "script"] },
+  resolveSignedIn
+);
+```
+
+Each kind is opt-in and none is the default. No other origin, no inline
+script and no framing can be admitted this way.
 
 ## What is stored, and what is not
 
