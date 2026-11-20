@@ -4,8 +4,10 @@
 #   1. Generate a KEK once and keep it out of your shell history:
 #        node -e "console.log(require('crypto').randomBytes(32).toString('hex'))" > kek.txt && chmod 600 kek.txt
 #   2. docker compose up --build
-#   3. Author at http://localhost:8080/, mint a key under "Keys", and
-#      connect an agent host to http://localhost:8081/mcp with it.
+#   3. Author at http://localhost:8080/, then add http://localhost:8081/mcp
+#      to an agent host: it signs in through the app, or takes a key you
+#      mint under "Keys". http://localhost:8081/mcp/public needs neither
+#      and serves the built-in widgets.
 #
 # Both services read the same KEK — the app encrypts secret values, the MCP
 # endpoint decrypts them at action execution. Without a KEK everything works
@@ -35,13 +37,16 @@ services:
       # overwrites what you already hold, but a seeded entry you delete comes
       # back on restart; ignored in multi-user mode):
       # WIDGENTIC_SEED_FILE: /srv/docker/seed/demo.json
+      # Anywhere but localhost: the app's public origin, where hosts are sent
+      # to sign in. Set the SAME value on the mcp service below.
+      # WIDGENTIC_PUBLIC_URL: https://widgets.example.com
       # Single-origin hosting (one domain, one certificate — e.g. one Azure
       # Container App running both containers): forward /mcp to the MCP
       # service so agents connect to https://<your-origin>/mcp.
       # WIDGENTIC_MCP_UPSTREAM: http://mcp:8081
-      # The endpoint the Keys section tells people to connect to, when it is
-      # neither this origin's /mcp nor http://<host>:8081/mcp (a reverse proxy
-      # in front of the mcp service, for example):
+      # The MCP endpoint's public URL when it is not <WIDGENTIC_PUBLIC_URL>/mcp
+      # (a reverse proxy in front of the mcp service, for example). Tokens are
+      # issued for it and the Keys section shows it; set it on both services:
       # WIDGENTIC_MCP_PUBLIC_URL: https://mcp.example.com/mcp
       # Chrome 149+ / Edge 150 expose WebMCP on this origin without a flag
       # when the page carries an origin-trial token for it (register the
@@ -61,6 +66,9 @@ services:
       - widgentic-kek
     environment:
       WIDGENTIC_KEK_FILE: /run/secrets/widgentic-kek
+      # The same public origins as on the web service (see above):
+      # WIDGENTIC_PUBLIC_URL: https://widgets.example.com
+      # WIDGENTIC_MCP_PUBLIC_URL: https://mcp.example.com/mcp
 
 volumes:
   widgentic-data:

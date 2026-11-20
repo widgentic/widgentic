@@ -1,0 +1,164 @@
+---
+title: "Sign hosts in"
+description: "Let an MCP host connect by signing in instead of pasting a key: protect your endpoint, mount the authorization surface, and bind each host to one of the person's API keys."
+---
+
+An MCP host that is given a URL and gets `401` with a challenge opens a
+browser window and runs the OAuth flow of the MCP specification.
+`@widgentic/mcp/oauth` carries both halves of that flow for a server built on
+widgentic: what the **MCP endpoint** says and accepts, and the
+**authorization surface** a person signs in through.
+
+The surface never learns who a person is. Your host says who is signed in —
+by session, by a trusted proxy header, or a fixed principal — and the surface
+turns that into a grant bound to one of that person's API keys. The key is
+the unit of permission and of revocation: the grant carries the key's scopes
+and ends when the key is revoked.
+
+## Protect the endpoint
+
+`resolveCredential` holds the rule: an API key decides when one is presented,
+otherwise a bearer token does, and anything that resolves to nobody is a
+challenge.
+
+```ts
+import {
+  protectedResourceMetadata,
+  protectedResourceMetadataPaths,
+  resolveCredential
+} from "@widgentic/mcp/oauth";
+
+const resource = "https://mcp.example.com/mcp"; // this endpoint, as hosts address it
+const issuer = "https://example.com"; // where the authorization surface is mounted
+
+// Serve the metadata without credentials, at both paths hosts try:
+// protectedResourceMetadataPaths(resource)
+//   → ["/.well-known/oauth-protected-resource/mcp", "/.well-known/oauth-protected-resource"]
+const metadata = protectedResourceMetadata({ resource, authorizationServers: [issuer] });
+
+const outcome = await resolveCredential(
+  { apiKey: request.headers.get("x-api-key"), authorization: request.headers.get("authorization") },
+  {
+    resource,
+    resolveKey: (key) => store.resolvePrincipal(key),
+    resolveToken: (token, target) => store.resolveAccessToken(token, target)
+  }
+);
+if ("challenge" in outcome) {
+  return new Response(JSON.stringify({ jsonrpc: "2.0", error: { code: -32001, message: "Authorization required." }, id: null }), {
+    status: 401,
+    headers: { "Content-Type": "application/json", "WWW-Authenticate": outcome.challenge }
+  });
+}
+// outcome.principal → compose its catalog and build this request's server
+```
+
+Resolving a token is one read and never a write, so the endpoint keeps a
+read-only store handle. A token is accepted only by the resource it was
+issued for.
+
+Keep a second path that needs no credential and reads none — the built-in
+catalog for hosts without an account. The self-host deployment serves it at
+`/mcp/public`.
+
+<Note>
+A host starts the flow only on a `401`. A host that cannot sign in, or a
+person who closes the window, is left unconnected — the protocol gives the
+server no way to fall back. That is what the public path and the anonymous
+choice below are for.
+</Note>
+
+## Mount the authorization surface
+
+```ts
+import { createAuthorizationHttpHandler } from "@widgentic/mcp/oauth";
+
+const handleAuthorization = createAuthorizationHttpHandler(
+  {
+    issuer: "https://example.com", // an origin, no path
+    resources: ["https://mcp.example.com/mcp"],
+    secret: process.env.OAUTH_SECRET, // 32+ characters, stable across restarts
+    store, // a writable store: memory, SQLite or Cosmos
+    signIn: [{ label: "Sign in", href: "/auth/login" }]
+  },
+  // Who is signed in for this request? `undefined` when nobody is.
+  async (req) => {
+    const session = readSession(req);
+    return session === undefined ? undefined : { principalId: session.principalId, label: session.email };
+  }
+);
+
+// In your server: `true` means the response was written.
+if (await handleAuthorization(req, res)) return;
+```
+
+It answers six routes on the issuer's origin:
+
+| Route | What it does |
+|---|---|
+| `GET /.well-known/oauth-authorization-server` | the metadata hosts discover the rest from |
+| `POST /oauth/register` | dynamic client registration |
+| `GET /oauth/authorize` | validates the request, then shows sign-in or consent |
+| `POST /oauth/authorize/decision` | the consent form's answer |
+| `POST /oauth/token` | authorization code (PKCE S256) and refresh |
+| `POST /oauth/revoke` | ends a grant |
+
+A visitor who is not signed in sees your `signIn` links, each carrying a
+`return_to` query parameter — the authorize request's path and query on your
+own origin. Send the person back there once they are signed in.
+
+The core is a function over decoded requests (`createAuthorizationSurface`),
+so it can be tested without a socket and mounted on any server.
+
+## What a person sees
+
+**Consent.** The requesting application's name and the host of the address it
+returns to — both supplied by the application and labelled as unverified —
+then the person's API keys, and the choice to create one. Approving binds the
+host to that key. A key created here is never shown: the host does not need
+it, and it appears in the key list by name so it can be revoked.
+
+**Continue without an account.** Offered to a visitor who is not signed in.
+The host receives a token that resolves to the anonymous principal — the
+built-in catalog, `read` only — and nothing is stored.
+
+**A request the surface refuses.** An error page, never an automatic redirect:
+anyone can register a client, so a link to your origin must not be able to
+send a browser on to an address of the linker's choosing. The page offers a
+link back to the application, marked unverified.
+
+The pages load no script and no external resource, cannot be framed and are
+never cached. Pass `renderPage` to supply your own markup; inline `<style>`
+blocks are allowed.
+
+## What is stored, and what is not
+
+| | Stored |
+|---|---|
+| Access tokens, refresh tokens, authorization codes | yes — as digests, like keys |
+| Grants (which application, through which key, since when) | yes — in the principal's own space |
+| Registered clients | no — the client id carries its registration, sealed with `secret` |
+| The consent form's state | no — sealed into the form |
+| Anything an anonymous visitor does | no |
+
+Lifetimes: an access token lasts one hour, a refresh token thirty days from
+its last use, an authorization code sixty seconds and one use. Refreshing
+rotates both tokens; a refresh token presented more than sixty seconds after
+it was rotated ends the grant, and so does a code presented twice. Revoking
+the key ends every grant bound to it, and a grant whose key is gone ends at
+its next refresh in any case.
+
+Rotating `secret` invalidates client registrations; hosts register again.
+
+## Show what is connected
+
+Give the authoring surface the same store as `grants` and its key listing
+names the applications connected through each key:
+
+```ts
+createAuthoringHttpHandler({ store, grants: store }, resolveContext);
+// GET /keys → { keys: [{ id, name, scopes, …, connections: [{ clientName, createdAt, lastUsedAt }] }] }
+```
+
+`clientName` is the application's own; print it as text. `lastUsedAt` is the
+last token refresh.

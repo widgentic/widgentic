@@ -20,6 +20,11 @@ export interface StoreLimits {
   maxEntryBytes: number;
   /** Template nodes in a single stored template (structure, not output). */
   maxTemplateNodes: number;
+  /**
+   * Access grants (connected hosts). Optional so a host's own limits object
+   * stays valid; unset means 50. Past it the least recently used grant ends.
+   */
+  maxGrants?: number;
 }
 
 export const DEFAULT_LIMITS: StoreLimits = {

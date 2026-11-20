@@ -47,15 +47,16 @@ packages/designer   @widgentic/designer   widget/theme/schema/action designers, 
 packages/webmcp     @widgentic/webmcp   BETA: the designers as WebMCP tools (document.modelContext) — descriptor factory, feature-detected registration, dispose; outside the linked release group
 packages/mcp        @widgentic/mcp    output/ (tool-output convention), server/ (handlers, app template, actions, guarded fetch,
                                       server.ts = createWidgenticServer behind ./sdk), authoring/ (./authoring — the hostable write surface and the designers' preview frame),
+                                      oauth/ (./oauth — the protected endpoint's metadata and challenge, and the authorization surface hosts sign in through),
                                       store/ (./store, ./store/sqlite, ./store/cosmos), secrets/ (./secrets, ./secrets/keyvault),
                                       host/ (./host — the runtime-neutral bundle for embedded engines; scripts/bundle-host.mjs)
 dotnet/              Widgentic.Mcp (NuGet, BETA, render-only): the ./host bundle on ClearScript V8 + WithWidgentic on the C# MCP SDK;
                      tests/ (conformance corpus, protocol, engine), samples/Widgentic.Sample.Stdio; outside Changesets
 examples/mcp-server  stdio server with compiled-in widgets (`npm run mcp`); also the test-fixture package @widgentic-examples/mcp-server/widgets
 examples/designer    designer demo host (`npm run designer`; /standalone.html uses the published browser bundle)
-examples/docker      self-hosted deployment: authoring app + MCP endpoint over one SQLite volume (docker compose)
+examples/docker      self-hosted deployment: authoring app (which also signs hosts in) + MCP endpoint (/mcp protected, /mcp/public open) over one SQLite volume (docker compose)
 examples/shared      wiring the example hosts import (designer mount discipline, authoring client, preview-theme merge)
-tools/               boundaries.test.ts, exports.test.ts (snapshots of all 20 entries), pack-check.mjs, docs-generate.ts,
+tools/               boundaries.test.ts, exports.test.ts (snapshots of all 21 entries), pack-check.mjs, docs-generate.ts,
                      conformance-generate.ts (the host corpus + the .NET sample's seed, from examples/docker/seed), verify-host-pin.mjs (NuGet release gate)
 openspec/            specs/ (current behavior per capability), changes/ (active), changes/archive/ (full history)
 ```
@@ -161,8 +162,19 @@ pack:check`, `openspec validate` — all green; plus `dotnet test` when `dotnet/
   never from the request; secrets are referenced by name, injected only at
   execution, never displayed, always redacted.
 - Per-request composition, no caches (cross-tenant leaks); stores validate on
-  write and read; anonymous/unknown keys degrade to the built-in catalog,
-  never to an error.
+  write and read. A credential that resolves to nobody never reaches a
+  principal's catalog: a PROTECTED endpoint answers `401` with a sign-in
+  challenge, and the PUBLIC endpoint (`/mcp/public` in our hosts) reads no
+  credential and serves the built-in catalog, never an error.
+- Hosts sign in through `@widgentic/mcp/oauth`: the host says who is signed
+  in, the person selects or creates the API key the application is bound to,
+  and the grant lives exactly as long as that key. Tokens are digests, token
+  resolution is one read (the MCP service stays read-only), and nothing an
+  unauthenticated visitor does is stored (client ids, the consent form and
+  anonymous codes are sealed, not saved). Anyone can register a client, so
+  the surface never sends a browser to a client's address before a person
+  has acted on a page: a refused authorize request is an error page with a
+  link, not a redirect.
 - Server assembly lives behind `@widgentic/mcp/sdk`; store and secrets are
   subpaths of `@widgentic/mcp`.
 - Exactly two repositories: this public one holds every package, every
@@ -262,6 +274,21 @@ and the NuGet version in one commit.
   reliable gate; app-side `tools/list` is -32601 everywhere; partial tool
   input is size-gated by the host; claude.ai mounts a fresh iframe per render;
   the sandbox CSP blocks external images (hence server-side inlining).
+- MCP hosts signing in: claude.ai probes the URL when a connector is added
+  and preselects the sign-in mode from the `401`; by default it presents a
+  client metadata document (`https://claude.ai/oauth/mcp-oauth-client-metadata`,
+  redirect `https://claude.ai/api/mcp/auth_callback`) and never calls
+  registration; it sends `resource` on authorize and token requests and asks
+  for every scope in `scopes_supported`. A revoked grant shows "Reconnect" and
+  widgets in existing chats stop rendering until then. ChatGPT desktop
+  (`codex-mcp-client`) also presents a metadata document
+  (`https://chatgpt.com/oauth/codex/client.json`) with a loopback redirect on
+  a fresh port; after a revoked grant it gets `401` but does NOT prompt — the
+  model answers from other knowledge, which can read like the built-in
+  catalog. Check the server log before believing a host "fell back". VS Code
+  (`https://vscode.dev/oauth/client-metadata.json`, redirect
+  `http://127.0.0.1:33418/`) signs in on first use and prompts again after a
+  revoked grant. No host of the three calls dynamic registration.
 - CSS: an author `display` rule defeats `[hidden]`; `var()` fallbacks fire
   only when the property is UNSET (defining `:root` defaults severed
   `surface → bg`; fallbacks resolve at theme-application time); headless
@@ -289,6 +316,12 @@ and the NuGet version in one commit.
   stays null. Read the request's capabilities (`MetaKeys.ClientCapabilities`), and use
   `SessionMode = StatefulForInitializeClients` so initialize-based clients keep a session. Python `write_text` on Windows writes
   CRLF — edit with bytes or the editor tools.
+- OAuth pages: a `form-action` CSP directive is applied by browsers to the
+  redirect a form post answers with, so the consent page must not carry one —
+  the flow returns to the host by exactly that redirect. happy-dom's `fetch`
+  enforces CORS: tests that call a local server belong in a `node` environment.
+  Token and code records share the Cosmos `keys` container, so every key
+  query excludes documents with a `type`.
 - OpenSpec: a MODIFIED delta carries ALL original scenarios with their
   ORIGINAL titles (renames read as omissions); after big refactors cross-check
   other requirements in the same spec for stale passages.

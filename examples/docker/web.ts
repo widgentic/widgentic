@@ -5,7 +5,14 @@
  * one-time key reveal, the guarded test call, the API-key refusal) is
  * `@widgentic/mcp/authoring`'s, not this file's.
  *
+ * It also signs MCP hosts in: `@widgentic/mcp/oauth`'s authorization surface,
+ * mounted with this deployment's identity as "who is signed in" — again
+ * wiring only (sign-in.ts).
+ *
  * Run with: npm run web   (WIDGENTIC_WEB_PORT, default 8080;
+ * WIDGENTIC_PUBLIC_URL / WIDGENTIC_MCP_PUBLIC_URL name the public origins
+ * hosts sign in against and WIDGENTIC_OAUTH_SECRET[_FILE] the signing secret
+ * — see oauth-config.ts;
  * WIDGENTIC_SEED_FILE loads sample entries into the single principal at
  * boot; WIDGENTIC_MCP_UPSTREAM forwards /mcp to the MCP service for single-origin
  * deployments; WIDGENTIC_MCP_PUBLIC_URL names the endpoint the Keys section
@@ -22,6 +29,7 @@ import { createExecutionLimiter, DEFAULT_EXECUTIONS_PER_MINUTE, positiveIntFromE
 import { createAuthoringHttpHandler } from "@widgentic/mcp/authoring";
 import { createMcpProxy, mcpEndpointHint, withMcpEndpoint, withOriginTrial } from "./edge.js";
 import { createIdentity } from "./identity.js";
+import { createSignIn } from "./sign-in.js";
 import { seedOnStartup } from "./seed.js";
 import { openDeployment } from "./store.js";
 
@@ -41,9 +49,18 @@ const limiter = createExecutionLimiter(
 );
 
 const handleAuthoring = createAuthoringHttpHandler(
-  { store, secretsEnabled, limiter },
+  // `grants` lets the key listing name the applications connected through each key.
+  { store, grants: store, secretsEnabled, limiter },
   (req) => identity.resolve(req)
 );
+
+// Signing MCP hosts in, with this deployment's identity as "who is signed in".
+const signIn = createSignIn(store, identity, process.env);
+if ((process.env.WIDGENTIC_MCP_UPSTREAM ?? "").trim() !== "" && (process.env.WIDGENTIC_PUBLIC_URL ?? "").trim() === "") {
+  console.error(
+    "widgentic web: WIDGENTIC_MCP_UPSTREAM is set without WIDGENTIC_PUBLIC_URL — hosts would be sent to localhost to sign in; set it on both services"
+  );
+}
 
 // The client is bundled once at boot; the page palette is DERIVED from the
 // designer package's exported default, never written by hand (see the spec's
@@ -73,6 +90,11 @@ const ASSETS: Record<string, { body: string; type: string }> = {
 
 createServer((req, res) => {
   void (async () => {
+    // What MCP hosts call from other origins (discovery, registration, the
+    // token endpoint) is answered before the guard below; the consent form's
+    // POST is not among them and stays behind it.
+    const requestPath = new URL(req.url ?? "/", "http://localhost").pathname;
+    if (signIn.crossOrigin(requestPath) && (await signIn.handle(req, res))) return;
     // Browser CSRF guard for the no-sign-in deployment: a cross-site page
     // must not be able to author through the operator's browser. Browsers
     // send Sec-Fetch-Site; same-origin traffic and non-browser clients
@@ -83,6 +105,7 @@ createServer((req, res) => {
       return;
     }
     if (await handleAuthoring(req, res)) return;
+    if (await signIn.handle(req, res)) return;
     const url = new URL(req.url ?? "/", "http://localhost");
     const path = url.pathname;
     if (proxyMcp(req, res, path, url.search)) return;
@@ -102,5 +125,7 @@ createServer((req, res) => {
     res.end();
   });
 }).listen(PORT, () => {
-  console.error(`widgentic authoring app on http://localhost:${PORT}/ (${identity.mode} mode)`);
+  console.error(
+    `widgentic authoring app on http://localhost:${PORT}/ (${identity.mode} mode; signs hosts in for ${signIn.origins.resource} as ${signIn.origins.issuer})`
+  );
 });

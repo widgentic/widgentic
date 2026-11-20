@@ -38,9 +38,14 @@ The two services mirror the hosted product's split:
 | | `web` | `mcp` |
 |---|---|---|
 | store handle | writable | **read-only** (by the type it holds) |
-| authorized by | the deployment's identity (below) | API keys, resolved per request |
+| authorized by | the deployment's identity (below) | API keys and sign-in tokens, resolved per request |
 | an API key here | refused, `401 KEY_NOT_A_SESSION` | is the access model |
-| unknown caller | refused | served the built-in catalog, never an error |
+| unknown caller | refused | `/mcp`: `401` with a sign-in challenge · `/mcp/public`: the built-in catalog |
+
+A host given the bare `/mcp` URL is sent to the app to [sign in](/develop/sign-hosts-in):
+you choose or create the API key it will use, and revoking that key
+disconnects it. Anywhere but localhost, set `WIDGENTIC_PUBLIC_URL` on both
+services so hosts are sent to the right address.
 
 ## Identity without an identity provider
 

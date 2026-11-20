@@ -23,20 +23,50 @@ The widget and theme designers preview in the authoring surface's
 style policy the MCP endpoint declares for you (the resource domains in
 **Settings**), so a preview loads exactly what a conversation would.
 
-Mint a key under **Keys** (shown exactly once, together with the ready-to-paste
-`…/mcp?key=…` form). The Keys section also names the endpoint hosts connect
-to — `http://<host>:8081/mcp` by default, this origin's `/mcp` when the web
-service forwards it, or `WIDGENTIC_MCP_PUBLIC_URL` when you front it with
-something else. Then connect a host:
+## Connect a host
+
+The MCP service has two endpoints:
+
+| Endpoint | Needs | Serves |
+|---|---|---|
+| `http://localhost:8081/mcp` | a sign-in or an API key | your catalog |
+| `http://localhost:8081/mcp/public` | nothing | the built-in widgets |
+
+**Sign in from the host.** Add the bare URL to a host that supports MCP
+authorization and it opens this app, where you choose one of your API keys or
+create one for it. The host then works with that key's permissions and stops
+working when you revoke the key:
+
+```sh
+claude mcp add --transport http widgentic-self http://localhost:8081/mcp
+```
+
+**Or paste a key.** Mint one under **Keys** (shown exactly once, together with
+the ready-to-paste `…/mcp?key=…` form):
 
 ```sh
 claude mcp add --transport http widgentic-self http://localhost:8081/mcp --header "x-api-key: <your key>"
 ```
 
 Hosts whose connector settings cannot send headers can use
-`http://localhost:8081/mcp?key=<your key>`. A request without a key (or with
-an unknown one) is served the built-in catalog — never an error. `execute`
-is opt-in per key and is what lets your http actions run.
+`http://localhost:8081/mcp?key=<your key>`. `execute` is opt-in per key and is
+what lets your http actions run.
+
+The Keys section names the endpoint hosts connect to — `http://<host>:8081/mcp`
+by default, this origin's `/mcp` when the web service forwards it, or
+`WIDGENTIC_MCP_PUBLIC_URL` when you front it with something else — and, beside
+each key, the applications connected through it. Those names are the
+applications' own and are not verified.
+
+> **Changed in 0.16.** `/mcp` used to serve the built-in catalog to a request
+> with no key or an unknown one. It now answers `401` and tells the host where
+> to sign in. A host you configured with the bare URL and no key either signs
+> in, or moves to `/mcp/public`.
+
+Anywhere but `localhost`, set `WIDGENTIC_PUBLIC_URL` (and
+`WIDGENTIC_MCP_PUBLIC_URL` when the MCP endpoint is not `<that origin>/mcp`)
+on **both** services: hosts are sent to those addresses to sign in, and a
+token is only accepted by the endpoint it was issued for.
 
 ## Co-author with a browser agent (WebMCP)
 
@@ -66,9 +96,11 @@ picks up whatever the page has.
 ### One origin for both surfaces
 
 `WIDGENTIC_MCP_UPSTREAM=http://mcp:8081` on the `web` service forwards
-`/mcp` to the MCP service — method, headers, body and the streamed response
-untouched, no authorization added — so agents connect to
-`https://<your-origin>/mcp` and one certificate covers both. This is how the
+`/mcp` (and the sign-in metadata hosts read under
+`/.well-known/oauth-protected-resource`) to the MCP service — method, headers,
+body and the streamed response untouched, no authorization added — so agents
+connect to `https://<your-origin>/mcp` and one certificate covers both. Set
+`WIDGENTIC_PUBLIC_URL=https://<your-origin>` on both services with it. This is how the
 hosted challenge instance runs: one Azure Container App, two containers from
 this image sharing an ephemeral `/data` (a restart empties it — the compose
 file's named volume is the durable arrangement). `WIDGENTIC_ORIGIN_TRIAL_TOKEN`
@@ -84,15 +116,22 @@ The two services deliberately mirror the hosted product's split:
   identity (below) and never by an API key: a pasted key is refused with
   `401 KEY_NOT_A_SESSION`, because keys travel into prompt-injectable agent
   hosts and must never author.
-- **`mcp` holds a read-only handle** on the store and resolves keys to
-  principals per request; catalogs are composed per request, uncached, so
-  one principal's widgets never reach another's session.
+- **`mcp` holds a read-only handle** on the store and resolves keys and
+  access tokens to principals per request (a token is one read); catalogs are
+  composed per request, uncached, so one principal's widgets never reach
+  another's session.
+- **Signing a host in happens in `web`, in your browser.** The host never
+  sees a key: it gets a one-hour token and a refresh token, both bound to the
+  key you chose and to this MCP endpoint, and both dead the moment that key is
+  revoked. Client registrations and the consent form are sealed with a secret
+  derived from the KEK (or `WIDGENTIC_OAUTH_SECRET_FILE`), not stored.
 
 ## Identity
 
 Out of the box there is **one principal and no sign-in** — run it on
 localhost or a network you trust, and treat the app the way you would treat
-any admin panel with no login.
+any admin panel with no login. That includes signing hosts in: whoever can
+open the app can connect a host to the one account.
 
 For multi-user, put the deployment behind the auth proxy you already run
 (oauth2-proxy, Cloudflare Access, Authelia, Tailscale Serve) and set:
@@ -107,6 +146,14 @@ than convenient: while the variable is **unset the header is never read**, so
 a spoofed header changes nothing; once **set the app fails closed** — a
 request without the header is refused rather than served the default
 account. Your proxy MUST strip the header from inbound client requests.
+
+Signing a host in follows the same identity: the proxy's user chooses the key,
+for their own account. Let the proxy pass these paths **without** its login,
+because hosts call them directly: `/.well-known/oauth-authorization-server`,
+`/.well-known/oauth-protected-resource`, `/oauth/register`, `/oauth/token`,
+`/oauth/revoke`, and `/mcp`. Keep `/oauth/authorize` behind the login — a
+visitor who reaches it without the header is offered only the built-in
+widgets.
 
 ## Secrets and the KEK
 
@@ -139,8 +186,10 @@ cipher port accepts `createKeyVaultCipher` from `@widgentic/mcp/secrets/keyvault
 | `WIDGENTIC_EXECUTE_RATE` | 60 | per-principal action executions and test calls per minute |
 | `WIDGENTIC_PREVIEW_RATE` | 240 | per-principal `preview_widget` calls per minute: streaming previews of stored widgets, and the theme CSS a streamed built-in render asks for (one call per render, another only when its theme changes) |
 | `WIDGENTIC_MAX_BODY_BYTES` | 4194304 (4 MiB) | largest request body the `mcp` service reads; a larger one is refused with 413 |
-| `WIDGENTIC_MCP_UPSTREAM` | unset | on `web`: forward `/mcp` to this MCP service URL (one origin for both, above) |
-| `WIDGENTIC_MCP_PUBLIC_URL` | unset | on `web`: the endpoint the Keys section shows, when it is neither this origin's `/mcp` nor `http://<host>:8081/mcp` |
+| `WIDGENTIC_MCP_UPSTREAM` | unset | on `web`: forward `/mcp` and the sign-in metadata to this MCP service URL (one origin for both, above) |
+| `WIDGENTIC_PUBLIC_URL` | unset | on both: the app's public origin — where hosts are sent to sign in. Unset = `http://localhost:<web port>` |
+| `WIDGENTIC_MCP_PUBLIC_URL` | `<WIDGENTIC_PUBLIC_URL>/mcp` | on both: the MCP endpoint's public URL — what tokens are issued for, and what the Keys section shows. With neither set: `http://localhost:<mcp port>/mcp` |
+| `WIDGENTIC_OAUTH_SECRET_FILE` / `WIDGENTIC_OAUTH_SECRET` | derived from the KEK | on `web`: seals client registrations and the consent form (32+ characters). With no KEK either, a per-boot secret: hosts sign in again after a restart |
 | `WIDGENTIC_ORIGIN_TRIAL_TOKEN` | unset | on `web`: a Chrome origin-trial token for WebMCP on your origin |
 | `WIDGENTIC_SEED_FILE` | unset | JSON file of sample entries loaded into the single principal at boot (see below) |
 | `WIDGENTIC_DEFAULT_KEY_FILE` / `WIDGENTIC_DEFAULT_KEY` | unset | a fixed API key for the single principal, set on the `mcp` service (see below) |

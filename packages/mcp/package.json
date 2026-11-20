@@ -21,6 +21,10 @@
       "types": "./dist/authoring/index.d.ts",
       "default": "./dist/authoring/index.js"
     },
+    "./oauth": {
+      "types": "./dist/oauth/index.d.ts",
+      "default": "./dist/oauth/index.js"
+    },
     "./store": {
       "types": "./dist/store/index.d.ts",
       "default": "./dist/store/index.js"

@@ -21,6 +21,7 @@ import type {
 import { hashKey } from "../keys.js";
 import { DEFAULT_LIMITS } from "../types.js";
 import { describeStoreContract } from "./contract.js";
+import { describeGrantContract } from "./grant-contract.js";
 import { composeThemes } from "../compose.js";
 import { createLocalCipher, generateLocalKek } from "../../secrets/index.js";
 
@@ -86,6 +87,11 @@ class FakeContainer implements CosmosContainerLike {
     }
   }
 
+  /** Every stored document, serialized — what a dump of the account would show. */
+  dump(): string {
+    return JSON.stringify(this.all());
+  }
+
   seed(doc: Doc): void {
     this.partition(String(doc[this.pkField])).set(doc.id, this.stamp(doc));
   }
@@ -102,9 +108,15 @@ class FakeContainer implements CosmosContainerLike {
           ? { statusCode: 404 }
           : { statusCode: 200, resource: { ...doc } };
       },
-      replace: async (doc: unknown) => {
+      replace: async (doc: unknown, options?: { accessCondition?: { type: "IfMatch"; condition: string } }) => {
         record("replace");
         this.maybeFail("replace");
+        const existing = this.partition(partitionKey).get(id);
+        if (existing === undefined) throw { code: 404 };
+        // As the service answers a stale version: precondition failed.
+        if (options?.accessCondition !== undefined && existing._etag !== options.accessCondition.condition) {
+          throw { code: 412 };
+        }
         this.partition(partitionKey).set(id, this.stamp(doc as Doc));
         return {};
       },
@@ -135,6 +147,7 @@ class FakeContainer implements CosmosContainerLike {
         if (prefix !== undefined) rows = rows.filter((d) => d.id.startsWith(prefix));
         const keyId = spec.query.includes("@k") ? param(spec, "@k") : undefined;
         if (keyId !== undefined) rows = rows.filter((d) => d.keyId === keyId);
+        if (spec.query.includes("NOT IS_DEFINED(c.type)")) rows = rows.filter((d) => d.type === undefined);
         // The removeSchema in-use guard: filter by the widget's ref and
         // project the kind, mirroring the adapter's real query.
         const ref = spec.query.includes("@ref") ? param(spec, "@ref") : undefined;
@@ -237,6 +250,31 @@ describeStoreContract("cosmos (structural fake)", async () => {
   };
 });
 
+describeGrantContract("cosmos (structural fake)", async (options) => {
+  const { client, data, keys } = fakeCosmos();
+  const clock = { now: Date.parse("2026-11-01T00:00:00Z") };
+  return {
+    store: createCosmosStore({
+      client,
+      limits: { ...LIMITS, ...(options?.maxGrants === undefined ? {} : { maxGrants: options.maxGrants }) },
+      log: () => {},
+      now: () => clock.now
+    }),
+    advance: (seconds) => {
+      clock.now += seconds * 1000;
+    },
+    dump: async () => data.dump() + keys.dump(),
+    strandGrant: async (principalId, keyId) => {
+      const doc = (JSON.parse(keys.dump()) as Doc[]).find(
+        (candidate) => candidate.principalId === principalId && candidate.keyId === keyId && candidate.type === undefined
+      );
+      if (doc === undefined) throw new Error("no such key document");
+      const { _etag: _etag, ...rest } = doc;
+      keys.seed({ ...rest, revokedAt: new Date(clock.now).toISOString() });
+    }
+  };
+});
+
 /* --------------------------- query shapes ---------------------------- */
 
 describe("cosmos adapter query shapes", () => {
@@ -251,6 +289,152 @@ describe("cosmos adapter query shapes", () => {
     for (const q of dataQueries) {
       expect(q.options?.partitionKey, q.spec.query).toBe(p.id);
     }
+  });
+
+  it("token resolution is one point read by digest, decided from the record", async () => {
+    const { client, keys, queries, pointOps } = fakeCosmos();
+    const clock = { now: Date.parse("2026-11-01T00:00:00Z") };
+    const store = createCosmosStore({ client, log: () => {}, now: () => clock.now });
+    const p = await store.ensurePrincipal("shape:token");
+    const key = await store.createKey(p.id, "ops", ["read", "execute"]);
+    const resource = "https://mcp.example/mcp";
+    const code = await store.createAuthorizationCode(p.id, {
+      keyId: key.entry.id,
+      clientId: "client-a",
+      clientName: "Client A",
+      resource,
+      redirectUri: "https://host.example/cb",
+      codeChallenge: "challenge"
+    });
+    const exchange = await store.exchangeAuthorizationCode(code, () => true);
+    if (exchange.status !== "issued") throw new Error("exchange failed");
+    queries.length = 0;
+    pointOps.length = 0;
+
+    expect(await store.resolveAccessToken(exchange.tokens.accessToken, { resource })).toEqual({
+      id: p.id,
+      scopes: ["read", "execute"]
+    });
+    expect(queries).toEqual([]);
+    const digest = hashKey(exchange.tokens.accessToken);
+    expect(pointOps).toEqual([{ container: "keys", id: digest, partitionKey: digest, op: "read" }]);
+
+    // Token records carry a time-to-live for tidying, and a type that keeps
+    // them out of every key listing.
+    const stored = JSON.parse(keys.dump()) as { id: string; type?: string; ttl?: number }[];
+    const record = stored.find((doc) => doc.id === digest);
+    expect(record?.type).toBe("access");
+    expect(record?.ttl).toBe(3600);
+    expect((await store.listKeys(p.id)).map((entry) => entry.name)).toEqual(["ops"]);
+
+    // Expiry is the record's own: the container has not removed it yet.
+    clock.now += 3_601_000;
+    pointOps.length = 0;
+    expect(await store.resolveAccessToken(exchange.tokens.accessToken, { resource })).toBeUndefined();
+    expect(pointOps.filter((op) => op.op !== "read")).toEqual([]);
+    expect(JSON.parse(keys.dump()).some((doc: { id: string }) => doc.id === digest)).toBe(true);
+  });
+
+  it("repeating a revocation that failed part-way finishes it", async () => {
+    const { client, keys } = fakeCosmos();
+    const store = createCosmosStore({ client, log: () => {} });
+    const p = await store.ensurePrincipal("shape:partial-revoke");
+    const key = await store.createKey(p.id, "ops");
+    const resource = "https://mcp.example/mcp";
+    const connect = async (clientName: string) => {
+      const code = await store.createAuthorizationCode(p.id, {
+        keyId: key.entry.id,
+        clientId: "client-a",
+        clientName,
+        resource,
+        redirectUri: "https://host.example/cb",
+        codeChallenge: "challenge"
+      });
+      const exchange = await store.exchangeAuthorizationCode(code, () => true);
+      if (exchange.status !== "issued") throw new Error("exchange failed");
+      return exchange.tokens;
+    };
+    const grants = [await connect("One"), await connect("Two"), await connect("Three")];
+
+    // The key document is stamped, then the service starts refusing deletes.
+    keys.failWith = { code: 429, ops: ["delete"] };
+    await expect(store.revokeKey(p.id, key.entry.id)).rejects.toMatchObject({ code: "STORE_ERROR" });
+    expect(await store.resolvePrincipal(key.key)).toBeUndefined();
+    const stillResolving = [];
+    for (const tokens of grants) {
+      if ((await store.resolveAccessToken(tokens.accessToken, { resource })) !== undefined) stillResolving.push(tokens);
+    }
+    expect(stillResolving.length).toBeGreaterThan(0);
+
+    // The person retries: the key is already revoked, and the grants end now.
+    keys.failWith = undefined;
+    await store.revokeKey(p.id, key.entry.id);
+    for (const tokens of grants) {
+      expect(await store.resolveAccessToken(tokens.accessToken, { resource })).toBeUndefined();
+      expect(await store.rotateGrant(tokens.refreshToken, "client-a")).toEqual({ status: "unknown" });
+    }
+    expect(await store.listGrants(p.id)).toEqual([]);
+  });
+
+  it("a grant-path failure carries no service text", async () => {
+    const { client, data } = fakeCosmos();
+    const store = createCosmosStore({ client, log: () => {} });
+    const p = await store.ensurePrincipal("shape:grant-read");
+    data.failWith = { code: 503, ops: ["read"] };
+    await expect(store.revokeGrant(p.id, "grant_x")).rejects.toMatchObject({
+      code: "STORE_ERROR",
+      detail: "readGrant failed (service code 503)."
+    });
+  });
+
+  it("the anonymous token touches no container, and an unreachable store resolves to nothing", async () => {
+    const { client, keys, queries, pointOps } = fakeCosmos();
+    const store = createCosmosStore({ client, log: () => {} });
+    const resource = "https://mcp.example/mcp";
+    expect((await store.resolveAccessToken(`wgn_${"a".repeat(64)}`, { resource }))?.id).toBe("anonymous");
+    expect(queries).toEqual([]);
+    expect(pointOps).toEqual([]);
+    keys.failWith = { code: 503, ops: ["read"] };
+    expect(await store.resolveAccessToken(`wga_${"a".repeat(64)}`, { resource })).toBeUndefined();
+  });
+
+  it("an account written before grants existed reads unchanged and accepts a first grant", async () => {
+    const { client, data, keys } = fakeCosmos();
+    const digest = hashKey("wgk_" + "c".repeat(64));
+    // The shapes 0.15.0 wrote: a profile, and a key document with no type.
+    data.seed({ id: "profile", principalId: "usr_old", subject: "old:subject", scopes: ["read"] });
+    keys.seed({
+      id: digest,
+      digest,
+      principalId: "usr_old",
+      keyId: "key_old",
+      name: "laptop",
+      scopes: ["read", "execute"],
+      createdAt: "2026-10-01T00:00:00.000Z"
+    });
+    const before = { data: data.dump(), keys: keys.dump() };
+    const store = createCosmosStore({ client, log: () => {} });
+    expect(await store.resolvePrincipal("wgk_" + "c".repeat(64))).toEqual({ id: "usr_old", scopes: ["read", "execute"] });
+    expect((await store.listKeys("usr_old")).map((entry) => entry.id)).toEqual(["key_old"]);
+    expect(await store.listGrants("usr_old")).toEqual([]);
+    expect({ data: data.dump(), keys: keys.dump() }).toEqual(before);
+
+    const resource = "https://mcp.example/mcp";
+    const code = await store.createAuthorizationCode("usr_old", {
+      keyId: "key_old",
+      clientId: "client-a",
+      clientName: "Client A",
+      resource,
+      redirectUri: "https://host.example/cb",
+      codeChallenge: "challenge"
+    });
+    const exchange = await store.exchangeAuthorizationCode(code, () => true);
+    if (exchange.status !== "issued") throw new Error("exchange failed");
+    expect((await store.resolveAccessToken(exchange.tokens.accessToken, { resource }))?.id).toBe("usr_old");
+    const oldDocs = (dump: string): unknown[] =>
+      (JSON.parse(dump) as { id: string; type?: string }[]).filter((doc) => doc.type === undefined && !doc.id.startsWith("grant:"));
+    expect(oldDocs(data.dump())).toEqual(oldDocs(before.data));
+    expect(oldDocs(keys.dump())).toEqual(oldDocs(before.keys));
   });
 
   it("key resolution is a point read by digest, never a query", async () => {

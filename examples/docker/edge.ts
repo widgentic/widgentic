@@ -1,6 +1,7 @@
 /**
  * What a single-origin deployment needs from the web service, and nothing
- * else: forward `/mcp` to the MCP service when the environment names one
+ * else: forward `/mcp` — and the protected-resource metadata hosts read
+ * before signing in — to the MCP service when the environment names one
  * (one public origin, one certificate — a Container App with two containers,
  * a reverse-proxy-less VPS), and carry a Chrome origin-trial token into the
  * page when the environment supplies one, and tell the page where its MCP
@@ -10,20 +11,24 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { request as httpRequest } from "node:http";
 
+const PROTECTED_RESOURCE_METADATA = "/.well-known/oauth-protected-resource";
+
 export type McpProxy = (req: IncomingMessage, res: ServerResponse, path: string, search: string) => boolean;
 
 /**
- * A handler that forwards `/mcp` (and anything under it) to `upstream` with
- * method, headers, body and the streamed response untouched — Streamable HTTP
- * is SSE-shaped, so nothing is buffered. It adds no authorization: the MCP
- * service resolves the key exactly as when reached directly. Returns false
+ * A handler that forwards `/mcp` (and anything under it) and the
+ * protected-resource metadata to `upstream` with method, headers, body and
+ * the streamed response untouched — Streamable HTTP is SSE-shaped, so nothing
+ * is buffered. It adds no authorization: the MCP service resolves keys and
+ * tokens, and challenges, exactly as when reached directly. Returns false
  * (nothing done) for other paths, and always when no upstream is configured.
  */
 export function createMcpProxy(upstream: string | undefined): McpProxy {
   if (upstream === undefined || upstream === "") return () => false;
   const base = new URL(upstream);
   return (req, res, path, search) => {
-    if (path !== "/mcp" && !path.startsWith("/mcp/")) return false;
+    const metadata = path === PROTECTED_RESOURCE_METADATA || path.startsWith(`${PROTECTED_RESOURCE_METADATA}/`);
+    if (path !== "/mcp" && !path.startsWith("/mcp/") && !metadata) return false;
     const target = new URL(path + search, base);
     const headers = { ...req.headers, host: target.host };
     delete headers.connection;

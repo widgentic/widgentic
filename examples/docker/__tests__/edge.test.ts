@@ -71,6 +71,25 @@ describe("the /mcp forward", () => {
     expect(seen).toEqual([{ method: "POST", url: "/mcp?key=abc", key: "k-123", body }]);
   });
 
+  it("forwards the protected-resource metadata hosts read before signing in", async () => {
+    const seen: Seen[] = [];
+    const mcp = await upstream(seen);
+    const origin = await app(createMcpProxy(mcp));
+    for (const path of ["/.well-known/oauth-protected-resource/mcp", "/.well-known/oauth-protected-resource", "/mcp/public"]) {
+      expect((await fetch(`${origin}${path}`)).status, path).toBe(200);
+    }
+    expect(seen.map((request) => request.url)).toEqual([
+      "/.well-known/oauth-protected-resource/mcp",
+      "/.well-known/oauth-protected-resource",
+      "/mcp/public"
+    ]);
+    // The app's own well-known documents are not the MCP service's to answer.
+    expect((await fetch(`${origin}/.well-known/oauth-authorization-server`)).status).toBe(404);
+    expect((await fetch(`${origin}/.well-known/oauth-protected-resourcex`)).status).toBe(404);
+    const unset = await app(createMcpProxy(undefined));
+    expect((await fetch(`${unset}/.well-known/oauth-protected-resource/mcp`)).status).toBe(404);
+  });
+
   it("does nothing for other paths, and for everything when unset", async () => {
     const seen: Seen[] = [];
     const mcp = await upstream(seen);

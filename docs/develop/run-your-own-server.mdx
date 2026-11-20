@@ -83,7 +83,7 @@ Catalog and themes are passed in because the trust decision belongs where the AP
 
 The assembly is transport-agnostic. Serve it through the SDK's entries, which speak protocol revision 2026-07-28 and the 2025-era revisions from the same factory: `serveStdio(factory)` over stdio, and `createMcpHandler(factory)` over Streamable HTTP. A server connected to a transport directly (in-memory pipes in tests, for example) speaks the 2025 era only.
 
-Over HTTP the handler calls the factory once per request with the inbound `Request`. Resolve the caller's principal from the presented API key there, and build that request's server. Composition caches nothing, so one principal's widgets never reach another's session. A key that resolves to no principal degrades to the anonymous catalog, never to an error, and is never logged. On Node, wrap the handler with `toNodeHandler` from `@modelcontextprotocol/node`:
+Over HTTP the handler calls the factory once per request with the inbound `Request`. Resolve the caller's principal from the presented API key there, and build that request's server. Composition caches nothing, so one principal's widgets never reach another's session. What a key that resolves to no principal gets is your edge's decision: the anonymous catalog, or — on an endpoint hosts [sign in](/develop/sign-hosts-in) to — a `401` challenge. Either way it is never logged. On Node, wrap the handler with `toNodeHandler` from `@modelcontextprotocol/node`:
 
 ```ts
 import { createServer } from "node:http";

@@ -19,7 +19,14 @@ import type { PrincipalSettings, SecretEntry, StoredKey, StoredSchema, StoredWid
 export type WidgetEntry = StoredWidget;
 export type Settings = PrincipalSettings;
 export type SchemaEntry = StoredSchema;
-export type KeyEntry = StoredKey;
+/** An application connected through a key: its own name (unverified) and two timestamps. */
+export interface KeyConnection {
+  clientName: string;
+  createdAt: string;
+  lastUsedAt: string;
+}
+/** A key as the authoring surface lists it; `connections` is present when the host has access grants. */
+export type KeyEntry = StoredKey & { connections?: KeyConnection[] };
 export type { SecretEntry };
 export type ActionTestResult = TestActionResult;
 
