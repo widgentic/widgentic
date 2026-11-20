@@ -426,6 +426,7 @@ exports[`published export surfaces > @widgentic/mcp/oauth 1`] = `
   "DECISION_SECONDS",
   "MAX_REDIRECT_URIS",
   "OAUTH_SCOPES",
+  "PAGE_ASSET_KINDS",
   "REGISTERED_CLIENT_PREFIX",
   "authorizationServerMetadata",
   "bearerChallenge",

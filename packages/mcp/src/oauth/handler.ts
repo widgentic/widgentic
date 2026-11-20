@@ -15,6 +15,7 @@ import { clientKey, redirectMatches, registerClient, resolveClient } from "./cli
 import { defaultPage, pageResponse } from "./pages.js";
 import { OAUTH_SCOPES } from "./resource.js";
 import { open, seal } from "./seal.js";
+import { PAGE_ASSET_KINDS } from "./types.js";
 import type { AuthorizationDeps, AuthorizationPage, AuthorizationRequest, AuthorizationResponse, SignedInPrincipal } from "./types.js";
 
 /** The routes, on the issuer's origin. */
@@ -172,8 +173,14 @@ export function createAuthorizationSurface(deps: AuthorizationDeps): Authorizati
   const secret = deps.secret;
   const now = deps.now ?? Date.now;
   const log = deps.log ?? ((line: string) => console.error(line));
+  const pageAssets = deps.pageAssets ?? [];
+  for (const kind of pageAssets) {
+    if (!PAGE_ASSET_KINDS.some((known) => known === kind)) {
+      throw new Error(`widgentic oauth: unknown page asset kind '${String(kind)}'.`);
+    }
+  }
   const render = (status: number, page: AuthorizationPage): AuthorizationResponse =>
-    pageResponse(status, (deps.renderPage ?? defaultPage)(page));
+    pageResponse(status, (deps.renderPage ?? defaultPage)(page), pageAssets);
   const metadata = JSON.stringify(authorizationServerMetadata(issuer));
 
   const paths: readonly string[] = Object.values(AUTHORIZATION_PATHS);

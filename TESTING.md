@@ -429,6 +429,8 @@ workspace and the sample first, then point at the built DLL):
 
 ## Verification log
 
+- **Own-origin assets on the sign-in pages (2026-11-20, change `oauth-page-assets`, on `feature/oauth-page-assets`; an mcp patch pending release)**: `pageAssets` lets a host that renders the authorization pages itself load styles, fonts, images and scripts from the pages' own origin. Five tests on the served policy, parsed into directives: with nothing named the header is identical to the one served without the option; each named kind adds `'self'` to its own directive and to no other; inline styles are still admitted only by hash; no `unsafe-inline`, scheme or host source appears with every kind named; framing stays forbidden and the page uncacheable; an unknown kind fails construction.
+
 - **Signing hosts in (2026-11-11, change `mcp-oauth`, on `feature/mcp-oauth`; an mcp minor pending release)**: an MCP host given the bare URL signs in, and the person selects or creates the API key it is bound to. The host legs on staging passed in claude.ai, ChatGPT desktop and VS Code Copilot (last bullet).
   - **Store** (`grant-contract.ts`, 14 cases each on memory, SQLite and the Cosmos fake; `grants.test.ts`).
     - A token resolves to the key's principal and scopes, a requested scope narrows them, and tokens, refresh tokens and codes appear in no dump of the backing — digests only.

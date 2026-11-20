@@ -5,7 +5,7 @@
  * and the pages say so.
  */
 import { createHash } from "node:crypto";
-import type { AuthorizationPage, AuthorizationResponse } from "./types.js";
+import type { AuthorizationPage, AuthorizationResponse, PageAssetKind } from "./types.js";
 
 const STYLE = `
 :root{color-scheme:light dark;--bg:#f6f7f9;--card:#fff;--ink:#16181d;--mute:#5b6270;--line:#d9dde4;--accent:#2f5fd0;--accent-ink:#fff;--warn:#8a4b00;--warn-bg:#fff4e0}
@@ -112,18 +112,33 @@ export function defaultPage(page: AuthorizationPage): string {
 
 const INLINE_STYLE = /<style[^>]*>([\s\S]*?)<\/style>/gi;
 
-/** A page as a response: its markup under a policy that admits only its own inline styles. */
-export function pageResponse(status: number, html: string): AuthorizationResponse {
+/**
+ * A page as a response: its markup under a policy that admits its own inline
+ * styles by hash and, for each kind the host named, that kind from the
+ * page's own origin. Nothing else — no other origin, no inline script.
+ */
+export function pageResponse(status: number, html: string, assets: readonly PageAssetKind[] = []): AuthorizationResponse {
   const hashes = [...html.matchAll(INLINE_STYLE)].map(
     (match) => `'sha256-${createHash("sha256").update(match[1] ?? "", "utf8").digest("base64")}'`
   );
+  const own = (kind: PageAssetKind): boolean => assets.some((named) => named === kind);
+  const styles = [...(own("style") ? ["'self'"] : []), ...hashes];
+  const policy = [
+    "default-src 'none'",
+    `style-src ${styles.length > 0 ? styles.join(" ") : "'none'"}`,
+    ...(own("font") ? ["font-src 'self'"] : []),
+    ...(own("img") ? ["img-src 'self'"] : []),
+    ...(own("script") ? ["script-src 'self'"] : []),
+    "base-uri 'none'",
+    "frame-ancestors 'none'"
+  ].join("; ");
   return {
     status,
     headers: {
       "Content-Type": "text/html; charset=utf-8",
       // No form-action directive: browsers apply it to the redirect a form
       // post answers with, which is exactly how the flow returns to the host.
-      "Content-Security-Policy": `default-src 'none'; style-src ${hashes.length > 0 ? hashes.join(" ") : "'none'"}; base-uri 'none'; frame-ancestors 'none'`,
+      "Content-Security-Policy": policy,
       "X-Frame-Options": "DENY",
       "X-Content-Type-Options": "nosniff",
       "Referrer-Policy": "no-referrer",

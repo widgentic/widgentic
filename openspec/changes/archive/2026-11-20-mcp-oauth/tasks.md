@@ -64,5 +64,5 @@
 ## 8. Release and hand-off
 
 - [x] 8.1 PR `feature/mcp-oauth` → staging with green `verify` and `docs`; review; `/opsx:verify`; `/opsx:archive`.
-- [ ] 8.2 Promote staging → main, Version Packages → `@widgentic/mcp` 0.16.0 on npm; `Widgentic.Mcp` 0.16.0 pin PR and NuGet release; back-merge.
+- [x] 8.2 Promote staging → main, Version Packages → `@widgentic/mcp` 0.16.0 on npm; `Widgentic.Mcp` 0.16.0 pin PR and NuGet release; back-merge.
 - [ ] 8.3 Open the apps-repository change (adopt 0.16.0: the surface on widgentic.dev over the session with a sealed return address, `401` and `/mcp/public` on mcp.widgentic.dev, the secret and the `keys` time-to-live in Bicep, landing and connect copy, the connected applications in its key list, the announcement to keyless users); deploy only on the owner's word. With that deploy, a docs PR here updates the hosted-facing pages (connect-a-host, keys-and-scopes, host-matrix, per-principal-catalogs) to the two URLs and the sign-in path.
