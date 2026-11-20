@@ -2,8 +2,8 @@
 
 - [x] 1.1 Branch `feature/mcp-oauth-probe` (never merged) from this branch: the example's MCP service answers a keyless `/mcp` with `401` and the challenge, serves both protected-resource metadata paths, and the app serves authorization-server metadata plus stub `register` and `authorize` routes that log method, path, query names, the `client_id` length and redirect URIs (never a secret) and answer registration with a ~600-character sealed `client_id`.
 - [x] 1.2 Deploy the probe to staging and verify the served bytes (download, then search the file).
-- [ ] 1.3 `[USER]` Add the staging `/mcp` URL with no key in claude.ai, ChatGPT and VS Code Copilot, once as a new connector and once on a connector that was already added keyless; report what each host shows. Staging now runs the REAL flow with the probe's logging (see the design's apply revisions), so this is the same session as 7.3.
-- [ ] 1.4 Record the five answers of D12 per host in `design.md` as a revision. If a host truncates the client id or uses only one registration method, revise D7 and the "Clients register without the server storing them" requirement before task 3.
+- [x] 1.3 `[USER]` Add the staging `/mcp` URL with no key in claude.ai, ChatGPT and VS Code Copilot, once as a new connector and once on a connector that was already added keyless; report what each host shows. Staging now runs the REAL flow with the probe's logging (see the design's apply revisions), so this is the same session as 7.3.
+- [x] 1.4 Record the five answers of D12 per host in `design.md` as a revision. If a host truncates the client id or uses only one registration method, revise D7 and the "Clients register without the server storing them" requirement before task 3.
 
 ## 2. The store (`@widgentic/mcp/store`)
 
@@ -58,8 +58,8 @@
 
 - [x] 7.1 `npm run typecheck`, `npm test`, `npm run build`, `npm run pack:check`, `openspec validate --strict mcp-oauth`, `openspec validate --specs`; `dotnet test` is not required (nothing the host bundle renders changes) — confirm the conformance corpus is not stale.
 - [x] 7.2 Deploy the branch to staging; verify served bytes: the `401` and its header, both metadata documents, `/mcp/public` listing the built-ins, a keyed request unchanged. Done as `mcp-oauth-flow-probe-ad2cb8a` (this branch plus the never-merged logging commit), revision `--0000043`.
-- [ ] 7.3 `[USER]` Host legs on staging in fresh conversations — claude.ai, ChatGPT, VS Code Copilot: add the bare URL, select an existing key, see your widgets and see the host named on that key in the Keys section; repeat creating a key at consent; repeat with "Continue without an account" (built-ins only); revoke the key in the app and confirm the host is disconnected; add `/mcp/public` and confirm no prompt.
-- [ ] 7.4 Route findings into this change (delta requirement plus regression test) and record deviations in `design.md`.
+- [x] 7.3 `[USER]` Host legs on staging in fresh conversations — claude.ai, ChatGPT, VS Code Copilot: add the bare URL, select an existing key, see your widgets and see the host named on that key in the Keys section; repeat creating a key at consent; repeat with "Continue without an account" (built-ins only); revoke the key in the app and confirm the host is disconnected; add `/mcp/public` and confirm no prompt.
+- [x] 7.4 Route findings into this change (delta requirement plus regression test) and record deviations in `design.md`.
 
 ## 8. Release and hand-off
 

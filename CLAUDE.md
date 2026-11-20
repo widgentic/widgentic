@@ -282,7 +282,10 @@ and the NuGet version in one commit.
   (`https://chatgpt.com/oauth/codex/client.json`) with a loopback redirect on
   a fresh port; after a revoked grant it gets `401` but does NOT prompt — the
   model answers from other knowledge, which can read like the built-in
-  catalog. Check the server log before believing a host "fell back".
+  catalog. Check the server log before believing a host "fell back". VS Code
+  (`https://vscode.dev/oauth/client-metadata.json`, redirect
+  `http://127.0.0.1:33418/`) signs in on first use and prompts again after a
+  revoked grant. No host of the three calls dynamic registration.
 - CSS: an author `display` rule defeats `[hidden]`; `var()` fallbacks fire
   only when the property is UNSET (defining `:root` defaults severed
   `surface → bg`; fallbacks resolve at theme-application time); headless

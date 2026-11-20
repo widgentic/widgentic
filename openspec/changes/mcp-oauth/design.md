@@ -148,7 +148,19 @@ The client is `codex-mcp-client` (0.169.1, then 0.171.0-alpha.13).
 4. **`resource` is sent** on authorize and on both token requests; it asks for `read execute`, and repeats `scope` on the refresh.
 5. **A revoked grant is not surfaced to the person.** After the key was revoked the refresh was answered `invalid_grant` and every later call `401 invalid_token`; the server served nothing until the person signed in again (no `served` line in that window). The host neither prompted nor reported the failure: in a new conversation the model answered a "list widgets" request from other knowledge, citing a web page, and it read like a built-in catalog. Signing in again from the connector's settings restored the person's widgets. This is host behavior; the server cannot make the host prompt.
 
-Nothing here contradicts D7 or the specs. VS Code Copilot is still to be run.
+Nothing here contradicts D7 or the specs.
+
+### D12 results — VS Code Copilot (2026-11-20, VS Code 1.147.0, staging `--0000043`, owner's session plus the staging log)
+
+1. **Sign-in is deferred to first use.** The server is challenged when a prompt first needs it; VS Code then asks "wants to authenticate to demo.widgentic.dev" before opening the browser.
+2. **Client metadata document, not registration**: `client_id` `https://vscode.dev/oauth/client-metadata.json`, redirect `http://127.0.0.1:33418/`. Registration was never called.
+3. **Client id length** 45.
+4. **`resource` is sent** on authorize and on the token request; it asks for `read execute`. The path form of the metadata is read first.
+5. **A revoked grant prompts again.** The next call presented the token, got `401 invalid_token`, and VS Code asked to authenticate again without trying the refresh token.
+
+### D12 conclusion
+
+All three hosts complete the flow from the bare URL, and all three present a client metadata document: dynamic registration and the sealed client id (D7) were exercised only by the tests and by the scripted staging run, never by a host. Both stay — the MCP specification still names registration, and other clients use it — and no host finding called for a change to the specs or the code. The hosts differ only in what they do with a revoked grant: claude.ai offers "Reconnect", VS Code prompts again, ChatGPT stays silent.
 
 ## Risks / Trade-offs
 

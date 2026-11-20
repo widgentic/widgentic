@@ -429,7 +429,7 @@ workspace and the sample first, then point at the built DLL):
 
 ## Verification log
 
-- **Signing hosts in (2026-11-11, change `mcp-oauth`, on `feature/mcp-oauth`; an mcp minor pending release)**: an MCP host given the bare URL signs in, and the person selects or creates the API key it is bound to. Host legs on staging are still open; everything below is in process.
+- **Signing hosts in (2026-11-11, change `mcp-oauth`, on `feature/mcp-oauth`; an mcp minor pending release)**: an MCP host given the bare URL signs in, and the person selects or creates the API key it is bound to. The host legs on staging passed in claude.ai, ChatGPT desktop and VS Code Copilot (last bullet).
   - **Store** (`grant-contract.ts`, 14 cases each on memory, SQLite and the Cosmos fake; `grants.test.ts`).
     - A token resolves to the key's principal and scopes, a requested scope narrows them, and tokens, refresh tokens and codes appear in no dump of the backing — digests only.
     - Two exchanges of one code yield one `issued` and one `used` naming the first's grant; a mismatched exchange does not consume the code; a code older than sixty seconds is unknown.
@@ -450,6 +450,7 @@ workspace and the sample first, then point at the built DLL):
     - The whole flow from the `401` to a listed widget, refresh, and cut-off by revoking the key made at consent — with the MCP service touching only its read ports.
     - Trusted-header mode: two users, two catalogs; without the header only the anonymous choice. Connections survive a restart over the same SQLite file and KEK.
   - **Staging** (`mcp-oauth-flow-probe-ad2cb8a`, the branch plus a never-merged logging commit; served bytes read from files): a keyless `/mcp` answers `401` with `resource_metadata` at the staging origin and `WWW-Authenticate` exposed; both metadata paths name the staging `/mcp` and origin; `/mcp/public` lists `card`, `group`, `table`, `tree` and no seeded widget; the deployment key still lists the seeded agenda; a scripted flow (register, consent with a new key, token) lists the seeded agenda by bearer token, the key listing names the connection, and revoking that key turns the token into `401 invalid_token`.
+  - **Host legs** (owner, 2026-11-12 and 2026-11-20, staging; each confirmed against the staging log): claude.ai, ChatGPT desktop and VS Code Copilot each signed in from the bare `/mcp` URL, created a key at consent and listed the account's widgets; the Keys section named the application beside its key; `/mcp/public` connected with no prompt (claude.ai). After the key was revoked every host was answered `401`: claude.ai showed "Reconnect", VS Code asked to authenticate again, and ChatGPT showed nothing and answered from other knowledge until signed in again from its settings. All three present a client metadata document; none called registration.
   - **Gates**: typecheck, `npm test` (2,169 passed), `npm run build`, `pack:check` (21 entries), `docs:check`, `openspec validate --strict`. The host bundle is byte-identical to 0.15.0's (`sha256 f5a2cf25…`), so the .NET suite was not rerun.
 
 - **Widget themes (2026-10-22, change `widget-themes`, on `feature/widget-themes`; core, designer and mcp minor and a webmcp patch pending release)**: a widget names its own light and dark themes, ahead of the Settings defaults.
