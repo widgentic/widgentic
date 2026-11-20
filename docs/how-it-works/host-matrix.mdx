@@ -43,7 +43,7 @@ A different axis from the table above: not a host rendering widgets, but a brows
 
 ## Connecting to the hosted server
 
-The hosted server answers at `https://mcp.widgentic.dev/mcp`. Hosts that send headers (VS Code Copilot Chat) pass the key as `x-api-key`; hosts that accept only a URL (claude.ai and Claude Desktop connectors) take it as `?key=`. A request without a resolvable key still works over the built-in catalog, as described in [Per-principal catalogs](/how-it-works/per-principal-catalogs).
+The hosted server answers at `https://mcp.widgentic.dev/mcp`. A host either signs in — it is challenged, opens widgentic.dev, and you choose the key it uses — or presents a key: hosts that send headers (VS Code Copilot Chat) as `x-api-key`, hosts that accept only a URL (claude.ai, Claude Desktop and ChatGPT connectors) as `?key=`. claude.ai, ChatGPT and VS Code Copilot Chat all sign in from the bare URL. A request with neither is refused; the built-in catalog needs no account at `/mcp/public`, as described in [Per-principal catalogs](/how-it-works/per-principal-catalogs).
 
 <Note>
 Registration is never an MCP tool. Whatever host you connect, saving a widget happens in the authenticated app; the key only reads. See the [Trust model](/how-it-works/trust-model).
