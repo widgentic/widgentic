@@ -1,5 +1,11 @@
 # @widgentic/mcp
 
+## 0.16.1
+
+### Patch Changes
+
+- 0dba9d8: A host that renders the authorization pages itself can give them its brand: `pageAssets` on the authorization surface names the kinds of asset (`style`, `font`, `img`, `script`) those pages may load from their own origin. Each kind is opt-in and the default is none, which is the policy served before. No other origin, no inline script and no framing can be admitted this way.
+
 ## 0.16.0
 
 ### Minor Changes
