@@ -93,6 +93,43 @@ grep -c '"<the action name>"' /tmp/actions.json      # 1+ = the source is wired
 grep -c '<the action's hostname>' /tmp/actions.json  # 0 = the transport stayed on the server
 ```
 
+## Signing hosts in: protocol smoke
+
+Against a deployment whose `/mcp` is protected (the self-host example, or any
+server using `@widgentic/mcp/oauth`). Download, then read the files.
+
+```sh
+URL=http://localhost:8081      # the MCP service
+APP=http://localhost:8080      # the app that signs hosts in
+
+# 1. No credential is a challenge that names the metadata; the body says how to connect.
+curl -s -D /tmp/challenge.txt -o /tmp/challenge.json -X POST "$URL/mcp" \
+  -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+head -1 /tmp/challenge.txt                       # HTTP/1.1 401
+grep -i '^www-authenticate' /tmp/challenge.txt   # Bearer resource_metadata="…/.well-known/oauth-protected-resource/mcp"
+
+# 2. Both metadata documents agree on the resource and the issuer.
+curl -s "$URL/.well-known/oauth-protected-resource/mcp" > /tmp/resource.json
+curl -s "$APP/.well-known/oauth-authorization-server"   > /tmp/issuer.json
+grep -o '"authorization_servers":[^]]*]' /tmp/resource.json
+grep -o '"issuer":"[^"]*"' /tmp/issuer.json
+
+# 3. The public endpoint needs nothing and lists the built-ins.
+curl -s -X POST "$URL/mcp/public" -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' -H 'Mcp-Protocol-Version: 2025-06-18' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' > /tmp/public.txt
+grep -c 'list_widgets' /tmp/public.txt           # 1+
+
+# 4. A key still works on the protected endpoint.
+curl -s -o /tmp/keyed.txt -w '%{http_code}\n' -X POST "$URL/mcp" -H "x-api-key: $KEY" \
+  -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
+  -H 'Mcp-Protocol-Version: 2025-06-18' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'   # 200
+```
+
+The full flow (register, consent, token, refresh, revocation by key) runs in
+process in `examples/docker/__tests__/sign-in.test.ts`, on both protocol eras.
+
 ## Designer chrome: computed-value check
 
 The designers' chrome is painted through the 28 `--wgd-*` tokens
@@ -330,6 +367,16 @@ principals from a store:
 { "servers": { "widgentic": { "type": "http", "url": "http://localhost:3001/mcp", "headers": { "x-api-key": "<api-key>" } } } }
 ```
 
+**Any host, signing in** — against a server whose endpoint is protected with
+`@widgentic/mcp/oauth` (the self-host example): give the host the bare URL and
+no key. It is challenged, opens the app, and you choose or create the API key
+it will use. The same server's `/mcp/public` needs no key and no sign-in and
+serves the built-in widgets.
+
+```json
+{ "servers": { "widgentic": { "type": "http", "url": "http://localhost:8081/mcp" } } }
+```
+
 **claude.ai / Claude Desktop custom connectors** — Settings → Connectors →
 Add custom connector; connectors accept only a URL, so a per-principal server
 takes the key as a query parameter:
@@ -381,6 +428,32 @@ workspace and the sample first, then point at the built DLL):
 ```
 
 ## Verification log
+
+- **Signing hosts in (2026-11-11, change `mcp-oauth`, on `feature/mcp-oauth`; an mcp minor pending release)**: an MCP host given the bare URL signs in, and the person selects or creates the API key it is bound to. The host legs on staging passed in claude.ai, ChatGPT desktop and VS Code Copilot (last bullet).
+  - **Store** (`grant-contract.ts`, 14 cases each on memory, SQLite and the Cosmos fake; `grants.test.ts`).
+    - A token resolves to the key's principal and scopes, a requested scope narrows them, and tokens, refresh tokens and codes appear in no dump of the backing — digests only.
+    - Two exchanges of one code yield one `issued` and one `used` naming the first's grant; a mismatched exchange does not consume the code; a code older than sixty seconds is unknown.
+    - Rotation supersedes the old pair at once, the superseded refresh token still rotates within sixty seconds and is a replay after that (the grant ends), and an idle grant ends thirty days after its last refresh.
+    - `revokeKey` ends that key's grants only. The grant limit retires the least recently used connection.
+    - Cosmos: resolving a token is exactly one point read of `keys` by digest, expiry is decided from the record while the document still exists, and the anonymous token touches no container.
+    - Old shapes: a SQLite database written by 0.15.0 (committed fixture) opens, resolves its keys, lists its entries, accepts a first grant with the old tables byte-identical and keeps `user_version` 1; a Cosmos account with untyped key documents does the same.
+  - **Authorization surface** (`authorization.test.ts`, 33 tests through the core with plain values; `node-adapter.test.ts`, 2 over a real server; `resource.test.ts`, 5).
+    - Metadata derives from the issuer and names only routes the surface answers. The token, registration, revocation and metadata routes answer cross-origin; authorize and decision do not.
+    - A registered client is recognised with no record; a tampered or foreign client id, and a metadata-document client behind a private address, a redirect, a non-JSON type, an oversize body or another `client_id`, are refused without redirecting. Redirect URIs match exactly, except a loopback port.
+    - Pages: `default-src 'none'`, the page's own inline style by hash, `frame-ancestors 'none'`, `no-store`, and no script, link or image in the parsed document. A client's name is text.
+    - Consent: select a key, create one (no response, header or log carries a raw key), a store refusal re-renders an answerable page, a forged, foreign, expired or signed-out decision writes nothing.
+    - The anonymous choice yields a `wgn_` token with no store write; PKCE, the client and the sixty seconds still guard it.
+    - The log sink receives no code, verifier, token or key across successes and failures.
+  - **Authoring** (`key-connections.test.ts`, 3 tests): `GET /keys` names the applications connected through each key and nothing a connection could be resumed with; ended connections disappear; without `grants` the listing is unchanged.
+  - **Self-host example** (`sign-in.test.ts`, 21 tests; `edge.test.ts`; `app-key-connections.test.ts`): the real edge and sign-in wiring on local servers, the app fronting the MCP service, driven by the SDK client pinned to 2026-07-28 and as a 2025-era client.
+    - No credential, an unknown key and a refused token are `401` with the challenge (`invalid_token` only for a token) and compose nothing; the metadata answers at both paths; `/mcp/public` lists the built-ins and ignores a valid key; keys work as before.
+    - The whole flow from the `401` to a listed widget, refresh, and cut-off by revoking the key made at consent — with the MCP service touching only its read ports.
+    - Trusted-header mode: two users, two catalogs; without the header only the anonymous choice. Connections survive a restart over the same SQLite file and KEK.
+  - **Staging** (`mcp-oauth-flow-probe-ad2cb8a`, the branch plus a never-merged logging commit; served bytes read from files): a keyless `/mcp` answers `401` with `resource_metadata` at the staging origin and `WWW-Authenticate` exposed; both metadata paths name the staging `/mcp` and origin; `/mcp/public` lists `card`, `group`, `table`, `tree` and no seeded widget; the deployment key still lists the seeded agenda; a scripted flow (register, consent with a new key, token) lists the seeded agenda by bearer token, the key listing names the connection, and revoking that key turns the token into `401 invalid_token`.
+  - **Staging, clean build** (`mcp-oauth-071711b`, revision `--0000044`, after the host legs): the same served-byte checks, with the deployment key listing the seeded widgets by header and by `?key=` and no probe line in either log.
+  - **Host legs** (owner, 2026-11-12 and 2026-11-20, staging; each confirmed against the staging log): claude.ai, ChatGPT desktop and VS Code Copilot each signed in from the bare `/mcp` URL, created a key at consent and listed the account's widgets; the Keys section named the application beside its key; `/mcp/public` connected with no prompt (claude.ai). After the key was revoked every host was answered `401`: claude.ai showed "Reconnect", VS Code asked to authenticate again, and ChatGPT showed nothing and answered from other knowledge until signed in again from its settings. All three present a client metadata document; none called registration.
+  - **Review fixes** (PR #70, 2026-11-20; five more contract cases on each adapter and three Cosmos cases): a refresh token superseded two rotations ago is a replay; three parallel rotations each get a pair, one resolves, and none survives `revokeKey`; a used code past sixty seconds is unknown and ends nothing; a second exchange racing the first leaves no resolving token; a grant stranded behind a revoked key ends at its next refresh; repeating a Cosmos `revokeKey` whose deletes failed finishes it; a refused authorize request is a page with a link and no `Location`; a store failure is logged by kind.
+  - **Gates**: typecheck, `npm test` (2,187 passed), `npm run build`, `pack:check` (21 entries), `docs:check`, `openspec validate --strict`. The host bundle is byte-identical to 0.15.0's (`sha256 f5a2cf25…`), so the .NET suite was not rerun.
 
 - **Widget themes (2026-10-22, change `widget-themes`, on `feature/widget-themes`; core, designer and mcp minor and a webmcp patch pending release)**: a widget names its own light and dark themes, ahead of the Settings defaults.
   - **Core** (`widget-themes.test.ts`, 3 tests). `descriptor.themes` registers and lists unchanged. `checkWidgetThemes` accepts a single mode or a built-in, and refuses a number, an unknown mode, an empty name, a name with a space, and a non-object, each naming `descriptor.themes`.

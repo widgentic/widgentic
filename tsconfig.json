@@ -34,6 +34,9 @@
       "@widgentic/mcp/authoring": [
         "./packages/mcp/src/authoring/index.ts"
       ],
+      "@widgentic/mcp/oauth": [
+        "./packages/mcp/src/oauth/index.ts"
+      ],
       "@widgentic/mcp": [
         "./packages/mcp/src/index.ts"
       ],

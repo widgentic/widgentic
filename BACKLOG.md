@@ -53,6 +53,10 @@ appears. Size: **S** one small change, **M** one change with spec deltas,
 | AGT-5 | Load-time warnings agents can act on: dropped link schemes, unreachable action hosts | P3 | S | Browser agent, staging 2026-10-12 |
 | THM-4 | Preview under the person's default themes, per scheme | P3 | M | Browser agent, `designer-preview-island` staging |
 | EXM-1 | A Content-Security-Policy for the self-host app page | P3 | S | Browser agent, `designer-preview-island` staging |
+| AUT-1 | A connected-applications section with per-connection revocation | P2 | M | `mcp-oauth` scope cut |
+| AUT-2 | Scope step-up when a signed-in host lacks `execute` | P3 | M | `mcp-oauth` scope cut |
+| AUT-3 | Sign-in for .NET hosts | P3 | M (investigate) | `mcp-oauth` scope cut |
+| AUT-4 | A per-principal key limit | P3 | S | `mcp-oauth` apply |
 
 **Part 2 · Pairing with other technologies**
 
@@ -328,6 +332,36 @@ are reachable by direct URL.
   Check that WebMCP registration and the origin-trial meta still work under it.
 - **Touches.** `self-host-example`, `examples/docker/web.ts`.
 - **Origin.** 2026-10-15, the browser agent on staging `designer-preview-island-764ca55`.
+
+### Signing hosts in
+
+#### AUT-1 · A connected-applications section with per-connection revocation — P2, M
+
+- **Problem.** The key list names the applications connected through each key, but the only way to disconnect one is to revoke the key, which disconnects every application bound to it.
+- **Direction.** A route on the authoring surface that lists a principal's grants and ends one by id (`revokeGrant` already exists on the port), and a section in the hosts that shows them with their last refresh.
+- **Touches.** `authoring-api`, `self-host-example`; the hosted app's `widgentic-app` spec.
+- **Origin.** 2026-11-11, `mcp-oauth`: the owner asked for the names on the key list and left management out.
+
+#### AUT-2 · Scope step-up when a signed-in host lacks `execute` — P3, M
+
+- **Problem.** A host signed in through a read-only key gets `FORBIDDEN_SCOPE` from `execute_action` as a tool result. The person must sign in again and pick another key; nothing tells the host that a wider grant would work.
+- **Direction.** Answer with an `insufficient_scope` challenge where hosts act on one, after probing which do. Per-tool scopes belong to the same decision.
+- **Touches.** `mcp-server`, `mcp-authorization`.
+- **Origin.** 2026-11-11, `mcp-oauth` design non-goals.
+
+#### AUT-3 · Sign-in for .NET hosts — P3, M (investigate)
+
+- **Problem.** `Widgentic.Mcp` is render-only and carries no authorization. An ASP.NET host that wants the same "select or create a key" consent has to build it.
+- **Direction.** Find out what ASP.NET hosts need beyond their own authorization stack: probably the resource-side rule and a documented way to resolve a widgentic access token, not a second authorization server.
+- **Touches.** `dotnet-host`.
+- **Origin.** 2026-11-11, `mcp-oauth` design non-goals.
+
+#### AUT-4 · A per-principal key limit — P3, S
+
+- **Problem.** `StoreLimits` bounds widgets, themes, schemas, actions, secrets and grants, but not keys. A signed-in person can create keys without bound, from the Keys section or at consent.
+- **Direction.** `maxKeys` (optional, like `maxGrants`) counting unrevoked keys, refused with a structured code in all three writable adapters.
+- **Touches.** `widget-store`, `authoring-api`.
+- **Origin.** 2026-11-11, `mcp-oauth` apply: a consent scenario had assumed the limit existed.
 
 ### Untriaged
 

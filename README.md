@@ -152,8 +152,9 @@ Guarantees worth knowing: entries are validated on write **and** on read (a
 store is editable out of band), an invalid entry is skipped with a
 diagnostic rather than failing the session, stored kinds may never shadow
 built-ins, per-principal limits bound how much one tenant can load, and an
-unknown key degrades to the anonymous catalog — the built-in kinds — never
-to an error. With no store configured the server serves one catalog for
+unknown key resolves to nobody — never to an error and never to someone
+else's catalog; whether nobody means the built-in kinds or a sign-in
+challenge is the host's edge to decide. With no store configured the server serves one catalog for
 every caller (the library default: built-ins; the stdio example shows
 compiling in your own widgets).
 
