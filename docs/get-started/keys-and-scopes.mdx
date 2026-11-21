@@ -30,11 +30,23 @@ Saving a widget, theme, schema, action, secret or your settings is authorized by
 
 The reason is where keys live: in the connector settings of third-party hosts and in conversations an attacker can steer. A leaked key exposes the ability to read and render your catalog, never the ability to change it.
 
-## Unknown keys fall back, they do not fail
+## Signing a host in
 
-The server resolves a key by comparing its digest in constant time. A key that resolves to no account — missing, mistyped, revoked or malformed — is not an error: the request is served the **anonymous catalog**, exactly the built-in kinds and themes, with `list_schemas` and `list_actions` returning empty lists and `execute_action` refused with `FORBIDDEN_SCOPE`. Key material never appears in server logs.
+A host that supports MCP sign-in needs no key pasted into it. Give it `https://mcp.widgentic.dev/mcp`; it opens widgentic.dev, and after you sign in you choose which of your keys it uses, or create one on the spot. From then on the key is how you manage that host:
 
-If an agent reports that your custom widgets are missing, check the key first: the host is most likely connected without one, or with a key you revoked.
+- the host has exactly that key's scopes;
+- **API keys** shows, beside each key, the applications signed in through it — by the name each application reported for itself;
+- revoking the key disconnects them.
+
+A key created while signing a host in is never shown: the host does not need it, and you can always create another to paste elsewhere.
+
+## Unknown keys are refused
+
+The server resolves a key by comparing its digest in constant time. A request to `https://mcp.widgentic.dev/mcp` that presents no credential, or a key that resolves to no account — mistyped, revoked or malformed — is refused with `401` and told where to sign in. Key material never appears in server logs.
+
+The built-in kinds and themes need no account at `https://mcp.widgentic.dev/mcp/public`. That endpoint reads no credential at all: `list_schemas` and `list_actions` return empty lists there and `execute_action` is refused with `FORBIDDEN_SCOPE`.
+
+If a host reports that it cannot connect, or an agent says your custom widgets are missing, check the key first: it was most likely revoked, or the host was pointed at the public endpoint.
 
 ## Presenting the key
 
@@ -58,7 +70,7 @@ Because several keys can resolve to the same account, rotation is three steps wi
     Update each connector or `mcp.json` to the new key. Both keys serve the same catalog meanwhile.
   </Step>
   <Step title="Revoke the old key">
-    Revoke it individually; the others are unaffected. From that moment the old key resolves to nothing and its bearer sees the built-in catalog only.
+    Revoke it individually; the others are unaffected. From that moment the old key resolves to nothing: its bearer is refused, and any host signed in through it is disconnected.
   </Step>
 </Steps>
 
