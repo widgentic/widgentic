@@ -27,12 +27,17 @@ A store can be edited out of band, so loaded data is untrusted input. Entries ar
 
 `StoreLimits` bound how much one tenant can load — how many widgets, themes, schemas, actions and secrets a principal may hold, how large one serialized entry may be, and how many template nodes a stored widget may carry. Exceeding a limit is a rejection at write time and a skip-with-diagnostic at read time, so a store that grew past its limits still serves what fits. The values are on [Limits](/reference/limits), generated from the same constants `get_authoring_guide` serves.
 
-## Unknown keys degrade, never fail
+## A credential that resolves to nobody
 
-A key that resolves to no principal falls back to the anonymous catalog — the built-ins plus any entries the deployment supplies — and every tool keeps working over it. The server notes the event on stderr without the key. `list_schemas` and `list_actions` return empty lists for an anonymous or unknown key, and `execute_action` answers `FORBIDDEN_SCOPE`, since the anonymous principal has no `execute` scope.
+A key or token that resolves to no principal never reaches a principal's catalog. What it gets instead is the edge's decision, and a server offers one or both:
+
+- **A protected endpoint** refuses it with `401` and a challenge that tells the host where to [sign in](/develop/sign-hosts-in). The hosted server's `/mcp` works this way.
+- **A public endpoint** reads no credential and serves the **anonymous catalog** — the built-ins plus any entries the deployment supplies — with every tool working over it. `list_schemas` and `list_actions` return empty lists there, and `execute_action` answers `FORBIDDEN_SCOPE`, since the anonymous principal has no `execute` scope. The hosted server's `/mcp/public` works this way.
+
+The server notes a refused credential on stderr without the credential.
 
 <Warning>
-A wrong or revoked key looks like "my custom widgets are missing", not like an error. When a saved widget comes back `UNKNOWN_KIND`, check the key the host is sending first.
+On a public endpoint, or a server that does not protect its endpoint, a missing key looks like "my custom widgets are missing", not like an error. When a saved widget comes back `UNKNOWN_KIND`, check which URL the host is using and what it is sending.
 </Warning>
 
 ## Shared schemas resolve at composition

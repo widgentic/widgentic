@@ -1,6 +1,6 @@
 ---
 title: "Connect a host"
-description: "Registration snippets for claude.ai, Claude Desktop, ChatGPT connectors, VS Code Copilot Chat, Claude Code, the MCP Apps basic-host and MCP Inspector."
+description: "Connect claude.ai, Claude Desktop, ChatGPT, VS Code Copilot Chat, Claude Code, the MCP Apps basic-host and MCP Inspector — by signing in from the host, or with an API key."
 ---
 
 The hosted widgentic server speaks Streamable HTTP at:
@@ -9,27 +9,47 @@ The hosted widgentic server speaks Streamable HTTP at:
 https://mcp.widgentic.dev/mcp
 ```
 
-Your API key identifies your catalog. Present it as an `x-api-key` header where the host lets you set headers, or as the `key` query parameter where the host accepts only a URL. Without a key — or with an unknown or revoked one — the server serves the built-in kinds only; it never answers with an error. See [keys and scopes](/get-started/keys-and-scopes).
+There are two ways to connect a host to your catalog:
+
+- **Sign in from the host.** Give the host the URL above and nothing else. It opens widgentic.dev, you sign in, and you choose one of your API keys or create one for it. The host works with that key's permissions and is disconnected when you revoke the key. Nothing to copy or paste.
+- **Paste a key.** Present it as an `x-api-key` header where the host lets you set headers, or as the `key` query parameter where the host accepts only a URL.
+
+A request to that URL with no sign-in and no key — or with an unknown or revoked key — is refused with `401`. The built-in kinds need no account at:
+
+```text
+https://mcp.widgentic.dev/mcp/public
+```
+
+See [keys and scopes](/get-started/keys-and-scopes).
 
 <Warning>
-A key in a URL is still a secret: anyone who can read the connector settings can use your catalog with it. Create one key per host so you can revoke them individually.
+A key in a URL is still a secret: anyone who can read the connector settings can use your catalog with it. Create one key per host so you can revoke them individually — or sign in instead, and no key leaves widgentic.dev.
 </Warning>
 
 ## claude.ai
 
-claude.ai is an MCP Apps host: widgets mount inline, and `prompt` actions prefill your composer for you to send. Custom connectors accept only a URL, so the key travels as a query parameter.
+claude.ai is an MCP Apps host: widgets mount inline, and `prompt` actions prefill your composer for you to send.
 
-Go to **Settings → Connectors → Add custom connector** and enter:
+Go to **Settings → Connectors → Add custom connector** and enter the URL. claude.ai detects that the server asks for sign-in and opens widgentic.dev for you to choose the key:
+
+```text
+https://mcp.widgentic.dev/mcp
+```
+
+To use a key instead, put it in the URL (connectors accept only a URL):
 
 ```text
 https://mcp.widgentic.dev/mcp?key=<api-key>
 ```
 
+If you revoke the key a signed-in connector uses, claude.ai shows **Reconnect**, and widgets in existing conversations stop rendering until you do.
+
 ## Claude Desktop
 
-Claude Desktop takes the same custom connectors as claude.ai, and Apps-capable versions mount widgets inline in the chat. Add a connector under **Settings → Connectors → Add custom connector** with the same URL:
+Claude Desktop takes the same custom connectors as claude.ai, and Apps-capable versions mount widgets inline in the chat. Add a connector under **Settings → Connectors → Add custom connector** with the same URL — bare to sign in, or with a key:
 
 ```text
+https://mcp.widgentic.dev/mcp
 https://mcp.widgentic.dev/mcp?key=<api-key>
 ```
 
@@ -48,17 +68,32 @@ To run the sample stdio server from a local checkout of the repository instead, 
 
 ## ChatGPT
 
-ChatGPT implements the MCP Apps standard, so widgets mount inline on chatgpt.com, in a mobile browser and in the desktop app. `load` and http actions run through its `tools/call` proxy. One difference from claude.ai: a `prompt` action is **sent** rather than placed in the composer — the desktop app asks send-or-cancel, and the web sends without asking when the connector's permission is "allow all". Its connectors take a URL only, so the key travels as a query parameter, the same shape as claude.ai's:
+ChatGPT implements the MCP Apps standard, so widgets mount inline on chatgpt.com, in a mobile browser and in the desktop app. `load` and http actions run through its `tools/call` proxy. One difference from claude.ai: a `prompt` action is **sent** rather than placed in the composer — the desktop app asks send-or-cancel, and the web sends without asking when the connector's permission is "allow all". Its connectors take a URL: bare to sign in, or with a key as a query parameter, the same shapes as claude.ai's:
 
 ```text
+https://mcp.widgentic.dev/mcp
 https://mcp.widgentic.dev/mcp?key=<api-key>
 ```
+
+<Warning>
+ChatGPT does not tell you when a signed-in connection has ended. If you revoke the key it uses, the server refuses its calls, and ChatGPT may answer from general knowledge instead of saying so. If your widgets go missing there, open the connector's settings and authenticate again.
+</Warning>
 
 ChatGPT also takes part in the other direction: its desktop app's browser runs the authoring page's WebMCP tools, so an agent drafts into the designer you have open and you save. See [Co-author with a browser agent](/develop/co-author-with-an-agent).
 
 ## VS Code Copilot Chat
 
-VS Code Copilot Chat is an MCP Apps host and lets you set headers. Create `.vscode/mcp.json` in your workspace:
+VS Code Copilot Chat is an MCP Apps host. Create `.vscode/mcp.json` in your workspace. With no headers, VS Code asks to authenticate the first time a prompt needs the server, and again if the key it was given is revoked:
+
+```json
+{
+  "servers": {
+    "widgentic": { "type": "http", "url": "https://mcp.widgentic.dev/mcp" }
+  }
+}
+```
+
+To use a key instead, send it as a header:
 
 ```json
 {
@@ -125,16 +160,16 @@ curl -s -X POST https://mcp.widgentic.dev/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_widgets","arguments":{}}}'
 ```
 
-The response lists the built-in kinds plus your saved widgets. Without the header it lists the built-ins only.
+The response lists the built-in kinds plus your saved widgets. Without the header the answer is `401` with a `WWW-Authenticate` challenge; the same request to `https://mcp.widgentic.dev/mcp/public` needs no key and lists the built-ins only.
 
 ## Which hosts render inline
 
-| Host | Widgets | How the key travels |
+| Host | Widgets | How it connects |
 |---|---|---|
-| claude.ai | Inline | `?key=` in the connector URL |
-| Claude Desktop | Inline (Apps-capable versions) | `?key=` in the connector URL |
-| ChatGPT (web, mobile web, desktop) | Inline (MCP Apps); prompt actions are sent, not prefilled | `?key=` in the connector URL |
-| VS Code Copilot Chat | Inline | `x-api-key` header in `.vscode/mcp.json` |
+| claude.ai | Inline | Sign in from the connector, or `?key=` in its URL |
+| Claude Desktop | Inline (Apps-capable versions) | Sign in from the connector, or `?key=` in its URL |
+| ChatGPT (web, mobile web, desktop) | Inline (MCP Apps); prompt actions are sent, not prefilled | Sign in from the connector, or `?key=` in its URL |
+| VS Code Copilot Chat | Inline | Sign in on first use, or an `x-api-key` header in `.vscode/mcp.json` |
 | MCP Apps basic-host | Inline | `?key=` in `SERVERS` |
 | Claude Code | Text | Sample stdio server, no key |
 | MCP Inspector | Raw tool results | Sample stdio server, no key |
